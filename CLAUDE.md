@@ -1,16 +1,12 @@
-# CLAUDE.md
+## Purpose
+Job Discovery and Job Hunt agents built on the shared agent-core package.
+agent-core lives in ../Agent-Core and is installed as a local dependency.
+Job specific logic stays in this repo; never add it to agent-core.
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## Project status
-
-This is a freshly initialized Node.js project (`npm init` defaults) with no source code, dependencies, or commits yet. Update this file once the architecture takes shape.
-
-- Entry point declared in `package.json`: `index.js` (does not exist yet).
-- No build, lint, or test tooling is configured; `npm test` is the npm placeholder and exits with an error.
-- Default git branch is `master`, but `main` is the intended PR base branch.
-
-## Conventions from existing config
-
-- `.gitignore` excludes `node_modules/`, `.env`, and `data/`. Secrets and config belong in `.env`, and runtime/generated data belongs in `data/`. Neither should be committed.
-- Development happens on Windows (PowerShell primary, Git Bash available).
+## Structure
+/agents/discovery   finds, researches, and scores postings
+/agents/hunt        cover letters, resume tailoring, application tracking
+/tools              job specific tool definitions and handlers
+/evals              hand scored postings and letter rubric cases
+/data               gitignored; SQLite database and outputs
+/legacy contains the v1 scripts for reference only. Do not modify or import from them.
