@@ -5,7 +5,9 @@ agent-core comes from the public Agent-Core repo as a git dependency pinned to a
 Job specific logic stays in this repo; never add it to agent-core.
 
 ## Structure
-/agents/discovery   finds, researches, and scores postings (prompts/*.md templates, schemas/*.json output schemas)
+/agents/discovery   finds, researches, and scores postings: sources/ (one module per job source, parse functions exported for tests),
+                    details.js (full text: source, LinkedIn guest endpoint, JSON-LD, page text, browser), discover.js (one run),
+                    prompts/*.md templates, schemas/*.json output schemas
 /agents/hunt        cover letters, resume tailoring, application tracking
 /tools              job specific helpers: config, urls, dates, template, google (auth, docs, gmail)
 /db                 SQLite schema (migrations/*.sql, applied in file-name order), openJobStore, v1 import
@@ -27,6 +29,9 @@ npm run config:from-v1            build data/config/job-search.json from the v1 
 npm run google:login              one-time Google sign-in; saves data/google/token.json
 npm run google:check              verify Google access (-- --send-test-email to test Gmail)
 npm run import:v1                 one-time import of the v1 sheets into data/job-agent.db (-- --reset to rebuild)
+npm run discover                  find new postings from all sources and store them (no scoring)
+npm run discover -- --dry-run --limit=20 --sources=himalayas,linkedin --no-details   preview options
+npx playwright install chromium   one-time browser download for pages that need JavaScript (optional)
 Scripts that need secrets load .env through node --env-file.
 
 ## Hard rules

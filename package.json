@@ -13,7 +13,8 @@
     "hooks:install": "git config core.hooksPath .githooks",
     "google:login": "node --env-file=.env scripts/google-login.js",
     "google:check": "node --env-file=.env scripts/google-check.js",
-    "import:v1": "node --env-file=.env scripts/import-v1.js"
+    "import:v1": "node --env-file=.env scripts/import-v1.js",
+    "discover": "node --env-file=.env scripts/discover.js"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +25,7 @@
     "@googleapis/gmail": "^22.0.1",
     "@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.0",
     "csv-parse": "^7.0.3",
-    "google-auth-library": "^11.1.0"
+    "google-auth-library": "^11.1.0",
+    "playwright": "^1.63.0"
   }
 }
