@@ -1,0 +1,20 @@
+{
+  "candidate": {
+    "name": "Pat Example",
+    "signoffName": "Pat Example",
+    "contactLine": "Anytown, ST | pat@example.com | 555-0100",
+    "linkedin": "linkedin.com/in/example"
+  },
+  "search": {
+    "terms": ["VP Engineering", "Head of Engineering", "Director of Engineering"],
+    "relevantTitleKeywords": ["engineering", "technology", "cto"],
+    "noiseTitleKeywords": ["intern", "sales"],
+    "homeLocations": ["Anytown"]
+  },
+  "coverLetterChecks": [
+    { "label": "\"I am confident\"", "text": "\\bi am confident\\b|\\bi'm confident\\b" },
+    { "label": "wrong title at Example Corp", "sentence": ["example corp", "\\bCTO\\b"] }
+  ],
+  "privateTerms": ["pat example", "anytown", "pat@example.com", "example corp"],
+  "allowTerms": ["your-github-username"]
+}
