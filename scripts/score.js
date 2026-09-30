@@ -4,14 +4,12 @@
 //   npm run score -- --model=claude-sonnet-5-5 --limit=10 --ids=12,15 --all-unscored
 import { createClaude, createTracer } from '@scottmroth5/agent-core';
 import { loadConfig } from '../tools/config.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
-import { readDoc } from '../tools/google/docs.js';
+import { loadKnowledge } from '../tools/knowledge.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { openJobStore } from '../db/index.js';
 import {
   DEFAULT_SCORE_MODEL,
   MODEL_SETTINGS,
-  MIN_KNOWLEDGE_CHARS,
   PROMOTE_AT,
   estimateCost,
   loadScorePrompt,
@@ -30,14 +28,6 @@ function parseArgs(argv) {
     ids: get('ids')?.split(',').map(Number).filter(Number.isFinite),
     model,
   };
-}
-
-async function loadKnowledge() {
-  const docId = process.env.YOUR_KNOWLEDGE_DOC_ID;
-  if (!docId) throw new Error('YOUR_KNOWLEDGE_DOC_ID is not set in .env.');
-  const { text } = await readDoc(getGoogleAuth(), docId);
-  if (text.length < MIN_KNOWLEDGE_CHARS) throw new Error(`Candidate Knowledge doc is under ${MIN_KNOWLEDGE_CHARS} characters; scoring aborted.`);
-  return text;
 }
 
 async function main() {

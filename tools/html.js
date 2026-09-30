@@ -13,6 +13,16 @@ export function decodeEntities(s) {
   });
 }
 
+/** Escapes text for safe insertion into HTML (element content and quoted attributes). */
+export function escapeHtml(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 /** Converts HTML to plain text, keeping paragraph and list structure as line breaks. */
 export function htmlToText(html) {
   return decodeEntities(
