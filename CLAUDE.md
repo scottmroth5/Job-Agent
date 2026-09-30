@@ -35,6 +35,15 @@ npx playwright install chromium   optional: without it, pages that need JavaScri
 npm run score                     score unscored postings (-- --dry-run for count and cost estimate; --model, --limit, --ids)
 npm run eval:score -- --build     build scoring eval cases in data/evals/score (applied vs passed postings)
 npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=2   compare models; costs real money
+npm run hunt                      resume tweaks + cover letters (Google Docs) for promoted jobs (-- --dry-run, --ids, --regenerate, --no-docs)
+npm run archive -- --dry-run      preview archiving; without --dry-run it moves them
+npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
+npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point)
+
+## Hunt
+Letters: Sonnet 5.5 at medium effort; v1's cleanup (strip greeting/sign-off, no dashes) and config.coverLetterChecks run in code,
+plus a word-limit flag. Letter Docs go to the app's own "Job Agent Cover Letters" Drive folder (drive.file scope).
+Nothing is overwritten: --regenerate creates new artifacts and Docs. Report HTML escapes every value.
 
 ## Scoring
 Default model and promotion threshold live in agents/discovery/score.js with the eval evidence behind them.
