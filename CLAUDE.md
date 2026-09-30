@@ -32,6 +32,14 @@ npm run import:v1                 one-time import of the v1 sheets into data/job
 npm run discover                  find new postings from all sources and store them (no scoring)
 npm run discover -- --dry-run --limit=20 --sources=himalayas,linkedin --no-details   preview options
 npx playwright install chromium   optional: without it, pages that need JavaScript render in the installed Edge or Chrome (PLAYWRIGHT_CHANNEL forces one)
+npm run score                     score unscored postings (-- --dry-run for count and cost estimate; --model, --limit, --ids)
+npm run eval:score -- --build     build scoring eval cases in data/evals/score (applied vs passed postings)
+npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=2   compare models; costs real money
+
+## Scoring
+Default model and promotion threshold live in agents/discovery/score.js with the eval evidence behind them.
+Change the prompt, schema, model, or threshold only after rerunning the scoring eval and comparing pairwise accuracy.
+Sonnet 5.5 and Opus 5.5 always think: keep effort low and maxTokens generous for scoring (MODEL_SETTINGS).
 Scripts that need secrets load .env through node --env-file.
 
 ## Hard rules
