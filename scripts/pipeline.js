@@ -12,6 +12,7 @@ import { getGoogleAuth } from '../tools/google/auth.js';
 import { createDriveClient } from '../tools/google/drive.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { openJobStore } from '../db/index.js';
+import { exitWhenDone } from '../tools/exit.js';
 import { runDiscovery } from '../agents/discovery/discover.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { generateForPostings } from '../agents/hunt/generate.js';
@@ -98,7 +99,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err.message);
-  process.exitCode = 1;
-});
+main()
+  .catch((err) => {
+    console.error(err.message);
+    process.exitCode = 1;
+  })
+  .finally(exitWhenDone);

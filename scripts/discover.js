@@ -7,6 +7,7 @@ import { loadConfig } from '../tools/config.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
 import { openJobStore } from '../db/index.js';
+import { exitWhenDone } from '../tools/exit.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { runDiscovery, SOURCES } from '../agents/discovery/discover.js';
 
@@ -88,7 +89,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err.message);
-  process.exitCode = 1;
-});
+main()
+  .catch((err) => {
+    console.error(err.message);
+    process.exitCode = 1;
+  })
+  .finally(exitWhenDone);

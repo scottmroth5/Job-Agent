@@ -7,6 +7,7 @@ import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { openJobStore } from '../db/index.js';
+import { exitWhenDone } from '../tools/exit.js';
 import {
   DEFAULT_SCORE_MODEL,
   MODEL_SETTINGS,
@@ -82,7 +83,9 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error(err.message);
-  process.exitCode = 1;
-});
+main()
+  .catch((err) => {
+    console.error(err.message);
+    process.exitCode = 1;
+  })
+  .finally(exitWhenDone);

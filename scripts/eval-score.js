@@ -11,6 +11,7 @@ import { getGoogleAuth } from '../tools/google/auth.js';
 import { readDoc } from '../tools/google/docs.js';
 import { repoPath } from '../tools/paths.js';
 import { openJobStore } from '../db/index.js';
+import { exitWhenDone } from '../tools/exit.js';
 import { MODEL_SETTINGS, MIN_KNOWLEDGE_CHARS, PROMOTE_AT } from '../agents/discovery/score.js';
 import { buildCases } from '../evals/score/build-cases.js';
 import { runEval, estimateEval } from '../evals/score/run.js';
@@ -96,7 +97,9 @@ async function evaluate(argv) {
 }
 
 const argv = process.argv.slice(2);
-(argv.includes('--build') || argv.includes('--rebuild') ? build(argv.includes('--rebuild')) : evaluate(argv)).catch((err) => {
-  console.error(err.message);
-  process.exitCode = 1;
-});
+(argv.includes('--build') || argv.includes('--rebuild') ? build(argv.includes('--rebuild')) : evaluate(argv))
+  .catch((err) => {
+    console.error(err.message);
+    process.exitCode = 1;
+  })
+  .finally(exitWhenDone);
