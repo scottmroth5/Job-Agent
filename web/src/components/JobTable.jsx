@@ -8,6 +8,7 @@ const COLUMNS = [
   { key: 'source', label: 'Source', get: (j) => j.source ?? '' },
   { key: 'location', label: 'Location', get: (j) => j.location ?? '' },
   { key: 'terms', label: 'Rate / hours', get: (j) => j.annualized?.mid ?? -1, terms: true },
+  { key: 'discoveredOn', label: 'Discovered', get: (j) => j.discoveredOn ?? '' },
   { key: 'status', label: 'Status', get: (j) => j.status },
   { key: 'appliedOn', label: 'Applied', get: (j) => j.appliedOn ?? '' },
   { key: 'letter', label: 'Letter', get: (j) => (j.letter ? (j.letter.flags.length ? 1 : 2) : 0) },
@@ -32,7 +33,8 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, showTerms,
     });
   }, [jobs, sort]);
 
-  const toggleSort = (key) => setSort((s) => ({ key, dir: s.key === key ? -s.dir : key === 'score' ? -1 : 1 }));
+  // Scores and dates sort newest/highest first on the first click.
+  const toggleSort = (key) => setSort((s) => ({ key, dir: s.key === key ? -s.dir : ['score', 'discoveredOn', 'appliedOn'].includes(key) ? -1 : 1 }));
 
   if (!loading && jobs.length === 0) return <div className="empty">No jobs match these filters.</div>;
 
@@ -83,6 +85,7 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, showTerms,
                     </span>
                   )}
                   {c.key === 'status' && <span className={`status s-${j.status}`}>{STATUS_LABELS[j.status]}</span>}
+                  {c.key === 'discoveredOn' && <span className="muted nowrap">{j.discoveredOn ?? ''}</span>}
                   {c.key === 'appliedOn' && <span className="muted">{j.appliedOn ?? ''}</span>}
                   {c.key === 'letter' && <LetterCell letter={j.letter} />}
                 </td>
