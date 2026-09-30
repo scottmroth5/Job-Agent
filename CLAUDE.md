@@ -13,8 +13,9 @@ Job specific logic stays in this repo; never add it to agent-core.
 /db                 SQLite schema (migrations/*.sql, applied in file-name order), openJobStore, v1 import
 /scripts            command-line entry points (see Commands)
 /config             job-search.example.json: the shape of the real, gitignored data/config/job-search.json
-/server             API over the SQLite store, plus the in-process scheduler that runs the agents
-/web                React (Vite) UI; the only place the user reviews and edits the pipeline
+/server             Fastify API over the SQLite store (app.js routes, queries.js, tasks.js, auth.js); serves the built UI
+/agents/manual.js   manually added jobs: dedupe, fetch or paste text, score, write materials
+/web                React (Vite) UI: job table with track/stage/status filters, detail panel, add-job dialog, fractional stacking bar
 /evals              eval runner and rubric code; real eval cases live in data/evals
 /test               node:test suites with synthetic fixtures only
 /data               gitignored: job-agent.db, config/, google/ (OAuth client and token), v1-export/
@@ -39,6 +40,20 @@ npm run hunt                      resume tweaks + cover letters (Google Docs) fo
 npm run archive -- --dry-run      preview archiving; without --dry-run it moves them
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
 npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point)
+npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)
+npm run web:dev                   Vite dev server with hot reload on :5179, forwarding /api to a running npm run ui
+npm run add -- --url=...          add a job by hand (also --description-file, --title, --company, --track, --rate, --hours, --write-materials)
+
+## UI and API
+server/app.js holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
+Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
+while a pipeline step is running. AUTH_MODE=none binds to 127.0.0.1 only; exposing the server requires adding a login mode
+in server/auth.js first. web/dist is build output (gitignored).
+
+## Tracks
+Postings are fulltime or fractional (tools/track.js). Fractional postings score with prompts/score-fractional.md, which adds
+fit (High/Medium/Stretch/Poor), why it fits, caveats, pay and hours; annualized estimates use tools/rates.js (tracker math).
+Go Fractional is bot-protected: it is never scraped, and search.siteSearch stays false unless the Serper plan allows site: queries.
 
 ## Hunt
 Letters: Sonnet 5.5 at medium effort; v1's cleanup (strip greeting/sign-off, no dashes) and config.coverLetterChecks run in code,
