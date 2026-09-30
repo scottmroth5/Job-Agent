@@ -26,6 +26,15 @@ export function loadConfig(path = CONFIG_PATH) {
   return config;
 }
 
+/**
+ * Text for the {{homeLocations}} prompt placeholder: search.homeAreaLabel when set
+ * (e.g. "the Anytown area"), otherwise the homeLocations list joined with " or ".
+ * homeLocations itself ("City, ST" entries and region phrases) drives the location check in code.
+ */
+export function homeAreaText(config) {
+  return config.search.homeAreaLabel?.trim() || config.search.homeLocations.join(' or ');
+}
+
 /** Returns a list of problems; empty when the config is usable. */
 export function validateConfig(config) {
   const problems = [];
@@ -41,6 +50,9 @@ export function validateConfig(config) {
   for (const key of ['terms', 'relevantTitleKeywords', 'homeLocations']) {
     const v = config?.search?.[key];
     if (!strList(v) || v.length === 0) problems.push(`search.${key} must be a non-empty list of strings`);
+  }
+  if (config?.search?.homeAreaLabel != null && !str(config.search.homeAreaLabel)) {
+    problems.push('search.homeAreaLabel must be a non-empty string');
   }
   if (config?.search?.noiseTitleKeywords != null && !strList(config.search.noiseTitleKeywords)) {
     problems.push('search.noiseTitleKeywords must be a list of strings');

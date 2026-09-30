@@ -9,7 +9,8 @@
     "terms": ["VP Engineering", "Head of Engineering", "Director of Engineering"],
     "relevantTitleKeywords": ["engineering", "technology", "cto"],
     "noiseTitleKeywords": ["intern", "sales"],
-    "homeLocations": ["Anytown"]
+    "homeAreaLabel": "the Anytown area (Anytown, ST and nearby suburbs)",
+    "homeLocations": ["Anytown Metro Area", "Anytown, ST", "Nearby City, ST", "Suburb, ST"]
   },
   "coverLetterChecks": [
     { "label": "\"I am confident\"", "text": "\\bi am confident\\b|\\bi'm confident\\b" },

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { normalizeUrl, companyTitleKey } from '../tools/urls.js';
 import { parseSheetDate, parsePostedDate } from '../tools/dates.js';
 import { fillTemplate } from '../tools/template.js';
-import { loadConfig, validateConfig } from '../tools/config.js';
+import { loadConfig, validateConfig, homeAreaText } from '../tools/config.js';
 
 test('normalizeUrl drops tracking, fragments, www and trailing slashes', () => {
   assert.equal(
@@ -77,6 +77,18 @@ test('validateConfig accepts a complete config and names each problem', () => {
   assert.ok(problems.some((p) => p.includes('invalid pattern')));
   assert.ok(problems.some((p) => p.includes('two-item')));
   assert.ok(problems.some((p) => p.includes('privateTerms')));
+});
+
+test('homeAreaText prefers the label and falls back to the location list', () => {
+  const config = validConfig();
+  assert.equal(homeAreaText(config), 'Anytown');
+  config.search.homeLocations = ['Anytown, ST', 'Suburb, ST'];
+  assert.equal(homeAreaText(config), 'Anytown, ST or Suburb, ST');
+  config.search.homeAreaLabel = 'the Anytown area';
+  assert.equal(homeAreaText(config), 'the Anytown area');
+  assert.deepEqual(validateConfig(config), []);
+  config.search.homeAreaLabel = '  ';
+  assert.ok(validateConfig(config).some((p) => p.includes('homeAreaLabel')));
 });
 
 test('loadConfig explains a missing or invalid file', () => {
