@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { findPersonalHits, maskTerm, envValues } from '../scripts/check-personal.js';
+import { findPersonalHits, maskTerm, envValues, isForbiddenPath } from '../scripts/check-personal.js';
 import { buildConfig } from '../scripts/config-from-v1.js';
 import { validateConfig } from '../tools/config.js';
 import { repoPath } from '../tools/paths.js';
@@ -26,6 +26,11 @@ test('catches a planted secret from .env values', () => {
   const terms = envValues(env);
   assert.deepEqual(terms, ['sk-test-0123456789abcdef', 'some-long-value-here']);
   assert.equal(findPersonalHits('const key = "sk-test-0123456789abcdef";', terms).length, 1);
+});
+
+test('personal-data locations are refused regardless of .gitignore', () => {
+  for (const f of ['data/config/job-search.json', 'data/job-agent.db', '.env', '.env.local', 'server/.env']) assert.ok(isForbiddenPath(f), f);
+  for (const f of ['db/index.js', 'tools/data.js', 'config/job-search.example.json', 'docs/env.md']) assert.ok(!isForbiddenPath(f), f);
 });
 
 test('masks terms so a secret is never printed in full', () => {

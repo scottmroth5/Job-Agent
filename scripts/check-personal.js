@@ -50,6 +50,12 @@ export function envValues(text) {
     .filter((v) => v && v.length >= ENV_MIN_LENGTH);
 }
 
+/** Paths that hold personal data by design: anything under data/, and .env files. */
+export function isForbiddenPath(file) {
+  const f = file.replace(/\\/g, '/');
+  return f.startsWith('data/') || /(^|\/)\.env(\..*)?$/.test(f);
+}
+
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -80,7 +86,11 @@ function main() {
     .split('\n')
     .filter(Boolean);
 
-  let found = 0;
+  // Personal folders must never be committed, even if .gitignore is ever broken.
+  const forbidden = files.filter(isForbiddenPath);
+  for (const file of forbidden) console.error(`  ${file}  is in a personal-data location (data/ or .env) and must never be committed`);
+
+  let found = forbidden.length;
   for (const file of files) {
     let text;
     try {
