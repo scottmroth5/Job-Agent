@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["score", "reason", "roleType", "locationConcern", "strengths", "watchOuts", "topTalkingPoint", "suggestedStatus"],
+  "properties": {
+    "score": { "type": "integer", "enum": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "description": "Fit from 1 (poor) to 10 (excellent)" },
+    "reason": { "type": "string", "description": "One sentence explaining the score" },
+    "roleType": {
+      "type": "string",
+      "enum": ["Full time", "Part time", "Fractional", "Contract", "Interim", "Co-founder", "Founding CTO", "Unknown"]
+    },
+    "locationConcern": { "type": "string", "enum": ["none", "unverified", "conflict"] },
+    "strengths": { "type": "array", "items": { "type": "string" }, "description": "Up to three specific strengths" },
+    "watchOuts": { "type": "array", "items": { "type": "string" }, "description": "One or two gaps or risks" },
+    "topTalkingPoint": { "type": "string" },
+    "suggestedStatus": { "type": "string", "enum": ["worth_pursuing", "pass"] }
+  }
+}
