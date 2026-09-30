@@ -73,7 +73,14 @@ test('linkedin parses the guest posting page', () => {
   const html = `<div class="show-more-less-html__markup"><p>Lead engineering.</p><ul><li>Hire</li></ul></div>
     <h3 class="description__job-criteria-subheader">Seniority level</h3><span class="description__job-criteria-text">Executive</span>
     <h3 class="description__job-criteria-subheader">Employment type</h3><span class="description__job-criteria-text">Full-time</span>`;
-  assert.deepEqual(linkedin.parsePosting(html), { description: 'Lead engineering.\n- Hire', jobType: 'Full-time', seniority: 'Executive' });
+  assert.deepEqual(linkedin.parsePosting(html), { title: null, company: null, location: null, description: 'Lead engineering.\n- Hire', jobType: 'Full-time', seniority: 'Executive' });
+  const top = `<h2 class="top-card-layout__title font-sans">VP, Platform &amp; Data</h2>
+    <a class="topcard__org-name-link topcard__flavor--black-link" href="#">  Example Co </a>
+    <span class="topcard__flavor topcard__flavor--bullet"> Anytown, ST </span>`;
+  assert.deepEqual(
+    (({ title, company, location }) => ({ title, company, location }))(linkedin.parsePosting(top)),
+    { title: 'VP, Platform & Data', company: 'Example Co', location: 'Anytown, ST' },
+  );
   assert.equal(linkedin.jobIdFromUrl('https://www.linkedin.com/jobs/view/vp-at-example-4000000002/'), '4000000002');
 });
 

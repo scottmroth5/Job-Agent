@@ -71,6 +71,9 @@ export async function resolveDetails(item, { http, browser, state = {} }) {
         p = await fetchPosting(http, item.linkedinJobId);
       }
       item.jobType ??= p.jobType;
+      if (!item.title) item.title = p.title;
+      item.company ??= p.company;
+      item.location ??= p.location;
       if (p.description && p.description.length >= MIN_DESCRIPTION) {
         return Object.assign(item, { description: cap(p.description), fetchStatus: 'ok', fetchMethod: 'linkedin' });
       }

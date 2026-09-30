@@ -59,13 +59,18 @@ export function parseSearchPage(html, mode) {
     .filter(Boolean);
 }
 
-/** Parses the guest posting page: description text and the job criteria list. */
+/** Parses the guest posting page: title, company, location, description text and the job criteria list. */
 export function parsePosting(html) {
-  const body = /show-more-less-html__markup[^>]*>([\s\S]*?)<\/div>/.exec(html)?.[1];
+  const s = String(html ?? '');
+  const body = /show-more-less-html__markup[^>]*>([\s\S]*?)<\/div>/.exec(s)?.[1];
   const criteria = {};
   const re = /description__job-criteria-subheader[^>]*>([\s\S]*?)<\/h3>[\s\S]*?description__job-criteria-text[^>]*>([\s\S]*?)<\/span>/g;
-  for (const m of String(html ?? '').matchAll(re)) criteria[text(m[1])] = text(m[2]);
+  for (const m of s.matchAll(re)) criteria[text(m[1])] = text(m[2]);
+  const field = (cls, tag) => text(new RegExp(`class="[^"]*${cls}[^"]*"[^>]*>([\\s\\S]*?)</${tag}>`).exec(s)?.[1]) || null;
   return {
+    title: field('top-card-layout__title', 'h2') ?? field('topcard__title', 'h\\d'),
+    company: field('topcard__org-name-link', 'a'),
+    location: field('topcard__flavor--bullet', 'span'),
     description: body ? htmlToText(body) : null,
     jobType: criteria['Employment type'] ?? null,
     seniority: criteria['Seniority level'] ?? null,
