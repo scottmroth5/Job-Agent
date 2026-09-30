@@ -188,6 +188,7 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
 
   const summary = { selected: postings.length, scored: 0, ruleScored: 0, distribution: {}, promoted: [], failures: [], aborted: false };
   let consecutive = 0;
+  run?.log?.('info', postings.length ? `Scoring ${postings.length} postings with ${model}` : 'Nothing to score');
 
   await mapLimit(postings, concurrency, async (p) => {
     if (summary.aborted) return;
@@ -202,6 +203,8 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
       summary.scored += 1;
       if (result.source === 'v2-rule') summary.ruleScored += 1;
       summary.distribution[result.score] = (summary.distribution[result.score] ?? 0) + 1;
+      if (summary.promoted.includes(p.id)) run?.log?.('info', `#${p.id} scored ${result.score}, promoted to pipeline`);
+      else if (summary.scored % 10 === 0 && summary.scored < postings.length) run?.log?.('info', `Scored ${summary.scored}/${postings.length}`);
     } catch (err) {
       consecutive += 1;
       summary.failures.push({ id: p.id, error: `${err.name}: ${err.message}` });

@@ -116,6 +116,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
       const doc = await drive.createDocFromHtml({ name, html, folderId });
       setDoc.run(doc.id, doc.url, name, artifactId);
       summary.docs += 1;
+      run?.log?.('info', `#${posting.id}: letter saved as a Google Doc`);
     } catch (err) {
       summary.docFailures.push({ id: posting.id, error: `${err.name}: ${err.message}` });
     }
@@ -127,7 +128,9 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
     return res.text;
   };
 
-  for (const p of postings) {
+  const log = (msg) => run?.log?.('info', msg);
+  log(postings.length ? `${postings.length} promoted jobs need tweaks, a letter, or a letter Doc` : 'Nothing to write');
+  for (const [i, p] of postings.entries()) {
     if (summary.aborted) break;
     if (!p.analysis_json) {
       summary.skipped.push({ id: p.id, reason: 'no v2 score' });
@@ -135,15 +138,19 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
     }
     const analysis = JSON.parse(p.analysis_json);
     const nowIso = new Date().toISOString();
+    const tag = `#${p.id} (${i + 1}/${postings.length})`;
     try {
       if (!p.has_tweaks || regenerate) {
+        log(`${tag}: writing resume tweaks`);
         const tweaks = sanitizeDashes(await call(buildTweaksRequest(p, analysis, { config, knowledge, prompts })));
         insertArtifact.run(p.id, 'resume_tweaks', tweaks, null, HUNT_MODEL, prompts.tweaks.version, run?.id ?? null, nowIso);
         summary.tweaks += 1;
       }
       if (p.letter_missing_doc && !regenerate) {
+        log(`${tag}: saving the earlier letter as a Google Doc`);
         await saveDoc(p, p.letter_missing_doc, letterById.get(p.letter_missing_doc).content);
       } else if (!p.has_letter || regenerate) {
+        log(`${tag}: writing cover letter`);
         const { body, flags } = finishLetter(await call(buildLetterRequest(p, analysis, { config, knowledge, prompts })), config);
         const artifactId = Number(
           insertArtifact.run(p.id, 'cover_letter', body, flags.length ? JSON.stringify(flags) : null, HUNT_MODEL, prompts.letter.version, run?.id ?? null, nowIso).lastInsertRowid,

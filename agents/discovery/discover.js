@@ -159,6 +159,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
   // 5. Full text for new postings
   const state = {};
   if (details) {
+    if (selected.length) log('info', `Fetching full text for ${selected.length} new postings`);
+    let done = 0;
     await resolveAll(selected, {
       http,
       browser,
@@ -168,6 +170,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
       linkedinPauseMs,
       onDone: (item) => {
         stat(item.source)[item.fetchStatus === 'ok' ? 'detailsOk' : 'detailsFailed'] += 1;
+        done += 1;
+        if (done % 5 === 0 && done < selected.length) log('info', `Full text ${done}/${selected.length}`);
       },
     });
   } else {
@@ -289,6 +293,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
       linkedinJobId: linkedin.jobIdFromUrl(p.url),
       description: null,
     }));
+    if (items.length) log('info', `Retrying full text for ${items.length} earlier postings`);
     const update = db.prepare(`UPDATE postings SET fetched_text = @text, fetched_at = @fetchedAt, fetch_status = @status,
         fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
         workplace = COALESCE(workplace, @workplace), location_check = @locationCheck,

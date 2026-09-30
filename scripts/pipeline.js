@@ -20,8 +20,11 @@ import { collectReport, renderReport, sendReport } from '../agents/hunt/report.j
 
 const noEmail = process.argv.includes('--no-email');
 
+const STEPS = ['discover', 'score', 'hunt', 'archive', 'report'];
+
 /** Runs one step as its own traced run; returns its summary, or null when it failed. */
 async function step(tracer, name, fn, statusOf = () => 'ok') {
+  console.log(`[pipeline] Step ${STEPS.indexOf(name) + 1}/${STEPS.length}: ${name}`);
   const run = tracer.startRun(name);
   try {
     const summary = await fn(run);
@@ -76,6 +79,7 @@ async function main() {
     });
     pipelineRun.finish(knowledge ? 'ok' : 'partial');
 
+    console.log(`[pipeline] Step ${STEPS.length}/${STEPS.length}: report`);
     if (noEmail) {
       const r = renderReport(collectReport(store.db, { since: started }));
       console.log(`${r.subject}\n${r.text}`);
