@@ -31,7 +31,7 @@ npm run google:check              verify Google access (-- --send-test-email to 
 npm run import:v1                 one-time import of the v1 sheets into data/job-agent.db (-- --reset to rebuild)
 npm run discover                  find new postings from all sources and store them (no scoring)
 npm run discover -- --dry-run --limit=20 --sources=himalayas,linkedin --no-details   preview options
-npx playwright install chromium   one-time browser download for pages that need JavaScript (optional)
+npx playwright install chromium   optional: without it, pages that need JavaScript render in the installed Edge or Chrome (PLAYWRIGHT_CHANNEL forces one)
 Scripts that need secrets load .env through node --env-file.
 
 ## Hard rules
