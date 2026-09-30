@@ -1,15 +1,29 @@
 {
-  "name": "Job-Agent",
+  "name": "job-agent",
   "version": "1.0.0",
-  "main": "index.js",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --test",
+    "config:from-v1": "node scripts/config-from-v1.js",
+    "check:personal": "node scripts/check-personal.js",
+    "hooks:install": "git config core.hooksPath .githooks",
+    "google:login": "node --env-file=.env scripts/google-login.js",
+    "google:check": "node --env-file=.env scripts/google-check.js",
+    "import:v1": "node --env-file=.env scripts/import-v1.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "Job discovery and job hunt agents",
   "dependencies": {
-    "@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.0"
+    "@googleapis/docs": "^14.0.1",
+    "@googleapis/gmail": "^22.0.1",
+    "@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.0",
+    "csv-parse": "^7.0.3",
+    "google-auth-library": "^11.1.0"
   }
 }
