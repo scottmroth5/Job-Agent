@@ -59,21 +59,41 @@ export function parseResult(r, term) {
   };
 }
 
+// Go Fractional's own pages are bot-protected, so its listings are found through Google instead.
+export const GO_FRACTIONAL = 'Go Fractional';
+
+/**
+ * The searches to run: v1's "<term> remote jobs" for full-time terms, "<term> remote" for fractional
+ * terms, and, when search.siteSearch is true, a Google site search of Go Fractional per fractional term.
+ * Serper's free plan rejects site: queries ("Query pattern not allowed for free accounts"), so it is off by default.
+ */
+export function buildQueries(config) {
+  const fractional = config.search.fractionalTerms ?? [];
+  return [
+    ...config.search.terms.map((term) => ({ term, q: `${term} remote jobs` })),
+    ...fractional.map((term) => ({ term, q: `${term} remote`, searchTrack: 'fractional' })),
+    ...(config.search.siteSearch
+      ? fractional.map((term) => ({ term, q: `site:gofractional.com/jobs ${term}`, searchTrack: 'fractional', source: GO_FRACTIONAL }))
+      : []),
+  ];
+}
+
 export async function search({ http, config, apiKey = process.env.SERPER_API_KEY, delayMs = 1200 }) {
   const out = { items: [], requests: 0, errors: [], rateLimited: false };
   if (!apiKey) {
     out.errors.push('SERPER_API_KEY is not set; skipped');
     return out;
   }
-  for (const term of config.search.terms) {
+  for (const { term, q, searchTrack, source } of buildQueries(config)) {
     try {
       out.requests += 1;
-      const data = await http.postJson(
-        API,
-        { q: `${term} remote jobs`, gl: 'us', hl: 'en', tbs: 'qdr:w', num: 20 },
-        { headers: { 'X-API-KEY': apiKey } },
+      const data = await http.postJson(API, { q, gl: 'us', hl: 'en', tbs: 'qdr:w', num: 20 }, { headers: { 'X-API-KEY': apiKey } });
+      out.items.push(
+        ...(data.jobs ?? data.organic ?? [])
+          .map((r) => ({ ...parseResult(r, term), ...(searchTrack ? { searchTrack } : {}), ...(source ? { source } : {}) }))
+          .filter((i) => !isNonJobSite(i.url))
+          .filter((i) => source !== GO_FRACTIONAL || /gofractional\.com\/jobs\//i.test(i.url ?? '')),
       );
-      out.items.push(...(data.jobs ?? data.organic ?? []).map((r) => parseResult(r, term)).filter((i) => !isNonJobSite(i.url)));
     } catch (err) {
       if (err instanceof RateLimitedError) {
         out.rateLimited = true;

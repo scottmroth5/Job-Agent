@@ -78,19 +78,26 @@ export async function fetchPosting(http, jobId) {
   return parsePosting(html);
 }
 
-/** Runs the remote search, plus the local one when localSearchLocation is set, for every term. */
+/**
+ * Runs the remote search, plus the local one when localSearchLocation is set, for every full-time term,
+ * and a remote search for every fractional term (those items are tagged searchTrack 'fractional').
+ */
 export async function search({ http, config, delayMs = 1500, maxPages = 2 }) {
   const out = { items: [], requests: 0, errors: [], rateLimited: false };
   const modes = config.search.localSearchLocation ? ['remote', 'local'] : ['remote'];
-  outer: for (const term of config.search.terms) {
-    for (const mode of modes) {
+  const searches = [
+    ...config.search.terms.map((term) => ({ term, modes })),
+    ...(config.search.fractionalTerms ?? []).map((term) => ({ term, modes: ['remote'], searchTrack: 'fractional' })),
+  ];
+  outer: for (const { term, modes: termModes, searchTrack } of searches) {
+    for (const mode of termModes) {
       for (let page = 0; page < maxPages; page++) {
         try {
           out.requests += 1;
           const { text: html } = await http.get(
             searchUrl({ keywords: term, mode, localLocation: config.search.localSearchLocation, start: page * PAGE_SIZE }),
           );
-          const items = parseSearchPage(html, mode);
+          const items = parseSearchPage(html, mode).map((i) => (searchTrack ? { ...i, searchTrack } : i));
           out.items.push(...items);
           await http.sleep(delayMs);
           if (items.length < PAGE_SIZE) break;

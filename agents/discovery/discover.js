@@ -4,15 +4,26 @@
 import { normalizeUrl, companyTitleKey } from '../../tools/urls.js';
 import { keywordMatcher } from '../../tools/titles.js';
 import { checkLocation } from '../../tools/location.js';
+import { detectTrack } from '../../tools/track.js';
+import { parseRate, parseHours } from '../../tools/rates.js';
 import { resolveDetails, RETRYABLE } from './details.js';
 import * as himalayas from './sources/himalayas.js';
 import * as remoteok from './sources/remoteok.js';
+import * as fractionaljobs from './sources/fractionaljobs.js';
 import * as linkedin from './sources/linkedin.js';
 import * as serper from './sources/serper.js';
 
 /** Sources in priority order: when the same job appears in several, the earlier source wins. */
-export const SOURCES = { himalayas, remoteok, linkedin, serper };
-export const PRIORITY = [himalayas.SOURCE, remoteok.SOURCE, linkedin.SOURCE, serper.SOURCE];
+export const SOURCES = { himalayas, remoteok, fractionaljobs, linkedin, serper };
+export const PRIORITY = [himalayas.SOURCE, remoteok.SOURCE, fractionaljobs.SOURCE, linkedin.SOURCE, serper.GO_FRACTIONAL, serper.SOURCE];
+
+/** Fills track, rate and hours on an item from what the source and details gave. */
+function applyTrack(item) {
+  item.rate ??= parseRate(item.rateText);
+  item.hours ??= parseHours(item.hoursText);
+  item.track = detectTrack({ ...item, hoursMax: item.hours?.max });
+  return item;
+}
 const rank = (source) => {
   const i = PRIORITY.indexOf(source);
   return i === -1 ? PRIORITY.length : i;
@@ -86,7 +97,10 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const { db } = store;
   const today = now.toISOString().slice(0, 10);
   const since = isoDaysAgo(now, maxAgeDays);
-  const relevant = keywordMatcher(config.search.relevantTitleKeywords);
+  const fullTimeRelevant = keywordMatcher(config.search.relevantTitleKeywords);
+  const fractionalRelevant = keywordMatcher(config.search.fractionalTitleKeywords ?? []);
+  // Fractional items also pass on the fractional keywords (e.g. CISO), which full-time searches do not target.
+  const relevant = (item) => fullTimeRelevant(item.title) || (detectTrack(item) === 'fractional' && fractionalRelevant(item.title));
   const noise = keywordMatcher(config.search.noiseTitleKeywords ?? []);
 
   const bySource = {};
@@ -112,7 +126,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
   // 2-3. Filter by title and age
   const candidates = collected.filter((item) => {
     const s = stat(item.source);
-    if (!item.title || !relevant(item.title) || noise(item.title)) return false;
+    if (!item.title || !relevant(item) || noise(item.title)) return false;
     s.relevant += 1;
     if (item.postedOn && item.postedOn < since) return false;
     s.fresh += 1;
@@ -192,8 +206,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
       continue;
     }
     if (ctKey) seenAfter.add(ctKey);
-    // 6. Location check
+    // 6. Location check, and full-time vs fractional track with parsed pay and hours
     item.locationCheck = checkLocation({ location: item.location, workplace: item.workplace, text: item.description }, config.search.homeLocations);
+    applyTrack(item);
     stat(item.source).new += 1;
     toInsert.push(item);
   }
@@ -208,10 +223,10 @@ export async function runDiscovery({ store, config, http, browser = null, source
     const insert = db.prepare(`INSERT INTO postings
       (url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
        discovered_on, stage, status, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, workplace, location_check,
-       source_job_id, created_at, updated_at)
+       source_job_id, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
       VALUES (@url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on, @posted_raw,
        @discovered_on, 'discovered', 'new', @fetched_text, @fetched_at, @fetch_status, @fetch_method, @fetch_attempts, @workplace, @location_check,
-       @source_job_id, @now, @now)`);
+       @source_job_id, @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra_json, @now, @now)`);
     const history = db.prepare(`INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, 'new', 'agent', ?)`);
     const sighting = db.prepare('INSERT OR IGNORE INTO posting_sightings (posting_id, source, url, seen_on) VALUES (?, ?, ?, ?)');
     const upgrade = db.prepare(`UPDATE postings SET url = @url, url_key = @url_key, source = @source,
@@ -245,6 +260,14 @@ export async function runDiscovery({ store, config, http, browser = null, source
             workplace: item.workplace ?? null,
             location_check: item.locationCheck,
             source_job_id: item.sourceJobId ?? null,
+            track: item.track ?? 'fulltime',
+            rate_text: item.rateText ?? null,
+            rate_min: item.rate?.min ?? null,
+            rate_max: item.rate?.max ?? null,
+            rate_unit: item.rate?.unit ?? null,
+            hours_min: item.hours?.min ?? null,
+            hours_max: item.hours?.max ?? null,
+            extra_json: item.extra && Object.keys(item.extra).length ? JSON.stringify(item.extra) : null,
             now: nowIso,
           }).lastInsertRowid,
         );

@@ -11,7 +11,14 @@
     "noiseTitleKeywords": ["intern", "sales"],
     "homeAreaLabel": "the Anytown area (Anytown, ST and nearby suburbs)",
     "localSearchLocation": "Anytown Metropolitan Area",
-    "homeLocations": ["Anytown Metro Area", "Anytown, ST", "Nearby City, ST", "Suburb, ST"]
+    "homeLocations": ["Anytown Metro Area", "Anytown, ST", "Nearby City, ST", "Suburb, ST"],
+    "fractionalTerms": ["Fractional CTO", "Fractional Head of Engineering", "Fractional VP Engineering", "Fractional CISO"],
+    "fractionalTitleKeywords": ["fractional", "ciso", "cio", "chief information security", "chief information officer", "technical advisor"],
+    "siteSearch": false
+  },
+  "fractional": {
+    "targetAnnual": [200000, 250000],
+    "weeksPerYear": 48
   },
   "coverLetterChecks": [
     { "label": "\"I am confident\"", "text": "\\bi am confident\\b|\\bi'm confident\\b" },

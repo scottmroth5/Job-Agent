@@ -40,6 +40,23 @@ export async function resolveDetails(item, { http, browser, state = {} }) {
     return Object.assign(item, { description: cap(item.description), fetchStatus: 'ok', fetchMethod: 'source' });
   }
 
+  // Sources with their own page reader (e.g. Fractional Jobs' labeled terms).
+  if (item.fetchDetails) {
+    try {
+      const d = await item.fetchDetails(http);
+      item.rateText ??= d.rateText;
+      item.hoursText ??= d.hoursText;
+      item.location ??= d.location;
+      item.extra = { ...(item.extra ?? {}), ...(d.extra ?? {}) };
+      if (d.description && d.description.length >= MIN_DESCRIPTION) {
+        return Object.assign(item, { description: cap(d.description), fetchStatus: 'ok', fetchMethod: 'source-page' });
+      }
+      return Object.assign(item, { fetchStatus: 'thin', fetchMethod: 'source-page' });
+    } catch (err) {
+      return Object.assign(item, { fetchStatus: failure(err), fetchMethod: null });
+    }
+  }
+
   if (item.linkedinJobId) {
     if (state.linkedinBlocked) return Object.assign(item, { fetchStatus: 'rate_limited', fetchMethod: null });
     try {
