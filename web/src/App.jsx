@@ -5,6 +5,9 @@ import JobTable from './components/JobTable.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import AddJobDialog from './components/AddJobDialog.jsx';
 import StackingBar from './components/StackingBar.jsx';
+import AdminPage from './components/AdminPage.jsx';
+
+const viewFromHash = () => (window.location.hash.startsWith('#/admin') ? 'admin' : 'jobs');
 
 const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'all', q: '', minScore: '' };
 
@@ -25,6 +28,13 @@ export default function App() {
   const [selectedId, setSelectedId] = useState(null);
   const [adding, setAdding] = useState(false);
   const [stack, setStack] = useState([]);
+  const [view, setView] = useState(viewFromHash);
+
+  useEffect(() => {
+    const onHash = () => setView(viewFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -64,9 +74,17 @@ export default function App() {
             </div>
           )}
         </div>
-        <button className="primary" onClick={() => setAdding(true)}>+ Add job</button>
+        <nav className="views" aria-label="Screens">
+          <a href="#/" className={view === 'jobs' ? 'on' : ''}>Jobs</a>
+          <a href="#/admin" className={view === 'admin' ? 'on' : ''}>Admin</a>
+        </nav>
+        {view === 'jobs' && <button className="primary" onClick={() => setAdding(true)}>+ Add job</button>}
       </header>
 
+      {view === 'admin' ? (
+        <AdminPage />
+      ) : (
+      <>
       <div className="filters">
         <div className="segmented" role="tablist" aria-label="Track">
           {[
@@ -115,6 +133,8 @@ export default function App() {
         stack={stack}
         onToggleStack={toggleStack}
       />
+      </>
+      )}
 
       {selectedId && <DetailPanel id={selectedId} onClose={() => setSelectedId(null)} onChanged={refresh} />}
       {adding && (

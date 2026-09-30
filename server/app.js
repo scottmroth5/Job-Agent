@@ -8,6 +8,7 @@ import { createTracer } from '@scottmroth5/agent-core';
 import { listPostings, getPosting, updatePosting, summary, STATUSES, STAGES, TRACKS } from './queries.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
+import { registerAdminRoutes } from './admin.js';
 import { addPosting } from '../agents/manual.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { generateForPostings } from '../agents/hunt/generate.js';
@@ -235,6 +236,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
       return reply.code(202).send({ taskId });
     },
   );
+
+  registerAdminRoutes(app, { db, config });
 
   app.get(
     '/api/tasks/:id',

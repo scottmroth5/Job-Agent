@@ -106,6 +106,24 @@ pre.tweaks, pre.posting-text { white-space: pre-wrap; background: var(--bg); pad
 .task-step { padding: 2px 0; }
 section ul { margin: 0 0 8px; padding-left: 18px; }
 
+.views { display: flex; gap: 4px; margin-left: auto; margin-right: 12px; }
+.views a { padding: 6px 12px; border-radius: 6px; text-decoration: none; color: var(--text); }
+.views a.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+
+.admin { display: grid; grid-template-columns: 260px 1fr; gap: 16px; align-items: start; }
+.prompt-list { display: flex; flex-direction: column; gap: 6px; }
+.prompt-list button { text-align: left; padding: 10px; }
+.prompt-list button.on { border-color: var(--accent); background: var(--accent-soft); }
+.prompt-editor { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; min-width: 0; }
+.prompt-text { font: 13px/1.5 ui-monospace, Consolas, monospace; min-height: 320px; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 8px 0; }
+.chip { font: 12px ui-monospace, Consolas, monospace; padding: 2px 6px; }
+.chip.required { border-color: var(--accent); }
+.chip.used { background: var(--accent-soft); }
+table.history { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.history td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--border); vertical-align: top; }
+code { font: 12px ui-monospace, Consolas, monospace; background: var(--bg); padding: 0 4px; border-radius: 3px; }
+
 /* Phone: the table becomes stacked cards and the panel fills the screen. */
 @media (max-width: 760px) {
   .app { padding: 12px; }
@@ -123,4 +141,9 @@ section ul { margin: 0 0 8px; padding-left: 18px; }
   .grid2 { grid-template-columns: 1fr; }
   .panel { padding: 16px; }
   .filters select { flex: 1 1 40%; }
+  .topbar { flex-wrap: wrap; }
+  .views { order: 3; margin: 0; width: 100%; }
+  .admin { grid-template-columns: 1fr; }
+  .prompt-list { flex-direction: row; overflow-x: auto; }
+  .prompt-list button { flex: 0 0 200px; }
 }

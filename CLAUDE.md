@@ -50,6 +50,12 @@ Long actions (add, score, write-materials, regenerate, refetch) run as in-memory
 while a pipeline step is running. AUTH_MODE=none binds to 127.0.0.1 only; exposing the server requires adding a login mode
 in server/auth.js first. web/dist is build output (gitignored).
 
+## Prompts
+agents/prompts.js is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active
+(prompt_versions table, with history), else the repo file, which stays the default. The UI's Admin screen (#/admin) edits
+the four templates; placeholders are validated on save, and output schemas stay read-only in the repo because code reads
+their fields. Personal wording belongs in edits or the knowledge doc, never in the repo defaults.
+
 ## Tracks
 Postings are fulltime or fractional (tools/track.js). Fractional postings score with prompts/score-fractional.md, which adds
 fit (High/Medium/Stretch/Poor), why it fits, caveats, pay and hours; annualized estimates use tools/rates.js (tracker math).

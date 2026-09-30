@@ -22,6 +22,12 @@ export const api = {
   add: (job) => request('POST', '/api/postings', job),
   action: (id, action) => request('POST', `/api/postings/${id}/actions/${action}`),
   task: (id) => request('GET', `/api/tasks/${id}`),
+  prompts: () => request('GET', '/api/admin/prompts'),
+  prompt: (name) => request('GET', `/api/admin/prompts/${name}`),
+  savePrompt: (name, template, note) => request('PUT', `/api/admin/prompts/${name}`, { template, ...(note ? { note } : {}) }),
+  restorePrompt: (name, versionId) => request('POST', `/api/admin/prompts/${name}/restore`, { versionId }),
+  previewPrompt: (name, template, postingId) =>
+    request('POST', `/api/admin/prompts/${name}/preview`, { template, ...(postingId ? { postingId: Number(postingId) } : {}) }),
 };
 
 /** Polls a background task, reporting each update, until it finishes. Resolves with the final task. */
