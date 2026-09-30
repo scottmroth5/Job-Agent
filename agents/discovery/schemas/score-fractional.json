@@ -1,0 +1,43 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "score", "fit", "reason", "whyItFits", "caveats", "rate", "hoursPerWeek",
+    "roleType", "locationConcern", "strengths", "watchOuts", "topTalkingPoint", "suggestedStatus"
+  ],
+  "properties": {
+    "score": { "type": "integer", "enum": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], "description": "Fit from 1 (poor) to 10 (excellent)" },
+    "fit": { "type": "string", "enum": ["High", "Medium", "Stretch", "Poor"] },
+    "reason": { "type": "string", "description": "One sentence explaining the score" },
+    "whyItFits": { "type": "string" },
+    "caveats": { "type": "string" },
+    "rate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max", "unit"],
+      "properties": {
+        "min": { "anyOf": [{ "type": "number" }, { "type": "null" }] },
+        "max": { "anyOf": [{ "type": "number" }, { "type": "null" }] },
+        "unit": { "type": "string", "enum": ["hour", "month", "year", "project", "unknown"] }
+      }
+    },
+    "hoursPerWeek": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "properties": {
+        "min": { "anyOf": [{ "type": "number" }, { "type": "null" }] },
+        "max": { "anyOf": [{ "type": "number" }, { "type": "null" }] }
+      }
+    },
+    "roleType": {
+      "type": "string",
+      "enum": ["Full time", "Part time", "Fractional", "Contract", "Interim", "Co-founder", "Founding CTO", "Unknown"]
+    },
+    "locationConcern": { "type": "string", "enum": ["none", "unverified", "conflict"] },
+    "strengths": { "type": "array", "items": { "type": "string" }, "description": "Up to three specific strengths" },
+    "watchOuts": { "type": "array", "items": { "type": "string" }, "description": "One or two gaps or risks" },
+    "topTalkingPoint": { "type": "string" },
+    "suggestedStatus": { "type": "string", "enum": ["worth_pursuing", "pass"] }
+  }
+}

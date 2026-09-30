@@ -170,6 +170,41 @@ test('scorePostings refuses to run without usable knowledge', async () => {
   store.close();
 });
 
+test('fractional postings use the fractional prompt with stacking target and posted terms', () => {
+  const prompts = { fulltime: prompt, fractional: loadScorePrompt('fractional') };
+  const fcfg = { ...config, fractional: { targetAnnual: [200000, 250000], weeksPerYear: 48 } };
+  const posting = { track: 'fractional', company: 'Example Co', title: 'Fractional CTO', location: 'Remote', location_check: 'remote', rate_text: '$5K - $6K / mo', hours_min: 5, hours_max: 8, fetched_text: 'x' };
+  const req = buildScoreRequest(posting, { config: fcfg, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5', prompts });
+  assert.equal(req.label, 'score-fractional');
+  assert.ok(!/\{\{/.test(req.prompt));
+  assert.match(req.prompt, /The target is \$200K to \$250K per year/);
+  assert.match(req.prompt, /Posted terms: pay \$5K - \$6K \/ mo, 5 to 8 hours per week/);
+  assert.deepEqual(Object.keys(req.schema.properties).slice(0, 3), ['score', 'fit', 'reason']);
+  const full = buildScoreRequest({ ...posting, track: 'fulltime' }, { config: fcfg, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5', prompts });
+  assert.equal(full.label, 'score');
+});
+
+test('scoring a fractional posting stores pay and hours only where the source left them empty', async () => {
+  const store = openJobStore(':memory:');
+  const id = addPosting(store.db);
+  store.db.prepare("UPDATE postings SET track = 'fractional', hours_min = 10, hours_max = 20 WHERE id = ?").run(id);
+  const fractionalResult = result({
+    score: 8,
+    fit: 'High',
+    whyItFits: 'Fits.',
+    caveats: '',
+    rate: { min: 175, max: 225, unit: 'hour' },
+    hoursPerWeek: { min: 5, max: 8 },
+  });
+  const { claude, requests } = fakeClaude([fractionalResult]);
+  await scorePostings({ store, config: { ...config, fractional: { targetAnnual: [200000, 250000] } }, claude, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5' });
+  assert.match(requests[0].messages[0].content, /fractional engagement/);
+  const row = store.db.prepare('SELECT rate_min, rate_max, rate_unit, hours_min, hours_max, stage FROM postings WHERE id = ?').get(id);
+  assert.deepEqual(row, { rate_min: 175, rate_max: 225, rate_unit: 'hour', hours_min: 10, hours_max: 20, stage: 'pipeline' });
+  assert.equal(JSON.parse(store.db.prepare('SELECT analysis_json FROM scores').pluck().get()).fit, 'High');
+  store.close();
+});
+
 test('estimateCost skips rule-scored postings and knows only listed models', () => {
   const postings = [{ location_check: 'remote', fetched_text: 'x'.repeat(4000) }, { location_check: 'conflict' }];
   const usd = estimateCost(postings, { model: 'claude-haiku-4-5', knowledgeChars: 10000, templateChars: 2000 });
