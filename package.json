@@ -14,7 +14,9 @@
     "google:login": "node --env-file=.env scripts/google-login.js",
     "google:check": "node --env-file=.env scripts/google-check.js",
     "import:v1": "node --env-file=.env scripts/import-v1.js",
-    "discover": "node --env-file=.env scripts/discover.js"
+    "discover": "node --env-file=.env scripts/discover.js",
+    "score": "node --env-file=.env scripts/score.js",
+    "eval:score": "node --env-file=.env scripts/eval-score.js"
   },
   "keywords": [],
   "author": "",

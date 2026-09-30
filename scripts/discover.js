@@ -7,6 +7,7 @@ import { loadConfig } from '../tools/config.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
 import { openJobStore } from '../db/index.js';
+import { assertNoRunningRun } from '../tools/runs.js';
 import { runDiscovery, SOURCES } from '../agents/discovery/discover.js';
 
 function parseArgs(argv) {
@@ -23,19 +24,17 @@ function parseArgs(argv) {
   };
 }
 
-// A discover run still marked running after this long is assumed to have crashed.
-const STALE_RUN_MS = 30 * 60 * 1000;
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const config = loadConfig();
   const store = openJobStore();
-  const running = store.db
-    .prepare("SELECT id, started_at FROM runs WHERE name = 'discover' AND status = 'running' AND started_at > ? ORDER BY id DESC LIMIT 1")
-    .get(new Date(Date.now() - STALE_RUN_MS).toISOString());
-  if (running && !args.dryRun) {
-    store.close();
-    throw new Error(`Another discover run (started ${running.started_at}) is still running. Wait for it to finish; runs overlapping can store the same job twice.`);
+  if (!args.dryRun) {
+    try {
+      assertNoRunningRun(store.db, 'discover');
+    } catch (err) {
+      store.close();
+      throw err;
+    }
   }
   const run = createTracer({ store }).startRun('discover', { dryRun: args.dryRun, sources: Object.keys(args.sources), limit: args.limit });
   const browser = args.details ? await createBrowser() : null;
