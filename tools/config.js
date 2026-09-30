@@ -51,8 +51,8 @@ export function validateConfig(config) {
     const v = config?.search?.[key];
     if (!strList(v) || v.length === 0) problems.push(`search.${key} must be a non-empty list of strings`);
   }
-  if (config?.search?.homeAreaLabel != null && !str(config.search.homeAreaLabel)) {
-    problems.push('search.homeAreaLabel must be a non-empty string');
+  for (const key of ['homeAreaLabel', 'localSearchLocation']) {
+    if (config?.search?.[key] != null && !str(config.search[key])) problems.push(`search.${key} must be a non-empty string`);
   }
   if (config?.search?.noiseTitleKeywords != null && !strList(config.search.noiseTitleKeywords)) {
     problems.push('search.noiseTitleKeywords must be a list of strings');

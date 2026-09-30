@@ -10,6 +10,7 @@
     "relevantTitleKeywords": ["engineering", "technology", "cto"],
     "noiseTitleKeywords": ["intern", "sales"],
     "homeAreaLabel": "the Anytown area (Anytown, ST and nearby suburbs)",
+    "localSearchLocation": "Anytown Metropolitan Area",
     "homeLocations": ["Anytown Metro Area", "Anytown, ST", "Nearby City, ST", "Suburb, ST"]
   },
   "coverLetterChecks": [

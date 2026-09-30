@@ -18,7 +18,11 @@ export function normalizeUrl(raw) {
   }
   const host = url.hostname.toLowerCase().replace(/^www\./, '');
   let path = url.pathname.replace(/\/+$/, '') || '';
-  if (host.endsWith('linkedin.com')) return `${host}${path.toLowerCase()}`;
+  if (host.endsWith('linkedin.com')) {
+    // /jobs/view/some-title-at-company-1234567890 and /jobs/view/1234567890 are the same job.
+    const jobId = /\/jobs\/view\/(?:[^/]*-)?(\d{6,})$/i.exec(path)?.[1];
+    return jobId ? `linkedin.com/jobs/view/${jobId}` : `${host}${path.toLowerCase()}`;
+  }
 
   const params = [...url.searchParams.entries()]
     .filter(([k]) => !TRACKING.test(k))

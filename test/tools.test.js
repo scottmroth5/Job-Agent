@@ -18,11 +18,11 @@ test('normalizeUrl drops tracking, fragments, www and trailing slashes', () => {
   assert.equal(normalizeUrl('not a url'), 'not a url');
 });
 
-test('normalizeUrl keeps only the path for LinkedIn job links', () => {
-  assert.equal(
-    normalizeUrl('https://www.linkedin.com/jobs/view/VP-Engineering-at-Acme-123/?refId=x&trackingId=y'),
-    'linkedin.com/jobs/view/vp-engineering-at-acme-123',
-  );
+test('normalizeUrl reduces LinkedIn job links to the job ID', () => {
+  const key = 'linkedin.com/jobs/view/4000000123';
+  assert.equal(normalizeUrl('https://www.linkedin.com/jobs/view/VP-Engineering-at-Acme-4000000123/?refId=x&trackingId=y'), key);
+  assert.equal(normalizeUrl('https://linkedin.com/jobs/view/4000000123'), key);
+  assert.equal(normalizeUrl('https://www.linkedin.com/company/acme/'), 'linkedin.com/company/acme');
 });
 
 test('companyTitleKey ignores case, punctuation and spacing', () => {
