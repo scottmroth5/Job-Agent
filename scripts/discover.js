@@ -60,6 +60,10 @@ async function main() {
       console.log(`Limited to ${summary.selected} of ${summary.newFound} new postings (--limit).`);
     }
     console.log(args.dryRun ? `Would insert ${summary.wouldInsert} postings.` : `Inserted ${summary.inserted} postings; ${summary.upgrades} existing postings upgraded to a better source.`);
+    if (summary.retried.attempted) {
+      console.log(`Retried full text for ${summary.retried.attempted} earlier postings: ${summary.retried.fixed} fixed.`);
+    }
+    if (summary.linkedinRateLimited) console.log('LinkedIn rate limited full-text requests; the rest will be retried on the next run.');
 
     const { insertedIds, ...rest } = summary;
     run.finish(Object.values(summary.bySource).some((s) => s.errors.length || s.rateLimited) ? 'partial' : 'ok', {

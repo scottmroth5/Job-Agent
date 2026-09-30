@@ -4,7 +4,7 @@
 import { normalizeUrl, companyTitleKey } from '../../tools/urls.js';
 import { keywordMatcher } from '../../tools/titles.js';
 import { checkLocation } from '../../tools/location.js';
-import { resolveDetails } from './details.js';
+import { resolveDetails, RETRYABLE } from './details.js';
 import * as himalayas from './sources/himalayas.js';
 import * as remoteok from './sources/remoteok.js';
 import * as linkedin from './sources/linkedin.js';
@@ -41,6 +41,25 @@ async function mapLimit(items, limit, pauseMs, sleep, fn) {
 }
 
 /**
+ * Resolves details for many items. LinkedIn's endpoint rate-limits quickly, so its requests run
+ * one at a time with a longer pause, alongside the other sites at normal concurrency.
+ */
+async function resolveAll(items, { http, browser, state, concurrency, pauseMs, linkedinPauseMs, onDone }) {
+  const viaLinkedIn = items.filter((i) => i.linkedinJobId);
+  const others = items.filter((i) => !i.linkedinJobId);
+  const run = async (item) => {
+    await resolveDetails(item, { http, browser, state });
+    onDone(item);
+  };
+  await Promise.all([
+    mapLimit(viaLinkedIn, 1, linkedinPauseMs, http.sleep, run),
+    mapLimit(others, concurrency, pauseMs, http.sleep, run),
+  ]);
+}
+
+const MAX_FETCH_ATTEMPTS = 3;
+
+/**
  * @param {object} ctx
  * @param {{db, tx}} ctx.store
  * @param {object} ctx.config               loaded job-search config
@@ -48,11 +67,22 @@ async function mapLimit(items, limit, pauseMs, sleep, fn) {
  * @param {object|null} [ctx.browser]       from createBrowser(), or null
  * @param {object} [ctx.sources]            name -> source module; defaults to SOURCES
  * @param {Date}   [ctx.now]
- * @param {object} [ctx.options]            { dryRun, limit, details = true, maxAgeDays = 7, concurrency = 3, pauseMs = 1000, log }
+ * @param {object} [ctx.options]            { dryRun, limit, details = true, maxAgeDays = 7, concurrency = 3, pauseMs = 1000,
+ *                                            linkedinPauseMs = 3000, retryPending = true, log }
  * @returns {Promise<object>} summary with per-source counts, location results and inserted postings
  */
 export async function runDiscovery({ store, config, http, browser = null, sources = SOURCES, now = new Date(), options = {} }) {
-  const { dryRun = false, limit = Infinity, details = true, maxAgeDays = 7, concurrency = 3, pauseMs = 1000, log = () => {} } = options;
+  const {
+    dryRun = false,
+    limit = Infinity,
+    details = true,
+    maxAgeDays = 7,
+    concurrency = 3,
+    pauseMs = 1000,
+    linkedinPauseMs = 3000,
+    retryPending = true,
+    log = () => {},
+  } = options;
   const { db } = store;
   const today = now.toISOString().slice(0, 10);
   const since = isoDaysAgo(now, maxAgeDays);
@@ -129,9 +159,16 @@ export async function runDiscovery({ store, config, http, browser = null, source
   // 5. Full text for new postings
   const state = {};
   if (details) {
-    await mapLimit(selected, concurrency, pauseMs, http.sleep, async (item) => {
-      await resolveDetails(item, { http, browser, state });
-      stat(item.source)[item.fetchStatus === 'ok' ? 'detailsOk' : 'detailsFailed'] += 1;
+    await resolveAll(selected, {
+      http,
+      browser,
+      state,
+      concurrency,
+      pauseMs,
+      linkedinPauseMs,
+      onDone: (item) => {
+        stat(item.source)[item.fetchStatus === 'ok' ? 'detailsOk' : 'detailsFailed'] += 1;
+      },
     });
   } else {
     for (const item of selected) Object.assign(item, { fetchStatus: item.description ? 'ok' : 'skipped', fetchMethod: item.description ? 'source' : null });
@@ -166,10 +203,10 @@ export async function runDiscovery({ store, config, http, browser = null, source
     const nowIso = now.toISOString();
     const insert = db.prepare(`INSERT INTO postings
       (url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
-       discovered_on, stage, status, fetched_text, fetched_at, fetch_status, fetch_method, workplace, location_check,
+       discovered_on, stage, status, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, workplace, location_check,
        source_job_id, created_at, updated_at)
       VALUES (@url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on, @posted_raw,
-       @discovered_on, 'discovered', 'new', @fetched_text, @fetched_at, @fetch_status, @fetch_method, @workplace, @location_check,
+       @discovered_on, 'discovered', 'new', @fetched_text, @fetched_at, @fetch_status, @fetch_method, @fetch_attempts, @workplace, @location_check,
        @source_job_id, @now, @now)`);
     const history = db.prepare(`INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, 'new', 'agent', ?)`);
     const sighting = db.prepare('INSERT OR IGNORE INTO posting_sightings (posting_id, source, url, seen_on) VALUES (?, ?, ?, ?)');
@@ -200,6 +237,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
             fetched_at: item.description ? nowIso : null,
             fetch_status: item.fetchStatus ?? null,
             fetch_method: item.fetchMethod ?? null,
+            fetch_attempts: details && item.fetchMethod !== 'source' ? 1 : 0,
             workplace: item.workplace ?? null,
             location_check: item.locationCheck,
             source_job_id: item.sourceJobId ?? null,
@@ -232,10 +270,65 @@ export async function runDiscovery({ store, config, http, browser = null, source
     });
   }
 
+  // 8. Retry recent postings whose full text failed on an earlier run (rate limits, timeouts)
+  const retried = { attempted: 0, fixed: 0 };
+  if (!dryRun && details && retryPending) {
+    const pending = db
+      .prepare(`SELECT id, url, company, title, location, workplace, source_job_id, source FROM postings
+        WHERE stage = 'discovered' AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
+          AND fetch_attempts < ? AND discovered_on >= ?
+          ${insertedIds.length ? `AND id NOT IN (${insertedIds.map(() => '?').join(', ')})` : ''}`)
+      .all(...RETRYABLE, MAX_FETCH_ATTEMPTS, since, ...insertedIds);
+    const items = pending.map((p) => ({
+      id: p.id,
+      url: p.url,
+      company: knownCompany(p.company) ? p.company : null,
+      title: p.title,
+      location: p.location,
+      workplace: p.workplace,
+      linkedinJobId: linkedin.jobIdFromUrl(p.url),
+      description: null,
+    }));
+    const update = db.prepare(`UPDATE postings SET fetched_text = @text, fetched_at = @fetchedAt, fetch_status = @status,
+        fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
+        workplace = COALESCE(workplace, @workplace), location_check = @locationCheck,
+        company = CASE WHEN company = '${UNKNOWN_COMPANY}' AND @company IS NOT NULL THEN @company ELSE company END,
+        company_title_key = CASE WHEN company = '${UNKNOWN_COMPANY}' AND @company IS NOT NULL THEN @ctKey ELSE company_title_key END,
+        updated_at = @now WHERE id = @id`);
+    await resolveAll(items, {
+      http,
+      browser,
+      state,
+      concurrency,
+      pauseMs,
+      linkedinPauseMs,
+      onDone: (item) => {
+        retried.attempted += 1;
+        if (item.fetchStatus === 'ok') retried.fixed += 1;
+        const nowIso = new Date().toISOString();
+        update.run({
+          id: item.id,
+          text: item.description ?? null,
+          fetchedAt: item.description ? nowIso : null,
+          status: item.fetchStatus,
+          method: item.fetchMethod ?? null,
+          location: item.location ?? null,
+          workplace: item.workplace ?? null,
+          locationCheck: checkLocation({ location: item.location, workplace: item.workplace, text: item.description }, config.search.homeLocations),
+          company: item.company ?? null,
+          ctKey: item.company ? companyTitleKey(item.company, item.title) : null,
+          now: nowIso,
+        });
+      },
+    });
+    if (retried.attempted) log('info', `Retried full text for ${retried.attempted} earlier postings; ${retried.fixed} now have text`);
+  }
+
   return {
     dryRun,
     since,
     bySource,
+    retried,
     candidates: candidates.length,
     newFound: fresh.length,
     selected: selected.length,

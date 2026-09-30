@@ -8,6 +8,7 @@ import { fetchPosting } from './sources/linkedin.js';
 export const MIN_DESCRIPTION = 200; // shorter text is treated as missing
 export const MIN_PAGE_TEXT = 800; // plain page text shorter than this is probably a JS shell
 export const MAX_TEXT = 20000; // stored text is capped; prompts trim further
+export const LINKEDIN_BACKOFF_MS = 60000; // one pause after LinkedIn's first 429, before giving up for the run
 
 const cap = (s) => (s && s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
 
@@ -33,7 +34,16 @@ export async function resolveDetails(item, { http, browser, state = {} }) {
   if (item.linkedinJobId) {
     if (state.linkedinBlocked) return Object.assign(item, { fetchStatus: 'rate_limited', fetchMethod: null });
     try {
-      const p = await fetchPosting(http, item.linkedinJobId);
+      let p;
+      try {
+        p = await fetchPosting(http, item.linkedinJobId);
+      } catch (err) {
+        // First 429 of the run: wait once and retry; a second 429 blocks LinkedIn for the rest of the run.
+        if (!(err instanceof RateLimitedError) || state.linkedinBackedOff) throw err;
+        state.linkedinBackedOff = true;
+        await http.sleep(LINKEDIN_BACKOFF_MS);
+        p = await fetchPosting(http, item.linkedinJobId);
+      }
       item.jobType ??= p.jobType;
       if (p.description && p.description.length >= MIN_DESCRIPTION) {
         return Object.assign(item, { description: cap(p.description), fetchStatus: 'ok', fetchMethod: 'linkedin' });
@@ -81,6 +91,9 @@ export async function resolveDetails(item, { http, browser, state = {} }) {
     return Object.assign(item, { fetchStatus: failure(err), fetchMethod: 'browser' });
   }
 }
+
+/** Fetch statuses worth retrying on a later run (temporary failures, not "no text on the page"). */
+export const RETRYABLE = ['rate_limited', 'timeout', 'error', 'needs_browser', 'http_429', 'http_500', 'http_502', 'http_503', 'http_504'];
 
 function failure(err) {
   if (err instanceof RateLimitedError) return 'rate_limited';

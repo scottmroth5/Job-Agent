@@ -128,13 +128,13 @@ test('details: source text, LinkedIn endpoint, JSON-LD, page text, then browser'
   assert.equal((await resolveDetails({ url: 'https://jobs.example.com/3' }, { http: shell, browser })).fetchMethod, 'browser');
 });
 
-test('details: a LinkedIn 429 stops further LinkedIn requests', async () => {
+test('details: a second LinkedIn 429 stops further LinkedIn requests', async () => {
   const http = fakeHttp([['jobPosting/', new RateLimitedError('https://www.linkedin.com/x')]]);
   const state = {};
   assert.equal((await resolveDetails({ linkedinJobId: '1' }, { http, state })).fetchStatus, 'rate_limited');
   assert.equal(state.linkedinBlocked, true);
   await resolveDetails({ linkedinJobId: '2' }, { http, state });
-  assert.equal(http.calls.length, 1);
+  assert.equal(http.calls.length, 2, 'the original request and one retry after the pause; none for the second job');
 });
 
 // ---------- full run ----------
@@ -203,6 +203,44 @@ test('runDiscovery filters, dedupes by priority, checks location, and stores new
   // A second identical run inserts nothing.
   const again = await runDiscovery({ store, config, http: { sleep: async () => {} }, sources, now: new Date('2026-09-30T13:00:00Z'), options: { pauseMs: 0 } });
   assert.equal(again.inserted, 0);
+  store.close();
+});
+
+test('details: after the first LinkedIn 429 the run waits once and retries', async () => {
+  let calls = 0;
+  const slept = [];
+  const http = {
+    async get() {
+      calls += 1;
+      if (calls === 1) throw new RateLimitedError('https://www.linkedin.com/x');
+      return { status: 200, text: `<div class="show-more-less-html__markup">${LONG}</div>` };
+    },
+    sleep: async (ms) => slept.push(ms),
+  };
+  const state = {};
+  assert.equal((await resolveDetails({ linkedinJobId: '5' }, { http, state })).fetchMethod, 'linkedin');
+  assert.deepEqual(slept, [60000]);
+  assert.equal(state.linkedinBlocked, undefined);
+});
+
+test('runDiscovery retries recent postings whose text failed earlier, then stops after 3 attempts', async () => {
+  const store = openJobStore(':memory:');
+  const insertPending = (url, attempts, discoveredOn = '2026-09-29') =>
+    store.db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, source, discovered_on, stage,
+      fetch_status, fetch_attempts, location, location_check, created_at, updated_at)
+      VALUES (?, ?, '(unknown)', 'CTO', ?, 'Google Jobs', ?, 'discovered', 'rate_limited', ?, NULL, 'unknown', 'x', 'x')`)
+      .run(url, url, `(unknown)|cto|${url}`, discoveredOn, attempts);
+  insertPending('https://jobs.example.com/a', 1);
+  insertPending('https://jobs.example.com/b', 3); // out of attempts
+  insertPending('https://jobs.example.com/c', 1, '2026-09-01'); // too old
+  const ld = { '@type': 'JobPosting', hiringOrganization: { name: 'Found Co' }, description: LONG, jobLocation: { address: { addressLocality: 'Beaverton', addressRegion: 'OR' } } };
+  const http = fakeHttp([['jobs.example.com/a', `<script type="application/ld+json">${JSON.stringify(ld)}</script>`]]);
+
+  const summary = await runDiscovery({ store, config, http, sources: {}, now: new Date('2026-09-30T12:00:00Z'), options: { pauseMs: 0 } });
+  assert.deepEqual(summary.retried, { attempted: 1, fixed: 1 });
+  const row = store.db.prepare("SELECT company, location, location_check, fetch_status, fetch_attempts FROM postings WHERE url = 'https://jobs.example.com/a'").get();
+  assert.deepEqual(row, { company: 'Found Co', location: 'Beaverton, OR', location_check: 'home', fetch_status: 'ok', fetch_attempts: 2 });
+  assert.deepEqual(http.calls, ['https://jobs.example.com/a']);
   store.close();
 });
 
