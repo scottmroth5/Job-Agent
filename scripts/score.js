@@ -39,7 +39,7 @@ async function main() {
     if (args.dryRun) {
       const postings = selectPostings(store.db, args);
       const rule = postings.filter((p) => p.location_check === 'conflict').length;
-      const usd = estimateCost(postings, { model: args.model, knowledgeChars: 10000, templateChars: loadScorePrompt().template.length });
+      const usd = estimateCost(postings, { model: args.model, knowledgeChars: 10000, templateChars: loadScorePrompt('fulltime', store.db).template.length });
       console.log(`DRY RUN: ${postings.length} postings to score with ${args.model} (${rule} by location rule, no AI call).`);
       console.log(`Estimated cost: about $${usd.toFixed(2)}.`);
       const byCheck = {};
@@ -51,7 +51,7 @@ async function main() {
     assertNoRunningRun(store.db, 'score');
     const knowledge = await loadKnowledge();
     console.log(`Candidate Knowledge loaded: ${knowledge.length.toLocaleString()} characters.`);
-    const run = createTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt().version });
+    const run = createTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });
     try {
       const summary = await scorePostings({
         store,

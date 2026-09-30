@@ -56,15 +56,18 @@ async function evaluate(argv) {
   const { text: knowledge } = await readDoc(getGoogleAuth(), process.env.YOUR_KNOWLEDGE_DOC_ID);
   if (knowledge.length < MIN_KNOWLEDGE_CHARS) throw new Error('Candidate Knowledge doc is too short.');
 
-  const estimate = estimateEval(cases, models, knowledge.length);
+  const store = openJobStore();
+  const estimate = estimateEval(cases, models, knowledge.length, store.db);
   const total = Object.values(estimate).reduce((a, b) => a + b, 0);
   console.log(`${cases.length} cases x ${models.length} models. Estimated cost: ${Object.entries(estimate).map(([m, u]) => `${m} ~$${u.toFixed(2)}`).join(', ')} (total ~$${total.toFixed(2)}).`);
-  if (total > maxUsd) throw new Error(`Estimate is over the $${maxUsd.toFixed(2)} budget. Raise --max-usd or use --limit.`);
+  if (total > maxUsd) {
+    store.close();
+    throw new Error(`Estimate is over the $${maxUsd.toFixed(2)} budget. Raise --max-usd or use --limit.`);
+  }
 
-  const store = openJobStore();
   const run = createTracer({ store }).startRun('eval-score', { models, cases: cases.length });
   try {
-    const result = await runEval({ cases, models, claude: createClaude(), config, knowledge, run, log: (m) => console.log(`  ${m}`) });
+    const result = await runEval({ cases, models, claude: createClaude(), config, knowledge, run, db: store.db, log: (m) => console.log(`  ${m}`) });
     const totals = run.finish('ok', { models, cases: cases.length });
 
     const rows = [

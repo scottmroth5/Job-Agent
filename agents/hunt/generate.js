@@ -1,12 +1,10 @@
 // Resume tweaks and cover letters for promoted jobs. Sonnet 5.5 writes both with the Candidate
 // Knowledge doc as the cached system prompt; letters get v1's cleanup and rule checks, then are
 // saved as Google Docs. Nothing existing is ever overwritten.
-import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { fillTemplate } from '../../tools/template.js';
 import { sanitizeDashes, truncate } from '../../tools/text.js';
-import { repoPath } from '../../tools/paths.js';
 import { ensureLetterFolder } from '../../tools/google/drive.js';
+import { getPrompt } from '../prompts.js';
 import { PROMOTE_AT } from '../discovery/score.js';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
 
@@ -16,11 +14,11 @@ export const HUNT_SETTINGS = { maxTokens: 12000, effort: 'medium' };
 const CONTENT_CHARS = 6000;
 const MIN_NOTES = 30;
 
-/** Loads both hunt prompt templates with short version hashes. */
-export function loadHuntPrompts() {
+/** Both hunt prompts in effect (admin-screen edits or the repo defaults), with short version hashes. */
+export function loadHuntPrompts(db = null) {
   const load = (name) => {
-    const template = readFileSync(repoPath('agents', 'hunt', 'prompts', `${name}.md`), 'utf8');
-    return { template, version: createHash('sha256').update(template).digest('hex').slice(0, 10) };
+    const p = getPrompt(db, name);
+    return { template: p.template, version: p.version, source: p.source };
   };
   return { tweaks: load('resume-tweaks'), letter: load('cover-letter') };
 }
@@ -95,7 +93,7 @@ const isoLocalDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 export async function generateForPostings({ store, config, claude, knowledge, drive, run, now = new Date(), options = {} }) {
   const { ids, regenerate = false, promoteAt = PROMOTE_AT, maxConsecutiveFailures = 3 } = options;
   const { db } = store;
-  const prompts = loadHuntPrompts();
+  const prompts = loadHuntPrompts(db);
   const postings = selectForHunt(db, { ids, promoteAt });
 
   const insertArtifact = db.prepare(`INSERT INTO artifacts (posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at)

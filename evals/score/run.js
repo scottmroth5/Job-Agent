@@ -13,16 +13,17 @@ async function mapLimit(items, limit, fn) {
 }
 
 /** Estimated total cost of running these models over these cases. */
-export function estimateEval(cases, models, knowledgeChars) {
-  const templateChars = loadScorePrompt().template.length;
+export function estimateEval(cases, models, knowledgeChars, db = null) {
+  const templateChars = loadScorePrompt('fulltime', db).template.length;
   return Object.fromEntries(models.map((m) => [m, estimateCost(cases, { model: m, knowledgeChars, templateChars })]));
 }
 
 /**
+ * Uses the full-time scoring prompt in effect (an admin-screen edit if active), so evals test current edits.
  * @returns {Promise<{ perModel: Record<string, {results: object[], summary: object, costUsd: number, avgMs: number}>, v1: object }>}
  */
-export async function runEval({ cases, models, claude, config, knowledge, run, concurrency = 3, promoteAt = PROMOTE_AT, log = () => {} }) {
-  const prompt = loadScorePrompt();
+export async function runEval({ cases, models, claude, config, knowledge, run, db = null, concurrency = 3, promoteAt = PROMOTE_AT, log = () => {} }) {
+  const prompt = loadScorePrompt('fulltime', db);
   const perModel = {};
   for (const model of models) {
     const results = [];

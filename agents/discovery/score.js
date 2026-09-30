@@ -2,12 +2,10 @@
 // output schema (schemas/score.json); the Candidate Knowledge doc is the cached system prompt.
 // Deterministic rules run first and after the call, so a clear location conflict can never be
 // overridden by role-fit enthusiasm (v1's principle).
-import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import { fillTemplate } from '../../tools/template.js';
 import { homeAreaText } from '../../tools/config.js';
 import { sanitizeDashes, truncate } from '../../tools/text.js';
-import { repoPath } from '../../tools/paths.js';
+import { getPrompt } from '../prompts.js';
 
 // Chosen by the scoring eval (2026-09-30, 74 applied/passed cases): Sonnet 5.5 ranked applied above
 // passed jobs 84% of the time (Haiku 4.5: 72%, v1: 71%). At 7+ it promotes 56% of applied jobs and
@@ -39,20 +37,19 @@ const ESTIMATE_RATES = {
 };
 
 /**
- * The approved prompt template and schema for a track, plus a short version hash stored with every score.
- * 'fulltime' uses score.md/score.json; 'fractional' uses score-fractional.md/score-fractional.json.
+ * The scoring prompt in effect for a track (an admin-screen edit if one is active, else the repo
+ * default), with its schema and a short version hash stored with every score.
+ * 'fulltime' is score.md/score.json; 'fractional' is score-fractional.md/score-fractional.json.
+ * db may be omitted, which gives the repo default.
  */
-export function loadScorePrompt(track = 'fulltime') {
-  const name = track === 'fractional' ? 'score-fractional' : 'score';
-  const template = readFileSync(repoPath('agents', 'discovery', 'prompts', `${name}.md`), 'utf8');
-  const schemaText = readFileSync(repoPath('agents', 'discovery', 'schemas', `${name}.json`), 'utf8');
-  const version = createHash('sha256').update(template).update(schemaText).digest('hex').slice(0, 10);
-  return { template, schema: JSON.parse(schemaText), version, track };
+export function loadScorePrompt(track = 'fulltime', db = null) {
+  const p = getPrompt(db, track === 'fractional' ? 'score-fractional' : 'score');
+  return { template: p.template, schema: p.schema, version: p.version, track, source: p.source };
 }
 
 /** Both tracks' prompts, keyed by track. */
-export function loadScorePrompts() {
-  return { fulltime: loadScorePrompt('fulltime'), fractional: loadScorePrompt('fractional') };
+export function loadScorePrompts(db = null) {
+  return { fulltime: loadScorePrompt('fulltime', db), fractional: loadScorePrompt('fractional', db) };
 }
 
 /** The prompt for a posting's track, from either a single prompt or a { fulltime, fractional } set. */
@@ -220,7 +217,7 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
     throw new Error(`Candidate Knowledge is missing or under ${MIN_KNOWLEDGE_CHARS} characters; scoring aborted.`);
   }
   const { db } = store;
-  const prompts = loadScorePrompts();
+  const prompts = loadScorePrompts(db);
   const postings = selectPostings(db, { ids, allUnscored, limit, rescore });
 
   const insertScore = db.prepare(`INSERT INTO scores (posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
