@@ -84,6 +84,9 @@ test('serper parses company and title from common result formats', () => {
   assert.deepEqual(serper.parseResultTitle('CTO | Indeed'), { title: 'CTO', company: null, location: null });
   const item = serper.parseResult({ title: 'CTO - Example Co', link: 'https://www.linkedin.com/jobs/view/4000000003' }, 'CTO');
   assert.equal(item.linkedinJobId, '4000000003');
+  assert.ok(serper.isNonJobSite('https://www.instagram.com/p/abc/'));
+  assert.ok(!serper.isNonJobSite('https://jobs.example.com/1'));
+  assert.ok(!serper.isNonJobSite('https://www.linkedin.com/jobs/view/1'));
 });
 
 // ---------- details ----------
@@ -126,6 +129,15 @@ test('details: source text, LinkedIn endpoint, JSON-LD, page text, then browser'
   assert.equal((await resolveDetails({ url: 'https://jobs.example.com/3' }, { http: shell })).fetchStatus, 'needs_browser');
   const browser = { renderPage: async () => ({ html: '<p>rendered</p>', text: LONG }) };
   assert.equal((await resolveDetails({ url: 'https://jobs.example.com/3' }, { http: shell, browser })).fetchMethod, 'browser');
+});
+
+test('details: bot-check pages are marked blocked, not treated as posting text', async () => {
+  const check = 'example.com\nPerforming security verification\nThis website uses a security service to protect against malicious bots.';
+  const shell = fakeHttp([['jobs.example.com/4', '<div id="app"></div>']]);
+  const browser = { renderPage: async () => ({ html: '', text: check }) };
+  const item = await resolveDetails({ url: 'https://jobs.example.com/4' }, { http: shell, browser });
+  assert.equal(item.fetchStatus, 'blocked');
+  assert.equal(item.description, undefined);
 });
 
 test('details: a second LinkedIn 429 stops further LinkedIn requests', async () => {

@@ -12,6 +12,15 @@ export const LINKEDIN_BACKOFF_MS = 60000; // one pause after LinkedIn's first 42
 
 const cap = (s) => (s && s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
 
+// Bot-check and access-denied pages. These sites block automated access on purpose, so the
+// posting is marked blocked (not retried) rather than worked around.
+const BOT_CHECK = /performing security verification|verify(ing)? (that )?you are (not a bot|human)|just a moment\.\.\.|access denied|attention required|enable javascript and cookies to continue/i;
+
+/** True when page text is a bot check or access-denied page rather than a job posting. */
+export function isBotCheck(text) {
+  return BOT_CHECK.test(String(text ?? '').slice(0, 1000));
+}
+
 function applyJobPosting(item, jp) {
   item.company ??= jp.company;
   if (!item.title) item.title = jp.title ?? item.title;
@@ -66,7 +75,7 @@ export async function resolveDetails(item, { http, browser, state = {} }) {
       return Object.assign(item, { description: cap(jp.description), fetchStatus: 'ok', fetchMethod: 'jsonld' });
     }
     pageText = htmlToText(html);
-    if (pageText.length >= MIN_PAGE_TEXT) {
+    if (pageText.length >= MIN_PAGE_TEXT && !isBotCheck(pageText)) {
       return Object.assign(item, { description: cap(pageText), fetchStatus: 'ok', fetchMethod: 'html' });
     }
   } catch (err) {
@@ -80,6 +89,7 @@ export async function resolveDetails(item, { http, browser, state = {} }) {
   try {
     const rendered = await browser.renderPage(item.url);
     if (!rendered) return Object.assign(item, { fetchStatus: 'needs_browser', fetchMethod: null });
+    if (isBotCheck(rendered.text)) return Object.assign(item, { fetchStatus: 'blocked', fetchMethod: 'browser' });
     const jp = extractJobPosting(rendered.html);
     if (jp) applyJobPosting(item, jp);
     const text = jp?.description && jp.description.length >= MIN_DESCRIPTION ? jp.description : rendered.text?.trim();

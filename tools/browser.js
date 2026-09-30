@@ -35,7 +35,11 @@ export async function createBrowser({ timeoutMs = 30000, channel = process.env.P
     }
     const page = await browser.newPage();
     try {
-      await page.goto(url, { waitUntil: 'networkidle', timeout: timeoutMs });
+      // Job apps like Workday never go network-idle; wait for the DOM, then for enough visible text.
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: timeoutMs });
+      await page
+        .waitForFunction((min) => (document.body?.innerText ?? '').length > min, 800, { timeout: 15000 })
+        .catch(() => {}); // thin pages are judged by the caller
       return { html: await page.content(), text: await page.innerText('body') };
     } finally {
       await page.close();

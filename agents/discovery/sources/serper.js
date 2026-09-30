@@ -25,6 +25,18 @@ export function parseResultTitle(raw) {
   return { title: parts[0] ?? s, company: parts.length > 1 ? parts[1] : null, location: null };
 }
 
+// Search results from these sites are posts or profiles, never job postings.
+const NOT_JOB_SITES = /(^|\.)(instagram|facebook|twitter|x|tiktok|youtube|reddit|pinterest|medium|quora)\.com$/i;
+
+/** True when a result links to a site that never hosts job postings. */
+export function isNonJobSite(url) {
+  try {
+    return NOT_JOB_SITES.test(new URL(url).hostname);
+  } catch {
+    return false;
+  }
+}
+
 /** Maps one Serper result (organic or jobs) to the common item shape. */
 export function parseResult(r, term) {
   const parsed = parseResultTitle(r.title);
@@ -61,7 +73,7 @@ export async function search({ http, config, apiKey = process.env.SERPER_API_KEY
         { q: `${term} remote jobs`, gl: 'us', hl: 'en', tbs: 'qdr:w', num: 20 },
         { headers: { 'X-API-KEY': apiKey } },
       );
-      out.items.push(...(data.jobs ?? data.organic ?? []).map((r) => parseResult(r, term)));
+      out.items.push(...(data.jobs ?? data.organic ?? []).map((r) => parseResult(r, term)).filter((i) => !isNonJobSite(i.url)));
     } catch (err) {
       if (err instanceof RateLimitedError) {
         out.rateLimited = true;
