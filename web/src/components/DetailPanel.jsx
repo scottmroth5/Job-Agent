@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, followTask } from '../api.js';
-import { STATUSES, STATUS_LABELS, rateText, hoursText, annualText, scoreClass } from '../format.js';
+import { STATUSES, STATUS_LABELS, rateText, hoursText, annualText, scoreClass, payText, PAY_FROM } from '../format.js';
 import TaskProgress from './TaskProgress.jsx';
 
 function List({ items }) {
@@ -97,6 +97,13 @@ export default function DetailPanel({ id, onClose, onChanged }) {
                   {job.company}
                   {job.location ? ` · ${job.location}` : ''} · {job.source}
                 </div>
+                {job.pay && (
+                  <div className="small">
+                    Pay: {payText(job)}
+                    {job.annualized && job.pay.unit !== 'year' ? ` (about ${annualText(job.annualized)})` : ''}
+                    <span className="muted"> · {PAY_FROM[job.pay.from]}</span>
+                  </div>
+                )}
               </div>
             </div>
 

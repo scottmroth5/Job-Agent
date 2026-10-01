@@ -136,7 +136,7 @@ code { font: 12px ui-monospace, Consolas, monospace; background: var(--bg); padd
   .jobs td.col-title { padding-right: 70px; }
   .jobs td.col-source, .jobs td.col-appliedOn { display: none; }
   .jobs td.stack-cell { position: absolute; left: -2px; top: 10px; width: auto; }
-  .jobs td.col-letter::before, .jobs td.col-terms::before, .jobs td.col-discoveredOn::before { content: attr(data-label) ': '; color: var(--muted); font-size: 12px; }
+  .jobs td.col-letter::before, .jobs td.col-pay::before, .jobs td.col-discoveredOn::before { content: attr(data-label) ': '; color: var(--muted); font-size: 12px; }
   .jobs td.col-status { display: inline-block; width: auto; margin-right: 8px; }
   .jobs td.col-letter { display: inline-block; width: auto; }
   .grid2 { grid-template-columns: 1fr; }

@@ -1,5 +1,5 @@
 // Database reads and edits behind the API. Rows come back in the shape the UI uses (camelCase).
-import { annualize, parseRate, parseHours } from '../tools/rates.js';
+import { annualize, parseRate, parseHours, findPayInText } from '../tools/rates.js';
 import { checkLocation } from '../tools/location.js';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 
@@ -39,10 +39,23 @@ const BASE = `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reaso
   LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE}
   LEFT JOIN artifacts ll ON ll.id = ${LATEST_LETTER}`;
 
+/**
+ * The pay to show: the job's own terms (fractional rate, or what the user typed), then the salary the
+ * source listed, then the first pay range in the description. from says which.
+ */
+function payFor(r, rate) {
+  if (rate) return { ...rate, text: r.rate_text ?? null, from: 'terms' };
+  const listed = r.salary ? parseRate(r.salary) : null;
+  if (listed?.unit) return { ...listed, text: r.salary, from: 'source' };
+  const found = findPayInText(r.jd_text || r.fetched_text);
+  return found ? { ...found, from: 'description' } : null;
+}
+
 function toRow(r, config) {
   const analysis = parse(r.analysis_json);
   const rate = r.rate_min != null ? { min: r.rate_min, max: r.rate_max ?? r.rate_min, unit: r.rate_unit } : null;
   const hours = r.hours_min != null ? { min: r.hours_min, max: r.hours_max ?? r.hours_min } : null;
+  const pay = payFor(r, rate);
   return {
     id: r.id,
     title: r.title,
@@ -64,7 +77,8 @@ function toRow(r, config) {
     rateText: r.rate_text,
     rate,
     hours,
-    annualized: annualize(rate, hours, config.fractional?.weeksPerYear ?? 48),
+    pay,
+    annualized: annualize(pay, hours, config.fractional?.weeksPerYear ?? 48),
     letter: r.letter_id ? { url: r.letter_url, name: r.letter_name, flags: parse(r.letter_flags) ?? [] } : null,
     hasTweaks: Boolean(r.has_tweaks),
     needsDescription: !r.jd_text && !r.fetched_text,

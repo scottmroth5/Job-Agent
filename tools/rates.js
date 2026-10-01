@@ -22,13 +22,41 @@ export function parseRate(text) {
   const s = String(text ?? '');
   const values = [...s.matchAll(money)].map((m) => amount(m[1], m[2]));
   if (!values.length) return null;
-  const [first, second] = values;
-  // "$5K - 6K": a bare second number after a range separator shares the first's scale.
-  const bare = second === undefined ? /\$\s*[\d.,]+\s*([kK])?\s*(?:-|–|to)\s*([\d.,]+)\s*([kK])?/.exec(s) : null;
-  const max = second ?? (bare ? amount(bare[2], bare[3] ?? bare[1]) : first);
+  let [first, second] = values;
+  // A range shares one scale when only one side has it: "$5K - 6K", "$10-20k/month".
+  const range = /\$\s*(\d[\d.,]*)\s*([kK])?\s*(?:-|–|—|to)\s*\$?\s*(\d[\d.,]*)\s*([kK])?/.exec(s);
+  if (range) {
+    first = amount(range[1], range[2] ?? range[4]);
+    second = amount(range[3], range[4] ?? range[2]);
+  }
+  const max = second ?? first;
   let unit = UNITS.find(([, re]) => re.test(s))?.[0] ?? null;
   if (!unit) unit = first >= 20000 ? 'year' : first < 1000 ? 'hour' : null;
   return { min: Math.min(first, max), max: Math.max(first, max), unit };
+}
+
+// A pay range written in a posting: "$170,000 - $210,000", "$150K–$200K per year", "$80 to $95/hr".
+// Not followed by "million"/"billion" (funding and revenue figures).
+const PAY_RANGE =
+  /\$\s*\d[\d,]*(?:\.\d+)?\s*[kK]?\s*(?:-|–|—|to)\s*\$?\s*\d[\d,]*(?:\.\d+)?\s*[kK]?(?!\s*(?:million|billion|mm\b|[mMbB]\b))(?:\s*(?:\/\s*(?:yr|year|hr|hour|mo|month)\b|per\s+(?:year|hour|month|annum)|annually|hourly|a year|an hour))?/gi;
+const EXPLICIT_UNIT = /\/\s*(yr|year|hr|hour|mo|month)\b|per\s+(year|hour|month|annum)|annually|hourly|a year|an hour/i;
+
+/**
+ * The first plausible pay range in posting text, as { min, max, unit, text }, or null.
+ * Hourly and monthly ranges count only with an explicit unit; a bare range must look like a salary.
+ */
+export function findPayInText(text) {
+  for (const m of String(text ?? '').matchAll(PAY_RANGE)) {
+    const rate = parseRate(m[0]);
+    if (!rate) continue;
+    const explicit = EXPLICIT_UNIT.test(m[0]);
+    const ok =
+      rate.unit === 'year'
+        ? rate.min >= 30000 && rate.max <= 2_000_000
+        : explicit && ((rate.unit === 'hour' && rate.min >= 15 && rate.max <= 1000) || (rate.unit === 'month' && rate.min >= 1000 && rate.max <= 100000));
+    if (ok) return { ...rate, text: m[0].trim() };
+  }
+  return null;
 }
 
 /**

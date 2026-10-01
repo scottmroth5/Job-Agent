@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { STATUS_LABELS, rateText, hoursText, annualText, scoreClass } from '../format.js';
+import { STATUS_LABELS, payText, hoursText, annualText, scoreClass, PAY_FROM } from '../format.js';
 
 const COLUMNS = [
   { key: 'score', label: 'Score', get: (j) => j.score ?? -1 },
@@ -7,7 +7,7 @@ const COLUMNS = [
   { key: 'company', label: 'Company', get: (j) => j.company.toLowerCase() },
   { key: 'source', label: 'Source', get: (j) => j.source ?? '' },
   { key: 'location', label: 'Location', get: (j) => j.location ?? '' },
-  { key: 'terms', label: 'Rate / hours', get: (j) => j.annualized?.mid ?? -1, terms: true },
+  { key: 'pay', label: 'Pay', get: (j) => j.annualized?.mid ?? j.pay?.min ?? -1 },
   { key: 'discoveredOn', label: 'Discovered', get: (j) => j.discoveredOn ?? '' },
   { key: 'status', label: 'Status', get: (j) => j.status },
   { key: 'appliedOn', label: 'Applied', get: (j) => j.appliedOn ?? '' },
@@ -20,9 +20,9 @@ function LetterCell({ letter }) {
   return <span className="badge ok">ready</span>;
 }
 
-export default function JobTable({ jobs, loading, onOpen, selectedId, showTerms, stackable, stack, onToggleStack }) {
+export default function JobTable({ jobs, loading, onOpen, selectedId, stackable, stack, onToggleStack }) {
   const [sort, setSort] = useState({ key: 'score', dir: -1 });
-  const columns = COLUMNS.filter((c) => showTerms || !c.terms);
+  const columns = COLUMNS;
 
   const sorted = useMemo(() => {
     const col = COLUMNS.find((c) => c.key === sort.key) ?? COLUMNS[0];
@@ -82,10 +82,10 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, showTerms,
                   {c.key === 'company' && j.company}
                   {c.key === 'source' && <span className="muted">{j.source}</span>}
                   {c.key === 'location' && <span className="muted">{j.location ?? ''}</span>}
-                  {c.key === 'terms' && (
-                    <span className="terms">
-                      {[rateText(j), hoursText(j)].filter(Boolean).join(' · ')}
-                      {j.annualized && <span className="muted small"> ≈ {annualText(j.annualized)}</span>}
+                  {c.key === 'pay' && j.pay && (
+                    <span className="terms" title={`${PAY_FROM[j.pay.from] ?? ''}${j.pay.text ? `: ${j.pay.text}` : ''}`}>
+                      {[payText(j), hoursText(j)].filter(Boolean).join(' · ')}
+                      {j.annualized && j.pay.unit !== 'year' && <span className="muted small"> ≈ {annualText(j.annualized)}</span>}
                     </span>
                   )}
                   {c.key === 'status' && <span className={`status s-${j.status}`}>{STATUS_LABELS[j.status]}</span>}

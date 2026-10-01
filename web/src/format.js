@@ -12,6 +12,17 @@ export function rateText(p) {
   return p.rate.min === p.rate.max ? `${money(p.rate.min)}${unit}` : `${money(p.rate.min)} to ${money(p.rate.max)}${unit}`;
 }
 
+const UNIT_SUFFIX = { hour: '/hr', month: '/mo', year: '/yr', project: ' project' };
+export const PAY_FROM = { terms: 'Pay terms on the job', source: 'Listed by the job site', description: 'Found in the job description' };
+
+/** "$170K to $210K/yr" from row.pay, or ''. */
+export function payText(p) {
+  const pay = p.pay;
+  if (!pay || pay.min == null) return p.rateText ?? '';
+  const unit = UNIT_SUFFIX[pay.unit] ?? '';
+  return pay.min === pay.max ? `${money(pay.min)}${unit}` : `${money(pay.min)} to ${money(pay.max)}${unit}`;
+}
+
 export function hoursText(p) {
   if (!p.hours) return '';
   return p.hours.min === p.hours.max ? `${p.hours.min} hrs/wk` : `${p.hours.min} to ${p.hours.max} hrs/wk`;

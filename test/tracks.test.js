@@ -49,3 +49,20 @@ test('005 migration adds track, rate and hours columns defaulting to full-time',
   for (const c of ['track', 'rate_text', 'rate_min', 'rate_max', 'rate_unit', 'hours_min', 'hours_max', 'extra_json']) assert.ok(cols.includes(c), c);
   store.close();
 });
+
+test('findPayInText finds a salary or an explicit hourly range, and skips funding figures', async () => {
+  const { findPayInText } = await import('../tools/rates.js');
+  assert.deepEqual(findPayInText('The base salary range is $170,000 - $210,000 plus equity.'), { min: 170000, max: 210000, unit: 'year', text: '$170,000 - $210,000' });
+  assert.equal(findPayInText('Pay: $150K–$200K per year').max, 200000);
+  assert.deepEqual(findPayInText('Contract at $80 to $95/hr').unit, 'hour');
+  assert.equal(findPayInText('We raised $50 - $100 million and offer a $1,000 - $2,000 stipend.'), null);
+  assert.equal(findPayInText('Hourly-looking $50 - $90 with no unit'), null);
+  assert.equal(findPayInText(''), null);
+});
+
+test('parseRate applies a k on one side of a range to both', () => {
+  assert.deepEqual(parseRate('$10-20k/month'), { min: 10000, max: 20000, unit: 'month' });
+  assert.deepEqual(parseRate('$5K - 6K / mo'), { min: 5000, max: 6000, unit: 'month' });
+  assert.deepEqual(parseRate('$175 to $225/hr'), { min: 175, max: 225, unit: 'hour' });
+  assert.deepEqual(parseRate('$175,000 - 185,000'), { min: 175000, max: 185000, unit: 'year' });
+});

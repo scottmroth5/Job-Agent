@@ -141,7 +141,6 @@ export default function App() {
         loading={loading}
         onOpen={setSelectedId}
         selectedId={selectedId}
-        showTerms={filters.track !== 'fulltime'}
         stackable={filters.track === 'fractional'}
         stack={stack}
         onToggleStack={toggleStack}

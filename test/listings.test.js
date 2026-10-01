@@ -204,3 +204,22 @@ test('duplicates: the copy the user acted on is kept, extra new copies are archi
   assert.equal(stage(first), 'discovered');
   store.close();
 });
+
+test('rows carry pay from the job terms, the source salary, or the description, in that order', () => {
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const listed = insert(db, { title: 'VP Engineering A' });
+  db.prepare("UPDATE postings SET salary = '$200k - $250k', fetched_text = 'Salary $100,000 - $120,000.' WHERE id = ?").run(listed);
+  const described = insert(db, { title: 'VP Engineering B' });
+  db.prepare("UPDATE postings SET fetched_text = 'The range is $180,000 to $220,000 annually.' WHERE id = ?").run(described);
+  const terms = insert(db, { title: 'Fractional CTO' });
+  db.prepare("UPDATE postings SET rate_min = 150, rate_max = 200, rate_unit = 'hour', rate_text = '$150 - $200/hr', hours_min = 10, hours_max = 10 WHERE id = ?").run(terms);
+  const none = insert(db, { title: 'VP Engineering C' });
+
+  const rows = Object.fromEntries(listPostings(db, {}, { fractional: { weeksPerYear: 48 } }).map((r) => [r.id, r]));
+  assert.deepEqual([rows[listed].pay.min, rows[listed].pay.from], [200000, 'source']);
+  assert.deepEqual([rows[described].pay.max, rows[described].pay.from], [220000, 'description']);
+  assert.deepEqual([rows[terms].pay.unit, rows[terms].pay.from, rows[terms].annualized.low], ['hour', 'terms', 72000]);
+  assert.equal(rows[none].pay, null);
+  store.close();
+});
