@@ -94,12 +94,13 @@ test('archiveListings removes list pages, keeps them for dedupe, and leaves acte
   store.close();
 });
 
-test("the 'active' status filter hides passed, closed, and rejected jobs", () => {
+test("status groups: Needs action is new and offer; In progress is applied, interviewing, and offer", () => {
   const store = openJobStore(':memory:');
   const { db } = store;
   for (const status of ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected']) insert(db, { title: `Job ${status}`, status });
   const statuses = (filters) => listPostings(db, filters).map((r) => r.status).sort();
-  assert.deepEqual(statuses({ status: 'active' }), ['applied', 'interviewing', 'new', 'offer']);
+  assert.deepEqual(statuses({ status: 'active' }), ['new', 'offer']);
+  assert.deepEqual(statuses({ status: 'progress' }), ['applied', 'interviewing', 'offer']);
   assert.equal(statuses({ status: 'all' }).length, 7);
   assert.deepEqual(statuses({ status: 'closed' }), ['closed']);
   store.close();

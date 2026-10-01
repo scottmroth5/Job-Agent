@@ -4,8 +4,8 @@ import { checkLocation } from '../tools/location.js';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 
 export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected'];
-/** Statuses that still need something from the user; the 'active' list filter shows only these. */
-export const ACTIVE_STATUSES = ['new', 'applied', 'interviewing', 'offer'];
+/** Status filters that group statuses: 'active' is what waits on the user to evaluate or decide; 'progress' is under way. */
+export const STATUS_GROUPS = { active: ['new', 'offer'], progress: ['applied', 'interviewing', 'offer'] };
 export const STAGES = ['discovered', 'pipeline', 'archived'];
 export const TRACKS = ['fulltime', 'fractional'];
 
@@ -73,7 +73,7 @@ function toRow(r, config) {
   };
 }
 
-/** Filtered list. filters: { track, stage, status, needsDescription, q, minScore, limit } ('all' or empty means no filter; status 'active' means ACTIVE_STATUSES). */
+/** Filtered list. filters: { track, stage, status, needsDescription, q, minScore, limit } ('all' or empty means no filter; status 'active' or 'progress' means a STATUS_GROUPS group). */
 export function listPostings(db, filters = {}, config = {}) {
   const where = [];
   const params = {};
@@ -85,8 +85,8 @@ export function listPostings(db, filters = {}, config = {}) {
     where.push('p.stage = @stage');
     params.stage = filters.stage;
   }
-  if (filters.status === 'active') {
-    where.push(`p.status IN (${ACTIVE_STATUSES.map((s) => `'${s}'`).join(', ')})`);
+  if (STATUS_GROUPS[filters.status]) {
+    where.push(`p.status IN (${STATUS_GROUPS[filters.status].map((s) => `'${s}'`).join(', ')})`);
   } else if (filters.status && filters.status !== 'all') {
     where.push('p.status = @status');
     params.status = filters.status;

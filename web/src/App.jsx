@@ -9,7 +9,7 @@ import AdminPage from './components/AdminPage.jsx';
 
 const viewFromHash = () => (window.location.hash.startsWith('#/admin') ? 'admin' : 'jobs');
 
-// 'active' hides passed, closed, and rejected jobs: the default view is what still needs action.
+// 'active' (Needs action) is new jobs to evaluate and offers to decide; applied and interviewing are under 'progress'.
 const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', needsDescription: false, q: '', minScore: '' };
 // v2 since the default status changed; a filter saved under the old key would keep showing everything.
 const FILTERS_KEY = 'jobHuntFilters.v2';
@@ -116,6 +116,7 @@ export default function App() {
         </select>
         <select value={filters.status} onChange={set('status')} aria-label="Status">
           <option value="active">Needs action</option>
+          <option value="progress">In progress</option>
           <option value="all">Any status</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
