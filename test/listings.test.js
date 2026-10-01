@@ -173,3 +173,33 @@ test('jobs judged 7+ without a description are flagged and counted; others are n
   assert.equal(summary(db).needsDescription, 2);
   store.close();
 });
+
+test('duplicates: the copy the user acted on is kept, extra new copies are archived with a pointer', () => {
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const add = (title, company, o = {}) => {
+    const id = insert(db, { title, stage: 'discovered', ...o });
+    db.prepare('UPDATE postings SET company = ?, company_title_key = ? WHERE id = ?').run(company, `${company}|${title}`.toLowerCase(), id);
+    return id;
+  };
+  const applied = add('Director of Engineering', 'Example Co', { status: 'applied', stage: 'pipeline' });
+  const googleCopy = add('Job Application for Director of Engineering at Example Co', 'See posting');
+  const plainCopy = add('Director of Engineering', 'Example Co');
+  const other = add('VP Engineering', 'Example Co');
+  const unknownA = add('CTO', 'See posting');
+  const unknownB = add('CTO', 'See posting');
+
+  const { archived } = archiveListings(db, { now: new Date('2026-10-01T12:00:00Z') });
+  assert.deepEqual(archived.map((p) => p.id), [googleCopy, plainCopy]);
+  assert.match(archived[0].reason, new RegExp(`^duplicate of #${applied}, Director of Engineering at Example Co, pipeline/applied$`));
+  const stage = (id) => db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
+  assert.deepEqual([applied, other, unknownA, unknownB].map(stage), ['pipeline', 'discovered', 'discovered', 'discovered'], 'placeholder companies never match each other');
+
+  // Two new copies, no acted-on one: the oldest stays. Running again must not flip to the removed copy.
+  const first = add('Head of Engineering', 'Other Co');
+  const second = add('Head of Engineering', 'Other Co');
+  assert.deepEqual(archiveListings(db).archived.map((p) => p.id), [second]);
+  assert.equal(archiveListings(db).archived.length, 0, 'a second run finds nothing');
+  assert.equal(stage(first), 'discovered');
+  store.close();
+});

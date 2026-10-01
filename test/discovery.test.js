@@ -88,6 +88,7 @@ test('serper parses company and title from common result formats', () => {
   assert.deepEqual(serper.parseResultTitle('Example Co hiring VP of Engineering in Denver, CO | LinkedIn'), { title: 'VP of Engineering', company: 'Example Co', location: 'Denver, CO' });
   assert.deepEqual(serper.parseResultTitle('VP of Engineering - Example Co - Remote Rocketship'), { title: 'VP of Engineering', company: 'Example Co', location: null });
   assert.deepEqual(serper.parseResultTitle('Head of Engineering at Example Co'), { title: 'Head of Engineering', company: 'Example Co', location: null });
+  assert.deepEqual(serper.parseResultTitle('Job Application for Director of Engineering at Example Co'), { title: 'Director of Engineering', company: 'Example Co', location: null });
   assert.deepEqual(serper.parseResultTitle('CTO | Indeed'), { title: 'CTO', company: null, location: null });
   const item = serper.parseResult({ title: 'CTO - Example Co', link: 'https://www.linkedin.com/jobs/view/4000000003' }, 'CTO');
   assert.equal(item.linkedinJobId, '4000000003');

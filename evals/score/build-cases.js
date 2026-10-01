@@ -15,7 +15,10 @@ export async function buildCases({ db, http, browser = null, config, log = () =>
     .prepare(`SELECT p.id, p.company, p.title, p.location, p.url, p.status, p.jd_text,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.source = 'v1-analysis' ORDER BY s.id DESC LIMIT 1) AS v1_score,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.source = 'v1-quick' ORDER BY s.id DESC LIMIT 1) AS v1_quick
-      FROM postings p WHERE p.status IN ('applied', 'passed') ORDER BY p.id`)
+      FROM postings p WHERE p.status IN ('applied', 'passed')
+        -- a status the agent set (cleanup of list pages, excluded sites, duplicates) is not the user's choice
+        AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = p.id ORDER BY h.id DESC LIMIT 1), '') != 'agent'
+      ORDER BY p.id`)
     .all();
 
   const cases = [];

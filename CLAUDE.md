@@ -38,7 +38,8 @@ npm run eval:score -- --build     build scoring eval cases in data/evals/score (
 npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=2   compare models; costs real money
 npm run hunt                      resume tweaks + cover letters (Google Docs) for promoted jobs (-- --dry-run, --ids, --regenerate, --no-docs)
 npm run archive -- --dry-run      preview archiving; without --dry-run it moves them
-npm run cleanup -- --dry-run      after a rule change: archive list-of-jobs pages and search.excludedSites jobs, move pipeline jobs without a description back to Discovered
+npm run cleanup -- --dry-run      after a rule change: archive list-of-jobs pages, search.excludedSites jobs, and duplicate copies (the acted-on copy is kept);
+                                  move pipeline jobs without a description back to Discovered. Its status changes are changed_by agent, which the eval ignores
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
 npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point)
 npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)

@@ -3,9 +3,13 @@
 //   anything else              archived once discovered more than 30 days ago,
 //                              unless an active conversation (interviewing, offer)
 // Stage becomes 'archived'; status is kept, so the reason stays visible.
-// archiveListings separately removes skipped postings (list-of-jobs pages, excluded sites) wherever they sit,
-// and demoteWithoutText moves untouched pipeline jobs with no description back to Discovered.
+// Cleanup after a rule change (npm run cleanup), separate from the pipeline's archive step:
+//   archiveListings     removes skipped postings (list-of-jobs pages, excluded sites) and duplicates
+//   demoteWithoutText   moves untouched pipeline jobs with no description back to Discovered
 import { skipReason } from '../../tools/listings.js';
+import { companyTitleKey } from '../../tools/urls.js';
+import { parseResultTitle } from '../discovery/sources/serper.js';
+import { isRealCompany } from '../manual.js';
 
 export const ARCHIVE_AFTER_DAYS = 30;
 const ARCHIVE_NOW = ['closed', 'passed', 'rejected'];
@@ -40,12 +44,61 @@ export function findListings(db, config) {
     .filter((p) => p.reason && !['applied', 'interviewing', 'offer'].includes(p.status));
 }
 
+// Which copy of a duplicated job to keep: the one the user acted on, then one with text, then the pipeline, then the oldest.
+const STATUS_RANK = { offer: 0, interviewing: 1, applied: 2, rejected: 3, closed: 4, passed: 5, new: 6 };
+// A copy this cleanup already removed (its last status change is the agent's) never wins over one still in play.
+const keepRank = (p) => [p.agent_removed ? 9 : STATUS_RANK[p.status] ?? 6, p.has_text ? 0 : 1, p.stage === 'pipeline' ? 0 : 1, p.id];
+const byRank = (a, b) => {
+  const x = keepRank(a);
+  const y = keepRank(b);
+  return x.reduce((d, v, i) => d || v - y[i], 0);
+};
+
+/** The company+title that identifies a posting, reading it from a Google page title when the company is a placeholder. */
+function identityKey(p) {
+  if (isRealCompany(p.company)) return p.company_title_key;
+  const parsed = parseResultTitle(p.title);
+  return isRealCompany(parsed.company) ? companyTitleKey(parsed.company, parsed.title) : null;
+}
+
 /**
- * Archives skipped postings and marks new ones passed, with a note and status history.
- * They stay in the database so their links are recognized and never added again.
+ * Extra copies of one job (same company and title, including "See posting" rows whose Google title
+ * names the company). Only new, unarchived copies are returned; the best copy is kept.
+ */
+export function findDuplicates(db) {
+  const rows = db
+    .prepare(`SELECT id, company, title, url, stage, status, company_title_key,
+        TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != '' AS has_text,
+        COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = p.id ORDER BY h.id DESC LIMIT 1), '') = 'agent' AS agent_removed
+      FROM postings p`)
+    .all();
+  const groups = new Map();
+  for (const p of rows) {
+    const key = identityKey(p);
+    if (key) groups.set(key, [...(groups.get(key) ?? []), p]);
+  }
+  const found = [];
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const [keep, ...rest] = [...group].sort(byRank);
+    const named = isRealCompany(keep.company) ? keep : parseResultTitle(keep.title);
+    const what = `#${keep.id}, ${named.title} at ${named.company}, ${keep.stage}/${keep.status}`;
+    for (const p of rest) {
+      if (p.status === 'new' && p.stage !== 'archived') found.push({ ...p, reason: `duplicate of ${what}` });
+    }
+  }
+  return found.sort((a, b) => a.id - b.id);
+}
+
+/**
+ * Archives skipped postings and duplicates and marks new ones passed, with a note and status history
+ * (changed_by 'agent', which the scoring eval ignores). They stay in the database so their links are
+ * recognized and never added again.
  */
 export function archiveListings(db, { config, now = new Date(), dryRun = false } = {}) {
-  const found = findListings(db, config);
+  const skipped = findListings(db, config);
+  const seen = new Set(skipped.map((p) => p.id));
+  const found = [...skipped, ...findDuplicates(db).filter((p) => !seen.has(p.id))];
   if (!dryRun && found.length) {
     const nowIso = now.toISOString();
     const update = db.prepare(`UPDATE postings SET stage = 'archived', status = @status, updated_at = @now,

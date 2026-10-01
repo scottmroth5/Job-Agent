@@ -15,7 +15,11 @@ const SITE_NAMES = /^(linkedin|indeed(\.com)?|glassdoor|ziprecruiter|monster|sim
  *   "VP of Engineering - Acme - Remote Rocketship"
  */
 export function parseResultTitle(raw) {
-  const s = String(raw ?? '').replace(/\s*\.{3}$/, '').trim();
+  // Page-title wrappers such as Greenhouse's "Job Application for <title> at <company>".
+  const s = String(raw ?? '')
+    .replace(/\s*\.{3}$/, '')
+    .replace(/^(job application for|apply for|apply to|careers:)\s+/i, '')
+    .trim();
   const hiring = /^(.+?) hiring (.+?)(?: in (.+?))?(?: \| .*)?$/i.exec(s);
   if (hiring) return { title: hiring[2].trim(), company: hiring[1].trim(), location: hiring[3]?.trim() ?? null };
   const parts = s.split(/\s+[-|–]\s+/).map((p) => p.trim()).filter(Boolean);
