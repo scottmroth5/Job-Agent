@@ -5,6 +5,7 @@ import { normalizeUrl, companyTitleKey } from '../tools/urls.js';
 import { checkLocation } from '../tools/location.js';
 import { detectTrack } from '../tools/track.js';
 import { parseRate, parseHours } from '../tools/rates.js';
+import { listingReason } from '../tools/listings.js';
 import { resolveDetails } from './discovery/details.js';
 import { jobIdFromUrl } from './discovery/sources/linkedin.js';
 import * as fractionaljobs from './discovery/sources/fractionaljobs.js';
@@ -61,6 +62,13 @@ export function validateManualInput(input) {
   if (!url && (!input.title?.trim() || !input.company?.trim())) throw new Error('Without a link, enter the job title and company.');
   if (description && description.length < MIN_PASTED) throw new Error(`The pasted description is very short (under ${MIN_PASTED} characters).`);
   if (input.track && !['fulltime', 'fractional'].includes(input.track)) throw new Error('Track must be fulltime or fractional.');
+  rejectListing({ url, title: input.title });
+}
+
+/** Refuses a list-of-jobs page: it cannot be scored or applied to. */
+function rejectListing(posting) {
+  const reason = listingReason(posting);
+  if (reason) throw new Error(`This looks like a list of jobs, not one job (${reason}). Open it, pick a job, and add that job's link.`);
 }
 
 /**
@@ -128,6 +136,7 @@ export async function addPosting(input, ctx) {
   if (!item.title || !item.company) {
     throw new Error("Couldn't read the job title or company from the link. Enter them and try again.");
   }
+  rejectListing(item);
 
   // 3. Location, track, pay and hours
   const rate = parseRate(item.rateText);

@@ -5,6 +5,7 @@
 import { fillTemplate } from '../../tools/template.js';
 import { homeAreaText } from '../../tools/config.js';
 import { sanitizeDashes, truncate } from '../../tools/text.js';
+import { listingReason } from '../../tools/listings.js';
 import { getPrompt } from '../prompts.js';
 
 // Chosen by the scoring eval (2026-09-30, 74 applied/passed cases): Sonnet 5.5 ranked applied above
@@ -14,6 +15,10 @@ export const DEFAULT_SCORE_MODEL = 'claude-sonnet-5-5';
 export const PROMOTE_AT = 7;
 export const UNVERIFIED_CAP = 7;
 export const CONFLICT_SCORE = 2;
+// A list of jobs is not a job. Without posting text a title alone is not enough to promote:
+// the cap keeps it below PROMOTE_AT until a description is fetched or pasted and it is re-scored.
+export const LISTING_SCORE = 1;
+export const NO_TEXT_CAP = 5;
 export const MIN_KNOWLEDGE_CHARS = 500;
 const CONTENT_CHARS = 6000;
 
@@ -123,12 +128,25 @@ export function interpretResult(data, posting) {
   let score = analysis.score;
   if (posting.location_check === 'unverified') score = Math.min(score, UNVERIFIED_CAP);
   if (analysis.locationConcern === 'conflict') score = Math.min(score, CONFLICT_SCORE);
+  if (!(posting.jd_text || posting.fetched_text || '').trim() && score > NO_TEXT_CAP) {
+    score = NO_TEXT_CAP;
+    analysis.reason = `${analysis.reason ?? ''} Capped at ${NO_TEXT_CAP}: no posting text to score from; paste the description and re-score.`.trim();
+  }
   analysis.score = score;
   return { score, reason: analysis.reason, analysis };
 }
 
-/** The no-AI score for a clear location conflict. */
+/** True when scoring needs no AI call: a clear location conflict or a list-of-jobs page. */
+export const isRuleScored = (posting) => posting.location_check === 'conflict' || listingReason(posting) !== null;
+
+/** The no-AI score for a list-of-jobs page or a clear location conflict. */
 export function ruleScore(posting, config) {
+  const listing = listingReason(posting);
+  if (listing) {
+    const reason = `Not a single job: ${listing}. Scored by rule without an AI call.`;
+    const analysis = { score: LISTING_SCORE, reason, roleType: 'Unknown', locationConcern: 'none', strengths: [], watchOuts: [], topTalkingPoint: '', suggestedStatus: 'pass' };
+    return { score: LISTING_SCORE, reason, analysis };
+  }
   const reason =
     `Location conflict: listed in "${posting.location}", outside ${homeAreaText(config)}, ` +
     'and the posting shows no remote option. Scored by rule without an AI call.';
@@ -153,7 +171,7 @@ export function ruleScore(posting, config) {
  * Returns { score, reason, analysis, source: 'v2' | 'v2-rule', model, costUsd }.
  */
 export async function scoreOne(posting, { config, claude, knowledge, model, prompt, prompts, trace }) {
-  if (posting.location_check === 'conflict') return { ...ruleScore(posting, config), source: 'v2-rule', model: null, costUsd: 0 };
+  if (isRuleScored(posting)) return { ...ruleScore(posting, config), source: 'v2-rule', model: null, costUsd: 0 };
   const res = await claude.send({ ...buildScoreRequest(posting, { config, knowledge, model, prompt, prompts }), trace });
   return { ...interpretResult(res.data, posting), source: 'v2', model: res.model, costUsd: res.costUsd };
 }
@@ -164,7 +182,7 @@ export function estimateCost(postings, { model, knowledgeChars, templateChars })
   if (!r) return null;
   let usd = 0;
   for (const p of postings) {
-    if (p.location_check === 'conflict') continue;
+    if (isRuleScored(p)) continue;
     const textChars = Math.min((p.jd_text || p.fetched_text || '').length, CONTENT_CHARS);
     const inputTokens = (knowledgeChars + templateChars + textChars) / 4;
     usd += (inputTokens * r.input + r.expectedOutput * r.output) / 1_000_000;

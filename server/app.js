@@ -89,7 +89,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
           properties: {
             track: { type: 'string', enum: ['all', ...TRACKS] },
             stage: { type: 'string', enum: ['all', ...STAGES] },
-            status: { type: 'string', enum: ['all', ...STATUSES] },
+            status: { type: 'string', enum: ['all', 'active', ...STATUSES] },
             q: { type: 'string', maxLength: 200 },
             minScore: { type: 'integer', minimum: 1, maximum: 10 },
             limit: { type: 'integer', minimum: 1, maximum: 2000 },

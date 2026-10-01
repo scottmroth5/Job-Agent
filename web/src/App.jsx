@@ -9,11 +9,14 @@ import AdminPage from './components/AdminPage.jsx';
 
 const viewFromHash = () => (window.location.hash.startsWith('#/admin') ? 'admin' : 'jobs');
 
-const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'all', q: '', minScore: '' };
+// 'active' hides passed, closed, and rejected jobs: the default view is what still needs action.
+const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', q: '', minScore: '' };
+// v2 since the default status changed; a filter saved under the old key would keep showing everything.
+const FILTERS_KEY = 'jobHuntFilters.v2';
 
 function loadFilters() {
   try {
-    return { ...DEFAULT_FILTERS, ...JSON.parse(localStorage.getItem('jobHuntFilters') ?? '{}') };
+    return { ...DEFAULT_FILTERS, ...JSON.parse(localStorage.getItem(FILTERS_KEY) ?? '{}') };
   } catch {
     return DEFAULT_FILTERS;
   }
@@ -52,7 +55,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('jobHuntFilters', JSON.stringify(filters));
+      localStorage.setItem(FILTERS_KEY, JSON.stringify(filters));
     } catch {
       // private mode; filters just are not remembered
     }
@@ -104,6 +107,7 @@ export default function App() {
           <option value="all">All stages</option>
         </select>
         <select value={filters.status} onChange={set('status')} aria-label="Status">
+          <option value="active">Needs action</option>
           <option value="all">Any status</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>

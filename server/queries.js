@@ -3,6 +3,8 @@ import { annualize, parseRate, parseHours } from '../tools/rates.js';
 import { checkLocation } from '../tools/location.js';
 
 export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected'];
+/** Statuses that still need something from the user; the 'active' list filter shows only these. */
+export const ACTIVE_STATUSES = ['new', 'applied', 'interviewing', 'offer'];
 export const STAGES = ['discovered', 'pipeline', 'archived'];
 export const TRACKS = ['fulltime', 'fractional'];
 
@@ -59,7 +61,7 @@ function toRow(r, config) {
   };
 }
 
-/** Filtered list. filters: { track, stage, status, q, minScore, limit } ('all' or empty means no filter). */
+/** Filtered list. filters: { track, stage, status, q, minScore, limit } ('all' or empty means no filter; status 'active' means ACTIVE_STATUSES). */
 export function listPostings(db, filters = {}, config = {}) {
   const where = [];
   const params = {};
@@ -71,7 +73,9 @@ export function listPostings(db, filters = {}, config = {}) {
     where.push('p.stage = @stage');
     params.stage = filters.stage;
   }
-  if (filters.status && filters.status !== 'all') {
+  if (filters.status === 'active') {
+    where.push(`p.status IN (${ACTIVE_STATUSES.map((s) => `'${s}'`).join(', ')})`);
+  } else if (filters.status && filters.status !== 'all') {
     where.push('p.status = @status');
     params.status = filters.status;
   }

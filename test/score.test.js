@@ -106,11 +106,12 @@ test('buildScoreRequest fills every placeholder and applies model settings', () 
 });
 
 test('interpretResult removes dashes and enforces location caps', () => {
-  const clean = interpretResult(result(), { location_check: 'remote' });
+  const text = { fetched_text: 'Lead the platform team.' };
+  const clean = interpretResult(result(), { location_check: 'remote', ...text });
   assert.equal(clean.reason, 'Strong match, scaled teams');
   assert.deepEqual(clean.analysis.strengths, ['Scaled a platform, twice']);
-  assert.equal(interpretResult(result({ score: 9 }), { location_check: 'unverified' }).score, 7);
-  assert.equal(interpretResult(result({ score: 9, locationConcern: 'conflict' }), { location_check: 'unknown' }).score, 2);
+  assert.equal(interpretResult(result({ score: 9 }), { location_check: 'unverified', ...text }).score, 7);
+  assert.equal(interpretResult(result({ score: 9, locationConcern: 'conflict' }), { location_check: 'unknown', ...text }).score, 2);
 });
 
 test('ruleScore explains a conflict without an AI call', () => {

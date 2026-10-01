@@ -6,6 +6,7 @@ import { keywordMatcher } from '../../tools/titles.js';
 import { checkLocation } from '../../tools/location.js';
 import { detectTrack } from '../../tools/track.js';
 import { parseRate, parseHours } from '../../tools/rates.js';
+import { isListingPage } from '../../tools/listings.js';
 import { resolveDetails, RETRYABLE } from './details.js';
 import * as himalayas from './sources/himalayas.js';
 import * as remoteok from './sources/remoteok.js';
@@ -126,7 +127,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
   // 2-3. Filter by title and age
   const candidates = collected.filter((item) => {
     const s = stat(item.source);
-    if (!item.title || !relevant(item) || noise(item.title)) return false;
+    if (!item.title || !relevant(item) || noise(item.title) || isListingPage(item)) return false;
     s.relevant += 1;
     if (item.postedOn && item.postedOn < since) return false;
     s.fresh += 1;
