@@ -161,3 +161,7 @@ code { font: 12px ui-monospace, Consolas, monospace; background: var(--bg); padd
 .ident-edit .row, .copies .row { display: flex; gap: 8px; }
 .copies .copy-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
 .copies button { padding: 3px 10px; font-size: 13px; }
+
+/* "Discovered since" sits inline with the other filters. */
+.filters label.date-filter { flex-direction: row; align-items: center; gap: 6px; margin: 0; font-size: 13px; }
+.filters label.date-filter input { padding: 6px 8px; }

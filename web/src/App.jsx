@@ -10,7 +10,7 @@ import AdminPage from './components/AdminPage.jsx';
 const viewFromHash = () => (window.location.hash.startsWith('#/admin') ? 'admin' : 'jobs');
 
 // 'active' (Needs action) is new jobs to evaluate and offers to decide; applied and interviewing are under 'progress'.
-const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', needsDescription: false, q: '', minScore: '' };
+const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', needsDescription: false, discoveredAfter: '', q: '', minScore: '' };
 // v2 since the default status changed; a filter saved under the old key would keep showing everything.
 const FILTERS_KEY = 'jobHuntFilters.v2';
 
@@ -122,6 +122,10 @@ export default function App() {
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
           ))}
         </select>
+        <label className="date-filter" title="Only jobs discovered on or after this date">
+          Discovered since
+          <input type="date" value={filters.discoveredAfter} onChange={set('discoveredAfter')} max={new Date().toISOString().slice(0, 10)} />
+        </label>
         <select value={filters.minScore} onChange={set('minScore')} aria-label="Minimum score">
           <option value="">Any score</option>
           {[9, 8, 7, 6, 5].map((n) => (

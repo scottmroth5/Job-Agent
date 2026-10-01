@@ -91,6 +91,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
             stage: { type: 'string', enum: ['all', ...STAGES] },
             status: { type: 'string', enum: ['all', 'active', 'progress', ...STATUSES] },
             q: { type: 'string', maxLength: 200 },
+            discoveredAfter: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Only jobs discovered on or after this date (YYYY-MM-DD)' },
             needsDescription: { type: 'boolean', description: 'Only new jobs judged 7+ from the title that still need a pasted description' },
             minScore: { type: 'integer', minimum: 1, maximum: 10 },
             limit: { type: 'integer', minimum: 1, maximum: 2000 },

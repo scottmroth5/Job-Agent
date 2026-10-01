@@ -305,3 +305,19 @@ test('copies already archived as duplicates are not pointed out again', async ()
   assert.deepEqual(getPosting(db, kept).copies.map((c) => c.id), [passedEarlier], 'a copy the user passed on is shown');
   store.close();
 });
+
+test('discoveredAfter keeps jobs found on or after the date', () => {
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const on = (day) => {
+    const id = insert(db, { title: `Job ${day}` });
+    db.prepare('UPDATE postings SET discovered_on = ? WHERE id = ?').run(day, id);
+    return id;
+  };
+  on('2026-09-20');
+  const sameDay = on('2026-09-25');
+  const later = on('2026-10-01');
+  assert.deepEqual(listPostings(db, { discoveredAfter: '2026-09-25' }).map((r) => r.id).sort(), [sameDay, later].sort());
+  assert.equal(listPostings(db, { discoveredAfter: '' }).length, 3, 'empty means no filter');
+  store.close();
+});

@@ -92,7 +92,7 @@ function toRow(r, config) {
   };
 }
 
-/** Filtered list. filters: { track, stage, status, needsDescription, q, minScore, limit } ('all' or empty means no filter; status 'active' or 'progress' means a STATUS_GROUPS group). */
+/** Filtered list. filters: { track, stage, status, needsDescription, discoveredAfter, q, minScore, limit } ('all' or empty means no filter; status 'active' or 'progress' means a STATUS_GROUPS group). */
 export function listPostings(db, filters = {}, config = {}) {
   const where = [];
   const params = {};
@@ -111,6 +111,10 @@ export function listPostings(db, filters = {}, config = {}) {
     params.status = filters.status;
   }
   if (String(filters.needsDescription) === 'true') where.push(AWAITING_DESCRIPTION);
+  if (filters.discoveredAfter) {
+    where.push('p.discovered_on >= @discoveredAfter'); // inclusive: jobs found on that day count
+    params.discoveredAfter = filters.discoveredAfter;
+  }
   if (filters.q) {
     where.push('(p.title LIKE @q OR p.company LIKE @q OR p.location LIKE @q)');
     params.q = `%${filters.q}%`;
