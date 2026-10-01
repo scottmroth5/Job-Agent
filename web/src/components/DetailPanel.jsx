@@ -3,6 +3,8 @@ import { api, followTask } from '../api.js';
 import { STATUSES, STATUS_LABELS, rateText, hoursText, annualText, scoreClass, payText, PAY_FROM } from '../format.js';
 import TaskProgress from './TaskProgress.jsx';
 
+const STAGE_NAMES = { discovered: 'Discovered', pipeline: 'Pipeline', archived: 'Archived' };
+
 function List({ items }) {
   if (!items?.length) return <p className="muted">None noted.</p>;
   return (
@@ -14,7 +16,7 @@ function List({ items }) {
   );
 }
 
-export default function DetailPanel({ id, onClose, onChanged }) {
+export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
   const [notes, setNotes] = useState('');
@@ -23,6 +25,7 @@ export default function DetailPanel({ id, onClose, onChanged }) {
   const [task, setTask] = useState(null);
   const [copied, setCopied] = useState(false);
   const [showText, setShowText] = useState(false);
+  const [ident, setIdent] = useState(null); // { title, company } while editing
 
   const load = async () => {
     try {
@@ -40,6 +43,7 @@ export default function DetailPanel({ id, onClose, onChanged }) {
     setTask(null);
     setPaste('');
     setShowText(false);
+    setIdent(null);
     load();
     const onKey = (e) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
@@ -92,11 +96,40 @@ export default function DetailPanel({ id, onClose, onChanged }) {
             <div className="panel-head">
               <span className={scoreClass(job.score)}>{job.score ?? '–'}{job.fit && <span className="fit"> {job.fit}</span>}</span>
               <div>
-                <h2>{job.title}</h2>
-                <div className="muted">
-                  {job.company}
-                  {job.location ? ` · ${job.location}` : ''} · {job.source}
-                </div>
+                {ident ? (
+                  <form
+                    className="ident-edit"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      await save({ title: ident.title, company: ident.company });
+                      setIdent(null);
+                    }}
+                  >
+                    <label>
+                      Title
+                      <input value={ident.title} onChange={(e) => setIdent((v) => ({ ...v, title: e.target.value }))} required autoFocus />
+                    </label>
+                    <label>
+                      Company
+                      <input value={ident.company} onChange={(e) => setIdent((v) => ({ ...v, company: e.target.value }))} required />
+                    </label>
+                    <div className="row">
+                      <button type="submit" className="primary">Save</button>
+                      <button type="button" onClick={() => setIdent(null)}>Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <h2>{job.title}</h2>
+                    <div className="muted">
+                      {job.company}
+                      {job.location ? ` · ${job.location}` : ''} · {job.source}
+                      <button className="link-button" onClick={() => setIdent({ title: job.title, company: job.company })} title="Fix the title or company so duplicates are recognized">
+                        Edit
+                      </button>
+                    </div>
+                  </>
+                )}
                 {job.pay && (
                   <div className="small">
                     Pay: {payText(job)}
@@ -112,6 +145,23 @@ export default function DetailPanel({ id, onClose, onChanged }) {
               {job.letter?.url && <a className="button" href={job.letter.url} target="_blank" rel="noreferrer">Cover letter (Google Doc) ↗</a>}
               {job.tweaks && <button onClick={copyTweaks}>{copied ? 'Copied!' : 'Copy resume tweaks'}</button>}
             </div>
+            {job.copies?.length > 0 && (
+              <div className="warn-box copies">
+                <strong>Looks like the same job as:</strong>
+                {job.copies.map((c) => (
+                  <div key={c.id} className="copy-row">
+                    <span>
+                      {c.title} at {c.company} · {STAGE_NAMES[c.stage]}, {STATUS_LABELS[c.status]}
+                      {c.appliedOn ? ` ${c.appliedOn}` : ''} (#{c.id})
+                    </span>
+                    <span className="row">
+                      {onOpen && <button onClick={() => onOpen(c.id)}>Open it</button>}
+                      {job.stage !== 'archived' && <button onClick={() => save({ duplicateOf: c.id })}>Archive this copy</button>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
             {job.letter?.flags?.length > 0 && <div className="warn-box">Cover letter needs review: {job.letter.flags.join('; ')}</div>}
             {job.letter && !job.letter.url && <div className="warn-box">The cover letter was written but not saved as a Doc yet; the next run retries it.</div>}
 

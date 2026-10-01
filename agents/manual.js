@@ -1,7 +1,8 @@
 // Manually added jobs: a link you found and/or a pasted description. Dedupe, get the text if
 // you did not paste it, check location and track, score, and write materials when it scores
 // well (or when asked). Used by the UI's Add job and by npm run add.
-import { normalizeUrl, companyTitleKey } from '../tools/urls.js';
+import { normalizeUrl } from '../tools/urls.js';
+import { identityKey, storedKey, isRealCompany } from './identity.js';
 import { checkLocation } from '../tools/location.js';
 import { detectTrack } from '../tools/track.js';
 import { parseRate, parseHours } from '../tools/rates.js';
@@ -13,17 +14,10 @@ import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/scor
 import { generateForPostings } from './hunt/generate.js';
 
 export const MANUAL_SOURCE = 'manual';
+export { isRealCompany };
 const MIN_PASTED = 100;
 
 const STAGE_LABEL = { discovered: 'Discovered', pipeline: 'Pipeline', archived: 'Archived' };
-
-const PLACEHOLDER_COMPANY = /^\(?(unknown|see posting|confidential|stealth|stealth startup|n\/?a|tbd|none|undisclosed|company)\)?$/i;
-
-/** False for empty or placeholder company names, which cannot tell two jobs apart. */
-export function isRealCompany(company) {
-  const c = String(company ?? '').trim();
-  return c.length > 0 && !PLACEHOLDER_COMPANY.test(c);
-}
 
 /** What an existing posting is, in words the Add job dialog can show. */
 export function describeExisting(db, id) {
@@ -95,7 +89,7 @@ export async function addPosting(input, ctx) {
   const urlKey = normalizeUrl(url);
   const byUrl = urlKey ? db.prepare('SELECT id FROM postings WHERE url_key = ?').get(urlKey) : null;
   // Company + title only identifies a job when the company is real, not a placeholder like "Unknown".
-  const ctKey = input.title && isRealCompany(input.company) ? companyTitleKey(input.company, input.title) : null;
+  const ctKey = input.title ? identityKey({ company: input.company, title: input.title }) : null;
   const existing = byUrl ?? (ctKey ? db.prepare('SELECT id FROM postings WHERE company_title_key = ? ORDER BY id LIMIT 1').get(ctKey) : null);
   if (existing) {
     const match = describeExisting(db, existing.id);
@@ -140,6 +134,14 @@ export async function addPosting(input, ctx) {
     throw new Error("Couldn't read the job title or company from the link. Enter them and try again.");
   }
   rejectSkipped(item, config);
+  // The link may have supplied the company and title: check again for the same job saved from another site.
+  const fetchedKey = identityKey(item);
+  const sameJob = fetchedKey ? db.prepare('SELECT id FROM postings WHERE company_title_key = ? ORDER BY id LIMIT 1').get(fetchedKey) : null;
+  if (sameJob) {
+    const match = describeExisting(db, sameJob.id);
+    step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
+    return { id: sameJob.id, created: false, existing: match, matchedBy: 'company and title' };
+  }
 
   // 3. Location, track, pay and hours
   const rate = parseRate(item.rateText);
@@ -162,7 +164,7 @@ export async function addPosting(input, ctx) {
         url_key: urlKey,
         company: item.company,
         title: item.title,
-        ct: companyTitleKey(item.company, item.title),
+        ct: storedKey(item),
         location: item.location ?? null,
         workplace: item.workplace ?? null,
         today: nowIso.slice(0, 10),

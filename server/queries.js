@@ -2,6 +2,7 @@
 import { annualize, parseRate, parseHours, findPayInText } from '../tools/rates.js';
 import { checkLocation } from '../tools/location.js';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
+import { findCopies, storedKey, identityKey, LIVE_COPY } from '../agents/identity.js';
 
 export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected'];
 /** Status filters that group statuses: 'active' is what waits on the user to evaluate or decide; 'progress' is under way. */
@@ -33,6 +34,8 @@ const AWAITING_DESCRIPTION = `(${NO_TEXT} AND p.status = 'new' AND p.stage != 'a
 
 const BASE = `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
     ${AWAITING_DESCRIPTION} AS awaiting_description,
+    -- flagged only while this job still waits on the user (new) and another live copy exists
+    p.status = 'new' AND EXISTS (SELECT 1 FROM postings q WHERE q.company_title_key = p.company_title_key AND q.id != p.id AND ${LIVE_COPY}) AS shares_key,
     ll.doc_url AS letter_url, ll.doc_name AS letter_name, ll.flags_json AS letter_flags, ll.id AS letter_id,
     EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks') AS has_tweaks
   FROM postings p
@@ -83,6 +86,8 @@ function toRow(r, config) {
     hasTweaks: Boolean(r.has_tweaks),
     needsDescription: !r.jd_text && !r.fetched_text,
     awaitingDescription: Boolean(r.awaiting_description),
+    // Placeholder companies ("See posting") share keys without being the same job, so they need a real identity.
+    hasCopies: Boolean(r.shares_key) && identityKey(r) !== null,
     fetchStatus: r.fetch_status,
   };
 }
@@ -130,6 +135,7 @@ export function getPosting(db, id, config = {}) {
   const letter = r.letter_id ? db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at FROM artifacts WHERE id = ?').get(r.letter_id) : null;
   return {
     ...toRow(r, config),
+    copies: findCopies(db, r),
     analysis: parse(r.analysis_json),
     notes: r.notes,
     text: r.jd_text ?? r.fetched_text ?? null,
@@ -149,7 +155,8 @@ export function getPosting(db, id, config = {}) {
 
 /**
  * Applies an edit from the UI. patch: { status, notes, appliedOn, stage, track, title, company, location,
- * description, rateText, hoursText }. Status changes are recorded in status_history as the user's.
+ * description, rateText, hoursText, duplicateOf }. Status changes are recorded in status_history as the user's.
+ * A company or title edit recomputes the duplicate key; duplicateOf archives this copy with a note pointing at the other.
  * Marking a job applied without a date sets today's date. Returns the updated detail, or null if not found.
  */
 export function updatePosting(db, id, patch, config = {}, now = new Date()) {
@@ -167,6 +174,16 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
   if (patch.track !== undefined) set.track = patch.track;
   if (patch.title !== undefined && patch.title.trim()) set.title = patch.title.trim();
   if (patch.company !== undefined && patch.company.trim()) set.company = patch.company.trim();
+  if (set.title !== undefined || set.company !== undefined) {
+    set.company_title_key = storedKey({ company: set.company ?? current.company, title: set.title ?? current.title });
+  }
+  if (patch.duplicateOf !== undefined) {
+    const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ?').get(patch.duplicateOf);
+    if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
+    const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${nowIso.slice(0, 10)}.`;
+    set.stage = 'archived';
+    set.notes = [set.notes ?? current.notes, note].filter(Boolean).join('\n');
+  }
   if (patch.location !== undefined) set.location = patch.location || null;
   if (patch.description !== undefined) set.jd_text = patch.description?.trim() || null;
   if (patch.rateText !== undefined) {

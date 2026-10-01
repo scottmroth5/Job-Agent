@@ -15,6 +15,8 @@ Job specific logic stays in this repo; never add it to agent-core.
 /config             job-search.example.json: the shape of the real, gitignored data/config/job-search.json
 /server             Fastify API over the SQLite store (app.js routes, queries.js, tasks.js, auth.js); serves the built UI
 /agents/manual.js   manually added jobs: dedupe, fetch or paste text, score, write materials
+/agents/identity.js same-job matching: companyTitleKey (tools/urls.js) spells out VP/Sr/CTO, drops "of/and/remote" and company suffixes;
+                    placeholder companies ("See posting") are read from the Google title. Rule changes need npm run cleanup to rekey
 /web                React (Vite) UI: job table with track/stage/status filters, detail panel, add-job dialog, fractional stacking bar
 /evals              eval runner and rubric code; real eval cases live in data/evals
 /test               node:test suites with synthetic fixtures only
@@ -38,7 +40,7 @@ npm run eval:score -- --build     build scoring eval cases in data/evals/score (
 npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=2   compare models; costs real money
 npm run hunt                      resume tweaks + cover letters (Google Docs) for promoted jobs (-- --dry-run, --ids, --regenerate, --no-docs)
 npm run archive -- --dry-run      preview archiving; without --dry-run it moves them
-npm run cleanup -- --dry-run      after a rule change: archive list-of-jobs pages, search.excludedSites jobs, and duplicate copies (the acted-on copy is kept);
+npm run cleanup -- --dry-run      after a rule change: rekey duplicates, archive list-of-jobs pages, search.excludedSites jobs, and duplicate copies (the acted-on copy is kept);
                                   move pipeline jobs without a description back to Discovered. Its status changes are changed_by agent, which the eval ignores
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
 npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point)

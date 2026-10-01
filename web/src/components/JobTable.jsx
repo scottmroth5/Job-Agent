@@ -72,6 +72,7 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
                     <>
                       <span className="role">{j.title}</span>
                       {j.track === 'fractional' && <span className="badge frac">fractional</span>}
+                      {j.hasCopies && <span className="badge warn" title="Another saved job has the same company and title; open it to compare">possible duplicate</span>}
                       {j.awaitingDescription ? (
                         <span className="badge warn" title="Scored from the title alone; paste the description, then Re-score">needs description</span>
                       ) : (

@@ -1,7 +1,8 @@
 // One discovery run: collect from every source, filter, dedupe against the database and
 // within the run, fetch full text for new postings, check location, and store them.
 // Scoring is a separate step (Phase 2c).
-import { normalizeUrl, companyTitleKey } from '../../tools/urls.js';
+import { normalizeUrl } from '../../tools/urls.js';
+import { identityKey, storedKey } from '../identity.js';
 import { keywordMatcher } from '../../tools/titles.js';
 import { checkLocation } from '../../tools/location.js';
 import { detectTrack } from '../../tools/track.js';
@@ -145,7 +146,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
 
   const findExisting = (item) => {
     const urlKey = normalizeUrl(item.url);
-    const ctKey = knownCompany(item.company) ? companyTitleKey(item.company, item.title) : null;
+    const ctKey = identityKey(item);
     const existing = (urlKey && byUrl.get(urlKey)) || (ctKey && byCompanyTitle.get(ctKey)) || null;
     return { urlKey, ctKey, existing };
   };
@@ -245,7 +246,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
             url_key: normalizeUrl(item.url),
             company,
             title: item.title,
-            company_title_key: companyTitleKey(company, item.title),
+            company_title_key: storedKey({ company, title: item.title }),
             source: item.source,
             location: item.location ?? null,
             salary: item.salary ?? null,
@@ -345,7 +346,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
           workplace: item.workplace ?? null,
           locationCheck: checkLocation({ location: item.location, workplace: item.workplace, text: item.description }, config.search.homeLocations),
           company: item.company ?? null,
-          ctKey: item.company ? companyTitleKey(item.company, item.title) : null,
+          ctKey: item.company ? storedKey({ company: item.company, title: item.title }) : null,
           now: nowIso,
         });
       },

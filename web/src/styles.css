@@ -154,3 +154,10 @@ code { font: 12px ui-monospace, Consolas, monospace; background: var(--bg); padd
 .jobs tbody tr.needs-desc:hover, .jobs tbody tr.needs-desc.selected { background: var(--accent-soft); }
 .needs-desc-toggle { border: 1px solid var(--mid); color: var(--mid); background: var(--card); border-radius: 16px; padding: 4px 12px; cursor: pointer; }
 .needs-desc-toggle.on { background: var(--mid); color: #fff; }
+
+/* Editing a job's title and company, and the same-job warning in the detail panel. */
+.link-button { background: none; border: none; color: var(--accent); padding: 0 0 0 8px; text-decoration: underline; cursor: pointer; font-size: 13px; }
+.ident-edit { display: flex; flex-direction: column; gap: 8px; min-width: 260px; }
+.ident-edit .row, .copies .row { display: flex; gap: 8px; }
+.copies .copy-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
+.copies button { padding: 3px 10px; font-size: 13px; }

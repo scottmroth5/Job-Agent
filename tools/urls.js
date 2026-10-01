@@ -31,12 +31,43 @@ export function normalizeUrl(raw) {
   return `${host}${path}${query}`;
 }
 
-/** Key for matching the same role across sources: lowercase, punctuation removed, spaces collapsed. */
+const words = (s) =>
+  String(s ?? '')
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean);
+
+// Company: legal suffixes and spacing do not tell employers apart ("M3 USA", "M3USA", "Acme, Inc.").
+const COMPANY_NOISE = new Set(['the', 'inc', 'incorporated', 'llc', 'ltd', 'limited', 'corp', 'corporation', 'co', 'plc', 'gmbh', 'lp', 'llp']);
+// Title: abbreviations spelled out, and words that vary between copies of one posting dropped.
+const TITLE_WORDS = {
+  vp: 'vice president',
+  svp: 'senior vice president',
+  evp: 'executive vice president',
+  sr: 'senior',
+  snr: 'senior',
+  jr: 'junior',
+  mgr: 'manager',
+  dir: 'director',
+  eng: 'engineering',
+  engg: 'engineering',
+  cto: 'chief technology officer',
+  cio: 'chief information officer',
+  ciso: 'chief information security officer',
+};
+const TITLE_NOISE = new Set(['of', 'the', 'and', 'for', 'a', 'an', 'remote']);
+
+/**
+ * Key for matching the same role across sources and spellings: "M3 USA | Vice President, Technology and
+ * Product (Remote)" and "M3USA | VP Technology & Product" give the same key.
+ */
 export function companyTitleKey(company, title) {
-  const clean = (s) =>
-    String(s ?? '')
-      .toLowerCase()
-      .replace(/[^\p{L}\p{N}]+/gu, ' ')
-      .trim();
-  return `${clean(company)}|${clean(title)}`;
+  const c = words(company);
+  const kept = c.filter((w) => !COMPANY_NOISE.has(w));
+  const t = words(title)
+    .flatMap((w) => (TITLE_WORDS[w] ?? w).split(' '))
+    .filter((w) => !TITLE_NOISE.has(w));
+  return `${(kept.length ? kept : c).join('')}|${t.join(' ')}`;
 }

@@ -223,3 +223,85 @@ test('rows carry pay from the job terms, the source salary, or the description, 
   assert.equal(rows[none].pay, null);
   store.close();
 });
+
+test('editing the company finds the earlier copy, and duplicateOf archives this one with a note', async () => {
+  const { updatePosting, getPosting } = await import('../server/queries.js');
+  const { rekeyPostings, findCopies } = await import('../agents/identity.js');
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const set = (id, company, title) => db.prepare('UPDATE postings SET company = ?, title = ? WHERE id = ?').run(company, title, id);
+  const applied = insert(db, { title: 'x', status: 'applied' });
+  set(applied, 'Example Health', 'VP of Engineering');
+  const copy = insert(db, { title: 'x' });
+  set(copy, 'See posting', 'Vice President, Engineering (Remote)');
+  const other = insert(db, { title: 'x' });
+  set(other, 'See posting', 'Vice President, Engineering (Remote)');
+  rekeyPostings(db);
+  assert.deepEqual(findCopies(db, db.prepare('SELECT * FROM postings WHERE id = ?').get(copy)), [], 'a placeholder company matches nothing');
+  assert.equal(listPostings(db, {}).find((r) => r.id === copy).hasCopies, false, 'two "See posting" rows are not flagged as copies');
+
+  const edited = updatePosting(db, copy, { company: 'Example Health, Inc.' });
+  assert.deepEqual(edited.copies.map((c) => [c.id, c.status]), [[applied, 'applied']]);
+  assert.equal(listPostings(db, {}).find((r) => r.id === copy).hasCopies, true);
+
+  const archived = updatePosting(db, copy, { duplicateOf: applied }, {}, new Date('2026-10-01T12:00:00Z'));
+  assert.equal(archived.stage, 'archived');
+  assert.equal(archived.status, 'new', 'status is left alone so the scoring eval does not read it as a pass');
+  assert.ok(archived.notes.endsWith(`Duplicate of #${applied}, VP of Engineering at Example Health (pipeline/applied); archived 2026-10-01.`), archived.notes);
+  assert.throws(() => updatePosting(db, copy, { duplicateOf: copy }), /not found/);
+  assert.equal(getPosting(db, other).copies.length, 0);
+  store.close();
+});
+
+test('duplicates: a new pipeline copy is kept over an old copy archived for age or left in Discovered', () => {
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const add = (o) => {
+    const id = insert(db, { title: 'x', ...o });
+    db.prepare("UPDATE postings SET company = 'Example Co', title = 'Engineering Manager', company_title_key = 'example|engineering manager' WHERE id = ?").run(id);
+    return id;
+  };
+  const oldArchived = add({ stage: 'archived' });
+  const oldDiscovered = add({ stage: 'discovered' });
+  const fresh = add({ stage: 'pipeline' });
+  assert.deepEqual(archiveListings(db, { dryRun: true }).archived.map((p) => p.id), [oldDiscovered]);
+  assert.ok(fresh > oldArchived);
+  store.close();
+});
+
+test("discovery's first status entry does not count as removed by cleanup", () => {
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const add = (stage) => {
+    const id = insert(db, { title: 'x', stage });
+    db.prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
+    db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, 'new', 'agent', 'x')").run(id);
+    return id;
+  };
+  const older = add('discovered');
+  const fresh = add('pipeline');
+  assert.deepEqual(archiveListings(db, { dryRun: true }).archived.map((p) => p.id), [older], 'the pipeline copy is kept');
+  assert.ok(fresh);
+  store.close();
+});
+
+test('copies already archived as duplicates are not pointed out again', async () => {
+  const { updatePosting, getPosting } = await import('../server/queries.js');
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const add = (o) => {
+    const id = insert(db, { title: 'x', ...o });
+    db.prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
+    return id;
+  };
+  const kept = add({ stage: 'pipeline' });
+  const copy = add({ stage: 'discovered' });
+  assert.equal(listPostings(db, {}).find((r) => r.id === kept).hasCopies, true);
+  updatePosting(db, copy, { duplicateOf: kept });
+  assert.equal(listPostings(db, {}).find((r) => r.id === kept).hasCopies, false);
+  assert.deepEqual(getPosting(db, kept).copies, []);
+  const passedEarlier = add({ stage: 'archived', status: 'passed' });
+  db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, 'new', 'passed', 'user', 'x')").run(passedEarlier);
+  assert.deepEqual(getPosting(db, kept).copies.map((c) => c.id), [passedEarlier], 'a copy the user passed on is shown');
+  store.close();
+});

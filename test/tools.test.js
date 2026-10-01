@@ -27,6 +27,12 @@ test('normalizeUrl reduces LinkedIn job links to the job ID', () => {
 
 test('companyTitleKey ignores case, punctuation and spacing', () => {
   assert.equal(companyTitleKey('Acme, Inc.', 'VP  of Engineering'), companyTitleKey('acme inc', 'vp of engineering'));
+  assert.equal(companyTitleKey('Example Co', 'Vice President of Engineering'), companyTitleKey('Example', 'VP Engineering'));
+  assert.equal(companyTitleKey('M3 USA', 'Vice President, Technology and Product (Remote)'), companyTitleKey('M3USA', 'VP Technology & Product'));
+  assert.equal(companyTitleKey('Example LLC', 'Sr. Engineering Mgr'), companyTitleKey('Example', 'Senior Engineering Manager'));
+  assert.notEqual(companyTitleKey('Example', 'Director of Engineering'), companyTitleKey('Example', 'Senior Director of Engineering'));
+  assert.notEqual(companyTitleKey('Example One', 'CTO'), companyTitleKey('Example Two', 'CTO'));
+  assert.equal(companyTitleKey('Co', 'CTO'), 'co|chief technology officer', 'a name made only of a suffix is kept');
 });
 
 test('parseSheetDate handles M/D/YYYY and ISO, rejects impossible dates', () => {

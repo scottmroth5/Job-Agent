@@ -7,9 +7,8 @@
 //   archiveListings     removes skipped postings (list-of-jobs pages, excluded sites) and duplicates
 //   demoteWithoutText   moves untouched pipeline jobs with no description back to Discovered
 import { skipReason } from '../../tools/listings.js';
-import { companyTitleKey } from '../../tools/urls.js';
 import { parseResultTitle } from '../discovery/sources/serper.js';
-import { isRealCompany } from '../manual.js';
+import { identityKey, isRealCompany } from '../identity.js';
 
 export const ARCHIVE_AFTER_DAYS = 30;
 const ARCHIVE_NOW = ['closed', 'passed', 'rejected'];
@@ -44,22 +43,16 @@ export function findListings(db, config) {
     .filter((p) => p.reason && !['applied', 'interviewing', 'offer'].includes(p.status));
 }
 
-// Which copy of a duplicated job to keep: the one the user acted on, then one with text, then the pipeline, then the oldest.
+// Which copy of a duplicated job to keep: the one the user acted on, then one still in play (not archived),
+// then the pipeline (scored and promoted), then one with text, then the oldest.
 const STATUS_RANK = { offer: 0, interviewing: 1, applied: 2, rejected: 3, closed: 4, passed: 5, new: 6 };
 // A copy this cleanup already removed (its last status change is the agent's) never wins over one still in play.
-const keepRank = (p) => [p.agent_removed ? 9 : STATUS_RANK[p.status] ?? 6, p.has_text ? 0 : 1, p.stage === 'pipeline' ? 0 : 1, p.id];
+const keepRank = (p) => [p.agent_removed ? 9 : STATUS_RANK[p.status] ?? 6, p.stage === 'archived' ? 1 : 0, p.stage === 'pipeline' ? 0 : 1, p.has_text ? 0 : 1, p.id];
 const byRank = (a, b) => {
   const x = keepRank(a);
   const y = keepRank(b);
   return x.reduce((d, v, i) => d || v - y[i], 0);
 };
-
-/** The company+title that identifies a posting, reading it from a Google page title when the company is a placeholder. */
-function identityKey(p) {
-  if (isRealCompany(p.company)) return p.company_title_key;
-  const parsed = parseResultTitle(p.title);
-  return isRealCompany(parsed.company) ? companyTitleKey(parsed.company, parsed.title) : null;
-}
 
 /**
  * Extra copies of one job (same company and title, including "See posting" rows whose Google title
@@ -69,7 +62,8 @@ export function findDuplicates(db) {
   const rows = db
     .prepare(`SELECT id, company, title, url, stage, status, company_title_key,
         TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != '' AS has_text,
-        COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = p.id ORDER BY h.id DESC LIMIT 1), '') = 'agent' AS agent_removed
+        -- removed by cleanup: the agent changed an existing status (discovery's first status, from nothing, does not count)
+        COALESCE((SELECT h.changed_by = 'agent' AND h.from_status IS NOT NULL FROM status_history h WHERE h.posting_id = p.id ORDER BY h.id DESC LIMIT 1), 0) AS agent_removed
       FROM postings p`)
     .all();
   const groups = new Map();

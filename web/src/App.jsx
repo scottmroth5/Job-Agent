@@ -148,7 +148,7 @@ export default function App() {
       </>
       )}
 
-      {selectedId && <DetailPanel id={selectedId} onClose={() => setSelectedId(null)} onChanged={refresh} />}
+      {selectedId && <DetailPanel id={selectedId} onClose={() => setSelectedId(null)} onChanged={refresh} onOpen={setSelectedId} />}
       {adding && (
         <AddJobDialog
           onClose={() => setAdding(false)}

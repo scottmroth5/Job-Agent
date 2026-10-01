@@ -110,7 +110,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     '/api/postings/:id',
     {
       schema: {
-        summary: 'Edit a job: status, notes, dates, stage, track (fractional), pay, hours, description',
+        summary: 'Edit a job: status, notes, dates, stage, track (fractional), company, title, pay, hours, description, or archive it as a duplicate',
         params: idParams,
         body: {
           type: 'object',
@@ -123,6 +123,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
             notes: { ...nullableString, maxLength: 20000 },
             appliedOn: { anyOf: [{ type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, { type: 'null' }, { type: 'string', maxLength: 0 }] },
             title: { type: 'string', maxLength: 300 },
+            duplicateOf: { type: 'integer', minimum: 1, description: 'Archive this job as a copy of that one' },
             company: { type: 'string', maxLength: 300 },
             location: { ...nullableString, maxLength: 300 },
             description: { ...nullableString, maxLength: 100000 },
@@ -147,6 +148,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
           properties: {
             url: { type: 'string', maxLength: 2000 },
             title: { type: 'string', maxLength: 300 },
+            duplicateOf: { type: 'integer', minimum: 1, description: 'Archive this job as a copy of that one' },
             company: { type: 'string', maxLength: 300 },
             location: { type: 'string', maxLength: 300 },
             description: { type: 'string', maxLength: 100000 },
