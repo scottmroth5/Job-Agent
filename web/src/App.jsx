@@ -10,7 +10,7 @@ import AdminPage from './components/AdminPage.jsx';
 const viewFromHash = () => (window.location.hash.startsWith('#/admin') ? 'admin' : 'jobs');
 
 // 'active' hides passed, closed, and rejected jobs: the default view is what still needs action.
-const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', q: '', minScore: '' };
+const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', needsDescription: false, q: '', minScore: '' };
 // v2 since the default status changed; a filter saved under the old key would keep showing everything.
 const FILTERS_KEY = 'jobHuntFilters.v2';
 
@@ -42,7 +42,7 @@ export default function App() {
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const [list, s] = await Promise.all([api.list(filters), api.summary()]);
+      const [list, s] = await Promise.all([api.list(filters.needsDescription ? { ...filters, stage: 'all' } : filters), api.summary()]);
       setJobs(list);
       setSummary(s);
       setError(null);
@@ -100,7 +100,15 @@ export default function App() {
             </button>
           ))}
         </div>
-        <select value={filters.stage} onChange={set('stage')} aria-label="Stage">
+        <button
+          className={`needs-desc-toggle${filters.needsDescription ? ' on' : ''}`}
+          aria-pressed={filters.needsDescription}
+          title="New jobs that scored 7+ from the title alone: paste the description, then Re-score"
+          onClick={() => setFilters((f) => ({ ...f, needsDescription: !f.needsDescription }))}
+        >
+          Needs description{summary ? ` (${summary.needsDescription})` : ''}
+        </button>
+        <select value={filters.stage} onChange={set('stage')} aria-label="Stage" disabled={filters.needsDescription}>
           <option value="pipeline">Pipeline</option>
           <option value="discovered">Discovered</option>
           <option value="archived">Archived</option>

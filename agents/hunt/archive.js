@@ -3,8 +3,9 @@
 //   anything else              archived once discovered more than 30 days ago,
 //                              unless an active conversation (interviewing, offer)
 // Stage becomes 'archived'; status is kept, so the reason stays visible.
-// archiveListings separately removes list-of-jobs pages (search results) wherever they sit.
-import { listingReason } from '../../tools/listings.js';
+// archiveListings separately removes skipped postings (list-of-jobs pages, excluded sites) wherever they sit,
+// and demoteWithoutText moves untouched pipeline jobs with no description back to Discovered.
+import { skipReason } from '../../tools/listings.js';
 
 export const ARCHIVE_AFTER_DAYS = 30;
 const ARCHIVE_NOW = ['closed', 'passed', 'rejected'];
@@ -28,37 +29,55 @@ export function findArchivable(db, { now = new Date(), days = ARCHIVE_AFTER_DAYS
 }
 
 /**
- * Postings that are lists of jobs (see tools/listings.js), not yet archived, that the user has not
- * acted on. Jobs with a status other than new are left alone: the user put that there.
+ * Postings that are never kept (see tools/listings.js: list-of-jobs pages, excluded sites) and are not
+ * yet archived, or archived but still new. Applied, interviewing, and offer jobs are left alone.
  */
-export function findListings(db) {
+export function findListings(db, config) {
   return db
     .prepare("SELECT id, company, title, url, stage, status FROM postings WHERE stage != 'archived' OR status = 'new' ORDER BY id")
     .all()
-    .map((p) => ({ ...p, reason: listingReason(p) }))
+    .map((p) => ({ ...p, reason: skipReason(p, config) }))
     .filter((p) => p.reason && !['applied', 'interviewing', 'offer'].includes(p.status));
 }
 
 /**
- * Archives list-of-jobs postings and marks new ones passed, with a note and status history.
+ * Archives skipped postings and marks new ones passed, with a note and status history.
  * They stay in the database so their links are recognized and never added again.
  */
-export function archiveListings(db, { now = new Date(), dryRun = false } = {}) {
-  const found = findListings(db);
+export function archiveListings(db, { config, now = new Date(), dryRun = false } = {}) {
+  const found = findListings(db, config);
   if (!dryRun && found.length) {
     const nowIso = now.toISOString();
     const update = db.prepare(`UPDATE postings SET stage = 'archived', status = @status, updated_at = @now,
-      notes = TRIM(COALESCE(notes, '') || char(10) || @note) WHERE id = @id`);
+      notes = CASE WHEN TRIM(COALESCE(notes, '')) = '' THEN @note ELSE notes || char(10) || @note END WHERE id = @id`);
     const history = db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'agent', ?)");
     db.transaction(() => {
       for (const p of found) {
         const status = p.status === 'new' ? 'passed' : p.status;
-        update.run({ id: p.id, status, now: nowIso, note: `Removed ${nowIso.slice(0, 10)}: not a single job (${p.reason}).` });
+        update.run({ id: p.id, status, now: nowIso, note: `Removed ${nowIso.slice(0, 10)}: ${p.reason}.` });
         if (status !== p.status) history.run(p.id, p.status, status, nowIso);
       }
     })();
   }
   return { archived: found, dryRun };
+}
+
+/**
+ * Pipeline jobs still new that have no description (v1 promoted many from the title alone). They go
+ * back to Discovered, where the UI flags them, until a description is pasted and they are re-scored.
+ */
+export function demoteWithoutText(db, { now = new Date(), dryRun = false } = {}) {
+  const found = db
+    .prepare(`SELECT id, company, title, status FROM postings WHERE stage = 'pipeline' AND status = 'new'
+      AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) = '' ORDER BY id`)
+    .all();
+  if (!dryRun && found.length) {
+    const update = db.prepare("UPDATE postings SET stage = 'discovered', updated_at = ? WHERE id = ? AND stage = 'pipeline'");
+    db.transaction(() => {
+      for (const p of found) update.run(now.toISOString(), p.id);
+    })();
+  }
+  return { demoted: found, dryRun };
 }
 
 /** Archives them (unless dryRun). Returns { archived: [...], kept: number }. */

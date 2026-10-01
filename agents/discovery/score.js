@@ -5,7 +5,7 @@
 import { fillTemplate } from '../../tools/template.js';
 import { homeAreaText } from '../../tools/config.js';
 import { sanitizeDashes, truncate } from '../../tools/text.js';
-import { listingReason } from '../../tools/listings.js';
+import { skipReason } from '../../tools/listings.js';
 import { getPrompt } from '../prompts.js';
 
 // Chosen by the scoring eval (2026-09-30, 74 applied/passed cases): Sonnet 5.5 ranked applied above
@@ -129,6 +129,7 @@ export function interpretResult(data, posting) {
   if (posting.location_check === 'unverified') score = Math.min(score, UNVERIFIED_CAP);
   if (analysis.locationConcern === 'conflict') score = Math.min(score, CONFLICT_SCORE);
   if (!(posting.jd_text || posting.fetched_text || '').trim() && score > NO_TEXT_CAP) {
+    analysis.uncappedScore = score; // the UI asks for a description when this is promotable
     score = NO_TEXT_CAP;
     analysis.reason = `${analysis.reason ?? ''} Capped at ${NO_TEXT_CAP}: no posting text to score from; paste the description and re-score.`.trim();
   }
@@ -136,14 +137,14 @@ export function interpretResult(data, posting) {
   return { score, reason: analysis.reason, analysis };
 }
 
-/** True when scoring needs no AI call: a clear location conflict or a list-of-jobs page. */
-export const isRuleScored = (posting) => posting.location_check === 'conflict' || listingReason(posting) !== null;
+/** True when scoring needs no AI call: a clear location conflict, a list-of-jobs page, or an excluded site. */
+export const isRuleScored = (posting, config) => posting.location_check === 'conflict' || skipReason(posting, config) !== null;
 
-/** The no-AI score for a list-of-jobs page or a clear location conflict. */
+/** The no-AI score for a skipped posting (list of jobs, excluded site) or a clear location conflict. */
 export function ruleScore(posting, config) {
-  const listing = listingReason(posting);
-  if (listing) {
-    const reason = `Not a single job: ${listing}. Scored by rule without an AI call.`;
+  const skip = skipReason(posting, config);
+  if (skip) {
+    const reason = `Skipped: ${skip}. Scored by rule without an AI call.`;
     const analysis = { score: LISTING_SCORE, reason, roleType: 'Unknown', locationConcern: 'none', strengths: [], watchOuts: [], topTalkingPoint: '', suggestedStatus: 'pass' };
     return { score: LISTING_SCORE, reason, analysis };
   }
@@ -171,18 +172,18 @@ export function ruleScore(posting, config) {
  * Returns { score, reason, analysis, source: 'v2' | 'v2-rule', model, costUsd }.
  */
 export async function scoreOne(posting, { config, claude, knowledge, model, prompt, prompts, trace }) {
-  if (isRuleScored(posting)) return { ...ruleScore(posting, config), source: 'v2-rule', model: null, costUsd: 0 };
+  if (isRuleScored(posting, config)) return { ...ruleScore(posting, config), source: 'v2-rule', model: null, costUsd: 0 };
   const res = await claude.send({ ...buildScoreRequest(posting, { config, knowledge, model, prompt, prompts }), trace });
   return { ...interpretResult(res.data, posting), source: 'v2', model: res.model, costUsd: res.costUsd };
 }
 
 /** Rough cost estimate for scoring postings with a model (dry runs and eval budget guard). */
-export function estimateCost(postings, { model, knowledgeChars, templateChars }) {
+export function estimateCost(postings, { model, knowledgeChars, templateChars, config }) {
   const r = ESTIMATE_RATES[model];
   if (!r) return null;
   let usd = 0;
   for (const p of postings) {
-    if (isRuleScored(p)) continue;
+    if (isRuleScored(p, config)) continue;
     const textChars = Math.min((p.jd_text || p.fetched_text || '').length, CONTENT_CHARS);
     const inputTokens = (knowledgeChars + templateChars + textChars) / 4;
     usd += (inputTokens * r.input + r.expectedOutput * r.output) / 1_000_000;
@@ -240,7 +241,9 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
 
   const insertScore = db.prepare(`INSERT INTO scores (posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  const promote = db.prepare("UPDATE postings SET stage = 'pipeline', updated_at = ? WHERE id = ? AND stage = 'discovered'");
+  // A job without a description stays in Discovered (the UI flags it) until text is pasted and it is re-scored.
+  const promote = db.prepare(`UPDATE postings SET stage = 'pipeline', updated_at = ? WHERE id = ? AND stage = 'discovered'
+    AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != ''`);
   // Fractional scoring reports pay and hours from the posting text; keep what the source already gave.
   const fillTerms = db.prepare(`UPDATE postings SET rate_min = COALESCE(rate_min, @rateMin), rate_max = COALESCE(rate_max, @rateMax),
       rate_unit = COALESCE(rate_unit, @rateUnit), hours_min = COALESCE(hours_min, @hoursMin), hours_max = COALESCE(hours_max, @hoursMax)

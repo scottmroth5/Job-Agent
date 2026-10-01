@@ -1,6 +1,8 @@
-// Recognizes job-list pages (search results, "CTO Jobs and Vacancies", "VP Engineering jobs in Remote -
-// Indeed") that come back from Google results and aggregators. They are not a single job: they cannot
-// be scored or applied to, so discovery and manual add drop them and scoring gives them a 1 by rule.
+// Postings that are never kept, whatever their score:
+//   - job-list pages (search results, "CTO Jobs and Vacancies", "VP Engineering jobs in Remote -
+//     Indeed") that come back from Google results and aggregators: they cannot be scored or applied to
+//   - links to sites in config.search.excludedSites (for example sites that charge to apply)
+// Discovery and manual add drop them, scoring gives them a 1 by rule, and archiveListings removes saved ones.
 // Kept narrow on purpose: "(2 Openings)" titles and Workday links with "Search" in the path are real jobs.
 
 // Titles that describe a set of jobs. A single role is never titled "... Jobs" or "... Vacancies".
@@ -28,3 +30,27 @@ export function listingReason({ title, url } = {}) {
 }
 
 export const isListingPage = (posting) => listingReason(posting) !== null;
+
+/** The entry of sites (domains such as "example.com") that a link belongs to, subdomains included, else null. */
+export function excludedSite(url, sites = []) {
+  let host;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  return (
+    sites.find((site) => {
+      const domain = site.toLowerCase().replace(/^www\./, '');
+      return host === domain || host.endsWith(`.${domain}`);
+    }) ?? null
+  );
+}
+
+/** Why a posting is never kept (an excluded site or a list of jobs), else null. config is optional. */
+export function skipReason(posting, config) {
+  const site = excludedSite(posting?.url, config?.search?.excludedSites);
+  if (site) return `excluded site (${site})`;
+  const listing = listingReason(posting);
+  return listing ? `not a single job (${listing})` : null;
+}

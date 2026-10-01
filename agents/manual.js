@@ -5,7 +5,7 @@ import { normalizeUrl, companyTitleKey } from '../tools/urls.js';
 import { checkLocation } from '../tools/location.js';
 import { detectTrack } from '../tools/track.js';
 import { parseRate, parseHours } from '../tools/rates.js';
-import { listingReason } from '../tools/listings.js';
+import { listingReason, excludedSite } from '../tools/listings.js';
 import { resolveDetails } from './discovery/details.js';
 import { jobIdFromUrl } from './discovery/sources/linkedin.js';
 import * as fractionaljobs from './discovery/sources/fractionaljobs.js';
@@ -62,11 +62,13 @@ export function validateManualInput(input) {
   if (!url && (!input.title?.trim() || !input.company?.trim())) throw new Error('Without a link, enter the job title and company.');
   if (description && description.length < MIN_PASTED) throw new Error(`The pasted description is very short (under ${MIN_PASTED} characters).`);
   if (input.track && !['fulltime', 'fractional'].includes(input.track)) throw new Error('Track must be fulltime or fractional.');
-  rejectListing({ url, title: input.title });
+  rejectSkipped({ url, title: input.title });
 }
 
-/** Refuses a list-of-jobs page: it cannot be scored or applied to. */
-function rejectListing(posting) {
+/** Refuses a list-of-jobs page (it cannot be scored or applied to) or a link to an excluded site. */
+function rejectSkipped(posting, config) {
+  const site = excludedSite(posting.url, config?.search?.excludedSites);
+  if (site) throw new Error(`Jobs from ${site} are excluded in your settings (search.excludedSites). Find the job on the employer's site and add that link.`);
   const reason = listingReason(posting);
   if (reason) throw new Error(`This looks like a list of jobs, not one job (${reason}). Open it, pick a job, and add that job's link.`);
 }
@@ -80,6 +82,7 @@ function rejectListing(posting) {
 export async function addPosting(input, ctx) {
   validateManualInput(input);
   const { store, config, http, browser, claude, knowledge, drive, run } = ctx;
+  rejectSkipped({ url: input.url?.trim() }, config);
   const step = (m) => {
     ctx.onStep?.(m);
     run?.log?.('info', m);
@@ -136,7 +139,7 @@ export async function addPosting(input, ctx) {
   if (!item.title || !item.company) {
     throw new Error("Couldn't read the job title or company from the link. Enter them and try again.");
   }
-  rejectListing(item);
+  rejectSkipped(item, config);
 
   // 3. Location, track, pay and hours
   const rate = parseRate(item.rateText);
@@ -199,6 +202,8 @@ export async function addPosting(input, ctx) {
     step('Writing resume tweaks and cover letter');
     materials = await generateForPostings({ store, config, claude, knowledge, drive, run, options: { ids: [id] } });
     step(materials.docs ? 'Cover letter saved as a Google Doc' : 'Materials written');
+  } else if (!pasted && !item.description) {
+    step('No description, so it stays in Discovered: paste the description in the detail panel, then Re-score');
   } else {
     step(`Score is under ${PROMOTE_AT}, so no materials were written (use Write materials to create them anyway)`);
   }

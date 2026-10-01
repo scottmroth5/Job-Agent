@@ -14,7 +14,8 @@
     "homeLocations": ["Anytown Metro Area", "Anytown, ST", "Nearby City, ST", "Suburb, ST"],
     "fractionalTerms": ["Fractional CTO", "Fractional Head of Engineering", "Fractional VP Engineering", "Fractional CISO"],
     "fractionalTitleKeywords": ["fractional", "ciso", "cio", "chief information security", "chief information officer", "technical advisor"],
-    "siteSearch": false
+    "siteSearch": false,
+    "excludedSites": ["virtualvocations.com"]
   },
   "fractional": {
     "targetAnnual": [200000, 250000],

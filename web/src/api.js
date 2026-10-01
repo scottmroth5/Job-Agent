@@ -14,7 +14,7 @@ async function request(method, path, body) {
 export const api = {
   summary: () => request('GET', '/api/summary'),
   list: (filters) => {
-    const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== '' && v != null));
+    const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== '' && v != null && v !== false));
     return request('GET', `/api/postings?${q}`);
   },
   get: (id) => request('GET', `/api/postings/${id}`),

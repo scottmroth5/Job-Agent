@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.js';
-import { listingReason, isListingPage } from '../tools/listings.js';
+import { listingReason, isListingPage, excludedSite, skipReason } from '../tools/listings.js';
 import { interpretResult, ruleScore, isRuleScored, NO_TEXT_CAP } from '../agents/discovery/score.js';
-import { archiveListings } from '../agents/hunt/archive.js';
-import { validateManualInput } from '../agents/manual.js';
-import { listPostings } from '../server/queries.js';
+import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';
+import { validateManualInput, addPosting } from '../agents/manual.js';
+import { listPostings, summary } from '../server/queries.js';
 
 // Synthetic titles and links in the shapes seen in Google results; no real data.
 test('list-of-jobs titles and search links are recognized', () => {
@@ -46,11 +46,12 @@ test('a list page scores 1 by rule; a job with no text is capped below promotion
   assert.ok(isRuleScored(listing));
   const r = ruleScore(listing, {});
   assert.equal(r.score, 1);
-  assert.match(r.reason, /Not a single job/);
+  assert.match(r.reason, /Skipped: not a single job/);
 
   const analysis = { score: 9, reason: 'Great title.', locationConcern: 'none' };
   const capped = interpretResult(analysis, { location_check: 'remote' });
   assert.equal(capped.score, NO_TEXT_CAP);
+  assert.equal(capped.analysis.uncappedScore, 9);
   assert.match(capped.reason, /no posting text/);
   assert.equal(interpretResult({ ...analysis }, { location_check: 'remote', jd_text: 'Pasted text.' }).score, 9);
 });
@@ -101,5 +102,74 @@ test("the 'active' status filter hides passed, closed, and rejected jobs", () =>
   assert.deepEqual(statuses({ status: 'active' }), ['applied', 'interviewing', 'new', 'offer']);
   assert.equal(statuses({ status: 'all' }).length, 7);
   assert.deepEqual(statuses({ status: 'closed' }), ['closed']);
+  store.close();
+});
+
+const excluding = { search: { excludedSites: ['payjobs.example'] } };
+
+test('excluded sites match the domain and its subdomains only', () => {
+  assert.equal(excludedSite('https://www.payjobs.example/job/vp-1.html', ['payjobs.example']), 'payjobs.example');
+  assert.equal(excludedSite('https://payjobs.example/x', ['www.payjobs.example']), 'www.payjobs.example');
+  assert.equal(excludedSite('https://notpayjobs.example/x', ['payjobs.example']), null);
+  assert.equal(excludedSite('not a url', ['payjobs.example']), null);
+  assert.equal(skipReason({ title: 'VP Engineering', url: 'https://www.payjobs.example/j/1' }, excluding), 'excluded site (payjobs.example)');
+  assert.equal(skipReason({ title: 'VP Engineering', url: 'https://www.payjobs.example/j/1' }, {}), null, 'no setting, no exclusion');
+  assert.equal(ruleScore({ title: 'VP Engineering', url: 'https://payjobs.example/j/1' }, excluding).score, 1);
+  assert.ok(isRuleScored({ title: 'VP Engineering', url: 'https://payjobs.example/j/1' }, excluding));
+});
+
+test('manual add refuses an excluded site before fetching anything', async () => {
+  const store = openJobStore(':memory:');
+  const http = { get: () => assert.fail('no fetch for an excluded site') };
+  await assert.rejects(addPosting({ url: 'https://www.payjobs.example/job/1' }, { store, config: excluding, http }), /excluded in your settings/);
+  store.close();
+});
+
+test('cleanup archives excluded-site jobs and moves pipeline jobs without a description to Discovered', () => {
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const paid = insert(db, { title: 'VP Engineering', url: 'https://www.payjobs.example/job/1', stage: 'discovered' });
+  const noText = insert(db, { title: 'Director of Engineering' });
+  const appliedNoText = insert(db, { title: 'Head of Engineering', status: 'applied' });
+  const withText = insert(db, { title: 'CTO' });
+  db.prepare("UPDATE postings SET fetched_text = 'The full posting.' WHERE id = ?").run(withText);
+
+  const { archived } = archiveListings(db, { config: excluding, now: new Date('2026-10-01T12:00:00Z') });
+  assert.deepEqual(archived.map((p) => p.id), [paid]);
+  assert.match(db.prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(paid), /^Removed 2026-10-01: excluded site \(payjobs\.example\)\.$/);
+
+  assert.deepEqual(demoteWithoutText(db, { dryRun: true }).demoted.map((p) => p.id), [noText]);
+  demoteWithoutText(db);
+  const stage = (id) => db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
+  assert.deepEqual([stage(noText), stage(appliedNoText), stage(withText)], ['discovered', 'pipeline', 'pipeline']);
+  store.close();
+});
+
+test('jobs judged 7+ without a description are flagged and counted; others are not', () => {
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const today = new Date().toISOString().slice(0, 10);
+  const add = (title, o = {}) => {
+    const id = insert(db, { title, stage: 'discovered', ...o });
+    db.prepare('UPDATE postings SET discovered_on = ? WHERE id = ?').run(o.discoveredOn ?? today, id);
+    return id;
+  };
+  const score = (id, value, source, analysis = {}) =>
+    db.prepare("INSERT INTO scores (posting_id, score, reason, analysis_json, source, created_at) VALUES (?, ?, 'r', ?, ?, 'x')").run(id, value, JSON.stringify(analysis), source);
+  const v1High = add('VP Engineering');
+  score(v1High, 9, 'v1-quick');
+  const capped = add('Head of Engineering');
+  score(capped, 5, 'v2', { uncappedScore: 8 });
+  const low = add('Engineering Manager');
+  score(low, 5, 'v2');
+  const old = add('Director', { discoveredOn: '2026-01-01' });
+  score(old, 9, 'v1-quick');
+  const passed = add('CTO', { status: 'passed' });
+  score(passed, 9, 'v1-quick');
+
+  const flagged = listPostings(db, { stage: 'all', status: 'all' }).filter((r) => r.awaitingDescription).map((r) => r.id).sort();
+  assert.deepEqual(flagged, [v1High, capped].sort());
+  assert.deepEqual(listPostings(db, { needsDescription: 'true' }).map((r) => r.id).sort(), [v1High, capped].sort());
+  assert.equal(summary(db).needsDescription, 2);
   store.close();
 });

@@ -54,7 +54,7 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, showTerms,
         </thead>
         <tbody>
           {sorted.map((j) => (
-            <tr key={j.id} className={j.id === selectedId ? 'selected' : ''} onClick={() => onOpen(j.id)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(j.id)}>
+            <tr key={j.id} className={[j.id === selectedId && 'selected', j.awaitingDescription && 'needs-desc'].filter(Boolean).join(' ')} onClick={() => onOpen(j.id)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(j.id)}>
               {stackable && (
                 <td className="stack-cell" onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" aria-label="Include in stack" checked={stack.includes(j.id)} onChange={() => onToggleStack(j.id)} />
@@ -72,7 +72,11 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, showTerms,
                     <>
                       <span className="role">{j.title}</span>
                       {j.track === 'fractional' && <span className="badge frac">fractional</span>}
-                      {j.needsDescription && <span className="badge warn">needs description</span>}
+                      {j.awaitingDescription ? (
+                        <span className="badge warn" title="Scored from the title alone; paste the description, then Re-score">needs description</span>
+                      ) : (
+                        j.needsDescription && <span className="badge muted">no description</span>
+                      )}
                     </>
                   )}
                   {c.key === 'company' && j.company}

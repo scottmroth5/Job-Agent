@@ -19,7 +19,7 @@
     "eval:score": "node --env-file=.env scripts/eval-score.js",
     "hunt": "node --env-file=.env scripts/hunt.js",
     "archive": "node scripts/archive.js",
-    "remove-listings": "node scripts/remove-listings.js",
+    "cleanup": "node scripts/cleanup.js",
     "report": "node --env-file=.env scripts/report.js",
     "pipeline": "node --env-file=.env scripts/pipeline.js",
     "web:build": "vite build",

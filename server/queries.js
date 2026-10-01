@@ -1,6 +1,7 @@
 // Database reads and edits behind the API. Rows come back in the shape the UI uses (camelCase).
 import { annualize, parseRate, parseHours } from '../tools/rates.js';
 import { checkLocation } from '../tools/location.js';
+import { PROMOTE_AT } from '../agents/discovery/score.js';
 
 export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected'];
 /** Statuses that still need something from the user; the 'active' list filter shows only these. */
@@ -21,7 +22,17 @@ const LATEST_SCORE = `(SELECT s.id FROM scores s WHERE s.posting_id = p.id
   ORDER BY CASE s.source WHEN 'v2' THEN 0 WHEN 'v2-rule' THEN 0 WHEN 'v1-analysis' THEN 1 ELSE 2 END, s.id DESC LIMIT 1)`;
 const LATEST_LETTER = `(SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'cover_letter' ORDER BY a.id DESC LIMIT 1)`;
 
+// Jobs worth pasting a description for: no text, still new, found in the last 30 days, and judged
+// PROMOTE_AT+ from the title alone (a v1 title score, or a v2 score capped for lack of text, whose
+// original is analysis.uncappedScore). They stay in Discovered and the UI highlights them.
+export const DESCRIPTION_DAYS = 30;
+const NO_TEXT = "TRIM(COALESCE(p.jd_text, '') || COALESCE(p.fetched_text, '')) = ''";
+const AWAITING_DESCRIPTION = `(${NO_TEXT} AND p.status = 'new' AND p.stage != 'archived'
+  AND p.discovered_on >= date('now', '-${DESCRIPTION_DAYS} days')
+  AND COALESCE(CASE WHEN json_valid(ls.analysis_json) THEN json_extract(ls.analysis_json, '$.uncappedScore') END, ls.score) >= ${PROMOTE_AT})`;
+
 const BASE = `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
+    ${AWAITING_DESCRIPTION} AS awaiting_description,
     ll.doc_url AS letter_url, ll.doc_name AS letter_name, ll.flags_json AS letter_flags, ll.id AS letter_id,
     EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks') AS has_tweaks
   FROM postings p
@@ -57,11 +68,12 @@ function toRow(r, config) {
     letter: r.letter_id ? { url: r.letter_url, name: r.letter_name, flags: parse(r.letter_flags) ?? [] } : null,
     hasTweaks: Boolean(r.has_tweaks),
     needsDescription: !r.jd_text && !r.fetched_text,
+    awaitingDescription: Boolean(r.awaiting_description),
     fetchStatus: r.fetch_status,
   };
 }
 
-/** Filtered list. filters: { track, stage, status, q, minScore, limit } ('all' or empty means no filter; status 'active' means ACTIVE_STATUSES). */
+/** Filtered list. filters: { track, stage, status, needsDescription, q, minScore, limit } ('all' or empty means no filter; status 'active' means ACTIVE_STATUSES). */
 export function listPostings(db, filters = {}, config = {}) {
   const where = [];
   const params = {};
@@ -79,6 +91,7 @@ export function listPostings(db, filters = {}, config = {}) {
     where.push('p.status = @status');
     params.status = filters.status;
   }
+  if (String(filters.needsDescription) === 'true') where.push(AWAITING_DESCRIPTION);
   if (filters.q) {
     where.push('(p.title LIKE @q OR p.company LIKE @q OR p.location LIKE @q)');
     params.q = `%${filters.q}%`;
@@ -175,6 +188,7 @@ export function summary(db, config = {}, now = new Date()) {
   return {
     counts,
     pipeline: counts.filter((c) => c.stage === 'pipeline').reduce((s, c) => s + c.n, 0),
+    needsDescription: db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} WHERE ${AWAITING_DESCRIPTION}`).pluck().get(),
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
     spend30Days: db.prepare('SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= ?').pluck().get(since),

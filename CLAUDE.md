@@ -38,6 +38,7 @@ npm run eval:score -- --build     build scoring eval cases in data/evals/score (
 npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=2   compare models; costs real money
 npm run hunt                      resume tweaks + cover letters (Google Docs) for promoted jobs (-- --dry-run, --ids, --regenerate, --no-docs)
 npm run archive -- --dry-run      preview archiving; without --dry-run it moves them
+npm run cleanup -- --dry-run      after a rule change: archive list-of-jobs pages and search.excludedSites jobs, move pipeline jobs without a description back to Discovered
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
 npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point)
 npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)
@@ -69,6 +70,8 @@ Nothing is overwritten: --regenerate creates new artifacts and Docs. Report HTML
 ## Scoring
 Default model and promotion threshold live in agents/discovery/score.js with the eval evidence behind them.
 Change the prompt, schema, model, or threshold only after rerunning the scoring eval and comparing pairwise accuracy.
+Never kept (tools/listings.js): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
+Without posting text a score is capped at 5 (analysis.uncappedScore keeps the original) and the job is never promoted; the UI flags 7+ ones.
 Sonnet 5.5 and Opus 5.5 always think: keep effort low and maxTokens generous for scoring (MODEL_SETTINGS).
 Scripts that need secrets load .env through node --env-file.
 

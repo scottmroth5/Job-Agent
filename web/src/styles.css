@@ -148,3 +148,9 @@ code { font: 12px ui-monospace, Consolas, monospace; background: var(--bg); padd
   .prompt-list { flex-direction: row; overflow-x: auto; }
   .prompt-list button { flex: 0 0 200px; }
 }
+
+/* Jobs waiting for a pasted description: a warm row with a left bar, and the toolbar toggle that lists them. */
+.jobs tbody tr.needs-desc { background: var(--warn-bg); box-shadow: inset 4px 0 0 var(--mid); }
+.jobs tbody tr.needs-desc:hover, .jobs tbody tr.needs-desc.selected { background: var(--accent-soft); }
+.needs-desc-toggle { border: 1px solid var(--mid); color: var(--mid); background: var(--card); border-radius: 16px; padding: 4px 12px; cursor: pointer; }
+.needs-desc-toggle.on { background: var(--mid); color: #fff; }

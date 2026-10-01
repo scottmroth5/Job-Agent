@@ -55,7 +55,7 @@ export function validateConfig(config) {
     if (config?.search?.[key] != null && !str(config.search[key])) problems.push(`search.${key} must be a non-empty string`);
   }
   if (config?.search?.siteSearch != null && typeof config.search.siteSearch !== 'boolean') problems.push('search.siteSearch must be true or false');
-  for (const key of ['fractionalTerms', 'fractionalTitleKeywords']) {
+  for (const key of ['fractionalTerms', 'fractionalTitleKeywords', 'excludedSites']) {
     if (config?.search?.[key] != null && !strList(config.search[key])) problems.push(`search.${key} must be a list of strings`);
   }
   const f = config?.fractional;

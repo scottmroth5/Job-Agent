@@ -57,6 +57,7 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `npm run score` | Only score new jobs and promote 7+ (`-- --dry-run` for a cost estimate) |
 | `npm run hunt` | Only write resume tweaks and cover letters for promoted jobs |
 | `npm run add -- --url=...` | Add a job you found yourself |
+| `npm run cleanup` | Remove list-of-jobs pages and excluded-site jobs; move jobs without a description back to Discovered (`-- --dry-run` to preview) |
 | `npm run report` | Email the summary for the last 24 hours |
 | `npm run eval:score` | Compare scoring models on jobs you applied to vs. passed on (costs money) |
 | `npm test` | Run the tests (no network or keys needed) |
