@@ -73,16 +73,21 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 The inbox uses the same Google Cloud project and OAuth client as the rest of the app, with its own
 sign-in. It asks for two permissions: read mail, and modify (used only to add labels).
 
-1. **Create a Google Cloud project** at [console.cloud.google.com](https://console.cloud.google.com), or reuse the one from the setup guide.
-2. **Enable the Gmail API:** APIs & Services, Library, "Gmail API", Enable.
-3. **Configure the OAuth consent screen** (Google Auth Platform):
-   - User type: External.
-   - Add yourself as a test user.
-   - Under **Data Access**, add the scopes `gmail.readonly` and `gmail.modify`.
-4. **Create desktop credentials:** Clients, Create client, application type **Desktop app**. Either download the JSON to `data/google/client_secret.json`, or put the ID and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
-5. **Publish the app to production:** Audience, Publish app. In testing mode, Google expires refresh tokens after 7 days, so the inbox would stop working every week. As an unverified app for your own account, Google shows an "unverified app" warning at sign-in. Choose Advanced, then continue. Verification is not needed for personal use.
-6. **Sign in:** `npm run inbox:auth`, and leave both boxes checked. This saves `GMAIL_REFRESH_TOKEN` to `.env`, and creates `EMAIL_ENC_KEY` there if it's missing. Neither is printed. **Back up `.env`:** stored email bodies cannot be read without that key.
-7. **Preview, then run:** `npm run inbox:backfill -- --days=30 --dry-run` shows how many emails would be classified and the cost (about $0.002 each with Claude Haiku). Then run `npm run inbox:backfill` once, and `npm run inbox` after that.
+**If you already set up Google for Job Agent** (the setup guide), the project, desktop client, and
+production publishing are already done. In [Google Cloud](https://console.cloud.google.com), with the
+Job Agent project selected:
+
+1. **Enable the Gmail API:** APIs & Services, Library, "Gmail API", Enable.
+2. **Add the scopes:** Google Auth Platform, Data Access, Add or remove scopes. Add `gmail.readonly` and `gmail.modify`, then Save.
+3. **Sign in:** `npm run inbox:auth`, and leave both boxes checked. This saves `GMAIL_REFRESH_TOKEN` to `.env`, and creates `EMAIL_ENC_KEY` there if it's missing. Neither is printed. **Back up `.env`:** stored email bodies cannot be read without that key.
+4. **Preview, then run:** `npm run inbox:backfill -- --days=30 --dry-run` shows how many emails would be classified and the cost (about $0.002 each with Claude Haiku). Then run `npm run inbox:backfill` once, and `npm run inbox` after that.
+
+**If you are starting without a Google setup,** do these first, then steps 1 to 4 above:
+
+- **Create a Google Cloud project** at [console.cloud.google.com](https://console.cloud.google.com).
+- **Configure the OAuth consent screen** (Google Auth Platform): user type External, and add yourself as a test user.
+- **Create desktop credentials:** Clients, Create client, application type **Desktop app**. Either download the JSON to `data/google/client_secret.json`, or put the ID and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+- **Publish the app to production:** Audience, Publish app. In testing mode, Google expires refresh tokens after 7 days, so the inbox would stop working every week. As an unverified app for your own account, Google shows an "unverified app" warning at sign-in: choose Advanced, then continue. Verification is not needed for personal use.
 
 Only email that looks job related is processed: threads you started, known contacts, known company
 domains, and job sites (`config/inbox.json`). Nothing about other mail is stored. Email bodies are
