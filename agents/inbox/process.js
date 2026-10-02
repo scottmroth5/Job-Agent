@@ -25,6 +25,18 @@ export function estimateCostUsd(emails, openCount) {
 const IGNORED_LABELS = ['SPAM', 'TRASH', 'CHAT', 'DRAFT'];
 
 /**
+ * Where a classified email goes: the rule cascade, then the confidence gate, then the injection guard
+ * (an email with instructions aimed at an AI is held for review with no action, even when a rule links it,
+ * because its type still comes from the model). Shared by the inbox run and the inbox eval.
+ */
+export function decideEmail(db, email, c, { cfg, open }) {
+  const ruleMatch = matchEmail(db, email, { atsDomains: cfg.atsDomains, open });
+  const link = decideLink({ ruleMatch, classification: c, threshold: cfg.autoLinkAt });
+  if (!looksLikeInjection(email)) return link;
+  return { ...link, postingId: null, opportunity: false, reviewStatus: 'needs_review', reason: 'contains instructions aimed at an AI; no action taken', bestGuess: link.postingId ?? link.bestGuess };
+}
+
+/**
  * @param {object} ctx
  * @param {{db, tx}} ctx.store
  * @param {object} ctx.gmail     createGmail()
@@ -81,11 +93,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
       log('warn', `Classification failed for one message: ${err.name}`);
       continue;
     }
-    const ruleMatch = matchEmail(db, email, { atsDomains: cfg.atsDomains, open });
-    let link = decideLink({ ruleMatch, classification: c, threshold: cfg.autoLinkAt });
-    if (looksLikeInjection(email)) {
-      link = { ...link, postingId: null, opportunity: false, reviewStatus: 'needs_review', reason: 'contains instructions aimed at an AI; no action taken', bestGuess: link.postingId ?? link.bestGuess };
-    }
+    const link = decideEmail(db, email, c, { cfg, open });
     const decidedBy = link.rule && link.rule !== 'model' ? `rule:${link.rule}` : `model:${c.model}`;
     const at = now();
 

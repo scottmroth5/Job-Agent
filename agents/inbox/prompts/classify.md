@@ -4,10 +4,10 @@ Open applications (id | company | title):
 {{applicationsBlock}}
 
 Types:
-- confirmation: an automated or personal acknowledgement that an application was received
+- confirmation: only an acknowledgement that a submitted application was received; anything later in the process is another type
 - rejection: the application will not move forward, or the role was filled or closed
 - recruiter_outreach: a recruiter or company reaching out about a role the person has not applied to
-- interview_request: an invitation to schedule or attend an interview or phone screen
+- interview_request: an invitation to schedule, attend, confirm, or reschedule an interview or phone screen
 - assessment: a test, take-home exercise, or questionnaire to complete
 - offer: a job offer
 - follow_up: other correspondence about an existing application (status updates, scheduling changes, questions)

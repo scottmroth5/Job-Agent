@@ -17,6 +17,8 @@
     "discover": "node --env-file=.env scripts/discover.js",
     "score": "node --env-file=.env scripts/score.js",
     "eval:score": "node --env-file=.env scripts/eval-score.js",
+    "eval:inbox": "node --env-file=.env scripts/eval-inbox.js",
+    "evals": "node scripts/evals.js",
     "hunt": "node --env-file=.env scripts/hunt.js",
     "archive": "node scripts/archive.js",
     "cleanup": "node scripts/cleanup.js",
