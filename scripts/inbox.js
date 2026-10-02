@@ -26,7 +26,7 @@ async function main() {
   const store = openJobStore();
   try {
     const key = dryRun ? null : loadKey();
-    const gmail = createGmail({ auth: getInboxAuth() });
+    const gmail = createGmail({ auth: getInboxAuth(), onWait: (ms) => console.log(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
     const name = mode === 'backfill' ? 'inbox-backfill' : 'inbox';
     if (!dryRun) assertNoRunningRun(store.db, name);
     const run = dryRun ? null : createTracer({ store }).startRun(name, { model: cfg.model, promptVersion: getPrompt(store.db, 'inbox-classify').version });

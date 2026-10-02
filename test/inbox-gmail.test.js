@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.js';
 import { getSetting, setSetting } from '../db/settings.js';
-import { createGmail, normalizeMessage, labelName, parseFrom } from '../agents/inbox/gmail.js';
+import { createGmail, normalizeMessage, labelName, parseFrom, isQuotaError } from '../agents/inbox/gmail.js';
 import { newMessageIds, backfillMessageIds, saveCursor, CURSOR_KEY } from '../agents/inbox/sync.js';
 import { fakeGmailApi, message } from './fixtures/inbox/fake-gmail.js';
 
@@ -22,7 +22,7 @@ test('messages are normalized: sender, domain, subject, date, and body', () => {
 
 test('the wrapper offers only read and add-label operations', () => {
   const g = createGmail({ api: fakeGmailApi().api });
-  assert.deepEqual(Object.keys(g).sort(), ['addThreadLabel', 'ensureLabel', 'getMessage', 'historySince', 'listMessages', 'profile', 'threadStartedByMe']);
+  assert.deepEqual(Object.keys(g).sort(), ['addThreadLabel', 'ensureLabel', 'getMessage', 'historySince', 'listMessages', 'profile', 'sentThreadIds']);
   for (const k of Object.keys(g)) assert.doesNotMatch(k, /send|delete|trash|archive|remove/i);
 });
 
@@ -39,13 +39,36 @@ test('labels: Job/<Company> is sanitized, created once, and only ever added', as
   assert.deepEqual(modify.args.requestBody, { addLabelIds: [a] });
 });
 
-test('threadStartedByMe checks the first message for SENT, once per thread', async () => {
-  const { api, calls } = fakeGmailApi({ threadStarters: { tA: true } });
-  const g = createGmail({ api });
-  assert.equal(await g.threadStartedByMe('tA'), true);
-  assert.equal(await g.threadStartedByMe('tA'), true);
-  assert.equal(await g.threadStartedByMe('tB'), false);
-  assert.equal(calls.filter((c) => c.name === 'threads.get').length, 2);
+test('sentThreadIds lists the threads I sent in with one list call, not one lookup per thread', async () => {
+  const mine = message({ id: 'm9', threadId: 'tA', from: 'me@example.net', subject: 'Following up', labelIds: ['SENT'] });
+  const { api, calls } = fakeGmailApi({ messages: [...msgs, mine] });
+  const sent = await createGmail({ api }).sentThreadIds(180);
+  assert.deepEqual([...sent], ['tA']);
+  assert.equal(calls.find((c) => c.name === 'messages.list').args.q, 'in:sent newer_than:180d');
+  assert.equal(calls.filter((c) => c.name === 'threads.get').length, 0);
+});
+
+test('quota errors are retried after a wait; other errors and exhausted retries are thrown', async () => {
+  const quota = Object.assign(new Error("Quota exceeded for quota metric 'Total Query Cost'"), { code: 429 });
+  assert.ok(isQuotaError(quota));
+  assert.ok(isQuotaError(Object.assign(new Error('x'), { code: 403, errors: [{ reason: 'userRateLimitExceeded' }] })));
+  assert.ok(!isQuotaError(Object.assign(new Error('Forbidden'), { code: 403, errors: [{ reason: 'insufficientPermissions' }] })));
+
+  const { api } = fakeGmailApi({ messages: msgs });
+  let failures = 2;
+  const realGet = api.users.messages.get;
+  api.users.messages.get = async (a) => (failures-- > 0 ? Promise.reject(quota) : realGet(a));
+  const waited = [];
+  const g = createGmail({ api, waits: [5, 10, 20], sleep: async () => {}, onWait: (ms) => waited.push(ms) });
+  assert.equal((await g.getMessage('m1')).gmailMessageId, 'm1');
+  assert.deepEqual(waited, [5, 10]);
+
+  failures = 10;
+  await assert.rejects(g.getMessage('m1'), /Quota exceeded/);
+  api.users.messages.get = async () => Promise.reject(Object.assign(new Error('Not found'), { code: 404 }));
+  waited.length = 0;
+  await assert.rejects(g.getMessage('m1'), /Not found/);
+  assert.deepEqual(waited, [], 'no retry for other errors');
 });
 
 test('history mode returns messages since the stored historyId and the next cursor', async () => {

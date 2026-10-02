@@ -15,7 +15,7 @@ export function domainIn(domain, list = []) {
 
 /**
  * @param {{ senderEmail: string, senderDomain: string }} email
- * @param {{ threadStartedByMe: boolean, isContact: (email) => boolean, isCompanyDomain: (domain) => boolean, atsDomains: string[] }} ctx
+ * @param {{ threadStartedByMe: boolean (I sent a message in this thread), isContact: (email) => boolean, isCompanyDomain: (domain) => boolean, atsDomains: string[] }} ctx
  * @returns {{ pass: boolean, reason: string | null }}  reason: 'my_thread' | 'contact' | 'company_domain' | 'ats_domain'
  */
 export function prefilter(email, ctx) {

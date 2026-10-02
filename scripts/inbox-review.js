@@ -43,7 +43,7 @@ async function main() {
     const key = loadKey();
     let gmail = null;
     try {
-      gmail = createGmail({ auth: getInboxAuth() });
+      gmail = createGmail({ auth: getInboxAuth(), onWait: (ms) => console.log(`  (Gmail rate limit; waiting ${ms / 1000} seconds)`) });
     } catch {
       console.log('(Gmail is not signed in, so email bodies will not be stored or saved with eval cases.)');
     }

@@ -3,6 +3,16 @@
 import { gmail as gmailApi } from '@googleapis/gmail';
 import { domainOf } from './prefilter.js';
 
+/** Gmail's per-user rate limit (15,000 units a minute): 429, or 403 with a rate-limit or quota reason. */
+export function isQuotaError(err) {
+  const status = err?.code ?? err?.status ?? err?.response?.status;
+  const reason = err?.errors?.[0]?.reason ?? err?.response?.data?.error?.errors?.[0]?.reason ?? '';
+  return status === 429 || (status === 403 && /rateLimit|quota/i.test(`${reason} ${err?.message ?? ''}`)) || /quota exceeded/i.test(err?.message ?? '');
+}
+
+// Waits before each retry after a quota error; the per-minute window clears within a minute.
+export const QUOTA_WAITS_MS = [15000, 30000, 60000, 60000, 60000];
+
 export class HistoryExpiredError extends Error {
   constructor() {
     super('The stored Gmail historyId is too old.');
@@ -57,18 +67,31 @@ export function labelName(company) {
 }
 
 /**
- * @param {{ auth?: object, api?: object }} opts  api: an object shaped like gmail({ version: 'v1' }) (tests pass a fake)
+ * @param {{ auth?: object, api?: object, waits?: number[], sleep?: (ms) => Promise, onWait?: (ms) => void }} opts
+ *   api: an object shaped like gmail({ version: 'v1' }) (tests pass a fake); waits/sleep: quota retry timing
  */
-export function createGmail({ auth, api = gmailApi({ version: 'v1', auth }) } = {}) {
+export function createGmail({ auth, api = gmailApi({ version: 'v1', auth }), waits = QUOTA_WAITS_MS, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), onWait = () => {} } = {}) {
   const users = api.users;
   const labelCache = new Map();
-  const startedCache = new Map();
+
+  /** Runs one API call, waiting and retrying when Gmail reports its rate limit. */
+  async function call(fn) {
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await fn();
+      } catch (err) {
+        if (!isQuotaError(err) || attempt >= waits.length) throw err;
+        onWait(waits[attempt]);
+        await sleep(waits[attempt]);
+      }
+    }
+  }
 
   async function pages(fn, pick) {
     const out = [];
     let pageToken;
     do {
-      const { data } = await fn(pageToken);
+      const { data } = await call(() => fn(pageToken));
       out.push(...(pick(data) ?? []));
       pageToken = data.nextPageToken;
     } while (pageToken);
@@ -77,7 +100,7 @@ export function createGmail({ auth, api = gmailApi({ version: 'v1', auth }) } = 
 
   return {
     async profile() {
-      const { data } = await users.getProfile({ userId: 'me' });
+      const { data } = await call(() => users.getProfile({ userId: 'me' }));
       return { emailAddress: data.emailAddress.toLowerCase(), historyId: String(data.historyId) };
     },
 
@@ -103,28 +126,28 @@ export function createGmail({ auth, api = gmailApi({ version: 'v1', auth }) } = 
       return pages((pageToken) => users.messages.list({ userId: 'me', q, maxResults: 500, pageToken }), (data) => (data.messages ?? []).map((x) => x.id));
     },
 
-    async getMessage(id) {
-      const { data } = await users.messages.get({ userId: 'me', id, format: 'full' });
-      return normalizeMessage(data);
+    /**
+     * Threads I sent a message in during the last `days` days: one list call per 500 sent messages, instead of
+     * one thread lookup (10 quota units) per incoming message.
+     */
+    async sentThreadIds(days) {
+      const threads = await pages((pageToken) => users.messages.list({ userId: 'me', q: `in:sent newer_than:${days}d`, maxResults: 500, pageToken }), (data) => (data.messages ?? []).map((x) => x.threadId));
+      return new Set(threads);
     },
 
-    /** True when the thread's first message was sent by me (it carries the SENT label). */
-    async threadStartedByMe(threadId) {
-      if (!startedCache.has(threadId)) {
-        const { data } = await users.threads.get({ userId: 'me', id: threadId, format: 'minimal' });
-        startedCache.set(threadId, Boolean(data.messages?.[0]?.labelIds?.includes('SENT')));
-      }
-      return startedCache.get(threadId);
+    async getMessage(id) {
+      const { data } = await call(() => users.messages.get({ userId: 'me', id, format: 'full' }));
+      return normalizeMessage(data);
     },
 
     /** The label's ID, creating it when missing. */
     async ensureLabel(name) {
       if (!labelCache.size) {
-        const { data } = await users.labels.list({ userId: 'me' });
+        const { data } = await call(() => users.labels.list({ userId: 'me' }));
         for (const l of data.labels ?? []) labelCache.set(l.name, l.id);
       }
       if (!labelCache.has(name)) {
-        const { data } = await users.labels.create({ userId: 'me', requestBody: { name, labelListVisibility: 'labelShow', messageListVisibility: 'show' } });
+        const { data } = await call(() => users.labels.create({ userId: 'me', requestBody: { name, labelListVisibility: 'labelShow', messageListVisibility: 'show' } }));
         labelCache.set(name, data.id);
       }
       return labelCache.get(name);
@@ -132,7 +155,7 @@ export function createGmail({ auth, api = gmailApi({ version: 'v1', auth }) } = 
 
     /** Adds a label to a whole thread. Never removes labels (so it never archives or marks anything read). */
     async addThreadLabel(threadId, labelId) {
-      await users.threads.modify({ userId: 'me', id: threadId, requestBody: { addLabelIds: [labelId] } });
+      await call(() => users.threads.modify({ userId: 'me', id: threadId, requestBody: { addLabelIds: [labelId] } }));
     },
   };
 }

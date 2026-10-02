@@ -57,10 +57,13 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
   summary.fetched = batch.messageIds.length;
   log('info', `${batch.messageIds.length} messages to check (${batch.mode})`);
   const me = (await gmail.profile()).emailAddress;
+  // "A thread I started": any thread I sent a message in, over the backfill window (one cheap list call).
+  const sentThreads = await gmail.sentThreadIds(Math.max(days, cfg.backfillDays));
   let open = listOpenApplications(db);
   const toClassify = [];
 
-  for (const id of batch.messageIds) {
+  for (const [i, id] of batch.messageIds.entries()) {
+    if (i && i % 250 === 0) log('info', `Checked ${i} of ${batch.messageIds.length} messages`);
     if (emailSeen(db, id)) {
       summary.alreadySeen += 1;
       continue;
@@ -71,9 +74,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
       summary.skipped += 1;
       continue;
     }
-    const checks = { isContact: isContact(db), isCompanyDomain: isCompanyDomain(db), atsDomains: cfg.atsDomains };
-    let pass = prefilter(msg, { ...checks, threadStartedByMe: false });
-    if (!pass.pass) pass = prefilter(msg, { ...checks, threadStartedByMe: await gmail.threadStartedByMe(msg.threadId) });
+    const pass = prefilter(msg, { isContact: isContact(db), isCompanyDomain: isCompanyDomain(db), atsDomains: cfg.atsDomains, threadStartedByMe: sentThreads.has(msg.threadId) });
     if (!pass.pass) {
       summary.skipped += 1;
       continue;

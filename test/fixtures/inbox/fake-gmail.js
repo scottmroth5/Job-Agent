@@ -21,8 +21,8 @@ export function message({ id, threadId = `t-${id}`, from, subject, body = '', ht
 }
 
 /**
- * @param {{ messages?: object[], me?: string, historyId?: string, history?: object, expiredHistory?: boolean, threadStarters?: Record<string, boolean> }} o
- *   history: { [startHistoryId]: messageIds[] }; threadStarters: threadId -> first message sent by me
+ * @param {{ messages?: object[], me?: string, historyId?: string, history?: object, expiredHistory?: boolean }} o
+ *   history: { [startHistoryId]: messageIds[] }; messages with the SENT label are what in:sent lists
  */
 export function fakeGmailApi(o = {}) {
   const calls = [];
@@ -42,11 +42,15 @@ export function fakeGmailApi(o = {}) {
         },
       },
       messages: {
-        list: async (a) => (rec('messages.list', a), { data: { messages: [...messages.keys()].map((id) => ({ id })) } }),
+        list: async (a) => {
+          rec('messages.list', a);
+          const sent = /in:sent/.test(a.q ?? '');
+          const hits = [...messages.values()].filter((m) => !sent || m.labelIds.includes('SENT'));
+          return { data: { messages: hits.map((m) => ({ id: m.id, threadId: m.threadId })) } };
+        },
         get: async (a) => (rec('messages.get', a), { data: messages.get(a.id) }),
       },
       threads: {
-        get: async (a) => (rec('threads.get', a), { data: { messages: [{ labelIds: o.threadStarters?.[a.id] ? ['SENT'] : ['INBOX'] }] } }),
         modify: async (a) => (rec('threads.modify', a), { data: {} }),
       },
       labels: {
