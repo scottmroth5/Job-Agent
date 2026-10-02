@@ -10,6 +10,19 @@
     "jobvite.com",
     "linkedin.com"
   ],
+  "personalDomains": [
+    "gmail.com",
+    "googlemail.com",
+    "outlook.com",
+    "hotmail.com",
+    "live.com",
+    "yahoo.com",
+    "icloud.com",
+    "me.com",
+    "aol.com",
+    "proton.me",
+    "protonmail.com"
+  ],
   "autoLinkAt": 0.85,
   "backfillDays": 180,
   "fallbackDays": 7,
