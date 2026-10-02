@@ -9,6 +9,7 @@ An AI job-search assistant that finds postings, scores them against your backgro
 - **Scores every job 1 to 10** with Claude against a Google Doc you write about yourself. Fractional roles also get a High / Medium / Stretch fit, pay, hours, and an annualized estimate.
 - **Writes materials** for jobs scoring 7 or higher: resume tweaks, and a cover letter saved as a Google Doc, with rule checks that flag letters for review.
 - **Emails a summary** of each run, including its cost.
+- **Reads your job email** (optional): matches confirmations, rejections, interview requests, assessments, and offers in Gmail to your applications, moves their status forward, records funnel dates, and labels the threads `Job/<Company>`. It never sends, deletes, or archives mail.
 - **Web page** (local only) to filter jobs, open application links and letters, track status, add jobs you find yourself, and edit the prompts Claude follows.
 
 ## How it works
@@ -59,8 +60,34 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `npm run add -- --url=...` | Add a job you found yourself |
 | `npm run cleanup` | Remove list-of-jobs pages, excluded-site jobs, and duplicate copies; move jobs without a description back to Discovered (`-- --dry-run` to preview) |
 | `npm run report` | Email the summary for the last 24 hours |
+| `npm run inbox:auth` | One-time Gmail sign-in for the inbox |
+| `npm run inbox` | Check Gmail for new job email once |
+| `npm run inbox:backfill` | Process the last 180 days of job email (`-- --days=30 --dry-run` to preview the count and cost) |
+| `npm run inbox:review` | Confirm, reassign, or dismiss emails the inbox was unsure about |
+| `npm run evals` | Run the inbox eval (`-- --all` adds the scoring eval; both cost money) |
 | `npm run eval:score` | Compare scoring models on jobs you applied to vs. passed on (costs money) |
 | `npm test` | Run the tests (no network or keys needed) |
+
+## Gmail inbox setup (optional)
+
+The inbox uses the same Google Cloud project and OAuth client as the rest of the app, with its own
+sign-in. It asks for two permissions: read mail, and modify (used only to add labels).
+
+1. **Create a Google Cloud project** at [console.cloud.google.com](https://console.cloud.google.com), or reuse the one from the setup guide.
+2. **Enable the Gmail API:** APIs & Services, Library, "Gmail API", Enable.
+3. **Configure the OAuth consent screen** (Google Auth Platform):
+   - User type: External.
+   - Add yourself as a test user.
+   - Under **Data Access**, add the scopes `gmail.readonly` and `gmail.modify`.
+4. **Create desktop credentials:** Clients, Create client, application type **Desktop app**. Either download the JSON to `data/google/client_secret.json`, or put the ID and secret in `.env` as `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+5. **Publish the app to production:** Audience, Publish app. In testing mode, Google expires refresh tokens after 7 days, so the inbox would stop working every week. As an unverified app for your own account, Google shows an "unverified app" warning at sign-in. Choose Advanced, then continue. Verification is not needed for personal use.
+6. **Sign in:** `npm run inbox:auth`, and leave both boxes checked. This saves `GMAIL_REFRESH_TOKEN` to `.env`, and creates `EMAIL_ENC_KEY` there if it's missing. Neither is printed. **Back up `.env`:** stored email bodies cannot be read without that key.
+7. **Preview, then run:** `npm run inbox:backfill -- --days=30 --dry-run` shows how many emails would be classified and the cost (about $0.002 each with Claude Haiku). Then run `npm run inbox:backfill` once, and `npm run inbox` after that.
+
+Only email that looks job related is processed: threads you started, known contacts, known company
+domains, and job sites (`config/inbox.json`). Nothing about other mail is stored. Email bodies are
+stored, encrypted (AES-256-GCM), only for emails linked to an application. Status only ever moves
+forward automatically; anything else waits for `npm run inbox:review`.
 
 ## Privacy
 
@@ -75,6 +102,7 @@ Job sites have their own terms of use. The agent reads public listings at a poli
 | `agents/discovery` | Job sources, full-text fetching, location checks, scoring, and scoring prompts |
 | `agents/hunt` | Resume tweaks, cover letters, the report email, and archiving |
 | `agents/manual.js` | Adding jobs by hand |
+| `agents/inbox` | Gmail inbox: pre-filter, matching, classification, status actions, review |
 | `server/` | Local API (OpenAPI spec at `/api/openapi.json`) |
 | `web/` | React web page |
 | `db/` | SQLite schema and migrations |

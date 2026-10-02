@@ -2,3 +2,10 @@ node_modules/
 .env
 data/
 web/dist/
+
+# Credentials, wherever they end up (defense in depth; they belong in .env or data/)
+.env.*
+!.env.example
+*.pem
+client_secret*.json
+token*.json
