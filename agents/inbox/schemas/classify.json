@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["application_id", "confidence", "type", "extracted", "summary"],
+  "properties": {
+    "application_id": { "anyOf": [{ "type": "string" }, { "type": "null" }], "description": "Id from the open applications list, or null" },
+    "confidence": { "type": "number", "description": "0 to 1" },
+    "type": {
+      "type": "string",
+      "enum": ["confirmation", "rejection", "recruiter_outreach", "interview_request", "assessment", "offer", "follow_up", "other"]
+    },
+    "extracted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["company", "role_title", "contact_name", "contact_email", "interview_times", "deadline"],
+      "properties": {
+        "company": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "role_title": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "contact_name": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "contact_email": { "anyOf": [{ "type": "string" }, { "type": "null" }] },
+        "interview_times": { "type": "array", "items": { "type": "string" } },
+        "deadline": { "anyOf": [{ "type": "string" }, { "type": "null" }] }
+      }
+    },
+    "summary": { "type": "string", "description": "At most two sentences" }
+  }
+}

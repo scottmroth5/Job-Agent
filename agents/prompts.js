@@ -1,4 +1,4 @@
-// The four editable prompts. Repo files are the defaults; admin-screen edits are stored in the
+// The editable prompts. Repo files are the defaults; admin-screen edits are stored in the
 // database (prompt_versions) with history, and the active edit wins. Output schemas stay in the
 // repo (read-only here) because code reads their field names.
 import { readFileSync } from 'node:fs';
@@ -39,6 +39,14 @@ export const PROMPTS = {
     file: ['agents', 'hunt', 'prompts', 'cover-letter.md'],
     allowed: HUNT_PLACEHOLDERS,
     required: ['company', 'roleTitle', 'analysis'],
+  },
+  'inbox-classify': {
+    label: 'Inbox email classification',
+    usedBy: 'Classifying job emails from Gmail (npm run inbox); the untrusted-email rules are fixed in code',
+    file: ['agents', 'inbox', 'prompts', 'classify.md'],
+    schemaFile: ['agents', 'inbox', 'schemas', 'classify.json'],
+    allowed: ['applicationsBlock', 'emailBlock'],
+    required: ['applicationsBlock', 'emailBlock'],
   },
 };
 

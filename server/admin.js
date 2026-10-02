@@ -1,8 +1,18 @@
-// Admin routes: view and edit the four prompts (stored in the database with history), and preview
+// Admin routes: view and edit the prompts (stored in the database with history), and preview
 // a prompt filled with a real job. Output schemas are shown read-only.
 import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersions, validateTemplate } from '../agents/prompts.js';
 import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.js';
+import { buildClassifyRequest } from '../agents/inbox/classify.js';
+import { listOpenApplications } from '../agents/inbox/match.js';
+
+// The inbox prompt previews with a made-up email; real email bodies are never shown here.
+const SAMPLE_EMAIL = {
+  senderEmail: 'no-reply@us.greenhouse.io',
+  sentAt: '2026-10-01T15:00:00Z',
+  subject: 'Thank you for applying to Example Co',
+  body: 'Hi,\n\nThanks for applying to the VP of Engineering role at Example Co. Our team will review your application.',
+};
 
 const NAMES = Object.keys(PROMPTS);
 const nameParams = { type: 'object', required: ['name'], properties: { name: { type: 'string', enum: NAMES } } };
@@ -104,6 +114,11 @@ export function registerAdminRoutes(app, { db, config }) {
       const { name } = req.params;
       const problems = validateTemplate(name, req.body.template);
       if (problems.length) return { problems, text: null, posting: null };
+      if (name === 'inbox-classify') {
+        const draft = { template: req.body.template, schema: defaultPrompt(name).schema };
+        const text = buildClassifyRequest(SAMPLE_EMAIL, { open: listOpenApplications(db).slice(0, 25), model: 'preview', prompt: draft }).prompt;
+        return { problems: [], text, posting: null, message: 'Previewed with a made-up sample email and your open applications.' };
+      }
       const posting = samplePosting(db, name, req.body.postingId);
       if (!posting) return { problems: [], text: null, posting: null, message: 'No job with posting text (and, for resume tweaks and letters, a v2 analysis) to preview with yet.' };
       const draft = { template: req.body.template, schema: defaultPrompt(name).schema, version: 'draft', track: posting.track };

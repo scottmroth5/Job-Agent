@@ -134,7 +134,7 @@ test('actions are refused while a pipeline run is in progress', async () => {
 test('admin: list, view, preview, save (validated), and restore prompts', async () => {
   const { app, store, ids } = await setup();
   const list = (await app.inject('/api/admin/prompts')).json();
-  assert.deepEqual(list.map((p) => [p.name, p.source]), [['score', 'default'], ['score-fractional', 'default'], ['resume-tweaks', 'default'], ['cover-letter', 'default']]);
+  assert.deepEqual(list.map((p) => [p.name, p.source]), [['score', 'default'], ['score-fractional', 'default'], ['resume-tweaks', 'default'], ['cover-letter', 'default'], ['inbox-classify', 'default']]);
 
   const score = (await app.inject('/api/admin/prompts/score')).json();
   assert.ok(score.template.includes('{{company}}') && score.schema.includes('"score"') && score.required.includes('jobContentBlock'));
