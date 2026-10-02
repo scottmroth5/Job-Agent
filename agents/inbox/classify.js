@@ -18,6 +18,23 @@ export const SYSTEM_PROMPT = [
   'Answer only with the JSON the output schema requires.',
 ].join(' ');
 
+// Text that addresses an AI rather than a person. Such an email is held for review with no action, even
+// when a rule links it, because its type still comes from the model.
+const INJECTION_PATTERNS = [
+  /\b(ignore|disregard|forget|override)\b[^.\n]{0,40}\b(previous|prior|above|earlier|all|system)\b[^.\n]{0,20}\b(instructions?|prompts?|rules?)\b/i,
+  /\b(you are|act as|you're now)\b[^.\n]{0,30}\b(ai|assistant|model|classifier|language model)\b/i,
+  /\b(classify|mark|label|set)\b[^.\n]{0,30}\b(this|the) (email|message)\b[^.\n]{0,30}\bas\b/i,
+  /\bset (the )?(application )?status to\b/i,
+  /^\s*(system|assistant)\s*:/im,
+  /<\/?\s*(system|instructions?)\s*>/i,
+];
+
+/** True when the email contains instructions aimed at an AI. */
+export function looksLikeInjection(email) {
+  const text = `${email.subject ?? ''}\n${email.body ?? ''}`;
+  return INJECTION_PATTERNS.some((re) => re.test(text));
+}
+
 // Stops email text from closing the wrapper or looking like a template placeholder.
 const neutralize = (s) =>
   String(s ?? '')

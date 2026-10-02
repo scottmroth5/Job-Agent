@@ -9,6 +9,9 @@ export const SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
 ];
 
+/** The inbox's own sign-in (npm run inbox:auth): read mail, and modify only to add labels. */
+export const INBOX_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify'];
+
 export const CLIENT_SECRET_PATH = repoPath('data', 'google', 'client_secret.json');
 export const TOKEN_PATH = repoPath('data', 'google', 'token.json');
 
@@ -41,5 +44,14 @@ export function getGoogleAuth({ clientSecretPath, tokenPath = TOKEN_PATH, env = 
   if (!refreshToken) throw new Error('Not signed in to Google. Run "npm run google:login".');
   const client = new OAuth2Client({ clientId, clientSecret });
   client.setCredentials({ refresh_token: refreshToken });
+  return client;
+}
+
+/** Signed-in client for the inbox, from GMAIL_REFRESH_TOKEN in .env (written by npm run inbox:auth). */
+export function getInboxAuth({ clientSecretPath, env = process.env } = {}) {
+  const { clientId, clientSecret } = loadClientCredentials({ path: clientSecretPath, env });
+  if (!env.GMAIL_REFRESH_TOKEN) throw new Error('Gmail inbox is not signed in. Run "npm run inbox:auth".');
+  const client = new OAuth2Client({ clientId, clientSecret });
+  client.setCredentials({ refresh_token: env.GMAIL_REFRESH_TOKEN });
   return client;
 }
