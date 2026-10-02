@@ -1,0 +1,18 @@
+{
+  "atsDomains": [
+    "greenhouse.io",
+    "lever.co",
+    "ashbyhq.com",
+    "myworkdayjobs.com",
+    "workday.com",
+    "icims.com",
+    "smartrecruiters.com",
+    "jobvite.com",
+    "linkedin.com"
+  ],
+  "autoLinkAt": 0.85,
+  "backfillDays": 180,
+  "fallbackDays": 7,
+  "bodyChars": 4000,
+  "model": "claude-haiku-4-5"
+}
