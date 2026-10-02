@@ -28,7 +28,8 @@
     "add": "node --env-file=.env scripts/add.js",
     "inbox:auth": "node --env-file-if-exists=.env scripts/inbox-auth.js",
     "inbox": "node --env-file=.env scripts/inbox.js",
-    "inbox:backfill": "node --env-file=.env scripts/inbox.js --backfill"
+    "inbox:backfill": "node --env-file=.env scripts/inbox.js --backfill",
+    "inbox:review": "node --env-file=.env scripts/inbox-review.js"
   },
   "keywords": [],
   "author": "",
