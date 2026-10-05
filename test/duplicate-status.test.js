@@ -15,7 +15,7 @@ test('the duplicate status is allowed and closes a job like passed', () => {
         VALUES ('k', 'Example Co', 'CTO', 'k', '2026-10-01', 'pipeline', 'duplicate', 'x', 'x')`)
       .run().lastInsertRowid,
   );
-  assert.throws(() => db.prepare("UPDATE postings SET status = 'maybe' WHERE id = ?").run(id), /CHECK/);
+  assert.throws(() => db.prepare("UPDATE postings SET status = 'maybe' WHERE id = ?").run(id), /status is not in the status list/);
   assert.deepEqual(listPostings(db, { status: 'active' }), []);
   assert.deepEqual(listPostings(db, { status: 'progress' }), []);
   assert.equal(archivePostings(db).archived[0].reason, 'status duplicate');

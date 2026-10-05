@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { openStore } from '@scottmroth5/agent-core';
 import { repoPath } from '../tools/paths.js';
 import * as duplicateStatus from './migrations/008-duplicate-status.js';
+import * as lookups from './migrations/009-lookups.js';
 
 /** Default database file. Gitignored, like everything under data/. */
 export const DB_PATH = repoPath('data', 'job-agent.db');
@@ -10,7 +11,7 @@ export const DB_PATH = repoPath('data', 'job-agent.db');
 const MIGRATIONS_DIR = repoPath('db', 'migrations');
 
 // Migrations that need code (a table rebuild) rather than plain SQL. Each exports id and up(db).
-const CODE_MIGRATIONS = [duplicateStatus];
+const CODE_MIGRATIONS = [duplicateStatus, lookups];
 
 /** Migrations: the .sql files in db/migrations plus CODE_MIGRATIONS, applied in id (file-name) order. */
 export function loadMigrations(dir = MIGRATIONS_DIR) {

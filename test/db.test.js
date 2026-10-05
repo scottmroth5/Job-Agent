@@ -33,8 +33,8 @@ test('defaults new postings to discovered/new and enforces allowed values', () =
   const store = openJobStore(':memory:');
   const id = insertPosting(store.db);
   assert.deepEqual(store.db.prepare('SELECT stage, status FROM postings WHERE id = ?').get(id), { stage: 'discovered', status: 'new' });
-  assert.throws(() => insertPosting(store.db, { url_key: 'k2', stage: 'somewhere' }), /CHECK/);
-  assert.throws(() => insertPosting(store.db, { url_key: 'k3', status: 'maybe' }), /CHECK/);
+  assert.throws(() => insertPosting(store.db, { url_key: 'k2', stage: 'somewhere' }), /stage is not in the stage list/);
+  assert.throws(() => insertPosting(store.db, { url_key: 'k3', status: 'maybe' }), /status is not in the status list/);
   assert.throws(() => insertPosting(store.db), /UNIQUE/);
   store.close();
 });
