@@ -20,6 +20,11 @@ Job specific logic stays in this repo; never add it to agent-core.
 /agents/inbox       Gmail inbox: sync.js (historyId cursor, 7-day fallback), prefilter.js, match.js (thread, contact, domain,
                     ATS subject), classify.js (Haiku, fixed untrusted-email system prompt), actions.js (gate, forward-only status),
                     process.js (one run; decideEmail is shared with the eval), review.js. Settings: config/inbox.json
+/agents/lookups.js  the configurable status, stage, and track lists (lookup_values, lookup_roles; Admin > Lists). Jobs store each
+                    value's immutable text ID. Behavior comes from the value's group (status: evaluate, waiting, conversation,
+                    decision, closed; stage: found, active, archived; track settings choose the scoring prompt and pay fields) and
+                    from roles (default status/stage/track, promotion stage, archive stage). Never compare to a literal status,
+                    stage, or track ID for behavior: use lookups(db) helpers and sqlList(). Values are archived, never deleted
 /agents/identity.js same-job matching: companyTitleKey (tools/urls.js) spells out VP/Sr/CTO, drops "of/and/remote" and company suffixes;
                     placeholder companies ("See posting") are read from the Google title. Rule changes need npm run cleanup to rekey
 /web                React (Vite) UI: job table with track/stage/status filters, detail panel, add-job dialog, fractional stacking bar

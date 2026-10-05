@@ -10,7 +10,7 @@ An AI job-search assistant that finds postings, scores them against your backgro
 - **Writes materials** for jobs scoring 7 or higher: resume tweaks, and a cover letter saved as a Google Doc, with rule checks that flag letters for review.
 - **Emails a summary** of each run, including its cost.
 - **Reads your job email** (optional): matches confirmations, rejections, interview requests, assessments, and offers in Gmail to your applications, moves their status forward, records funnel dates, and labels the threads `Job/<Company>`. It never sends, deletes, or archives mail.
-- **Web page** (local only) to filter jobs, open application links and letters, track status, add jobs you find yourself, run the pipeline, review job email on an Inbox screen, and edit the prompts Claude follows.
+- **Web page** (local only) to filter jobs, open application links and letters, track status, add jobs you find yourself, run the pipeline, review job email on an Inbox screen, edit the prompts Claude follows, and add or archive your own statuses, stages, and tracks (Admin > Lists).
 
 ## How it works
 
