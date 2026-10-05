@@ -33,6 +33,13 @@ export function annualText(a) {
   return a.low === a.high ? `${money(a.mid)}/yr` : `${money(a.low)} to ${money(a.high)}/yr`;
 }
 
+/** "Mon, Oct 5, 9:14 AM" in the viewer's time zone; '' for no date. */
+export function dateTime(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : d.toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
 export function scoreClass(score) {
   if (score == null) return 'score none';
   return `score ${score >= 8 ? 'high' : score >= 7 ? 'good' : score >= 5 ? 'mid' : 'low'}`;

@@ -1,13 +1,18 @@
 // Starts the Job Hunt UI server: npm run ui, then open http://localhost:5178
 // Local only (AUTH_MODE=none binds to 127.0.0.1). Google, Claude and the knowledge doc load on first use.
+import { spawn } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { createClaude } from '@scottmroth5/agent-core';
 import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
+import { getGoogleAuth, getInboxAuth } from '../tools/google/auth.js';
+import { createGmail } from '../agents/inbox/gmail.js';
+import { loadInboxConfig } from '../agents/inbox/config.js';
+import { loadKey } from '../agents/inbox/crypto.js';
 import { createDriveClient } from '../tools/google/drive.js';
-import { repoPath } from '../tools/paths.js';
+import { repoPath, ROOT } from '../tools/paths.js';
 import { openJobStore } from '../db/index.js';
 import { buildApp } from './app.js';
 import { assertSafeBinding } from './auth.js';
@@ -28,6 +33,24 @@ const services = {
   http: createHttp(),
   drive: createDriveClient(auth),
   createBrowser: () => createBrowser(),
+  // The Run pipeline button: the same script as npm run pipeline, in its own process.
+  runPipeline: ({ onLine }) =>
+    new Promise((resolve) => {
+      const child = spawn(process.execPath, ['--env-file-if-exists=.env', 'scripts/pipeline.js'], { cwd: ROOT, env: process.env, windowsHide: true });
+      let lastError = null;
+      createInterface({ input: child.stdout }).on('line', onLine);
+      createInterface({ input: child.stderr }).on('line', (l) => {
+        if (l.trim()) lastError = l.trim().slice(0, 300);
+      });
+      child.on('error', (err) => resolve({ code: 1, lastError: err.message }));
+      child.on('close', (code) => resolve({ code: code ?? 1, lastError }));
+    }),
+  inbox: {
+    ready: () => Boolean(process.env.GMAIL_REFRESH_TOKEN && process.env.EMAIL_ENC_KEY),
+    gmail: (opts = {}) => createGmail({ auth: getInboxAuth(), ...opts }),
+    key: () => loadKey(),
+    cfg: loadInboxConfig(),
+  },
   knowledge: async () => {
     if (!knowledgeCache.text || Date.now() - knowledgeCache.at > 10 * 60 * 1000) {
       knowledgeCache = { text: await loadKnowledge({ auth }), at: Date.now() };

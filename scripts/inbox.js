@@ -52,7 +52,7 @@ async function main() {
       if (s.failures.length) console.log(`${s.failures.length} emails failed to classify; the next run retries them.`);
       console.log(`Cost: $${totals.costUsd.toFixed(4)} (${totals.calls} Claude calls).`);
     } catch (err) {
-      run?.finish('failed');
+      run?.finish('failed', { error: `${err.name}: ${err.message}` });
       throw err;
     }
   } finally {

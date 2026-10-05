@@ -10,7 +10,7 @@ An AI job-search assistant that finds postings, scores them against your backgro
 - **Writes materials** for jobs scoring 7 or higher: resume tweaks, and a cover letter saved as a Google Doc, with rule checks that flag letters for review.
 - **Emails a summary** of each run, including its cost.
 - **Reads your job email** (optional): matches confirmations, rejections, interview requests, assessments, and offers in Gmail to your applications, moves their status forward, records funnel dates, and labels the threads `Job/<Company>`. It never sends, deletes, or archives mail.
-- **Web page** (local only) to filter jobs, open application links and letters, track status, add jobs you find yourself, and edit the prompts Claude follows.
+- **Web page** (local only) to filter jobs, open application links and letters, track status, add jobs you find yourself, run the pipeline, review job email on an Inbox screen, and edit the prompts Claude follows.
 
 ## How it works
 
@@ -63,7 +63,7 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `npm run inbox:auth` | One-time Gmail sign-in for the inbox |
 | `npm run inbox` | Check Gmail for new job email once |
 | `npm run inbox:backfill` | Process the last 180 days of job email (`-- --days=30 --dry-run` to preview the count and cost) |
-| `npm run inbox:review` | Confirm, reassign, or dismiss emails the inbox was unsure about |
+| `npm run inbox:review` | Confirm, reassign, or dismiss emails the inbox was unsure about (also on the web page's Inbox screen) |
 | `npm run evals` | Run the inbox eval (`-- --all` adds the scoring eval; both cost money) |
 | `npm run eval:score` | Compare scoring models on jobs you applied to vs. passed on (costs money) |
 | `npm test` | Run the tests (no network or keys needed) |

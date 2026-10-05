@@ -6,8 +6,10 @@ import DetailPanel from './components/DetailPanel.jsx';
 import AddJobDialog from './components/AddJobDialog.jsx';
 import StackingBar from './components/StackingBar.jsx';
 import AdminPage from './components/AdminPage.jsx';
+import InboxPage from './components/InboxPage.jsx';
+import PipelineButton from './components/PipelineButton.jsx';
 
-const viewFromHash = () => (window.location.hash.startsWith('#/admin') ? 'admin' : 'jobs');
+const viewFromHash = () => (window.location.hash.startsWith('#/admin') ? 'admin' : window.location.hash.startsWith('#/inbox') ? 'inbox' : 'jobs');
 
 // 'active' (Needs action) is new jobs to evaluate and offers to decide; applied and interviewing are under 'progress'.
 const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', needsDescription: false, discoveredAfter: '', q: '', minScore: '' };
@@ -79,13 +81,19 @@ export default function App() {
         </div>
         <nav className="views" aria-label="Screens">
           <a href="#/" className={view === 'jobs' ? 'on' : ''}>Jobs</a>
+          <a href="#/inbox" className={view === 'inbox' ? 'on' : ''}>
+            Inbox{summary?.inboxNeedsReview ? <span className="count-badge" title="Emails to review">{summary.inboxNeedsReview}</span> : null}
+          </a>
           <a href="#/admin" className={view === 'admin' ? 'on' : ''}>Admin</a>
         </nav>
+        <PipelineButton onFinished={refresh} />
         {view === 'jobs' && <button className="primary" onClick={() => setAdding(true)}>+ Add job</button>}
       </header>
 
       {view === 'admin' ? (
         <AdminPage />
+      ) : view === 'inbox' ? (
+        <InboxPage onOpenJob={setSelectedId} onChanged={refresh} />
       ) : (
       <>
       <div className="filters">

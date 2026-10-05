@@ -57,6 +57,9 @@ npm run evals                     inbox eval (about $0.06); -- --all adds the sc
 
 ## UI and API
 server/app.js holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
+The Run pipeline button (server/pipeline-routes.js) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
+lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.js) checks
+Gmail in-process, resolves needs_review emails with agents/inbox/review.js, and closes reminders.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
 while a pipeline step is running. AUTH_MODE=none binds to 127.0.0.1 only; exposing the server requires adding a login mode
 in server/auth.js first. web/dist is build output (gitignored).
@@ -99,7 +102,7 @@ New inbox tables use UUID text keys, ISO UTC text timestamps, and portable types
 This repo is public. Never commit personal data: names, locations, employers, emails, Google IDs, job history, or API keys.
 Personal values live only in .env, data/config/job-search.json, and data/job-agent.db. Prompts use placeholders such as {{candidateName}}.
 Never print knowledge doc content or prompt/response text in logs or script output; counts and metadata only.
-(The one exception is npm run inbox:review, which shows the user an email's subject and summary in their own terminal.)
+(The exceptions are npm run inbox:review and the local Inbox screen, which show the user an email's subject and summary.)
 Never send email to anyone but the user; the run report to the user's own address is the only email the app sends.
 Run npm install from PowerShell, never WSL: node_modules holds Windows builds of native modules (better-sqlite3).
 Output JSON schemas must avoid minimum/maximum/minLength/maxLength and complex array constraints (the API rejects them); use enum or validate in code.

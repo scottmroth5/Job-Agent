@@ -9,6 +9,8 @@ import { listPostings, getPosting, updatePosting, summary, STATUSES, STAGES, TRA
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { registerAdminRoutes } from './admin.js';
+import { registerPipelineRoutes } from './pipeline-routes.js';
+import { registerInboxRoutes } from './inbox-routes.js';
 import { addPosting } from '../agents/manual.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { generateForPostings } from '../agents/hunt/generate.js';
@@ -28,7 +30,8 @@ const taskAccepted = { 202: { type: 'object', properties: { taskId: { type: 'str
  * @param {object} ctx
  * @param {{db}} ctx.store
  * @param {object} ctx.config
- * @param {object} ctx.services   { claude, knowledge: () => Promise<string>, drive, http, createBrowser: () => Promise<browser|null> }
+ * @param {object} ctx.services   { claude, knowledge: () => Promise<string>, drive, http, createBrowser: () => Promise<browser|null>,
+ *                                  runPipeline({ onLine }), inbox: { ready(), gmail(opts), key(), cfg } }
  * @param {string} [ctx.webDir]   built UI to serve (web/dist); skipped when missing
  * @param {string} [ctx.authMode]
  */
@@ -242,6 +245,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   );
 
   registerAdminRoutes(app, { db, config });
+  if (services.runPipeline) registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline });
+  if (services.inbox) registerInboxRoutes(app, { store, tasks, tracer, claude: services.claude, inbox: services.inbox });
 
   app.get(
     '/api/tasks/:id',
