@@ -54,6 +54,8 @@ npm run cleanup -- --dry-run      after a rule change: rekey duplicates, archive
                                   move pipeline jobs without a description back to Discovered. Its status changes are changed_by agent, which the eval ignores
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
 npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point)
+powershell -ExecutionPolicy Bypass -File scriptsegister-schedule.ps1   Windows task: scripts/scheduled-run.ps1 runs pipeline then inbox
+                                  (Mon/Thu 6:00 by default; -Time, -Days, -Remove); logs in data/logs
 npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)
 npm run web:dev                   Vite dev server with hot reload on :5179, forwarding /api to a running npm run ui
 npm run add -- --url=...          add a job by hand (also --description-file, --title, --company, --track, --rate, --hours, --write-materials)
