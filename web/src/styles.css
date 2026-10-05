@@ -223,3 +223,29 @@ code { font: 12px ui-monospace, Consolas, monospace; background: var(--bg); padd
   .activity-list a { flex: 0 0 220px; }
   .console { height: 60vh; }
 }
+
+/* Admin > Lists. */
+.admin-sections { margin-bottom: 12px; }
+.lists-admin { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; max-width: 900px; }
+.lists-admin > .segmented { margin-bottom: 8px; }
+.lists-table th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 4px 8px 4px 0; }
+.lists-table td { vertical-align: middle; }
+.lists-table input { width: 100%; max-width: 260px; }
+.lists-table tr.archived td { opacity: 0.55; }
+.lists-table label.switch { margin: 4px 0 0; font-size: 12px; }
+button.icon { padding: 4px 8px; }
+.add-value { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 4px; }
+.add-value input { flex: 1 1 220px; }
+.group-help { margin: 4px 0 12px; padding-left: 18px; }
+.roles { border-top: 1px solid var(--border); margin-top: 8px; padding-top: 4px; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 0 12px; }
+.roles h3 { grid-column: 1 / -1; }
+.status.g-closed { opacity: 0.7; }
+@media (max-width: 760px) {
+  .lists-admin { padding: 12px; }
+  .lists-table thead { display: none; }
+  .lists-table, .lists-table tbody, .lists-table tr, .lists-table td { display: block; width: 100%; }
+  .lists-table tr { border-bottom: 1px solid var(--border); padding: 8px 0; }
+  .lists-table td { border: none; padding: 3px 0; }
+  .lists-table input, .lists-table select { max-width: none; width: 100%; }
+  .lists-table td:nth-child(3)::before { content: 'Jobs: '; }
+}

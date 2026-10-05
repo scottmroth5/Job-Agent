@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { STATUS_LABELS, payText, hoursText, annualText, scoreClass, PAY_FROM } from '../format.js';
+import { payText, hoursText, annualText, scoreClass, PAY_FROM } from '../format.js';
+import { useLookups } from '../lookups.jsx';
 
 const COLUMNS = [
   { key: 'score', label: 'Score', get: (j) => j.score ?? -1 },
@@ -21,6 +22,7 @@ function LetterCell({ letter }) {
 }
 
 export default function JobTable({ jobs, loading, onOpen, selectedId, stackable, stack, onToggleStack }) {
+  const lk = useLookups();
   const [sort, setSort] = useState({ key: 'score', dir: -1 });
   const columns = COLUMNS;
 
@@ -71,7 +73,7 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
                   {c.key === 'title' && (
                     <>
                       <span className="role">{j.title}</span>
-                      {j.track === 'fractional' && <span className="badge frac">fractional</span>}
+                      {j.track !== lk.roles.track.default && <span className="badge frac">{lk.label('track', j.track).toLowerCase()}</span>}
                       {j.hasCopies && <span className="badge warn" title="Another saved job has the same company and title; open it to compare">possible duplicate</span>}
                       {j.awaitingDescription ? (
                         <span className="badge warn" title="Scored from the title alone; paste the description, then Re-score">needs description</span>
@@ -89,7 +91,7 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
                       {j.annualized && j.pay.unit !== 'year' && <span className="muted small"> ≈ {annualText(j.annualized)}</span>}
                     </span>
                   )}
-                  {c.key === 'status' && <span className={`status s-${j.status}`}>{STATUS_LABELS[j.status]}</span>}
+                  {c.key === 'status' && <span className={`status s-${j.status} g-${lk.groupOf('status', j.status)}`}>{lk.label('status', j.status)}</span>}
                   {c.key === 'discoveredOn' && <span className="muted nowrap">{j.discoveredOn ?? ''}</span>}
                   {c.key === 'appliedOn' && <span className="muted">{j.appliedOn ?? ''}</span>}
                   {c.key === 'letter' && <LetterCell letter={j.letter} />}

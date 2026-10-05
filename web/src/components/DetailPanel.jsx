@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api, followTask } from '../api.js';
-import { STATUSES, STATUS_LABELS, rateText, hoursText, annualText, scoreClass, payText, PAY_FROM } from '../format.js';
+import { useLookups } from '../lookups.jsx';
+import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM } from '../format.js';
 import TaskProgress from './TaskProgress.jsx';
 
-const STAGE_NAMES = { discovered: 'Discovered', pipeline: 'Pipeline', archived: 'Archived' };
 
 function List({ items }) {
   if (!items?.length) return <p className="muted">None noted.</p>;
@@ -17,6 +17,7 @@ function List({ items }) {
 }
 
 export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
+  const lk = useLookups();
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
   const [notes, setNotes] = useState('');
@@ -83,7 +84,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
 
   const busy = task?.status === 'running';
   const a = job?.analysis ?? {};
-  const fractional = job?.track === 'fractional';
+  const fractional = lk.showsTerms(job?.track);
 
   return (
     <div className="panel-backdrop" onClick={onClose}>
@@ -151,12 +152,12 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                 {job.copies.map((c) => (
                   <div key={c.id} className="copy-row">
                     <span>
-                      {c.title} at {c.company} · {STAGE_NAMES[c.stage]}, {STATUS_LABELS[c.status]}
+                      {c.title} at {c.company} · {lk.label('stage', c.stage)}, {lk.label('status', c.status)}
                       {c.appliedOn ? ` ${c.appliedOn}` : ''} (#{c.id})
                     </span>
                     <span className="row">
                       {onOpen && <button onClick={() => onOpen(c.id)}>Open it</button>}
-                      {job.stage !== 'archived' && <button onClick={() => save({ duplicateOf: c.id })}>Mark this one duplicate</button>}
+                      {lk.groupOf('stage', job.stage) !== 'archived' && <button onClick={() => save({ duplicateOf: c.id })}>Mark this one duplicate</button>}
                     </span>
                   </div>
                 ))}
@@ -169,8 +170,8 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               <label>
                 Status
                 <select value={job.status} onChange={(e) => save({ status: e.target.value })}>
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                  {lk.options('status', job.status).map((s) => (
+                    <option key={s.id} value={s.id}>{lk.label('status', s.id, { markArchived: true })}</option>
                   ))}
                 </select>
               </label>
@@ -181,14 +182,18 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               <label>
                 Stage
                 <select value={job.stage} onChange={(e) => save({ stage: e.target.value })}>
-                  <option value="discovered">Discovered</option>
-                  <option value="pipeline">Pipeline</option>
-                  <option value="archived">Archived</option>
+                  {lk.options('stage', job.stage).map((s) => (
+                    <option key={s.id} value={s.id}>{lk.label('stage', s.id, { markArchived: true })}</option>
+                  ))}
                 </select>
               </label>
-              <label className="switch">
-                <input type="checkbox" checked={fractional} onChange={(e) => save({ track: e.target.checked ? 'fractional' : 'fulltime' })} />
-                Fractional role
+              <label>
+                Track
+                <select value={job.track} onChange={(e) => save({ track: e.target.value })}>
+                  {lk.options('track', job.track).map((t) => (
+                    <option key={t.id} value={t.id}>{lk.label('track', t.id, { markArchived: true })}</option>
+                  ))}
+                </select>
               </label>
             </section>
 

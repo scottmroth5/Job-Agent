@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api.js';
-import { STATUSES, STATUS_LABELS } from './format.js';
+import { useLookups } from './lookups.jsx';
 import JobTable from './components/JobTable.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import AddJobDialog from './components/AddJobDialog.jsx';
@@ -31,6 +31,7 @@ function loadFilters() {
 }
 
 export default function App() {
+  const lk = useLookups();
   const [filters, setFilters] = useState(loadFilters);
   const [jobs, setJobs] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -75,6 +76,15 @@ export default function App() {
     return () => clearTimeout(t);
   }, [filters, refresh]);
 
+  useEffect(() => {
+    if (!lk.lists.status.length) return;
+    const fix = {};
+    if (filters.track !== 'all' && !lk.get('track', filters.track)) fix.track = 'all';
+    if (filters.stage !== 'all' && !lk.get('stage', filters.stage)) fix.stage = lk.roles.stage.promote ?? 'all';
+    if (!['all', 'active', 'progress'].includes(filters.status) && !lk.get('status', filters.status)) fix.status = 'active';
+    if (Object.keys(fix).length) setFilters((f) => ({ ...f, ...fix }));
+  }, [lk, filters.track, filters.stage, filters.status]);
+
   const set = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
   const toggleStack = (id) => setStack((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
@@ -111,11 +121,7 @@ export default function App() {
       <>
       <div className="filters">
         <div className="segmented" role="tablist" aria-label="Track">
-          {[
-            ['all', 'All'],
-            ['fulltime', 'Full-time'],
-            ['fractional', 'Fractional'],
-          ].map(([value, label]) => (
+          {[['all', 'All'], ...lk.options('track', filters.track).map((t) => [t.id, t.label])].map(([value, label]) => (
             <button key={value} role="tab" aria-selected={filters.track === value} className={filters.track === value ? 'on' : ''} onClick={() => setFilters((f) => ({ ...f, track: value }))}>
               {label}
             </button>
@@ -130,17 +136,17 @@ export default function App() {
           Needs description{summary ? ` (${summary.needsDescription})` : ''}
         </button>
         <select value={filters.stage} onChange={set('stage')} aria-label="Stage" disabled={filters.needsDescription}>
-          <option value="pipeline">Pipeline</option>
-          <option value="discovered">Discovered</option>
-          <option value="archived">Archived</option>
+          {lk.options('stage', filters.stage).map((s) => (
+            <option key={s.id} value={s.id}>{lk.label('stage', s.id, { markArchived: true })}</option>
+          ))}
           <option value="all">All stages</option>
         </select>
         <select value={filters.status} onChange={set('status')} aria-label="Status">
           <option value="active">Needs action</option>
           <option value="progress">In progress</option>
           <option value="all">Any status</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+          {lk.options('status', filters.status).map((s) => (
+            <option key={s.id} value={s.id}>{lk.label('status', s.id, { markArchived: true })}</option>
           ))}
         </select>
         <label className="date-filter" title="Only jobs discovered on or after this date">
@@ -156,7 +162,7 @@ export default function App() {
         <input type="search" placeholder="Search role, company, location" value={filters.q} onChange={set('q')} aria-label="Search" />
       </div>
 
-      {filters.track === 'fractional' && summary?.fractionalTarget && (
+      {lk.showsTerms(filters.track) && summary?.fractionalTarget && (
         <StackingBar jobs={jobs.filter((j) => stack.includes(j.id))} target={summary.fractionalTarget} onClear={() => setStack([])} />
       )}
 
@@ -166,7 +172,7 @@ export default function App() {
         loading={loading}
         onOpen={setSelectedId}
         selectedId={selectedId}
-        stackable={filters.track === 'fractional'}
+        stackable={lk.showsTerms(filters.track)}
         stack={stack}
         onToggleStack={toggleStack}
       />

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, followTask } from '../api.js';
-import { STATUS_LABELS, dateTime } from '../format.js';
+import { dateTime } from '../format.js';
+import { useLookups } from '../lookups.jsx';
 import TaskProgress from './TaskProgress.jsx';
 
 export const TYPE_LABELS = {
@@ -16,6 +17,7 @@ export const TYPE_LABELS = {
 const RULES = { thread: 'same thread', contact: 'known contact', domain: 'company domain', ats_subject: 'subject', model: 'Claude', user: 'you' };
 
 function ReviewCard({ email, applications, onDone, onOpenJob }) {
+  const lk = useLookups();
   const [reassigning, setReassigning] = useState(false);
   const [postingId, setPostingId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,7 +51,7 @@ function ReviewCard({ email, applications, onDone, onOpenJob }) {
         Best guess:{' '}
         {email.guess ? (
           <button className="link" onClick={() => onOpenJob(email.guess.id)}>
-            {email.guess.title} at {email.guess.company} ({STATUS_LABELS[email.guess.status] ?? email.guess.status})
+            {email.guess.title} at {email.guess.company} ({lk.label('status', email.guess.status)})
           </button>
         ) : (
           <span className="muted">none</span>
@@ -61,7 +63,7 @@ function ReviewCard({ email, applications, onDone, onOpenJob }) {
             <option value="">Choose a job…</option>
             {applications.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.company}: {a.title} ({STATUS_LABELS[a.status] ?? a.status})
+                {a.company}: {a.title} ({lk.label('status', a.status)})
               </option>
             ))}
           </select>
@@ -83,6 +85,7 @@ function ReviewCard({ email, applications, onDone, onOpenJob }) {
 
 // Inbox: check Gmail, resolve emails the agent was unsure about, and keep track of reminders.
 export default function InboxPage({ onOpenJob, onChanged }) {
+  const lk = useLookups();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [task, setTask] = useState(null);
@@ -131,7 +134,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
 
   const reviewed = async (r, email) => {
     const notes = [];
-    if (r.statusChange) notes.push(`Status changed: ${STATUS_LABELS[r.statusChange.from]} to ${STATUS_LABELS[r.statusChange.to]}`);
+    if (r.statusChange) notes.push(`Status changed: ${lk.label('status', r.statusChange.from)} to ${lk.label('status', r.statusChange.to)}`);
     if (r.review) notes.push(`Status not changed: ${r.review}. Change it on the job if needed.`);
     notes.push(...r.notices);
     setMessages(notes.length ? notes.map((n) => `${email.subject || 'Email'}: ${n}`) : []);
@@ -217,7 +220,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
                     <button className="link" onClick={() => onOpenJob(e.postingId)}>{e.title} at {e.company}</button>
                     <div className="muted small">{e.subject}</div>
                   </td>
-                  <td className="muted small">{STATUS_LABELS[e.status] ?? e.status} · matched by {RULES[e.matchRule] ?? 'review'}</td>
+                  <td className="muted small">{lk.label('status', e.status)} · matched by {RULES[e.matchRule] ?? 'review'}</td>
                 </tr>
               ))}
             </tbody>

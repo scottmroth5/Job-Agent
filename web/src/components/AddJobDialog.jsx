@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLookups } from '../lookups.jsx';
 import { api, followTask } from '../api.js';
 import TaskProgress from './TaskProgress.jsx';
 
@@ -57,6 +58,7 @@ function DuplicateCard({ match, matchedBy, form, onOpen }) {
 }
 
 export default function AddJobDialog({ onClose, onAdded }) {
+  const lk = useLookups();
   const [form, setForm] = useState(EMPTY);
   const [task, setTask] = useState(null);
   const [error, setError] = useState(null);
@@ -107,8 +109,9 @@ export default function AddJobDialog({ onClose, onAdded }) {
             Track
             <select value={form.track} onChange={set('track')} disabled={busy || done}>
               <option value="">Detect automatically</option>
-              <option value="fulltime">Full-time</option>
-              <option value="fractional">Fractional</option>
+              {lk.options('track').map((t) => (
+                <option key={t.id} value={t.id}>{t.label}</option>
+              ))}
             </select>
           </label>
           <label>
@@ -116,7 +119,7 @@ export default function AddJobDialog({ onClose, onAdded }) {
             <input value={form.location} onChange={set('location')} placeholder="Remote, or City, ST" disabled={busy || done} />
           </label>
         </div>
-        {form.track === 'fractional' && (
+        {lk.showsTerms(form.track) && (
           <div className="grid2">
             <label>
               Rate
