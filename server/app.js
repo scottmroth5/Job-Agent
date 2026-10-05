@@ -36,9 +36,10 @@ const taskAccepted = { 202: { type: 'object', properties: { taskId: { type: 'str
  * @param {object} ctx.services   { claude, knowledge: () => Promise<string>, drive, http, createBrowser: () => Promise<browser|null>,
  *                                  runPipeline({ onLine }), inbox: { ready(), gmail(opts), key(), cfg } }
  * @param {string} [ctx.webDir]   built UI to serve (web/dist); skipped when missing
- * @param {string} [ctx.authMode]
+ * @param {string} [ctx.authMode]   'none' (default) or 'google'
+ * @param {object} [ctx.auth]       { settings: authSettings(), exchange? } for google mode (tests pass a fake exchange)
  */
-export async function buildApp({ store, config, services, webDir, authMode = 'none', logger = false }) {
+export async function buildApp({ store, config, services, webDir, authMode = 'none', auth = {}, logger = false }) {
   const app = Fastify({ logger });
   const { db } = store;
   const tasks = createTaskRunner();
@@ -46,7 +47,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   await app.register(swagger, {
     openapi: { info: { title: 'Job Agent API', version: '1.0.0', description: 'Job Hunt UI backend' } },
   });
-  registerAuth(app, { mode: authMode });
+  registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now });
+  app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
 
   app.setErrorHandler((err, req, reply) => {
     const status = err.statusCode ?? (err.validation ? 400 : 500);

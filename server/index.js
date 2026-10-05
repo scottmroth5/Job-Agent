@@ -15,12 +15,13 @@ import { createDriveClient } from '../tools/google/drive.js';
 import { repoPath, ROOT } from '../tools/paths.js';
 import { openJobStore } from '../db/index.js';
 import { buildApp } from './app.js';
-import { assertSafeBinding } from './auth.js';
+import { assertSafeBinding, authSettings } from './auth.js';
 
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number(process.env.PORT ?? 5178);
-const authMode = process.env.AUTH_MODE ?? 'none';
-assertSafeBinding({ host, mode: authMode });
+const authConfig = authSettings(process.env);
+const authMode = authConfig.mode;
+assertSafeBinding({ host, mode: authMode, settings: authConfig });
 
 const config = loadConfig();
 const store = openJobStore();
@@ -60,9 +61,13 @@ const services = {
   },
 };
 
-const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode });
+const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode, auth: { settings: authConfig } });
 await app.listen({ host, port });
-console.log(`Job Hunt UI: http://localhost:${port}  (API contract: http://localhost:${port}/api/openapi.json)`);
+console.log(
+  authMode === 'google'
+    ? `Job Hunt UI: ${authConfig.publicUrl}  (Google sign-in on; ${authConfig.allowed.length} allowed account${authConfig.allowed.length === 1 ? '' : 's'})`
+    : `Job Hunt UI: http://localhost:${port}  (API contract: http://localhost:${port}/api/openapi.json)`,
+);
 
 const shutdown = async () => {
   await app.close();
