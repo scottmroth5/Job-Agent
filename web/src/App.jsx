@@ -9,10 +9,11 @@ import AdminPage from './components/AdminPage.jsx';
 import InboxPage from './components/InboxPage.jsx';
 import PipelineButton from './components/PipelineButton.jsx';
 import ActivityPage from './components/ActivityPage.jsx';
+import FunnelPage from './components/FunnelPage.jsx';
 
 const viewFromHash = () => {
   const h = window.location.hash;
-  return h.startsWith('#/admin') ? 'admin' : h.startsWith('#/inbox') ? 'inbox' : h.startsWith('#/activity') ? 'activity' : 'jobs';
+  return h.startsWith('#/admin') ? 'admin' : h.startsWith('#/inbox') ? 'inbox' : h.startsWith('#/activity') ? 'activity' : h.startsWith('#/funnel') ? 'funnel' : 'jobs';
 };
 // #/activity/12 opens task 12's output.
 const activityIdFromHash = () => /^#\/activity\/(\w+)/.exec(window.location.hash)?.[1] ?? null;
@@ -104,6 +105,7 @@ export default function App() {
           <a href="#/inbox" className={view === 'inbox' ? 'on' : ''}>
             Inbox{summary?.inboxNeedsReview ? <span className="count-badge" title="Emails to review">{summary.inboxNeedsReview}</span> : null}
           </a>
+          <a href="#/funnel" className={view === 'funnel' ? 'on' : ''}>Funnel</a>
           <a href="#/activity" className={view === 'activity' ? 'on' : ''}>Activity</a>
           <a href="#/admin" className={view === 'admin' ? 'on' : ''}>Admin</a>
         </nav>
@@ -113,6 +115,8 @@ export default function App() {
 
       {view === 'admin' ? (
         <AdminPage />
+      ) : view === 'funnel' ? (
+        <FunnelPage onOpenJob={setSelectedId} />
       ) : view === 'activity' ? (
         <ActivityPage selectedId={activityId} />
       ) : view === 'inbox' ? (

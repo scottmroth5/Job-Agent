@@ -8,6 +8,7 @@ import { createTracer } from '@scottmroth5/agent-core';
 import { listPostings, getPosting, updatePosting, summary } from './queries.js';
 import { registerLookupRoutes } from './lookups-routes.js';
 import { lookups } from '../agents/lookups.js';
+import { funnel } from './funnel.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { registerAdminRoutes } from './admin.js';
@@ -81,6 +82,18 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const notFound = (reply) => reply.code(404).send({ error: 'Job not found' });
 
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
+
+  app.get(
+    '/api/funnel',
+    {
+      schema: {
+        summary: 'Application funnel: applied, responded, interview, offer; rates, timing, by source, per week, waiting for a reply',
+        querystring: { type: 'object', properties: { days: { type: 'string', enum: ['30', '90', 'all'] }, track: { type: 'string', pattern: '^[a-z][a-z0-9_]*$' } } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req) => funnel(db, { days: !req.query.days || req.query.days === 'all' ? null : Number(req.query.days), track: req.query.track && req.query.track !== 'all' ? req.query.track : null }),
+  );
 
   app.get('/api/summary', { schema: { summary: 'Counts, fractional target, and spend', response: { 200: anyObject } } }, async () => summary(db, config));
 

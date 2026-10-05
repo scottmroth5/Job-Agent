@@ -30,6 +30,7 @@ export const api = {
   checkInbox: () => request('POST', '/api/inbox/check'),
   reviewEmail: (id, choice, postingId) => request('POST', `/api/inbox/emails/${id}/review`, { choice, ...(postingId ? { postingId } : {}) }),
   closeReminder: (id, status) => request('PATCH', `/api/inbox/reminders/${id}`, { status }),
+  funnel: (days, track) => request('GET', `/api/funnel?days=${days}${track && track !== 'all' ? `&track=${track}` : ''}`),
   lookups: () => request('GET', '/api/lookups'),
   adminLookups: () => request('GET', '/api/admin/lookups'),
   addLookup: (list, value) => request('POST', `/api/admin/lookups/${list}`, value),

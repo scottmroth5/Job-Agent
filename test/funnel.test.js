@@ -91,3 +91,17 @@ test('filters, by-source results, weekly counts, and the follow-up list', () => 
   assert.equal(applications(db, { now }).find((a) => a.id === stale).noReply, 20 >= NO_REPLY_DAYS);
   store.close();
 });
+
+test('GET /api/funnel applies the window and track, and rejects bad values', async () => {
+  const { buildApp } = await import('../server/app.js');
+  const { store, job } = setup();
+  job({ applied: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10) });
+  job({ applied: '2025-01-01' });
+  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  assert.equal((await app.inject('/api/funnel?days=all')).json().totals.applied, 2);
+  assert.equal((await app.inject('/api/funnel?days=30')).json().totals.applied, 1);
+  assert.equal((await app.inject('/api/funnel?days=30&track=fractional')).json().totals.applied, 0);
+  assert.equal((await app.inject('/api/funnel?days=7')).statusCode, 400);
+  await app.close();
+  store.close();
+});

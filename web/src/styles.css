@@ -249,3 +249,29 @@ button.icon { padding: 4px 8px; }
   .lists-table input, .lists-table select { max-width: none; width: 100%; }
   .lists-table td:nth-child(3)::before { content: 'Jobs: '; }
 }
+
+/* Funnel. */
+.funnel { max-width: 980px; }
+.funnel-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 4px 16px 12px; margin-top: 12px; }
+.funnel-bars { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.funnel-row { display: grid; grid-template-columns: 90px 1fr 170px; gap: 10px; align-items: center; }
+.funnel-label { font-weight: 600; }
+.funnel-track { height: 18px; background: var(--bg); border-radius: 9px; overflow: hidden; }
+.funnel-fill { display: block; height: 100%; background: var(--accent); border-radius: 9px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-top: 12px; }
+.stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; }
+.stat-value { font-size: 24px; font-weight: 700; }
+.stat-label { color: var(--muted); font-size: 13px; }
+.weeks { display: flex; align-items: flex-end; gap: 6px; height: 150px; padding: 18px 0 22px; }
+.week { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; position: relative; }
+.week-bar { width: 100%; max-width: 36px; background: var(--accent); border-radius: 4px 4px 0 0; min-height: 0; }
+.week-count { font-size: 11px; color: var(--muted); }
+.week-label { position: absolute; bottom: -18px; font-size: 10px; color: var(--muted); white-space: nowrap; }
+.funnel table.history th { text-align: left; font-size: 12px; color: var(--muted); font-weight: 600; padding: 4px 8px 4px 0; }
+@media (max-width: 760px) {
+  .funnel-row { grid-template-columns: 76px 1fr; }
+  .funnel-num { grid-column: 2; }
+  .week-label { display: none; }
+  .funnel table.history { font-size: 12px; }
+}
+.funnel button.link { text-align: left; }
