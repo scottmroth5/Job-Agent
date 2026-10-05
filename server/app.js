@@ -5,7 +5,9 @@ import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
 import fastifyStatic from '@fastify/static';
 import { createTracer } from '@scottmroth5/agent-core';
-import { listPostings, getPosting, updatePosting, summary, STATUSES, STAGES, TRACKS } from './queries.js';
+import { listPostings, getPosting, updatePosting, summary } from './queries.js';
+import { registerLookupRoutes } from './lookups-routes.js';
+import { lookups } from '../agents/lookups.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { registerAdminRoutes } from './admin.js';
@@ -90,9 +92,9 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         querystring: {
           type: 'object',
           properties: {
-            track: { type: 'string', enum: ['all', ...TRACKS] },
-            stage: { type: 'string', enum: ['all', ...STAGES] },
-            status: { type: 'string', enum: ['all', 'active', 'progress', ...STATUSES] },
+            track: { type: 'string', pattern: '^[a-z][a-z0-9_]*$', description: "'all' or a track ID (GET /api/lookups)" },
+            stage: { type: 'string', pattern: '^[a-z][a-z0-9_]*$', description: "'all' or a stage ID" },
+            status: { type: 'string', pattern: '^[a-z][a-z0-9_]*$', description: "'all', 'active' (Needs action), 'progress' (In progress), or a status ID" },
             q: { type: 'string', maxLength: 200 },
             discoveredAfter: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$', description: 'Only jobs discovered on or after this date (YYYY-MM-DD)' },
             needsDescription: { type: 'boolean', description: 'Only new jobs judged 7+ from the title that still need a pasted description' },
@@ -103,7 +105,15 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         response: { 200: { type: 'array', items: anyObject } },
       },
     },
-    async (req) => listPostings(db, req.query, config),
+    async (req) => {
+      const lk = lookups(db);
+      const special = { status: ['all', 'active', 'progress'], stage: ['all'], track: ['all'] };
+      for (const list of ['status', 'stage', 'track']) {
+        const v = req.query[list];
+        if (v && !special[list].includes(v) && !lk.get(list, v)) throw Object.assign(new Error(`Unknown ${list} "${v}".`), { statusCode: 400 });
+      }
+      return listPostings(db, req.query, config);
+    },
   );
 
   app.get('/api/postings/:id', { schema: { summary: 'Job detail', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
@@ -121,9 +131,9 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
           additionalProperties: false,
           minProperties: 1,
           properties: {
-            status: { type: 'string', enum: STATUSES },
-            stage: { type: 'string', enum: STAGES },
-            track: { type: 'string', enum: TRACKS },
+            status: { type: 'string', pattern: '^[a-z][a-z0-9_]*$' },
+            stage: { type: 'string', pattern: '^[a-z][a-z0-9_]*$' },
+            track: { type: 'string', pattern: '^[a-z][a-z0-9_]*$' },
             notes: { ...nullableString, maxLength: 20000 },
             appliedOn: { anyOf: [{ type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' }, { type: 'null' }, { type: 'string', maxLength: 0 }] },
             title: { type: 'string', maxLength: 300 },
@@ -152,12 +162,11 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
           properties: {
             url: { type: 'string', maxLength: 2000 },
             title: { type: 'string', maxLength: 300 },
-            duplicateOf: { type: 'integer', minimum: 1, description: 'Archive this job as a copy of that one' },
             company: { type: 'string', maxLength: 300 },
             location: { type: 'string', maxLength: 300 },
             description: { type: 'string', maxLength: 100000 },
             notes: { type: 'string', maxLength: 20000 },
-            track: { type: 'string', enum: TRACKS },
+            track: { type: 'string', pattern: '^[a-z][a-z0-9_]*$' },
             rateText: { type: 'string', maxLength: 200 },
             hoursText: { type: 'string', maxLength: 200 },
             writeMaterials: { type: 'boolean' },
@@ -245,6 +254,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   );
 
   registerAdminRoutes(app, { db, config });
+  registerLookupRoutes(app, { db });
   if (services.runPipeline) registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline });
   if (services.inbox) registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox });
 

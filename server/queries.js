@@ -5,11 +5,8 @@ import { PROMOTE_AT } from '../agents/discovery/score.js';
 import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.js';
 import { lookups, sqlList } from '../agents/lookups.js';
 
-export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'duplicate'];
 /** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
 const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
-export const STAGES = ['discovered', 'pipeline', 'archived'];
-export const TRACKS = ['fulltime', 'fractional'];
 
 const parse = (s) => {
   try {
@@ -173,6 +170,12 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
   if (!current) return null;
   const set = {};
   const nowIso = now.toISOString();
+  // A new choice must be a value in its list that is not archived; a job keeps an archived value it already has.
+  for (const list of ['status', 'stage', 'track']) {
+    if (patch[list] !== undefined && patch[list] !== current[list] && !lk.selectable(list, patch[list])) {
+      throw Object.assign(new Error(`"${patch[list]}" is not an available ${list}. Choose one from the list.`), { statusCode: 400 });
+    }
+  }
   if (patch.status !== undefined && patch.status !== current.status) {
     set.status = patch.status;
     if (lk.groupOf('status', patch.status) === 'waiting' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = nowIso.slice(0, 10);
