@@ -10,7 +10,9 @@ Job specific logic stays in this repo; never add it to agent-core.
                     prompts/*.md templates, schemas/*.json output schemas
 /agents/hunt        cover letters, resume tailoring, application tracking
 /tools              job specific helpers: config, urls, dates, template, google (auth, docs, gmail)
-/db                 SQLite schema (migrations/*.sql, applied in file-name order), openJobStore, v1 import
+/db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.js, applied in id order), openJobStore, v1 import.
+                    Never rebuild postings in a migration: migrations run in a transaction with foreign keys on, so a drop cascades.
+                    008 shows the safe way to loosen a CHECK constraint (writable_schema). Back up data/job-agent.db before schema changes
 /scripts            command-line entry points (see Commands)
 /config             job-search.example.json: the shape of the real, gitignored data/config/job-search.json
 /server             Fastify API over the SQLite store (app.js routes, queries.js, tasks.js, auth.js); serves the built UI

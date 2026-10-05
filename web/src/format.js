@@ -1,7 +1,7 @@
 // Display helpers shared by the table and the detail panel.
 
-export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected'];
-export const STATUS_LABELS = { new: 'New', applied: 'Applied', interviewing: 'Interviewing', offer: 'Offer', passed: 'Passed', closed: 'Closed', rejected: 'Rejected' };
+export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'duplicate'];
+export const STATUS_LABELS = { new: 'New', applied: 'Applied', interviewing: 'Interviewing', offer: 'Offer', passed: 'Passed', closed: 'Closed', rejected: 'Rejected', duplicate: 'Duplicate' };
 
 const money = (n) => (n >= 1000 ? `$${Math.round(n / 1000)}K` : `$${Math.round(n)}`);
 

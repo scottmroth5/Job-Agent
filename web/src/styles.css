@@ -86,7 +86,7 @@ table.jobs { width: 100%; border-collapse: collapse; }
 .status { font-size: 12px; padding: 1px 8px; border-radius: 10px; background: var(--accent-soft); white-space: nowrap; }
 .status.s-applied, .status.s-interviewing { background: #dff3e6; color: #16603a; }
 .status.s-offer { background: var(--good); color: #fff; }
-.status.s-passed, .status.s-closed, .status.s-rejected { opacity: 0.7; }
+.status.s-passed, .status.s-closed, .status.s-rejected, .status.s-duplicate { opacity: 0.7; }
 
 .stacking { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin-bottom: 12px; }
 .meter { height: 8px; background: var(--border); border-radius: 4px; margin: 6px 0 4px; overflow: hidden; }

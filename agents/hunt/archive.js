@@ -1,5 +1,6 @@
 // Moves finished or stale jobs out of the active pipeline (v1's archiveOldJobs rules):
-//   closed, passed, rejected   archived right away, whatever their age
+//   closed, passed, rejected,  archived right away, whatever their age
+//   duplicate
 //   anything else              archived once discovered more than 30 days ago,
 //                              unless an active conversation (interviewing, offer)
 // Stage becomes 'archived'; status is kept, so the reason stays visible.
@@ -11,7 +12,7 @@ import { parseResultTitle } from '../discovery/sources/serper.js';
 import { identityKey, isRealCompany } from '../identity.js';
 
 export const ARCHIVE_AFTER_DAYS = 30;
-const ARCHIVE_NOW = ['closed', 'passed', 'rejected'];
+const ARCHIVE_NOW = ['closed', 'passed', 'rejected', 'duplicate'];
 const KEEP = ['interviewing', 'offer'];
 
 /** Returns the pipeline postings to archive, each with a reason. */
@@ -45,7 +46,7 @@ export function findListings(db, config) {
 
 // Which copy of a duplicated job to keep: the one the user acted on, then one still in play (not archived),
 // then the pipeline (scored and promoted), then one with text, then the oldest.
-const STATUS_RANK = { offer: 0, interviewing: 1, applied: 2, rejected: 3, closed: 4, passed: 5, new: 6 };
+const STATUS_RANK = { offer: 0, interviewing: 1, applied: 2, rejected: 3, closed: 4, passed: 5, new: 6, duplicate: 7 };
 // A copy this cleanup already removed (its last status change is the agent's) never wins over one still in play.
 const keepRank = (p) => [p.agent_removed ? 9 : STATUS_RANK[p.status] ?? 6, p.stage === 'archived' ? 1 : 0, p.stage === 'pipeline' ? 0 : 1, p.has_text ? 0 : 1, p.id];
 const byRank = (a, b) => {
@@ -100,7 +101,7 @@ export function archiveListings(db, { config, now = new Date(), dryRun = false }
     const history = db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'agent', ?)");
     db.transaction(() => {
       for (const p of found) {
-        const status = p.status === 'new' ? 'passed' : p.status;
+        const status = p.status !== 'new' ? p.status : /^duplicate of/.test(p.reason) ? 'duplicate' : 'passed';
         update.run({ id: p.id, status, now: nowIso, note: `Removed ${nowIso.slice(0, 10)}: ${p.reason}.` });
         if (status !== p.status) history.run(p.id, p.status, status, nowIso);
       }

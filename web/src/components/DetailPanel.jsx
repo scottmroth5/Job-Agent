@@ -156,7 +156,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                     </span>
                     <span className="row">
                       {onOpen && <button onClick={() => onOpen(c.id)}>Open it</button>}
-                      {job.stage !== 'archived' && <button onClick={() => save({ duplicateOf: c.id })}>Archive this copy</button>}
+                      {job.stage !== 'archived' && <button onClick={() => save({ duplicateOf: c.id })}>Mark this one duplicate</button>}
                     </span>
                   </div>
                 ))}

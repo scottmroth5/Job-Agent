@@ -47,7 +47,7 @@ export function rekeyPostings(db) {
  * SQL condition (on alias q) for a copy worth pointing out: still in play, or one the user acted on.
  * Copies already archived as duplicates or skipped (status new, or changed by the agent) are left out.
  */
-export const LIVE_COPY = `(q.stage != 'archived' OR (q.status != 'new'
+export const LIVE_COPY = `q.status != 'duplicate' AND (q.stage != 'archived' OR (q.status != 'new'
   AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = q.id ORDER BY h.id DESC LIMIT 1), '') != 'agent'))`;
 
 /** Other postings that are the same job as this one (same identity key) and still matter, oldest first. */

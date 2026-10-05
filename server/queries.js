@@ -4,7 +4,7 @@ import { checkLocation } from '../tools/location.js';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 import { findCopies, storedKey, identityKey, LIVE_COPY } from '../agents/identity.js';
 
-export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected'];
+export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'duplicate'];
 /** Status filters that group statuses: 'active' is what waits on the user to evaluate or decide; 'progress' is under way. */
 export const STATUS_GROUPS = { active: ['new', 'offer'], progress: ['applied', 'interviewing', 'offer'] };
 export const STAGES = ['discovered', 'pipeline', 'archived'];
@@ -160,7 +160,8 @@ export function getPosting(db, id, config = {}) {
 /**
  * Applies an edit from the UI. patch: { status, notes, appliedOn, stage, track, title, company, location,
  * description, rateText, hoursText, duplicateOf }. Status changes are recorded in status_history as the user's.
- * A company or title edit recomputes the duplicate key; duplicateOf archives this copy with a note pointing at the other.
+ * A company or title edit recomputes the duplicate key; duplicateOf marks this copy duplicate and archives it, with a note
+ * pointing at the other.
  * Marking a job applied without a date sets today's date. Returns the updated detail, or null if not found.
  */
 export function updatePosting(db, id, patch, config = {}, now = new Date()) {
@@ -186,6 +187,7 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
     if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
     const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${nowIso.slice(0, 10)}.`;
     set.stage = 'archived';
+    if (current.status !== 'duplicate') set.status = 'duplicate';
     set.notes = [set.notes ?? current.notes, note].filter(Boolean).join('\n');
   }
   if (patch.location !== undefined) set.location = patch.location || null;

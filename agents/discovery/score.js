@@ -197,7 +197,7 @@ export function selectPostings(db, { ids, allUnscored = false, limit, rescore = 
   // rescore (with ids) scores again even when a v2 score exists and whatever the status; used by the UI's Re-score.
   if (!(rescore && ids?.length)) {
     where.push("NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.source IN ('v2', 'v2-rule'))");
-    where.push("p.status NOT IN ('passed', 'rejected')");
+    where.push("p.status NOT IN ('passed', 'rejected', 'duplicate')");
   }
   const params = [];
   if (ids?.length) {

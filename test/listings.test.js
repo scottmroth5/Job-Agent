@@ -246,7 +246,8 @@ test('editing the company finds the earlier copy, and duplicateOf archives this 
 
   const archived = updatePosting(db, copy, { duplicateOf: applied }, {}, new Date('2026-10-01T12:00:00Z'));
   assert.equal(archived.stage, 'archived');
-  assert.equal(archived.status, 'new', 'status is left alone so the scoring eval does not read it as a pass');
+  assert.equal(archived.status, 'duplicate');
+  assert.equal(db.prepare('SELECT changed_by FROM status_history WHERE posting_id = ? ORDER BY id DESC LIMIT 1').pluck().get(copy), 'user');
   assert.ok(archived.notes.endsWith(`Duplicate of #${applied}, VP of Engineering at Example Health (pipeline/applied); archived 2026-10-01.`), archived.notes);
   assert.throws(() => updatePosting(db, copy, { duplicateOf: copy }), /not found/);
   assert.equal(getPosting(db, other).copies.length, 0);

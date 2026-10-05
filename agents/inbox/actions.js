@@ -4,7 +4,7 @@ import { storedKey } from '../identity.js';
 import { logDecision, linkThread, upsertContact, addReminder } from './store.js';
 
 export const STATUS_RANK = { new: 0, applied: 1, interviewing: 2, offer: 3 };
-const CLOSED = ['passed', 'closed', 'rejected'];
+const CLOSED = ['passed', 'closed', 'rejected', 'duplicate'];
 const TARGET = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };
 // Types that are about an application; without a confident link they need a person to place them.
 const APPLICATION_TYPES = ['confirmation', 'rejection', 'interview_request', 'assessment', 'offer', 'follow_up'];

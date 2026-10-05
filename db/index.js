@@ -2,18 +2,22 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openStore } from '@scottmroth5/agent-core';
 import { repoPath } from '../tools/paths.js';
+import * as duplicateStatus from './migrations/008-duplicate-status.js';
 
 /** Default database file. Gitignored, like everything under data/. */
 export const DB_PATH = repoPath('data', 'job-agent.db');
 
 const MIGRATIONS_DIR = repoPath('db', 'migrations');
 
-/** Migrations are the .sql files in db/migrations, applied in file-name order. */
+// Migrations that need code (a table rebuild) rather than plain SQL. Each exports id and up(db).
+const CODE_MIGRATIONS = [duplicateStatus];
+
+/** Migrations: the .sql files in db/migrations plus CODE_MIGRATIONS, applied in id (file-name) order. */
 export function loadMigrations(dir = MIGRATIONS_DIR) {
-  return readdirSync(dir)
+  const sql = readdirSync(dir)
     .filter((f) => f.endsWith('.sql'))
-    .sort()
     .map((f) => ({ id: f.replace(/\.sql$/, ''), up: readFileSync(join(dir, f), 'utf8') }));
+  return [...sql, ...CODE_MIGRATIONS.map(({ id, up }) => ({ id, up }))].sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
 /**
