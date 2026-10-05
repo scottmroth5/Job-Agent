@@ -88,10 +88,20 @@ export default function FunnelPage({ onOpenJob }) {
                 </span>
               </div>
             ))}
+            <div className="funnel-row rejected">
+              <span className="funnel-label">Rejected</span>
+              <span className="funnel-track">
+                <span className="funnel-fill" style={{ width: `${Math.max(t.rejected ? 2 : 0, (t.rejected / t.applied) * 100)}%` }} />
+              </span>
+              <span className="funnel-num">
+                <b>{t.rejected}</b>
+                <span className="muted small"> {pct(t.rejected / t.applied)} of applied</span>
+              </span>
+            </div>
           </div>
         )}
         <p className="muted small">
-          Also: {t.rejected} rejected, {t.noReply} with no reply after 21 days. An automatic "application received" email does not count as a response.
+          {t.noReply} with no reply after 21 days. An automatic "application received" email does not count as a response.
         </p>
       </section>
 
