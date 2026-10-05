@@ -28,6 +28,7 @@
     "web:dev": "vite",
     "ui": "vite build && node --env-file=.env server/index.js",
     "add": "node --env-file=.env scripts/add.js",
+    "auth:setup": "node scripts/auth-setup.js",
     "inbox:auth": "node --env-file-if-exists=.env scripts/inbox-auth.js",
     "inbox": "node --env-file=.env scripts/inbox.js",
     "inbox:backfill": "node --env-file=.env scripts/inbox.js --backfill",
