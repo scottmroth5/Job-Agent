@@ -95,6 +95,24 @@ domains, and job sites (`config/inbox.json`). Nothing about other mail is stored
 stored, encrypted (AES-256-GCM), only for emails linked to an application. Status only ever moves
 forward automatically; anything else waits for `npm run inbox:review`.
 
+## Google sign-in setup (optional)
+
+Without this, the web page opens with no login and only on this computer. Turn it on before reaching the
+app from another device or the cloud. It uses the Google Cloud project you already have.
+
+1. **Create a web client:** in [Google Cloud](https://console.cloud.google.com), go to Google Auth Platform, then Clients, then Create client. Choose application type **Web application**, and under **Authorized redirect URIs** add `http://localhost:5178/auth/google/callback`. Later, add your cloud address with the same `/auth/google/callback` ending. Only the `openid` and `email` permissions are used, so Google does not need to review anything.
+2. **Add to `.env`:**
+   ```
+   GOOGLE_WEB_CLIENT_ID=...
+   GOOGLE_WEB_CLIENT_SECRET=...
+   AUTH_ALLOWED_EMAILS=you@gmail.com
+   PUBLIC_URL=http://localhost:5178
+   ```
+3. **Create the session secret:** `npm run auth:setup`. It also lists anything still missing. `npm run auth:setup -- --rotate` replaces the secret, which signs everyone out.
+4. **Turn it on:** add `AUTH_MODE=google` to `.env` and restart `npm run ui`. Opening the page now sends you to Google. Only the addresses in `AUTH_ALLOWED_EMAILS` get in; anyone else sees "not allowed". Sessions last 30 days. Remove `AUTH_MODE` to go back to no login.
+
+The scheduled run and the `npm run` commands don't go through the web page, so they are unaffected.
+
 ## Privacy
 
 Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), and API keys (`.env`). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.

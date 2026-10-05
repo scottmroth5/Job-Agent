@@ -65,6 +65,9 @@ npm run inbox:review              resolve needs_review emails; each choice becom
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
 
 ## UI and API
+AUTH_MODE=none (default) binds to 127.0.0.1 with no login. AUTH_MODE=google (server/auth.js) is "Sign in with Google":
+only AUTH_ALLOWED_EMAILS get in, the session is a signed cookie (server/session.js, SESSION_SECRET), every route but /auth/* and
+/healthz needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
 server/app.js holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
 The Run pipeline button (server/pipeline-routes.js) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.js) checks
@@ -72,8 +75,7 @@ Gmail in-process, resolves needs_review emails with agents/inbox/review.js, and 
 Every task keeps its output (server/tasks.js: steps plus log lines; pass the task's logger to createTracer so run logs land there);
 the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
-while a pipeline step is running. AUTH_MODE=none binds to 127.0.0.1 only; exposing the server requires adding a login mode
-in server/auth.js first. web/dist is build output (gitignored).
+while a pipeline step is running. web/dist is build output (gitignored).
 
 ## Prompts
 agents/prompts.js is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active

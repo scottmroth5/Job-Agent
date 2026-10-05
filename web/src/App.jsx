@@ -33,6 +33,10 @@ function loadFilters() {
 
 export default function App() {
   const lk = useLookups();
+  const [me, setMe] = useState(null);
+  useEffect(() => {
+    api.me().then(setMe).catch(() => {});
+  }, []);
   const [filters, setFilters] = useState(loadFilters);
   const [jobs, setJobs] = useState([]);
   const [summary, setSummary] = useState(null);
@@ -110,6 +114,12 @@ export default function App() {
           <a href="#/admin" className={view === 'admin' ? 'on' : ''}>Admin</a>
         </nav>
         <PipelineButton onFinished={refresh} />
+        {me?.authMode === 'google' && (
+          <div className="signed-in small">
+            <span className="muted" title="Signed in with Google">{me.email}</span>
+            <button className="link" onClick={async () => { await api.signOut(); window.location.href = '/auth/signed-out'; }}>Sign out</button>
+          </div>
+        )}
         {view === 'jobs' && <button className="primary" onClick={() => setAdding(true)}>+ Add job</button>}
       </header>
 

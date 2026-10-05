@@ -6,12 +6,19 @@ async function request(method, path, body) {
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
+  // Signed out (google mode): go to sign-in and come back to this screen afterwards.
+  if (res.status === 401) {
+    window.location.href = `/auth/login?next=${encodeURIComponent(`/${window.location.hash}`)}`;
+    throw new Error('Sign in required.');
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
   return data;
 }
 
 export const api = {
+  me: () => request('GET', '/api/me'),
+  signOut: () => fetch('/auth/logout', { method: 'POST' }),
   summary: () => request('GET', '/api/summary'),
   list: (filters) => {
     const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== '' && v != null && v !== false));
