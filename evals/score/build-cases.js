@@ -4,6 +4,7 @@
 import { resolveDetails } from '../../agents/discovery/details.js';
 import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.js';
 import { checkLocation } from '../../tools/location.js';
+import { lookups, sqlList } from '../../agents/lookups.js';
 
 export const MIN_CASE_TEXT = 500;
 
@@ -15,7 +16,7 @@ export async function buildCases({ db, http, browser = null, config, log = () =>
     .prepare(`SELECT p.id, p.company, p.title, p.location, p.url, p.status, p.jd_text,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.source = 'v1-analysis' ORDER BY s.id DESC LIMIT 1) AS v1_score,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.source = 'v1-quick' ORDER BY s.id DESC LIMIT 1) AS v1_quick
-      FROM postings p WHERE p.status IN ('applied', 'passed')
+      FROM postings p WHERE (p.status IN ${sqlList(lookups(db).inProgress())} OR p.status = 'passed')
         -- a status the agent set (cleanup of list pages, excluded sites, duplicates) is not the user's choice
         AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = p.id ORDER BY h.id DESC LIMIT 1), '') != 'agent'
       ORDER BY p.id`)
@@ -46,7 +47,7 @@ export async function buildCases({ db, http, browser = null, config, log = () =>
     }
     cases.push({
       id: r.id,
-      label: r.status,
+      label: r.status === 'passed' ? 'passed' : 'applied', // pursued: any in-progress status
       company: r.company,
       title: r.title,
       location: location ?? null,

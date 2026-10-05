@@ -12,6 +12,7 @@ import { jobIdFromUrl } from './discovery/sources/linkedin.js';
 import * as fractionaljobs from './discovery/sources/fractionaljobs.js';
 import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/score.js';
 import { generateForPostings } from './hunt/generate.js';
+import { lookups } from './lookups.js';
 
 export const MANUAL_SOURCE = 'manual';
 export { isRealCompany };
@@ -55,7 +56,7 @@ export function validateManualInput(input) {
   if (url && !/^https?:\/\//i.test(url)) throw new Error('The link must start with http:// or https://.');
   if (!url && (!input.title?.trim() || !input.company?.trim())) throw new Error('Without a link, enter the job title and company.');
   if (description && description.length < MIN_PASTED) throw new Error(`The pasted description is very short (under ${MIN_PASTED} characters).`);
-  if (input.track && !['fulltime', 'fractional'].includes(input.track)) throw new Error('Track must be fulltime or fractional.');
+  if (input.track && !/^[a-z][a-z0-9_]*$/.test(input.track)) throw new Error('Choose a track from the list.');
   rejectSkipped({ url, title: input.title });
 }
 
@@ -146,6 +147,8 @@ export async function addPosting(input, ctx) {
   // 3. Location, track, pay and hours
   const rate = parseRate(item.rateText);
   const hours = parseHours(item.hoursText);
+  const lk = lookups(db);
+  if (input.track && !lk.selectable('track', input.track)) throw new Error(`"${input.track}" is not an available track.`);
   const track = input.track ?? detectTrack({ ...item, hoursMax: hours?.max });
   const locationCheck = checkLocation({ location: item.location, workplace: item.workplace, text: item.description }, config.search.homeLocations);
 
@@ -156,7 +159,7 @@ export async function addPosting(input, ctx) {
       .prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, source, location, workplace, discovered_on,
           stage, status, notes, jd_text, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, location_check,
           track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
-        VALUES (@url, @url_key, @company, @title, @ct, 'manual', @location, @workplace, @today, 'discovered', 'new', @notes,
+        VALUES (@url, @url_key, @company, @title, @ct, 'manual', @location, @workplace, @today, @stage, @status, @notes,
           @jd_text, @fetched_text, @fetched_at, @fetch_status, @fetch_method, 1, @location_check, @track, @rate_text,
           @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra, @now, @now)`)
       .run({
@@ -184,10 +187,12 @@ export async function addPosting(input, ctx) {
         hours_max: hours?.max ?? null,
         extra: item.extra && Object.keys(item.extra).length ? JSON.stringify(item.extra) : null,
         now: nowIso,
+        stage: lk.role('stage', 'default'),
+        status: lk.role('status', 'default'),
       }).lastInsertRowid,
   );
-  db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, 'new', 'user', ?)").run(id, nowIso);
-  step(`Saved as job #${id} (${track === 'fractional' ? 'fractional' : 'full-time'})`);
+  db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'user', ?)").run(id, lk.role('status', 'default'), nowIso);
+  step(`Saved as job #${id} (${lk.label('track', track)})`);
 
   // 5. Score
   step('Scoring');
@@ -200,7 +205,7 @@ export async function addPosting(input, ctx) {
   // 6. Materials
   let materials = null;
   if (promoted || input.writeMaterials) {
-    if (!promoted) db.prepare("UPDATE postings SET stage = 'pipeline', updated_at = ? WHERE id = ?").run(nowIso, id);
+    if (!promoted) db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ?').run(lk.role('stage', 'promote'), nowIso, id);
     step('Writing resume tweaks and cover letter');
     materials = await generateForPostings({ store, config, claude, knowledge, drive, run, options: { ids: [id] } });
     step(materials.docs ? 'Cover letter saved as a Google Doc' : 'Materials written');

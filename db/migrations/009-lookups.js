@@ -7,7 +7,7 @@
 export const id = '009-lookups';
 
 // [list, id, label, group, settings] in display order. Groups decide behavior (see agents/lookups.js).
-const BUILT_INS = [
+export const BUILT_INS = [
   ['status', 'new', 'New', 'evaluate'],
   ['status', 'applied', 'Applied', 'waiting'],
   ['status', 'interviewing', 'Interviewing', 'conversation'],
@@ -23,7 +23,7 @@ const BUILT_INS = [
   ['track', 'fractional', 'Fractional', 'track', { scorePrompt: 'score-fractional', terms: true }],
 ];
 
-const ROLES = [
+export const BUILT_IN_ROLES = [
   ['status', 'default', 'new'],
   ['stage', 'default', 'discovered'],
   ['stage', 'promote', 'pipeline'],
@@ -69,7 +69,7 @@ export function up(db) {
     insert.run(list, vid, label, group, order[list], settings ? JSON.stringify(settings) : null, now, now);
   }
   const role = db.prepare('INSERT INTO lookup_roles (list, role, value_id) VALUES (?, ?, ?)');
-  for (const r of ROLES) role.run(...r);
+  for (const r of BUILT_IN_ROLES) role.run(...r);
 
   // Any value a job already uses must exist in the lists before the fixed lists go away.
   for (const list of ['status', 'stage', 'track']) {

@@ -4,6 +4,7 @@
 // rekeyPostings after the key rules change (npm run cleanup does).
 import { companyTitleKey } from '../tools/urls.js';
 import { parseResultTitle } from './discovery/sources/serper.js';
+import { lookups, sqlList } from './lookups.js';
 
 const PLACEHOLDER_COMPANY = /^\(?(unknown|see posting|confidential|stealth|stealth startup|n\/?a|tbd|none|undisclosed|company)\)?$/i;
 
@@ -47,8 +48,11 @@ export function rekeyPostings(db) {
  * SQL condition (on alias q) for a copy worth pointing out: still in play, or one the user acted on.
  * Copies already archived as duplicates or skipped (status new, or changed by the agent) are left out.
  */
-export const LIVE_COPY = `q.status != 'duplicate' AND (q.stage != 'archived' OR (q.status != 'new'
+export function liveCopySql(db) {
+  const lk = lookups(db);
+  return `q.status != 'duplicate' AND (q.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR (q.status NOT IN ${sqlList(lk.ids('status', 'evaluate'))}
   AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = q.id ORDER BY h.id DESC LIMIT 1), '') != 'agent'))`;
+}
 
 /** Other postings that are the same job as this one (same identity key) and still matter, oldest first. */
 export function findCopies(db, posting) {
@@ -56,6 +60,6 @@ export function findCopies(db, posting) {
   if (!key) return [];
   return db
     .prepare(`SELECT id, company, title, stage, status, applied_on AS appliedOn, discovered_on AS discoveredOn FROM postings q
-      WHERE company_title_key = ? AND id != ? AND ${LIVE_COPY} ORDER BY id`)
+      WHERE company_title_key = ? AND id != ? AND ${liveCopySql(db)} ORDER BY id`)
     .all(key, posting.id);
 }

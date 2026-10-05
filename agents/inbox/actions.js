@@ -2,9 +2,9 @@
 // why. Status only ever moves forward automatically; anything else is flagged for review instead.
 import { storedKey } from '../identity.js';
 import { logDecision, linkThread, upsertContact, addReminder } from './store.js';
+import { lookups } from '../lookups.js';
 
-export const STATUS_RANK = { new: 0, applied: 1, interviewing: 2, offer: 3 };
-const CLOSED = ['passed', 'closed', 'rejected', 'duplicate'];
+// The built-in statuses the inbox moves jobs to; ranks and closed statuses come from status groups (agents/lookups.js).
 const TARGET = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };
 // Types that are about an application; without a confident link they need a person to place them.
 const APPLICATION_TYPES = ['confirmation', 'rejection', 'interview_request', 'assessment', 'offer', 'follow_up'];
@@ -30,13 +30,16 @@ export function decideLink({ ruleMatch, classification: c, threshold }) {
 /**
  * The status change an email type implies for an application in `current` status:
  *   { change: { from, to } } | { review: reason } | { none: true }
+ * lk: lookups(db), or the built-in lists when omitted. An archived target status sends the email to review.
  */
-export function planStatus(current, type) {
+export function planStatus(current, type, lk = lookups(null)) {
   const to = TARGET[type];
   if (!to || to === current) return { none: true };
-  if (CLOSED.includes(current)) return { review: `the application is ${current}; a ${type.replace('_', ' ')} email would reopen it` };
-  if (to === 'rejected') return current === 'offer' ? { review: 'a rejection arrived after an offer' } : { change: { from: current, to } };
-  if (STATUS_RANK[to] > STATUS_RANK[current]) return { change: { from: current, to } };
+  if (!lk.selectable('status', to)) return { review: `the "${lk.label('status', to)}" status is archived, so it was not set` };
+  if (lk.isClosed(current)) return { review: `the application is ${current}; a ${type.replace('_', ' ')} email would reopen it` };
+  if (to === 'rejected') return lk.groupOf('status', current) === 'decision' ? { review: 'a rejection arrived after an offer' } : { change: { from: current, to } };
+  const [rankTo, rankNow] = [lk.rank(to), lk.rank(current)];
+  if (rankTo != null && rankNow != null && rankTo > rankNow) return { change: { from: current, to } };
   return { review: `would move the status backward (${current} to ${to})` };
 }
 
@@ -70,12 +73,13 @@ export function applyActions(db, { email, postingId, c, decidedBy, promptVersion
     if (personal) upsertContact(db, { email: personal, name: c.extracted.contact_name, company: posting.company, postingId }, now);
   }
 
-  const plan = planStatus(posting.status, c.type);
+  const lk = lookups(db);
+  const plan = planStatus(posting.status, c.type, lk);
   let statusChange = null;
   if (plan.change) {
     const { from, to } = plan.change;
     db.transaction(() => {
-      const appliedOn = to === 'applied' && !posting.applied_on ? dateOnly(email.sentAt) : posting.applied_on;
+      const appliedOn = lk.groupOf('status', to) === 'waiting' && !posting.applied_on ? dateOnly(email.sentAt) : posting.applied_on;
       db.prepare('UPDATE postings SET status = ?, applied_on = ?, updated_at = ? WHERE id = ?').run(to, appliedOn, nowIso, postingId);
       db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'agent', ?)").run(postingId, from, to, nowIso);
       logDecision(db, { ...base, action: 'status_change', fromStatus: from, toStatus: to, detail: { emailDate: email.sentAt, type: c.type } }, now);
@@ -102,6 +106,7 @@ export function applyActions(db, { email, postingId, c, decidedBy, promptVersion
 
 /** A new opportunity from recruiter outreach that matches no application. The email body is not copied. */
 export function createOpportunity(db, { email, c, decidedBy, promptVersion, now = new Date() }) {
+  const lk = lookups(db);
   const nowIso = now.toISOString();
   const company = c.extracted.company ?? 'Unknown';
   const title = c.extracted.role_title ?? 'Recruiter outreach';
@@ -109,10 +114,10 @@ export function createOpportunity(db, { email, c, decidedBy, promptVersion, now 
   const id = Number(
     db
       .prepare(`INSERT INTO postings (company, title, company_title_key, source, discovered_on, stage, status, notes, created_at, updated_at)
-        VALUES (?, ?, ?, 'email', ?, 'discovered', 'new', ?, ?, ?)`)
-      .run(company, title, storedKey({ company, title }), nowIso.slice(0, 10), notes, nowIso, nowIso).lastInsertRowid,
+        VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?)`)
+      .run(company, title, storedKey({ company, title }), nowIso.slice(0, 10), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso).lastInsertRowid,
   );
-  db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, 'new', 'agent', ?)").run(id, nowIso);
+  db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
   linkThread(db, email.threadId, id, 'outreach', now);
   upsertContact(db, { email: c.extracted.contact_email ?? email.senderEmail, name: c.extracted.contact_name, company, postingId: id }, now);
   logDecision(db, { postingId: id, emailId: email.id, gmailMessageId: email.gmailMessageId, action: 'opportunity', decidedBy, promptVersion, detail: { company, title } }, now);

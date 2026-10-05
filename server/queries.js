@@ -2,11 +2,12 @@
 import { annualize, parseRate, parseHours, findPayInText } from '../tools/rates.js';
 import { checkLocation } from '../tools/location.js';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
-import { findCopies, storedKey, identityKey, LIVE_COPY } from '../agents/identity.js';
+import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.js';
+import { lookups, sqlList } from '../agents/lookups.js';
 
 export const STATUSES = ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'duplicate'];
-/** Status filters that group statuses: 'active' is what waits on the user to evaluate or decide; 'progress' is under way. */
-export const STATUS_GROUPS = { active: ['new', 'offer'], progress: ['applied', 'interviewing', 'offer'] };
+/** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
+const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
 export const STAGES = ['discovered', 'pipeline', 'archived'];
 export const TRACKS = ['fulltime', 'fractional'];
 
@@ -28,14 +29,15 @@ const LATEST_LETTER = `(SELECT a.id FROM artifacts a WHERE a.posting_id = p.id A
 // original is analysis.uncappedScore). They stay in Discovered and the UI highlights them.
 export const DESCRIPTION_DAYS = 30;
 const NO_TEXT = "TRIM(COALESCE(p.jd_text, '') || COALESCE(p.fetched_text, '')) = ''";
-const AWAITING_DESCRIPTION = `(${NO_TEXT} AND p.status = 'new' AND p.stage != 'archived'
+const awaitingDescription = (lk) => `(${NO_TEXT} AND p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND p.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))}
   AND p.discovered_on >= date('now', '-${DESCRIPTION_DAYS} days')
   AND COALESCE(CASE WHEN json_valid(ls.analysis_json) THEN json_extract(ls.analysis_json, '$.uncappedScore') END, ls.score) >= ${PROMOTE_AT})`;
 
-const BASE = `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
-    ${AWAITING_DESCRIPTION} AS awaiting_description,
+// The row query; db supplies the lists (agents/lookups.js) the status and stage conditions use.
+const base = (db, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
+    ${awaitingDescription(lk)} AS awaiting_description,
     -- flagged only while this job still waits on the user (new) and another live copy exists
-    p.status = 'new' AND EXISTS (SELECT 1 FROM postings q WHERE q.company_title_key = p.company_title_key AND q.id != p.id AND ${LIVE_COPY}) AS shares_key,
+    p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.company_title_key = p.company_title_key AND q.id != p.id AND ${liveCopySql(db)}) AS shares_key,
     ll.doc_url AS letter_url, ll.doc_name AS letter_name, ll.flags_json AS letter_flags, ll.id AS letter_id,
     EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks') AS has_tweaks
   FROM postings p
@@ -92,8 +94,9 @@ function toRow(r, config) {
   };
 }
 
-/** Filtered list. filters: { track, stage, status, needsDescription, discoveredAfter, q, minScore, limit } ('all' or empty means no filter; status 'active' or 'progress' means a STATUS_GROUPS group). */
+/** Filtered list. filters: { track, stage, status, needsDescription, discoveredAfter, q, minScore, limit } ('all' or empty means no filter; status 'active' (Needs action) or 'progress' (In progress) means those status groups). */
 export function listPostings(db, filters = {}, config = {}) {
+  const lk = lookups(db);
   const where = [];
   const params = {};
   if (filters.track && filters.track !== 'all') {
@@ -104,13 +107,13 @@ export function listPostings(db, filters = {}, config = {}) {
     where.push('p.stage = @stage');
     params.stage = filters.stage;
   }
-  if (STATUS_GROUPS[filters.status]) {
-    where.push(`p.status IN (${STATUS_GROUPS[filters.status].map((s) => `'${s}'`).join(', ')})`);
+  if (statusFilter(lk, filters.status)) {
+    where.push(`p.status IN ${sqlList(statusFilter(lk, filters.status))}`);
   } else if (filters.status && filters.status !== 'all') {
     where.push('p.status = @status');
     params.status = filters.status;
   }
-  if (String(filters.needsDescription) === 'true') where.push(AWAITING_DESCRIPTION);
+  if (String(filters.needsDescription) === 'true') where.push(awaitingDescription(lk));
   if (filters.discoveredAfter) {
     where.push('p.discovered_on >= @discoveredAfter'); // inclusive: jobs found on that day count
     params.discoveredAfter = filters.discoveredAfter;
@@ -124,14 +127,14 @@ export function listPostings(db, filters = {}, config = {}) {
     params.minScore = Number(filters.minScore);
   }
   const limit = Math.min(Number(filters.limit) || 500, 2000);
-  const sql = `${BASE} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+  const sql = `${base(db)} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY COALESCE(ls.score, 0) DESC, p.discovered_on DESC, p.id DESC LIMIT ${limit}`;
   return db.prepare(sql).all(params).map((r) => toRow(r, config));
 }
 
 /** Full detail for one posting, or null. */
 export function getPosting(db, id, config = {}) {
-  const r = db.prepare(`${BASE} WHERE p.id = ?`).get(id);
+  const r = db.prepare(`${base(db)} WHERE p.id = ?`).get(id);
   if (!r) return null;
   const tweaks = db
     .prepare("SELECT content, model, created_at FROM artifacts WHERE posting_id = ? AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
@@ -165,13 +168,14 @@ export function getPosting(db, id, config = {}) {
  * Marking a job applied without a date sets today's date. Returns the updated detail, or null if not found.
  */
 export function updatePosting(db, id, patch, config = {}, now = new Date()) {
+  const lk = lookups(db);
   const current = db.prepare('SELECT * FROM postings WHERE id = ?').get(id);
   if (!current) return null;
   const set = {};
   const nowIso = now.toISOString();
   if (patch.status !== undefined && patch.status !== current.status) {
     set.status = patch.status;
-    if (patch.status === 'applied' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = nowIso.slice(0, 10);
+    if (lk.groupOf('status', patch.status) === 'waiting' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = nowIso.slice(0, 10);
   }
   if (patch.appliedOn !== undefined) set.applied_on = patch.appliedOn || null;
   if (patch.notes !== undefined) set.notes = patch.notes || null;
@@ -186,7 +190,7 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
     const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ?').get(patch.duplicateOf);
     if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
     const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${nowIso.slice(0, 10)}.`;
-    set.stage = 'archived';
+    set.stage = lk.role('stage', 'archive');
     if (current.status !== 'duplicate') set.status = 'duplicate';
     set.notes = [set.notes ?? current.notes, note].filter(Boolean).join('\n');
   }
@@ -220,12 +224,13 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
 
 /** Counts and spend for the header. */
 export function summary(db, config = {}, now = new Date()) {
+  const lk = lookups(db);
   const since = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
   const counts = db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings GROUP BY track, stage, status').all();
   return {
     counts,
-    pipeline: counts.filter((c) => c.stage === 'pipeline').reduce((s, c) => s + c.n, 0),
-    needsDescription: db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} WHERE ${AWAITING_DESCRIPTION}`).pluck().get(),
+    pipeline: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active').reduce((s, c) => s + c.n, 0),
+    needsDescription: db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} WHERE ${awaitingDescription(lk)}`).pluck().get(),
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
     spend30Days: db.prepare('SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= ?').pluck().get(since),

@@ -3,6 +3,8 @@
 // added values work everywhere the built-in ones do. Values are archived, never deleted: an archived value
 // stays valid on the jobs that have it, and drops out of menus and automation targets.
 
+import { BUILT_INS, BUILT_IN_ROLES } from '../db/migrations/009-lookups.js';
+
 export const LISTS = ['status', 'stage', 'track'];
 
 /** Groups per list, in order, with what each one means. */
@@ -44,9 +46,7 @@ const ID = /^[a-z][a-z0-9_]{0,39}$/;
 
 const cache = new WeakMap();
 
-function read(db) {
-  const rows = db.prepare('SELECT * FROM lookup_values ORDER BY list, sort_order, id').all();
-  const roles = db.prepare('SELECT list, role, value_id FROM lookup_roles').all();
+function build(rows, roles) {
   const byList = Object.fromEntries(LISTS.map((l) => [l, []]));
   for (const r of rows) {
     byList[r.list].push({
@@ -61,7 +61,17 @@ function read(db) {
   }
   const roleMap = Object.fromEntries(LISTS.map((l) => [l, {}]));
   for (const r of roles) roleMap[r.list][r.role] = r.value_id;
-  return { byList, roles: roleMap };
+  return makeApi(byList, roleMap);
+}
+
+/** The built-in lists (the 009 seeds), for code and tests that run without a database. */
+let builtIn = null;
+export function builtInLookups() {
+  builtIn ??= build(
+    BUILT_INS.map(([list, id, label, group, settings], i) => ({ list, id, label, group_key: group, sort_order: (i + 1) * 10, settings_json: settings ? JSON.stringify(settings) : null, origin: 'built_in', archived_at: null })),
+    BUILT_IN_ROLES.map(([list, role, value_id]) => ({ list, role, value_id })),
+  );
+  return builtIn;
 }
 
 /** Drops the cached lists (call after any edit). */
@@ -72,8 +82,14 @@ export const invalidateLookups = (db) => cache.delete(db);
  * because their behavior still applies to the jobs that have them.
  */
 export function lookups(db) {
-  if (cache.has(db)) return cache.get(db);
-  const { byList, roles } = read(db);
+  if (!db) return builtInLookups();
+  if (!cache.has(db)) {
+    cache.set(db, build(db.prepare('SELECT * FROM lookup_values ORDER BY list, sort_order, id').all(), db.prepare('SELECT list, role, value_id FROM lookup_roles').all()));
+  }
+  return cache.get(db);
+}
+
+function makeApi(byList, roles) {
   const find = (list, id) => byList[list]?.find((v) => v.id === id) ?? null;
   const statusIds = (pred) => byList.status.filter((v) => pred(STATUS_GROUP[v.group] ?? {})).map((v) => v.id);
   const api = {
@@ -100,7 +116,6 @@ export function lookups(db) {
     scorePrompt: (trackId) => (find('track', trackId)?.settings.scorePrompt === 'score-fractional' ? 'score-fractional' : 'score'),
     showsTerms: (trackId) => Boolean(find('track', trackId)?.settings.terms),
   };
-  cache.set(db, api);
   return api;
 }
 

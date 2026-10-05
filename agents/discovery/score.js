@@ -7,6 +7,7 @@ import { homeAreaText } from '../../tools/config.js';
 import { sanitizeDashes, truncate } from '../../tools/text.js';
 import { skipReason } from '../../tools/listings.js';
 import { getPrompt } from '../prompts.js';
+import { lookups, sqlList } from '../lookups.js';
 
 // Chosen by the scoring eval (2026-09-30, 74 applied/passed cases): Sonnet 5.5 ranked applied above
 // passed jobs 84% of the time (Haiku 4.5: 72%, v1: 71%). At 7+ it promotes 56% of applied jobs and
@@ -59,7 +60,8 @@ export function loadScorePrompts(db = null) {
 
 /** The prompt for a posting's track, from either a single prompt or a { fulltime, fractional } set. */
 export function promptFor(posting, { prompt, prompts }) {
-  if (prompts) return prompts[posting.track === 'fractional' ? 'fractional' : 'fulltime'];
+  // scorePrompt comes from the track's settings (agents/lookups.js); without it, the built-in fractional track uses its prompt.
+  if (prompts) return prompts[(posting.scorePrompt ?? (posting.track === 'fractional' ? 'score-fractional' : 'score')) === 'score-fractional' ? 'fractional' : 'fulltime'];
   return prompt;
 }
 
@@ -197,7 +199,7 @@ export function selectPostings(db, { ids, allUnscored = false, limit, rescore = 
   // rescore (with ids) scores again even when a v2 score exists and whatever the status; used by the UI's Re-score.
   if (!(rescore && ids?.length)) {
     where.push("NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.source IN ('v2', 'v2-rule'))");
-    where.push("p.status NOT IN ('passed', 'rejected', 'duplicate')");
+    where.push(`p.status NOT IN ${sqlList(lookups(db).closed())}`);
   }
   const params = [];
   if (ids?.length) {
@@ -237,12 +239,13 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
   }
   const { db } = store;
   const prompts = loadScorePrompts(db);
-  const postings = selectPostings(db, { ids, allUnscored, limit, rescore });
+  const postings = selectPostings(db, { ids, allUnscored, limit, rescore }).map((p) => ({ ...p, scorePrompt: lookups(db).scorePrompt(p.track) }));
 
   const insertScore = db.prepare(`INSERT INTO scores (posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   // A job without a description stays in Discovered (the UI flags it) until text is pasted and it is re-scored.
-  const promote = db.prepare(`UPDATE postings SET stage = 'pipeline', updated_at = ? WHERE id = ? AND stage = 'discovered'
+  const lk = lookups(db);
+  const promote = db.prepare(`UPDATE postings SET stage = '${lk.role('stage', 'promote')}', updated_at = ? WHERE id = ? AND stage IN ${sqlList(lk.ids('stage', 'found'))}
     AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != ''`);
   // Fractional scoring reports pay and hours from the posting text; keep what the source already gave.
   const fillTerms = db.prepare(`UPDATE postings SET rate_min = COALESCE(rate_min, @rateMin), rate_max = COALESCE(rate_max, @rateMax),

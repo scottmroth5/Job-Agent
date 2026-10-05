@@ -7,15 +7,19 @@ import { companyTitleKey } from '../../tools/urls.js';
 import { identityKey } from '../identity.js';
 import { domainIn } from './prefilter.js';
 import { parseAtsEmail } from './atsParse.js';
+import { lookups, sqlList } from '../lookups.js';
 
 /**
- * Applications an email can be about: applied, interviewing, or offer (in any stage, since applied jobs are
- * archived after 30 days), or new jobs in the pipeline.
+ * Applications an email can be about: any in-progress status (in any stage, since applied jobs are
+ * archived after 30 days), or jobs still to evaluate in an active stage.
  */
-export const OPEN_SQL = "(p.status IN ('applied', 'interviewing', 'offer') OR (p.status = 'new' AND p.stage = 'pipeline'))";
+export function openSql(db) {
+  const lk = lookups(db);
+  return `(p.status IN ${sqlList(lk.inProgress())} OR (p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND p.stage IN ${sqlList(lk.ids('stage', 'active'))}))`;
+}
 
 export function listOpenApplications(db) {
-  return db.prepare(`SELECT p.id, p.company, p.title, p.status, p.stage, p.company_domain FROM postings p WHERE ${OPEN_SQL} ORDER BY p.id`).all();
+  return db.prepare(`SELECT p.id, p.company, p.title, p.status, p.stage, p.company_domain FROM postings p WHERE ${openSql(db)} ORDER BY p.id`).all();
 }
 
 const companyPart = (key) => (key ? key.split('|')[0] : null);

@@ -7,6 +7,7 @@ import { ensureLetterFolder } from '../../tools/google/drive.js';
 import { getPrompt } from '../prompts.js';
 import { PROMOTE_AT } from '../discovery/score.js';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
+import { lookups, sqlList } from '../lookups.js';
 
 export const HUNT_MODEL = 'claude-sonnet-5-5';
 // Writing quality matters more here than in scoring, so medium effort; thinking counts toward maxTokens.
@@ -35,7 +36,7 @@ export function selectForHunt(db, { ids, promoteAt = PROMOTE_AT } = {}) {
     FROM postings p`;
   if (ids?.length) return db.prepare(`${base} WHERE p.id IN (${ids.map(() => '?').join(', ')}) ORDER BY p.id`).all(...ids);
   return db
-    .prepare(`SELECT * FROM (${base} WHERE p.stage = 'pipeline' AND p.status IN ('new', 'applied'))
+    .prepare(`SELECT * FROM (${base} WHERE p.stage IN ${sqlList(lookups(db).ids('stage', 'active'))} AND p.status IN ${sqlList(lookups(db).ids('status', 'evaluate', 'waiting'))})
       WHERE v2_score >= ? AND (has_tweaks = 0 OR has_letter = 0 OR letter_missing_doc IS NOT NULL) ORDER BY id`)
     .all(promoteAt);
 }

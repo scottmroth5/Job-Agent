@@ -3,6 +3,10 @@
 import { escapeHtml as e } from '../../tools/html.js';
 import { sendEmail } from '../../tools/google/gmail.js';
 import { PROMOTE_AT } from '../discovery/score.js';
+import { lookups, sqlList } from '../lookups.js';
+
+// Pipeline order in the report: decisions first, then conversations, then waiting, then to evaluate.
+const REPORT_ORDER = ['decision', 'conversation', 'waiting', 'evaluate'];
 
 const parse = (s) => {
   try {
@@ -19,6 +23,9 @@ export function collectReport(db, { since, promoteAt = PROMOTE_AT }) {
     .all(since)
     .map((r) => ({ ...r, summary: parse(r.summary) }));
   const latest = (name) => [...runs].reverse().find((r) => r.name === name) ?? null;
+  const lk = lookups(db);
+  const active = sqlList(lk.ids('stage', 'active'));
+  const orderCase = `CASE ${REPORT_ORDER.map((g, i) => lk.ids('status', g).length ? `WHEN p.status IN ${sqlList(lk.ids('status', g))} THEN ${i}` : '').join(' ')} ELSE ${REPORT_ORDER.length} END`;
 
   const latestScore = `(SELECT %s FROM scores s WHERE s.posting_id = p.id AND s.source IN ('v2', 'v2-rule', 'v1-analysis') ORDER BY s.id DESC LIMIT 1)`;
   const letter = `(SELECT %s FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'cover_letter' ORDER BY a.id DESC LIMIT 1)`;
@@ -30,21 +37,22 @@ export function collectReport(db, { since, promoteAt = PROMOTE_AT }) {
       EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks') AS has_tweaks`;
 
   const promoted = db
-    .prepare(`SELECT ${cols} FROM postings p WHERE p.stage = 'pipeline'
+    .prepare(`SELECT ${cols} FROM postings p WHERE p.stage IN ${active}
       AND EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.source = 'v2' AND s.score >= ? AND s.created_at >= ?)
       ORDER BY score DESC, p.id`)
     .all(promoteAt, since)
     .map((p) => ({ ...p, analysis: parse(p.analysis_json), flags: parse(p.letter_flags) ?? [] }));
 
   const pipeline = db
-    .prepare(`SELECT ${cols} FROM postings p WHERE p.stage = 'pipeline' ORDER BY
-      CASE p.status WHEN 'offer' THEN 0 WHEN 'interviewing' THEN 1 WHEN 'applied' THEN 2 WHEN 'new' THEN 3 ELSE 4 END, score DESC, p.id`)
+    .prepare(`SELECT ${cols} FROM postings p WHERE p.stage IN ${active} ORDER BY ${orderCase}, score DESC, p.id`)
     .all()
     .map((p) => ({ ...p, flags: parse(p.letter_flags) ?? [] }));
 
   const statusCounts = Object.fromEntries(
-    db.prepare("SELECT status, COUNT(*) AS n FROM postings WHERE stage = 'pipeline' GROUP BY status").all().map((r) => [r.status, r.n]),
+    db.prepare(`SELECT status, COUNT(*) AS n FROM postings WHERE stage IN ${active} GROUP BY status`).all().map((r) => [r.status, r.n]),
   );
+  // Status labels and display order for the counts line (closed statuses are left out, as before).
+  const statusOrder = REPORT_ORDER.flatMap((g) => lk.ids('status', g)).map((id) => ({ id, label: lk.label('status', id) }));
   return {
     since,
     runs,
@@ -57,6 +65,7 @@ export function collectReport(db, { since, promoteAt = PROMOTE_AT }) {
     promoted,
     pipeline,
     statusCounts,
+    statusOrder,
   };
 }
 
@@ -119,9 +128,10 @@ export function renderReport(data, { now = new Date(), promoteAt = PROMOTE_AT } 
     parts.push(section(`${data.promoted.length} promoted to your pipeline (score ${promoteAt}+)`, cards));
   }
 
-  const counts = ['offer', 'interviewing', 'applied', 'new']
-    .filter((s) => data.statusCounts[s])
-    .map((s) => `${e(s)}: <b>${data.statusCounts[s]}</b>`)
+  const order = data.statusOrder ?? ['offer', 'interviewing', 'applied', 'new'].map((id) => ({ id, label: id }));
+  const counts = order
+    .filter((s) => data.statusCounts[s.id])
+    .map((s) => `${e(s.label)}: <b>${data.statusCounts[s.id]}</b>`)
     .join(' &middot; ');
   const rows = data.pipeline
     .map(

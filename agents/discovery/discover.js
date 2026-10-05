@@ -14,6 +14,7 @@ import * as remoteok from './sources/remoteok.js';
 import * as fractionaljobs from './sources/fractionaljobs.js';
 import * as linkedin from './sources/linkedin.js';
 import * as serper from './sources/serper.js';
+import { lookups, sqlList } from '../lookups.js';
 
 /** Sources in priority order: when the same job appears in several, the earlier source wins. */
 export const SOURCES = { himalayas, remoteok, fractionaljobs, linkedin, serper };
@@ -153,7 +154,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const recordDuplicate = (item, existing) => {
     stat(item.source).duplicates += 1;
     sightings.push({ postingId: existing.id, source: item.source, url: item.url });
-    if (existing.stage === 'discovered' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
+    if (lookups(db).groupOf('stage', existing.stage) === 'found' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
   };
 
   for (const item of candidates) {
@@ -222,20 +223,21 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const insertedIds = [];
   if (!dryRun) {
     const nowIso = now.toISOString();
+    const found = sqlList(lookups(db).ids('stage', 'found'));
     const insert = db.prepare(`INSERT INTO postings
       (url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
        discovered_on, stage, status, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, workplace, location_check,
        source_job_id, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
       VALUES (@url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on, @posted_raw,
-       @discovered_on, 'discovered', 'new', @fetched_text, @fetched_at, @fetch_status, @fetch_method, @fetch_attempts, @workplace, @location_check,
+       @discovered_on, @stage, @status, @fetched_text, @fetched_at, @fetch_status, @fetch_method, @fetch_attempts, @workplace, @location_check,
        @source_job_id, @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra_json, @now, @now)`);
-    const history = db.prepare(`INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, 'new', 'agent', ?)`);
+    const history = db.prepare(`INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'agent', ?)`);
     const sighting = db.prepare('INSERT OR IGNORE INTO posting_sightings (posting_id, source, url, seen_on) VALUES (?, ?, ?, ?)');
     const upgrade = db.prepare(`UPDATE postings SET url = @url, url_key = @url_key, source = @source,
         fetched_text = COALESCE(fetched_text, @fetched_text), location = COALESCE(location, @location),
         salary = COALESCE(salary, @salary), posted_on = COALESCE(posted_on, @posted_on),
         workplace = COALESCE(workplace, @workplace), updated_at = @now
-      WHERE id = @id AND stage = 'discovered'`);
+      WHERE id = @id AND stage IN ${found}`);
 
     store.tx(() => {
       for (const item of toInsert) {
@@ -262,7 +264,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
             workplace: item.workplace ?? null,
             location_check: item.locationCheck,
             source_job_id: item.sourceJobId ?? null,
-            track: item.track ?? 'fulltime',
+            track: item.track ?? lookups(db).role('track', 'default'),
+            stage: lookups(db).role('stage', 'default'),
+            status: lookups(db).role('status', 'default'),
             rate_text: item.rateText ?? null,
             rate_min: item.rate?.min ?? null,
             rate_max: item.rate?.max ?? null,
@@ -273,7 +277,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
             now: nowIso,
           }).lastInsertRowid,
         );
-        history.run(id, nowIso);
+        history.run(id, lookups(db).role('status', 'default'), nowIso);
         sighting.run(id, item.source, item.url ?? null, today);
         insertedIds.push(id);
       }
@@ -304,7 +308,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
   if (!dryRun && details && retryPending) {
     const pending = db
       .prepare(`SELECT id, url, company, title, location, workplace, source_job_id, source FROM postings
-        WHERE stage = 'discovered' AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
+        WHERE stage IN ${sqlList(lookups(db).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
           AND fetch_attempts < ? AND discovered_on >= ?
           ${insertedIds.length ? `AND id NOT IN (${insertedIds.map(() => '?').join(', ')})` : ''}`)
       .all(...RETRYABLE, MAX_FETCH_ATTEMPTS, since, ...insertedIds);
