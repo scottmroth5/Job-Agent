@@ -10,6 +10,11 @@ export default function TaskProgress({ task }) {
       ))}
       {task.status === 'running' && task.steps.length === 0 && <div className="task-step">⏳ Starting…</div>}
       {task.status === 'failed' && <div className="task-step error">✗ {task.error}</div>}
+      {task.id && (
+        <a className="small" href={`#/activity/${task.id}`} target="_blank" rel="noreferrer">
+          View full output ↗
+        </a>
+      )}
     </div>
   );
 }

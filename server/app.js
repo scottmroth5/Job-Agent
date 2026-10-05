@@ -39,7 +39,6 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const app = Fastify({ logger });
   const { db } = store;
   const tasks = createTaskRunner();
-  const tracer = createTracer({ store, logger: { info() {}, warn() {}, error() {} } });
 
   await app.register(swagger, {
     openapi: { info: { title: 'Job Agent API', version: '1.0.0', description: 'Job Hunt UI backend' } },
@@ -60,8 +59,9 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         throw Object.assign(new Error(`${err.message} Try again when it finishes.`), { statusCode: 409 });
       }
     }
-    return tasks.start(kind, meta, async (step) => {
-      const run = tracer.startRun(`ui-${kind}`, meta);
+    return tasks.start(kind, meta, async (step, { logger }) => {
+      // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
+      const run = createTracer({ store, logger }).startRun(`ui-${kind}`, meta);
       const browser = services.createBrowser ? await services.createBrowser() : null;
       try {
         const result = await fn(step, { run, browser });
@@ -246,7 +246,24 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
 
   registerAdminRoutes(app, { db, config });
   if (services.runPipeline) registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline });
-  if (services.inbox) registerInboxRoutes(app, { store, tasks, tracer, claude: services.claude, inbox: services.inbox });
+  if (services.inbox) registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox });
+
+  app.get('/api/tasks', { schema: { summary: 'Recent background tasks, newest first (without output)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
+    tasks.list(),
+  );
+
+  app.get(
+    '/api/tasks/:id/log',
+    {
+      schema: {
+        summary: "A task's output lines from index 'from' on",
+        params: { type: 'object', properties: { id: { type: 'string' } } },
+        querystring: { type: 'object', properties: { from: { type: 'integer', minimum: 0 } } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req, reply) => tasks.log(req.params.id, req.query.from ?? 0) ?? reply.code(404).send({ error: 'Task not found' }),
+  );
 
   app.get(
     '/api/tasks/:id',

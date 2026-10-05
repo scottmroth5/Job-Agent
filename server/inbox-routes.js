@@ -1,5 +1,6 @@
 // Inbox screen: check Gmail, resolve emails that need review, and close reminders. Email subjects and
 // summaries are shown to the user here (local server only); they are never logged.
+import { createTracer } from '@scottmroth5/agent-core';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { runInbox } from '../agents/inbox/process.js';
 import { listNeedsReview, resolveReview, CHOICES } from '../agents/inbox/review.js';
@@ -44,7 +45,7 @@ export function inboxOverview(db, { ready }) {
  * @param {object} ctx
  * @param {{ ready: () => boolean, gmail: () => object, key: () => Buffer, cfg: object }} ctx.inbox
  */
-export function registerInboxRoutes(app, { store, tasks, tracer, claude, inbox }) {
+export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
   const { db } = store;
   let checkTaskId = null;
 
@@ -65,12 +66,14 @@ export function registerInboxRoutes(app, { store, tasks, tracer, claude, inbox }
           throw Object.assign(new Error(`${err.message} Try again when it finishes.`), { statusCode: 409 });
         }
       }
-      const gmail = inbox.gmail({ onWait: () => {} });
-      checkTaskId = tasks.start('inbox', {}, async (step) => {
-        const run = tracer.startRun('inbox', { model: inbox.cfg.model });
+      checkTaskId = tasks.start('inbox', {}, async (step, { logger }) => {
+        const gmail = inbox.gmail({ onWait: (ms) => logger.warn(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
+        // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
+        const run = createTracer({ store, logger }).startRun('inbox', { model: inbox.cfg.model });
         try {
           step('Reading new mail');
-          const s = await runInbox({ store, gmail, claude, cfg: inbox.cfg, key: inbox.key(), run, log: (level, m) => /^Checked \d+/.test(m) && step(m) });
+          const s = await runInbox({ store, gmail, claude, cfg: inbox.cfg, key: inbox.key(), run, log: run.log });
+          for (const n of s.notices) logger.info(n);
           run.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length });
           step(`Done: ${s.considered} job emails, ${s.matched} linked, ${s.needsReview} to review`);
           return { considered: s.considered, matched: s.matched, needsReview: s.needsReview, opportunities: s.opportunities, statusChanges: s.statusChanges.length, notices: s.notices, failures: s.failures.length };

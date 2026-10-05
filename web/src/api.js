@@ -22,6 +22,8 @@ export const api = {
   add: (job) => request('POST', '/api/postings', job),
   action: (id, action) => request('POST', `/api/postings/${id}/actions/${action}`),
   task: (id) => request('GET', `/api/tasks/${id}`),
+  tasks: () => request('GET', '/api/tasks'),
+  taskLog: (id, from = 0) => request('GET', `/api/tasks/${id}/log?from=${from}`),
   pipeline: () => request('GET', '/api/pipeline'),
   runPipeline: () => request('POST', '/api/pipeline/run'),
   inbox: () => request('GET', '/api/inbox'),

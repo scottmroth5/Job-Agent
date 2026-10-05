@@ -135,3 +135,28 @@ test('review from the web page: reassign, validation, and reminders closed', asy
   await app.close();
   store.close();
 });
+
+test('task output: the pipeline keeps every line; in-server actions capture their run logs; tasks are listed', async () => {
+  const { app, store, release } = await setup({ pipelineLines: ['[pipeline] Step 1/5: discover', 'LinkedIn: 3 found in 2 requests', '[discover] ok: 0 calls'] });
+  release();
+  const { taskId } = (await app.inject({ method: 'POST', url: '/api/pipeline/run' })).json();
+  await app.tasks.wait(taskId);
+  const log = (await app.inject({ method: 'GET', url: `/api/tasks/${taskId}/log` })).json();
+  assert.deepEqual(log.lines.map((l) => l.text), ['Starting', '[pipeline] Step 1/5: discover', 'LinkedIn: 3 found in 2 requests', '[discover] ok: 0 calls']);
+  assert.equal(log.next, 4);
+  assert.deepEqual((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}/log?from=3` })).json().lines.map((l) => l.text), ['[discover] ok: 0 calls']);
+  assert.equal((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}` })).json().log, undefined, 'polling a task does not send its output');
+
+  const inbox = (await app.inject({ method: 'POST', url: '/api/inbox/check' })).json();
+  await app.tasks.wait(inbox.taskId);
+  const inboxLog = (await app.inject({ method: 'GET', url: `/api/tasks/${inbox.taskId}/log` })).json().lines.map((l) => l.text);
+  assert.ok(inboxLog.some((t) => /^\[inbox\] 0 messages to check/.test(t)), inboxLog.join(' | '));
+  assert.ok(inboxLog.some((t) => /^\[inbox\] ok: /.test(t)), 'the run summary line is captured');
+
+  const list = (await app.inject({ method: 'GET', url: '/api/tasks' })).json();
+  assert.deepEqual(list.map((t) => t.kind), ['inbox', 'pipeline']);
+  assert.equal(list[1].lines, 4);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/tasks/999/log' })).statusCode, 404);
+  await app.close();
+  store.close();
+});

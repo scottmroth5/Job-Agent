@@ -34,13 +34,14 @@ const services = {
   drive: createDriveClient(auth),
   createBrowser: () => createBrowser(),
   // The Run pipeline button: the same script as npm run pipeline, in its own process.
-  runPipeline: ({ onLine }) =>
+  runPipeline: ({ onLine, onError = () => {} }) =>
     new Promise((resolve) => {
       const child = spawn(process.execPath, ['--env-file-if-exists=.env', 'scripts/pipeline.js'], { cwd: ROOT, env: process.env, windowsHide: true });
       let lastError = null;
       createInterface({ input: child.stdout }).on('line', onLine);
       createInterface({ input: child.stderr }).on('line', (l) => {
         if (l.trim()) lastError = l.trim().slice(0, 300);
+        onError(l);
       });
       child.on('error', (err) => resolve({ code: 1, lastError: err.message }));
       child.on('close', (code) => resolve({ code: code ?? 1, lastError }));

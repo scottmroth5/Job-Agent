@@ -60,6 +60,8 @@ server/app.js holds every route with a JSON schema; keep /api/openapi.json the s
 The Run pipeline button (server/pipeline-routes.js) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.js) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.js, and closes reminders.
+Every task keeps its output (server/tasks.js: steps plus log lines; pass the task's logger to createTracer so run logs land there);
+the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
 while a pipeline step is running. AUTH_MODE=none binds to 127.0.0.1 only; exposing the server requires adding a login mode
 in server/auth.js first. web/dist is build output (gitignored).

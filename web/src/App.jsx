@@ -8,8 +8,14 @@ import StackingBar from './components/StackingBar.jsx';
 import AdminPage from './components/AdminPage.jsx';
 import InboxPage from './components/InboxPage.jsx';
 import PipelineButton from './components/PipelineButton.jsx';
+import ActivityPage from './components/ActivityPage.jsx';
 
-const viewFromHash = () => (window.location.hash.startsWith('#/admin') ? 'admin' : window.location.hash.startsWith('#/inbox') ? 'inbox' : 'jobs');
+const viewFromHash = () => {
+  const h = window.location.hash;
+  return h.startsWith('#/admin') ? 'admin' : h.startsWith('#/inbox') ? 'inbox' : h.startsWith('#/activity') ? 'activity' : 'jobs';
+};
+// #/activity/12 opens task 12's output.
+const activityIdFromHash = () => /^#\/activity\/(\w+)/.exec(window.location.hash)?.[1] ?? null;
 
 // 'active' (Needs action) is new jobs to evaluate and offers to decide; applied and interviewing are under 'progress'.
 const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', needsDescription: false, discoveredAfter: '', q: '', minScore: '' };
@@ -34,9 +40,13 @@ export default function App() {
   const [adding, setAdding] = useState(false);
   const [stack, setStack] = useState([]);
   const [view, setView] = useState(viewFromHash);
+  const [activityId, setActivityId] = useState(activityIdFromHash);
 
   useEffect(() => {
-    const onHash = () => setView(viewFromHash());
+    const onHash = () => {
+      setView(viewFromHash());
+      setActivityId(activityIdFromHash());
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -84,6 +94,7 @@ export default function App() {
           <a href="#/inbox" className={view === 'inbox' ? 'on' : ''}>
             Inbox{summary?.inboxNeedsReview ? <span className="count-badge" title="Emails to review">{summary.inboxNeedsReview}</span> : null}
           </a>
+          <a href="#/activity" className={view === 'activity' ? 'on' : ''}>Activity</a>
           <a href="#/admin" className={view === 'admin' ? 'on' : ''}>Admin</a>
         </nav>
         <PipelineButton onFinished={refresh} />
@@ -92,6 +103,8 @@ export default function App() {
 
       {view === 'admin' ? (
         <AdminPage />
+      ) : view === 'activity' ? (
+        <ActivityPage selectedId={activityId} />
       ) : view === 'inbox' ? (
         <InboxPage onOpenJob={setSelectedId} onChanged={refresh} />
       ) : (

@@ -9,9 +9,11 @@ export default function PipelineButton({ onFinished }) {
   const [state, setState] = useState(null);
   const [task, setTask] = useState(null);
   const [error, setError] = useState(null);
+  const [lastTaskId, setLastTaskId] = useState(null);
 
   const follow = useCallback(
     async (taskId) => {
+      setLastTaskId(taskId);
       try {
         const final = await followTask(taskId, setTask);
         if (final.status === 'failed') setError(final.error);
@@ -63,6 +65,11 @@ export default function PipelineButton({ onFinished }) {
       </button>
       <div className="muted small pipeline-status" aria-live="polite">
         {busy ? (step ?? (task ? 'Starting' : 'Started from the command line')) : last ? `Last run ${dateTime(last.finishedAt ?? last.startedAt)}, ${STATUS[last.status] ?? last.status}` : 'Not run yet'}
+        {lastTaskId && (
+          <a href={`#/activity/${lastTaskId}`} target="_blank" rel="noreferrer" className="output-link">
+            View output ↗
+          </a>
+        )}
         {error && <div className="error">{error}</div>}
       </div>
     </div>
