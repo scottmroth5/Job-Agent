@@ -54,7 +54,7 @@ npm run cleanup -- --dry-run      after a rule change: rekey duplicates, archive
                                   move pipeline jobs without a description back to Discovered. Its status changes are changed_by agent, which the eval ignores
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
 npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point)
-powershell -ExecutionPolicy Bypass -File scriptsegister-schedule.ps1   Windows task: scripts/scheduled-run.ps1 runs pipeline then inbox
+powershell -ExecutionPolicy Bypass -File scripts\register-schedule.ps1   Windows task: scripts/scheduled-run.ps1 runs pipeline then inbox
                                   (Mon/Thu 6:00 by default; -Time, -Days, -Remove); logs in data/logs
 npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)
 npm run web:dev                   Vite dev server with hot reload on :5179, forwarding /api to a running npm run ui
@@ -62,6 +62,11 @@ npm run add -- --url=...          add a job by hand (also --description-file, --
 npm run inbox:auth                one-time Gmail sign-in (gmail.readonly + gmail.modify); writes GMAIL_REFRESH_TOKEN and EMAIL_ENC_KEY to .env
 npm run inbox                     process new Gmail since the stored historyId (inbox:backfill -- --days=N --dry-run for history)
 npm run inbox:review              resolve needs_review emails; each choice becomes a case in data/evals/inbox/review-cases.jsonl
+npm run backup                    encrypted backup (database, data/config/job-search.json, data/attachments) to the "Job Agent
+                                  Backups" Drive folder; -- --to <folder> writes it to a folder; -- --check-passphrase checks .env
+npm run backup:restore -- --file latest --out data/restore/job-agent.db   decrypt into NEW files (never over the live database)
+powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nightly 11pm backup task ("Job Agent nightly backup";
+                                  scripts\backup-nightly.cmd, logs to data\logs\backup.log)
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
 
 ## UI and API
@@ -118,6 +123,11 @@ This repo is public. Never commit personal data: names, locations, employers, em
 Personal values live only in .env, data/config/job-search.json, and data/job-agent.db. Prompts use placeholders such as {{candidateName}}.
 Never print knowledge doc content or prompt/response text in logs or script output; counts and metadata only.
 (The exceptions are npm run inbox:review and the local Inbox screen, which show the user an email's subject and summary.)
+The only copy of personal data that leaves the machine is the encrypted backup (tools/backup, the same design as
+Health-Review): an online SQLite snapshot that must pass its integrity check, packed with the settings and attachments,
+gzipped, then AES-256-GCM with a scrypt key from JOB_BACKUP_PASSPHRASE (.env only, never uploaded or logged) and a fresh
+salt and nonce per file, verified by decrypting before upload with the drive.file scope. Plaintext snapshots live only in
+the OS temp folder. Never back up .env or data/google. Kept: 7 nightly, 3 weekly, 1 monthly.
 Never send email to anyone but the user; the run report to the user's own address is the only email the app sends.
 Run npm install from PowerShell, never WSL: node_modules holds Windows builds of native modules (better-sqlite3).
 Output JSON schemas must avoid minimum/maximum/minLength/maxLength and complex array constraints (the API rejects them); use enum or validate in code.

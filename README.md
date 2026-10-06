@@ -64,7 +64,7 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `npm run inbox` | Check Gmail for new job email once |
 | `npm run inbox:backfill` | Process the last 180 days of job email (`-- --days=30 --dry-run` to preview the count and cost) |
 | `npm run inbox:review` | Confirm, reassign, or dismiss emails the inbox was unsure about (also on the web page's Inbox screen) |
-| `scriptsegister-schedule.ps1` | Run the pipeline and inbox automatically (default Monday and Thursday at 6:00 AM; `-Time`, `-Days`, `-Remove`). Logs in `datalogs` |
+| `scripts\register-schedule.ps1` | Run the pipeline and inbox automatically (default Monday and Thursday at 6:00 AM; `-Time`, `-Days`, `-Remove`). Logs in `data\logs` |
 | `npm run evals` | Run the inbox eval (`-- --all` adds the scoring eval; both cost money) |
 | `npm run eval:score` | Compare scoring models on jobs you applied to vs. passed on (costs money) |
 | `npm test` | Run the tests (no network or keys needed) |
@@ -113,9 +113,24 @@ app from another device or the cloud. It uses the Google Cloud project you alrea
 
 The scheduled run and the `npm run` commands don't go through the web page, so they are unaffected.
 
+## Encrypted backups (recommended)
+
+A nightly backup encrypts the job database, your search settings, and attached files, and uploads them to a **Job Agent Backups** folder in your Google Drive. It keeps the last 7 nights, then one a week for 3 more weeks, then one more month. The file is encrypted on your computer with a passphrase only you know, so Google cannot read it. Without the passphrase, nobody can restore it, including you.
+
+1. Add a passphrase of at least 16 characters to `.env` as `JOB_BACKUP_PASSPHRASE=...`, and save a copy in your password manager.
+2. Check it: `npm run backup -- --check-passphrase`.
+3. Back up now: `npm run backup` (it uses the Google sign-in from `npm run google:login`; no new permission is needed).
+4. Back up every night at 11 PM: `powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1` (`-At 9:00pm` for another time). Results go to `data\logs\backup.log`.
+
+To write the backup to a folder instead (a USB drive, for example): `npm run backup -- --to E:\JobBackups`.
+
+To restore, `npm run backup:restore -- --file latest --out data/restore/job-agent.db` downloads the newest backup and writes **new** files: the database, plus your settings and attachments in `data/restore/restored`. It never touches the live database. The script prints the steps to swap the restored files in.
+
+Your `.env` and Google sign-in files are not backed up, because they hold the passphrase and sign-in tokens. Keep your API keys and passphrase in your password manager.
+
 ## Privacy
 
-Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
+Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The only copy that leaves your machine is the optional encrypted backup to your own Google Drive. The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
 
 Job sites have their own terms of use. The agent reads public listings at a polite pace, backs off when rate limited, and does not try to get around sites that block automated access; for those, paste the description through the web page instead.
 
