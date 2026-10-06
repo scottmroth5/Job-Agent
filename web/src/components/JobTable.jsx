@@ -74,6 +74,7 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
                     <>
                       <span className="role">{j.title}</span>
                       {j.track !== lk.roles.track.default && <span className="badge frac">{lk.label('track', j.track).toLowerCase()}</span>}
+                      {j.attachmentCount > 0 && <span className="badge" title={`${j.attachmentCount} attachment${j.attachmentCount === 1 ? '' : 's'}`}>📎 {j.attachmentCount}</span>}
                       {j.hasCopies && <span className="badge warn" title="Another saved job has the same company and title; open it to compare">possible duplicate</span>}
                       {j.awaitingDescription ? (
                         <span className="badge warn" title="Scored from the title alone; paste the description, then Re-score">needs description</span>

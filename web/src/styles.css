@@ -281,3 +281,12 @@ button.icon { padding: 4px 8px; }
 .funnel-row.rejected { border-top: 1px dashed var(--border); padding-top: 8px; }
 .funnel-row.rejected .funnel-fill { background: var(--low); }
 .topbar { flex-wrap: wrap; }
+
+/* Attachments in the detail panel. */
+ul.attachments { list-style: none; padding: 0; margin: 0 0 8px; }
+ul.attachments li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+ul.attachments li a:first-child { word-break: break-all; }
+ul.attachments .row { margin-left: auto; display: inline-flex; gap: 10px; align-items: baseline; }
+.drop-zone { display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 8px; border: 1px dashed var(--border); border-radius: var(--radius); padding: 14px; color: var(--muted); font-size: 13px; cursor: pointer; text-align: center; }
+.drop-zone input[type='file'] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.drop-zone.over { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }

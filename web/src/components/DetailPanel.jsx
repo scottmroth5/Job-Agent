@@ -3,6 +3,7 @@ import { api, followTask } from '../api.js';
 import { useLookups } from '../lookups.jsx';
 import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM } from '../format.js';
 import TaskProgress from './TaskProgress.jsx';
+import Attachments from './Attachments.jsx';
 
 
 function List({ items }) {
@@ -259,6 +260,8 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Your notes about this job" />
               {notes !== (job.notes ?? '') && <button onClick={() => save({ notes })}>Save notes</button>}
             </section>
+
+            <Attachments jobId={job.id} items={job.attachments ?? []} onChanged={async () => { await load(); onChanged(); }} />
 
             {job.needsDescription && (
               <section className="warn-box">

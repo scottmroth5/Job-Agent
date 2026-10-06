@@ -30,7 +30,7 @@ Job specific logic stays in this repo; never add it to agent-core.
 /web                React (Vite) UI: job table with track/stage/status filters, detail panel, add-job dialog, fractional stacking bar
 /evals              eval runner and rubric code; real eval cases live in data/evals; evals/inbox/cases.json is synthetic. Results: EVALS.md
 /test               node:test suites with synthetic fixtures only
-/data               gitignored: job-agent.db, config/, google/ (OAuth client and token), v1-export/
+/data               gitignored: job-agent.db, config/, google/ (OAuth client and token), attachments/, v1-export/
 /legacy contains the v1 scripts for reference only. Do not modify or import from them.
 
 ## Commands
@@ -76,6 +76,8 @@ Every task keeps its output (server/tasks.js: steps plus log lines; pass the tas
 the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
 while a pipeline step is running. web/dist is build output (gitignored).
+Attachments (server/attachments.js): the raw file is the POST body with its name in X-Filename, stored as
+data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images open inline, and downloads carry nosniff and a sandbox CSP.
 
 ## Prompts
 agents/prompts.js is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active

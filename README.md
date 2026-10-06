@@ -10,7 +10,7 @@ An AI job-search assistant that finds postings, scores them against your backgro
 - **Writes materials** for jobs scoring 7 or higher: resume tweaks, and a cover letter saved as a Google Doc, with rule checks that flag letters for review.
 - **Emails a summary** of each run, including its cost.
 - **Reads your job email** (optional): matches confirmations, rejections, interview requests, assessments, and offers in Gmail to your applications, moves their status forward, records funnel dates, and labels the threads `Job/<Company>`. It never sends, deletes, or archives mail.
-- **Web page** (local only) to filter jobs, open application links and letters, track status, add jobs you find yourself, run the pipeline, review job email on an Inbox screen, edit the prompts Claude follows, and add or archive your own statuses, stages, and tracks (Admin > Lists).
+- **Web page** (local only) to filter jobs, open application links and letters, track status, attach files to a job (a tailored resume, an offer letter; 25 MB each), add jobs you find yourself, run the pipeline, review job email on an Inbox screen, edit the prompts Claude follows, and add or archive your own statuses, stages, and tracks (Admin > Lists).
 
 ## How it works
 
@@ -115,7 +115,7 @@ The scheduled run and the `npm run` commands don't go through the web page, so t
 
 ## Privacy
 
-Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), and API keys (`.env`). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
+Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
 
 Job sites have their own terms of use. The agent reads public listings at a polite pace, backs off when rate limited, and does not try to get around sites that block automated access; for those, paste the description through the web page instead.
 

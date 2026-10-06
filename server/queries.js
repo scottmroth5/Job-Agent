@@ -4,6 +4,7 @@ import { checkLocation } from '../tools/location.js';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.js';
 import { lookups, sqlList } from '../agents/lookups.js';
+import { listAttachments } from './attachments.js';
 
 /** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
 const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
@@ -36,7 +37,8 @@ const base = (db, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source
     -- flagged only while this job still waits on the user (new) and another live copy exists
     p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.company_title_key = p.company_title_key AND q.id != p.id AND ${liveCopySql(db)}) AS shares_key,
     ll.doc_url AS letter_url, ll.doc_name AS letter_name, ll.flags_json AS letter_flags, ll.id AS letter_id,
-    EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks') AS has_tweaks
+    EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks') AS has_tweaks,
+    (SELECT COUNT(*) FROM attachments f WHERE f.posting_id = p.id) AS attachment_count
   FROM postings p
   LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE}
   LEFT JOIN artifacts ll ON ll.id = ${LATEST_LETTER}`;
@@ -83,6 +85,7 @@ function toRow(r, config) {
     annualized: annualize(pay, hours, config.fractional?.weeksPerYear ?? 48),
     letter: r.letter_id ? { url: r.letter_url, name: r.letter_name, flags: parse(r.letter_flags) ?? [] } : null,
     hasTweaks: Boolean(r.has_tweaks),
+    attachmentCount: r.attachment_count ?? 0,
     needsDescription: !r.jd_text && !r.fetched_text,
     awaitingDescription: Boolean(r.awaiting_description),
     // Placeholder companies ("See posting") share keys without being the same job, so they need a real identity.
@@ -140,6 +143,7 @@ export function getPosting(db, id, config = {}) {
   return {
     ...toRow(r, config),
     copies: findCopies(db, r),
+    attachments: listAttachments(db, r.id),
     analysis: parse(r.analysis_json),
     notes: r.notes,
     text: r.jd_text ?? r.fetched_text ?? null,

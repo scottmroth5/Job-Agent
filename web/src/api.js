@@ -18,6 +18,25 @@ async function request(method, path, body) {
 
 export const api = {
   me: () => request('GET', '/api/me'),
+  /** Sends the file as the raw body with its name and type in headers (no multipart). */
+  uploadAttachment: async (jobId, file) => {
+    const res = await fetch(`/api/postings/${jobId}/attachments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name), 'X-File-Type': file.type || 'application/octet-stream' },
+      body: file,
+    });
+    if (res.status === 401) {
+      window.location.href = `/auth/login?next=${encodeURIComponent(`/${window.location.hash}`)}`;
+      throw new Error('Sign in required.');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(res.status === 413 ? `${file.name} is over the 25 MB limit.` : data.error ?? `Upload failed (${res.status})`);
+    return data;
+  },
+  deleteAttachment: async (id) => {
+    const res = await fetch(`/api/attachments/${id}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error(`Delete failed (${res.status})`);
+  },
   signOut: () => fetch('/auth/logout', { method: 'POST' }),
   summary: () => request('GET', '/api/summary'),
   list: (filters) => {
