@@ -135,9 +135,15 @@ export function createGmail({ auth, api = gmailApi({ version: 'v1', auth }), wai
       return new Set(threads);
     },
 
+    /** The message, or null when it no longer exists (deleted, or a draft that was discarded, since it was listed). */
     async getMessage(id) {
-      const { data } = await call(() => users.messages.get({ userId: 'me', id, format: 'full' }));
-      return normalizeMessage(data);
+      try {
+        const { data } = await call(() => users.messages.get({ userId: 'me', id, format: 'full' }));
+        return normalizeMessage(data);
+      } catch (err) {
+        if (err?.code === 404 || err?.status === 404 || err?.response?.status === 404) return null;
+        throw err;
+      }
     },
 
     /** The label's ID, creating it when missing. */

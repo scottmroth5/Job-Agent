@@ -18,6 +18,7 @@ const SUBJECT_PATTERNS = [
   /^your application (?:to|with|at) (?<company>.+)$/i,
   /^(?<company>.+?)\s*[-|–:]\s*(?:application (?:received|confirmation|update)|thank you for (?:applying|your application))$/i,
   /^(?:an )?update on your (?:application (?:to|with|at) (?<company>.+)|(?<title>.+?) application)$/i,
+  /^(?:an )?update on the (?<title>.+?) (?:position|role|opening|application) (?:at|with) (?<company>.+)$/i,
   /^(?:important )?information about your (?:application|candidacy) (?:to|with|at) (?<company>.+)$/i,
 ];
 

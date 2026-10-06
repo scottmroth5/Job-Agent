@@ -65,9 +65,11 @@ test('quota errors are retried after a wait; other errors and exhausted retries 
 
   failures = 10;
   await assert.rejects(g.getMessage('m1'), /Quota exceeded/);
-  api.users.messages.get = async () => Promise.reject(Object.assign(new Error('Not found'), { code: 404 }));
+  api.users.messages.get = async () => Promise.reject(Object.assign(new Error('Requested entity was not found.'), { code: 404 }));
   waited.length = 0;
-  await assert.rejects(g.getMessage('m1'), /Not found/);
+  assert.equal(await g.getMessage('m1'), null, 'a message that no longer exists is null, not an error');
+  api.users.messages.get = async () => Promise.reject(Object.assign(new Error('Server error'), { code: 500 }));
+  await assert.rejects(g.getMessage('m1'), /Server error/);
   assert.deepEqual(waited, [], 'no retry for other errors');
 });
 

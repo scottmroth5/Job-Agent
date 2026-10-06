@@ -160,3 +160,37 @@ test('the injection detector flags instructions aimed at an AI and leaves normal
   assert.ok(!looksLikeInjection({ subject: 'Interview invitation', body: 'Please ignore the earlier calendar invite; the new time is 2 PM. Following our instructions, bring ID.' }));
   assert.ok(!looksLikeInjection({ body: 'We are pleased to offer you the role. Please review the attached offer letter.' }));
 });
+
+test('a message that vanished since it was listed is skipped, and the run still finishes and saves its place', async () => {
+  const { store, db, gmail, claude } = scenario();
+  const real = gmail.getMessage;
+  gmail.getMessage = async (id) => (id === 'm2' ? null : real(id));
+  const s = await runInbox({ store, gmail, claude, cfg, key });
+  assert.equal(s.gone, 1);
+  assert.equal(s.failures.length, 0);
+  assert.equal(getSetting(db, CURSOR_KEY), '500');
+  store.close();
+});
+
+test('Greenhouse rejections sent from greenhouse-mail.io are read, set Rejected, and archive the job', async () => {
+  const store = openJobStore(':memory:');
+  const { db } = store;
+  const vp = app(db, 'Example Co', 'Vice President Technology Operations', 'applied', 'archived');
+  const em = app(db, 'Sample Health', 'Senior Engineering Manager, Clinical', 'applied');
+  const messages = [
+    message({ id: 'g1', from: 'no-reply@us.greenhouse-mail.io', subject: 'Update on the Vice President, Technology Operations Position at Example Co', body: 'We have decided to move forward with another candidate.' }),
+    message({ id: 'g2', from: 'no-reply@us.greenhouse-mail.io', subject: 'Important information about your application to Sample Health', body: 'Unfortunately, we have decided not to proceed with your candidacy.' }),
+  ];
+  const { api } = fakeGmailApi({ messages, me: 'me@example.net' });
+  const { claude } = fakeClaude({
+    'Update on the Vice President, Technology Operations Position at Example Co': reply({ type: 'rejection', confidence: 0.9 }),
+    'Important information about your application to Sample Health': reply({ type: 'rejection', confidence: 0.9 }),
+  });
+  const s = await runInbox({ store, gmail: createGmail({ api }), claude, cfg, key });
+  assert.equal(s.considered, 2, 'both pass the pre-filter');
+  const row = (id) => db.prepare('SELECT status, stage FROM postings WHERE id = ?').get(id);
+  assert.deepEqual(row(vp), { status: 'rejected', stage: 'archived' });
+  assert.deepEqual(row(em), { status: 'rejected', stage: 'archived' });
+  assert.deepEqual(db.prepare("SELECT match_rule FROM emails ORDER BY gmail_message_id").pluck().all(), ['ats_subject', 'ats_subject']);
+  store.close();
+});

@@ -69,6 +69,11 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
       continue;
     }
     const msg = await gmail.getMessage(id);
+    // Gone since it was listed (deleted, or a discarded draft): nothing to read, and not a reason to stop the run.
+    if (!msg) {
+      summary.gone = (summary.gone ?? 0) + 1;
+      continue;
+    }
     // My own messages and spam/trash/chats are never processed.
     if (msg.senderEmail === me || msg.labelIds.some((l) => l === 'SENT' || IGNORED_LABELS.includes(l))) {
       summary.skipped += 1;

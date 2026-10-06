@@ -58,7 +58,7 @@ export function parseDeadline(text) {
  * Returns { statusChange, review, notices[], reminderId }.
  */
 export function applyActions(db, { email, postingId, c, decidedBy, promptVersion, now = new Date() }) {
-  const posting = db.prepare('SELECT id, company, title, status, applied_on FROM postings WHERE id = ?').get(postingId);
+  const posting = db.prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ?').get(postingId);
   if (!posting) return { statusChange: null, review: 'the application no longer exists', notices: [], reminderId: null };
   const nowIso = now.toISOString();
   const base = { postingId, emailId: email.id, gmailMessageId: email.gmailMessageId, decidedBy, promptVersion };
@@ -80,7 +80,8 @@ export function applyActions(db, { email, postingId, c, decidedBy, promptVersion
     const { from, to } = plan.change;
     db.transaction(() => {
       const appliedOn = lk.groupOf('status', to) === 'waiting' && !posting.applied_on ? dateOnly(email.sentAt) : posting.applied_on;
-      db.prepare('UPDATE postings SET status = ?, applied_on = ?, updated_at = ? WHERE id = ?').run(to, appliedOn, nowIso, postingId);
+      const stage = lk.isClosed(to) ? lk.role('stage', 'archive') : posting.stage;
+      db.prepare('UPDATE postings SET status = ?, applied_on = ?, stage = ?, updated_at = ? WHERE id = ?').run(to, appliedOn, stage, nowIso, postingId);
       db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'agent', ?)").run(postingId, from, to, nowIso);
       logDecision(db, { ...base, action: 'status_change', fromStatus: from, toStatus: to, detail: { emailDate: email.sentAt, type: c.type } }, now);
     })();
