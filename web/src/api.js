@@ -1,7 +1,18 @@
 // Thin client for the Job Agent API (see /api/openapi.json).
 
+const OFFLINE = 'Cannot reach the Job Agent server. Start it with npm run ui, then try again.';
+
+/** fetch, with the browser's bare "Failed to fetch" turned into a message that says what to do. */
+async function send(path, init) {
+  try {
+    return await fetch(path, init);
+  } catch {
+    throw new Error(OFFLINE);
+  }
+}
+
 async function request(method, path, body) {
-  const res = await fetch(path, {
+  const res = await send(path, {
     method,
     headers: body ? { 'Content-Type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -20,7 +31,7 @@ export const api = {
   me: () => request('GET', '/api/me'),
   /** Sends the file as the raw body with its name and type in headers (no multipart). */
   uploadAttachment: async (jobId, file) => {
-    const res = await fetch(`/api/postings/${jobId}/attachments`, {
+    const res = await send(`/api/postings/${jobId}/attachments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name), 'X-File-Type': file.type || 'application/octet-stream' },
       body: file,
@@ -34,7 +45,7 @@ export const api = {
     return data;
   },
   deleteAttachment: async (id) => {
-    const res = await fetch(`/api/attachments/${id}`, { method: 'DELETE' });
+    const res = await send(`/api/attachments/${id}`, { method: 'DELETE' });
     if (!res.ok && res.status !== 204) throw new Error(`Delete failed (${res.status})`);
   },
   signOut: () => fetch('/auth/logout', { method: 'POST' }),
