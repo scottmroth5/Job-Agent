@@ -54,6 +54,7 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 |---|---|
 | `npm run pipeline` | Discover, score, write materials, archive, and email a report |
 | `npm run ui` | Start the web page at http://localhost:5178 |
+| `scripts\register-server-task.ps1` | Start the web page automatically when you sign in to Windows, hidden, restarting if it crashes. Then `npm run server:restart` after code changes and `npm run server:stop` to stop it. Logs in `data\logs\server.log` |
 | `npm run discover` | Only find and store new jobs (`-- --dry-run` to preview) |
 | `npm run score` | Only score new jobs and promote 7+ (`-- --dry-run` for a cost estimate) |
 | `npm run hunt` | Only write resume tweaks and cover letters for promoted jobs |

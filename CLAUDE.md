@@ -57,6 +57,9 @@ npm run pipeline                  discover, score, hunt, archive, then one repor
 powershell -ExecutionPolicy Bypass -File scripts\register-schedule.ps1   Windows task: scripts/scheduled-run.ps1 runs pipeline then inbox
                                   (Mon/Thu 6:00 by default; -Time, -Days, -Remove); logs in data/logs
 npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)
+powershell -ExecutionPolicy Bypass -File scripts\register-server-task.ps1   "Job Agent server" task: builds and starts the server at
+                                  sign-in, hidden (scripts\server-start.cmd, logs to data\logs\server.log). While it runs, npm run ui
+                                  hits EADDRINUSE: use npm run server:restart after code changes, npm run server:stop to stop it
 npm run web:dev                   Vite dev server with hot reload on :5179, forwarding /api to a running npm run ui
 npm run add -- --url=...          add a job by hand (also --description-file, --title, --company, --track, --rate, --hours, --write-materials)
 npm run inbox:auth                one-time Gmail sign-in (gmail.readonly + gmail.modify); writes GMAIL_REFRESH_TOKEN and EMAIL_ENC_KEY to .env

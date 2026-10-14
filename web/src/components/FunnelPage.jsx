@@ -25,7 +25,7 @@ function Stat({ label, value, note }) {
 // Funnel: how applications turn into responses, interviews, and offers, and which job sites work.
 export default function FunnelPage({ onOpenJob }) {
   const lk = useLookups();
-  const [range, setRange] = useState('90');
+  const [range, setRange] = useState('30');
   const [track, setTrack] = useState('all');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);

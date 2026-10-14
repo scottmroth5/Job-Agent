@@ -27,6 +27,8 @@
     "web:build": "vite build",
     "web:dev": "vite",
     "ui": "vite build && node --env-file=.env server/index.js",
+    "server:stop": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-server.ps1",
+    "server:restart": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/stop-server.ps1 -Restart",
     "add": "node --env-file=.env scripts/add.js",
     "auth:setup": "node scripts/auth-setup.js",
     "inbox:auth": "node --env-file-if-exists=.env scripts/inbox-auth.js",
