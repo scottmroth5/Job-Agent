@@ -1,0 +1,61 @@
+# The cloud server: the app's container behind Caddy, which gets and renews the HTTPS certificate on its own.
+# Lives on the server at /opt/job-agent/compose.yml with deploy.sh, Caddyfile, and .env beside it.
+# deploy.sh sets IMAGE_TAG; by hand: IMAGE_TAG=<tag> docker compose up -d
+#
+# Only Caddy is reachable from outside (ports 80 and 443). The app listens on the private Docker network.
+
+name: job-agent
+
+services:
+  app:
+    image: ${IMAGE:-ghcr.io/scottmroth5/job-agent}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    # Every setting and secret, from the server's own .env (never in GitHub or the image).
+    env_file: .env
+    environment:
+      # Fixed for the container, whatever .env says: data on the mounted disk, reachable by Caddy, one proxy hop.
+      DATA_DIR: /data
+      HOST: 0.0.0.0
+      PORT: "5178"
+      TRUST_PROXY: "1"
+    volumes:
+      # The database, config, Google tokens, attachments, and logs. Survives every deploy.
+      - ./data:/data
+    expose:
+      - "5178"
+    # Reaps Chromium's child processes; a bigger shared memory area keeps Chromium from crashing on large pages.
+    init: true
+    shm_size: 512mb
+    stop_grace_period: 30s
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      # The public address, e.g. jobs.example.com. Set in the server's .env.
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: local
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  # Caddy's certificates and keys. Kept so a restart never asks Let's Encrypt for a new certificate.
+  caddy_data:
+  caddy_config:

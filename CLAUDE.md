@@ -130,6 +130,18 @@ which is UTC (10 PM Eastern is already tomorrow). Timestamps stay ISO UTC.
 Personal data paths come from tools/paths.js dataPath(...) (DATA_DIR, default the repo's data folder); never repoPath('data', ...).
 CI (.github/workflows/ci.yml) runs npm audit (production, high), npm test in America/Los_Angeles and UTC, the web build, and the personal-data scan.
 
+## Cloud
+Dockerfile: node:22-bookworm-slim, production node_modules and Playwright Chromium in early layers (cached until
+package-lock.json changes), code and web/dist last; runs as node (uid 1000) with DATA_DIR=/data, HOST=0.0.0.0.
+.dockerignore keeps .env, data/, and credentials out of the image; keep it in step with .gitignore.
+deploy/ is copied to the server's /opt/job-agent: compose.yml (app plus Caddy, only Caddy publishes ports; it fixes
+DATA_DIR, HOST, PORT, TRUST_PROXY=1), Caddyfile (no access log), deploy.sh (deploy <tag> | rollback | up | status;
+the GitHub deploy key's authorized_keys line forces it, so it validates SSH_ORIGINAL_COMMAND), cloud.env.example.
+.github/workflows/deploy.yml runs after CI succeeds on a push to main: build, publish ghcr.io/<owner>/job-agent
+(sha-<7> and latest), then deploy over SSH when the DEPLOY_ENABLED variable is true. GitHub holds only the deploy
+host, user, key, and known_hosts; app secrets live in the server's .env. A new required setting needs a line in
+deploy/cloud.env.example.
+
 ## Spending and internet safety
 Make Claude clients only with tools/claude.js createJobClaude(db): it applies the monthly cap (agents/budget.js), which refuses
 calls once this calendar month's run_calls cost reaches the cap (Admin > Spending, else MONTHLY_CLAUDE_BUDGET_USD, else $50).
