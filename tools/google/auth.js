@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { OAuth2Client } from 'google-auth-library';
-import { repoPath } from '../paths.js';
+import { dataPath } from '../paths.js';
 
 /** Read the knowledge doc, manage only files this app creates, send email. Nothing broader. */
 export const SCOPES = [
@@ -12,8 +12,8 @@ export const SCOPES = [
 /** The inbox's own sign-in (npm run inbox:auth): read mail, and modify only to add labels. */
 export const INBOX_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.modify'];
 
-export const CLIENT_SECRET_PATH = repoPath('data', 'google', 'client_secret.json');
-export const TOKEN_PATH = repoPath('data', 'google', 'token.json');
+export const CLIENT_SECRET_PATH = dataPath('google', 'client_secret.json');
+export const TOKEN_PATH = dataPath('google', 'token.json');
 
 /**
  * OAuth client ID and secret: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET when set (cloud),

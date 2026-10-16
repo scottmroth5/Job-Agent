@@ -5,9 +5,9 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
-import { repoPath } from '../tools/paths.js';
+import { dataPath } from '../tools/paths.js';
 
-export const ATTACHMENTS_DIR = repoPath('data', 'attachments');
+export const ATTACHMENTS_DIR = dataPath('attachments');
 export const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 const INLINE_TYPES = /^(application\/pdf|image\/(png|jpeg|gif|webp))$/;
 const anyObject = { type: 'object', additionalProperties: true };

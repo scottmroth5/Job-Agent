@@ -7,6 +7,7 @@ import { lookups, sqlList } from '../agents/lookups.js';
 import { listAttachments } from './attachments.js';
 import { listPreps } from '../agents/hunt/prep.js';
 import { addNote, listNotes } from '../agents/notes.js';
+import { localDay } from '../tools/dates.js';
 
 /** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
 const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
@@ -187,7 +188,7 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
   }
   if (patch.status !== undefined && patch.status !== current.status) {
     set.status = patch.status;
-    if (lk.groupOf('status', patch.status) === 'waiting' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = nowIso.slice(0, 10);
+    if (lk.groupOf('status', patch.status) === 'waiting' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = localDay(now);
   }
   if (patch.appliedOn !== undefined) set.applied_on = patch.appliedOn || null;
   const newNotes = [];
@@ -202,7 +203,7 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
   if (patch.duplicateOf !== undefined) {
     const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ?').get(patch.duplicateOf);
     if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
-    const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${nowIso.slice(0, 10)}.`;
+    const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${localDay(now)}.`;
     set.stage = lk.role('stage', 'archive');
     if (current.status !== 'duplicate') set.status = 'duplicate';
     newNotes.push({ body: note, source: 'agent' });

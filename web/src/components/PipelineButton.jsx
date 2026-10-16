@@ -64,7 +64,8 @@ export default function PipelineButton({ onFinished }) {
         {busy ? 'Pipeline running…' : 'Run pipeline'}
       </button>
       <div className="muted small pipeline-status" aria-live="polite">
-        {busy ? (step ?? (task ? 'Starting' : 'Started from the command line')) : last ? `Last run ${dateTime(last.finishedAt ?? last.startedAt)}, ${STATUS[last.status] ?? last.status}` : 'Not run yet'}
+        {busy ? (step ?? (task ? 'Starting' : 'Started from the command line or schedule')) : last ? `Last run ${dateTime(last.finishedAt ?? last.startedAt)}, ${STATUS[last.status] ?? last.status}` : 'Not run yet'}
+        {!busy && state?.nextScheduled && <span title={`Scheduled: ${state.schedule}`}> · next {dateTime(state.nextScheduled)}</span>}
         {lastTaskId && (
           <a href={`#/activity/${lastTaskId}`} target="_blank" rel="noreferrer" className="output-link">
             View output ↗

@@ -4,6 +4,7 @@
 // Timing uses only dated events (your changes, the agent's, and emails); v1-imported history has the import
 // date, not the real one, so it counts a milestone but not its timing.
 import { lookups } from '../agents/lookups.js';
+import { dayOf, localDay, localDaysAgo } from '../tools/dates.js';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 
 export const NO_REPLY_DAYS = 21;
@@ -13,7 +14,8 @@ export const WEEKS = 12;
 const RESPONSE_EMAILS = ['follow_up', 'interview_request', 'assessment', 'rejection', 'offer'];
 const LINKED = "('auto', 'confirmed', 'reassigned')";
 const DAY = 24 * 3600 * 1000;
-const day = (iso) => (iso ? String(iso).slice(0, 10) : null);
+// Calendar days in the app time zone: stored dates pass through, event timestamps are converted.
+const day = dayOf;
 const earliest = (dates) => dates.filter(Boolean).sort()[0] ?? null;
 const daysBetween = (a, b) => Math.max(0, Math.round((Date.parse(day(b)) - Date.parse(day(a))) / DAY));
 const median = (xs) => {
@@ -94,7 +96,7 @@ export function applications(db, { now = new Date() } = {}) {
  * @param {{ days?: number | null, track?: string | null, now?: Date }} opts  days: applied within the last N days (null: all)
  */
 export function funnel(db, { days = null, track = null, now = new Date() } = {}) {
-  const since = days ? new Date(now.getTime() - days * DAY).toISOString().slice(0, 10) : null;
+  const since = days ? localDaysAgo(now, days) : null;
   const inWindow = (a) => (!since || a.appliedOn >= since) && (!track || a.track === track);
   const apps = applications(db, { now }).filter(inWindow);
 
@@ -132,7 +134,7 @@ export function funnel(db, { days = null, track = null, now = new Date() } = {})
   }
 
   const weeks = [];
-  const thisWeek = weekStart(now.toISOString());
+  const thisWeek = weekStart(localDay(now));
   for (let i = WEEKS - 1; i >= 0; i -= 1) {
     const w = new Date(`${thisWeek}T00:00:00Z`);
     w.setUTCDate(w.getUTCDate() - i * 7);

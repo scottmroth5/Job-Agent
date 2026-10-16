@@ -5,9 +5,9 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { CONFIG_PATH, validateConfig } from '../tools/config.js';
-import { repoPath } from '../tools/paths.js';
+import { dataPath } from '../tools/paths.js';
 
-const EXPORT_DIR = repoPath('data', 'v1-export', 'prompts');
+const EXPORT_DIR = dataPath('v1-export', 'prompts');
 
 const list = (s) =>
   String(s ?? '')

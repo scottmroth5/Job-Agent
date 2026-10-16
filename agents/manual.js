@@ -14,6 +14,7 @@ import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/scor
 import { generateForPostings } from './hunt/generate.js';
 import { lookups } from './lookups.js';
 import { adoptNotesText } from './notes.js';
+import { localDay } from '../tools/dates.js';
 
 export const MANUAL_SOURCE = 'manual';
 export { isRealCompany };
@@ -171,7 +172,7 @@ export async function addPosting(input, ctx) {
         ct: storedKey(item),
         location: item.location ?? null,
         workplace: item.workplace ?? null,
-        today: nowIso.slice(0, 10),
+        today: localDay(),
         notes: input.notes?.trim() || null,
         jd_text: pasted,
         fetched_text: pasted ? null : item.description ?? null,

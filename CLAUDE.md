@@ -88,6 +88,10 @@ Every task keeps its output (server/tasks.js: steps plus log lines; pass the tas
 the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
 while a pipeline step is running. web/dist is build output (gitignored).
+The in-app scheduler (server/scheduler.js) runs SCHEDULE_PIPELINE (then the inbox), SCHEDULE_INBOX, and SCHEDULE_BACKUP from .env
+while the server runs, through the same task starters as the buttons (pipeline-routes start, inbox-routes startCheck); it
+catches up a run missed in the last 12 hours. GET /api/schedule lists the jobs. It replaces the Windows tasks in the cloud;
+never enable both. Child scripts run through services.runScript.
 Attachments (server/attachments.js): the raw file is the POST body with its name in X-Filename, stored as
 data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images open inline, and downloads carry nosniff and a sandbox CSP.
 
@@ -119,6 +123,12 @@ Never kept (tools/listings.js): list-of-jobs pages and search.excludedSites link
 Without posting text a score is capped at 5 (analysis.uncappedScore keeps the original) and the job is never promoted; the UI flags 7+ ones.
 Sonnet 5.5 and Opus 5.5 always think: keep effort low and maxTokens generous for scoring (MODEL_SETTINGS).
 Scripts that need secrets load .env through node --env-file.
+
+## Portability (Windows now, a Linux server later)
+Calendar days come from tools/dates.js localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
+which is UTC (10 PM Eastern is already tomorrow). Timestamps stay ISO UTC.
+Personal data paths come from tools/paths.js dataPath(...) (DATA_DIR, default the repo's data folder); never repoPath('data', ...).
+CI (.github/workflows/ci.yml) runs npm test in America/New_York and UTC, plus the web build and the personal-data scan.
 
 ## Inbox
 Pre-filter first: only threads the user started, known contacts, known company domains, and config/inbox.json atsDomains;

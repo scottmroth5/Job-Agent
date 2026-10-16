@@ -1,7 +1,7 @@
 // One-time import of the v1 Google Sheets exports into the Job-Agent database.
 // Pure logic over parsed CSV rows; scripts/import-v1.js handles files and output.
 import { normalizeUrl, companyTitleKey } from '../tools/urls.js';
-import { parseSheetDate, parsePostedDate } from '../tools/dates.js';
+import { parseSheetDate, parsePostedDate, localDay } from '../tools/dates.js';
 import { adoptNotesText } from '../agents/notes.js';
 
 const STATUS_MAP = {
@@ -60,7 +60,7 @@ const clean = (v) => {
  * @param {number|null} [options.runId]  runs.id for provenance
  * @returns {object} counts for the summary
  */
-export function importV1(store, { discovered = [], hunt = [] }, { now = new Date().toISOString(), today = now.slice(0, 10), runId = null } = {}) {
+export function importV1(store, { discovered = [], hunt = [] }, { now = new Date().toISOString(), today = localDay(new Date(now)), runId = null } = {}) {
   const { db } = store;
   if (db.prepare('SELECT COUNT(*) FROM postings').pluck().get() > 0) {
     throw new Error('The database already has postings; the v1 import only runs into an empty database (use --reset).');

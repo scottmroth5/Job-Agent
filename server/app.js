@@ -12,6 +12,8 @@ import { funnel } from './funnel.js';
 import { registerAttachmentRoutes } from './attachments.js';
 import { registerPrepRoutes } from './prep-routes.js';
 import { registerNoteRoutes } from './notes-routes.js';
+import { createScheduler } from './scheduler.js';
+import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { registerAdminRoutes } from './admin.js';
@@ -276,8 +278,51 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });
   registerPrepRoutes(app, { store, config, services, startTask });
   registerNoteRoutes(app, { db });
-  if (services.runPipeline) registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline });
-  if (services.inbox) registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox });
+  let scheduler = null;
+  const scheduled = (name) => scheduler?.status().find((j) => j.name === name) ?? null;
+  const pipeline = services.runPipeline ? registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline, schedule: () => scheduled('pipeline') }) : null;
+  const inboxChecks = services.inbox ? registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox }) : null;
+
+  // The encrypted backup as a task (scheduled), the same script as npm run backup, in its own process.
+  const startBackup = () =>
+    tasks.start('backup', { by: 'schedule' }, async (step, { logger }) => {
+      step('Backing up');
+      const { code, lastError } = await services.runScript({ script: 'scripts/backup.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
+      if (code !== 0) throw new Error(lastError ? `The backup failed: ${lastError}` : `The backup failed with exit code ${code}.`);
+      step('Backup done');
+    });
+
+  // The in-app scheduler (server/scheduler.js): each job starts the same task as its button, and waits for it.
+  if (services.schedules?.length) {
+    const HOURS = 3600 * 1000;
+    const finish = async (taskId, hours) => {
+      const t = await tasks.wait(taskId, hours * HOURS);
+      if (t?.status === 'failed') throw new Error(t.error ?? 'failed');
+    };
+    const runners = {
+      pipeline: pipeline && (async () => {
+        await finish(pipeline.start({ by: 'schedule' }), 4);
+        // Then the inbox, as the Windows scheduled run did; a pipeline failure above skips it.
+        if (inboxChecks && services.inbox.ready()) await finish(inboxChecks.startCheck({ by: 'schedule' }), 1);
+      }),
+      inbox: inboxChecks && (() => finish(inboxChecks.startCheck({ by: 'schedule' }), 1)),
+      backup: services.runScript && (() => finish(startBackup(), 1)),
+    };
+    const lastRanAt = (name) => () => db.prepare('SELECT started_at FROM runs WHERE name = ? ORDER BY id DESC LIMIT 1').pluck().get(name) ?? null;
+    scheduler = createScheduler({
+      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: runners[j.name], lastRanAt: lastRanAt(j.name) })),
+      log: services.log ?? console,
+    });
+    app.addHook('onReady', async () => {
+      scheduler.start();
+    });
+    app.addHook('onClose', async () => scheduler.stop());
+  }
+
+  app.get('/api/schedule', { schema: { summary: 'The scheduled jobs, their schedules, and when each runs next (empty when none are set)', response: { 200: anyObject } } }, async () => ({
+    timeZone: timeZone(),
+    jobs: scheduler?.status() ?? [],
+  }));
 
   app.get('/api/tasks', { schema: { summary: 'Recent background tasks, newest first (without output)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
     tasks.list(),

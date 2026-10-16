@@ -1,8 +1,8 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { repoPath } from './paths.js';
+import { dataPath } from './paths.js';
 
 /** Default location of the personal config. Gitignored; see config/job-search.example.json for the shape. */
-export const CONFIG_PATH = repoPath('data', 'config', 'job-search.json');
+export const CONFIG_PATH = dataPath('config', 'job-search.json');
 
 /**
  * Loads and validates the personal job-search config.

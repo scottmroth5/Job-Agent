@@ -3,7 +3,7 @@
 //   npm run eval:inbox -- [--model=claude-haiku-4-5] [--max-usd=0.25] [--verbose]
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createClaude, createTracer } from '@scottmroth5/agent-core';
-import { repoPath } from '../tools/paths.js';
+import { repoPath, dataPath } from '../tools/paths.js';
 import { openJobStore } from '../db/index.js';
 import { exitWhenDone } from '../tools/exit.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';
@@ -31,7 +31,7 @@ async function main() {
     const results = await runInboxEval({ cases, applications, claude: createClaude(), cfg, model, trace: run, log: argv.includes('--verbose') ? (m) => console.log(`  ${m}`) : () => {} });
     const m = inboxMetrics(results);
     const totals = run.finish('ok', { ...m, model, promptVersion });
-    const dir = repoPath('data', 'evals', 'inbox');
+    const dir = dataPath('evals', 'inbox');
     mkdirSync(dir, { recursive: true });
     writeFileSync(`${dir}/results-${new Date().toISOString().slice(0, 10)}-${model}.json`, JSON.stringify({ model, promptVersion, metrics: m, results }, null, 2));
 

@@ -9,14 +9,14 @@ import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
 import { getGoogleAuth } from '../tools/google/auth.js';
 import { readDoc } from '../tools/google/docs.js';
-import { repoPath } from '../tools/paths.js';
+import { dataPath } from '../tools/paths.js';
 import { openJobStore } from '../db/index.js';
 import { exitWhenDone } from '../tools/exit.js';
 import { MODEL_SETTINGS, MIN_KNOWLEDGE_CHARS, PROMOTE_AT } from '../agents/discovery/score.js';
 import { buildCases } from '../evals/score/build-cases.js';
 import { runEval, estimateEval } from '../evals/score/run.js';
 
-const DIR = repoPath('data', 'evals', 'score');
+const DIR = dataPath('evals', 'score');
 const CASES = `${DIR}/cases.jsonl`;
 
 const get = (argv, name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];

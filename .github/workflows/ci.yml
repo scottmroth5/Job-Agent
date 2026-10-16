@@ -1,0 +1,35 @@
+# Tests on every push and pull request. No secrets and no real data: the tests use synthetic fixtures only, and
+# the personal-data scan skips itself without the gitignored config (it runs for real in the pre-commit hook).
+# The suite runs twice, in Eastern time and in UTC, so a calendar-day bug that only shows on a UTC server fails here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Tests (${{ matrix.tz }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        tz: [America/New_York, UTC]
+    env:
+      TZ: ${{ matrix.tz }}
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run web:build
+      - run: npm run check:personal -- --all

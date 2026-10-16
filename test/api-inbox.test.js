@@ -56,7 +56,7 @@ test('progress lines come from the pipeline output', () => {
 
 test('Run pipeline: progress, the last run time, and no second run while one is going', async () => {
   const { app, store, release } = await setup({ pipelineLines: ['[pipeline] Step 1/5: discover', 'LinkedIn: 3 found', '[pipeline] Step 5/5: report', 'Sent "Job Agent" (x).'] });
-  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/pipeline' })).json(), { running: false, last: null, lastFinished: null, taskId: null });
+  assert.deepEqual((await app.inject({ method: 'GET', url: '/api/pipeline' })).json(), { running: false, last: null, lastFinished: null, taskId: null, nextScheduled: null, schedule: null });
   const { taskId } = (await app.inject({ method: 'POST', url: '/api/pipeline/run' })).json();
   await new Promise((r) => setTimeout(r, 20));
   assert.equal((await app.inject({ method: 'GET', url: '/api/pipeline' })).json().taskId, taskId);

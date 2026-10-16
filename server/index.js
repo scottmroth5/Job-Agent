@@ -15,6 +15,8 @@ import { createDriveClient } from '../tools/google/drive.js';
 import { repoPath, ROOT } from '../tools/paths.js';
 import { openJobStore } from '../db/index.js';
 import { buildApp } from './app.js';
+import { schedulesFromEnv } from './scheduler.js';
+import { timeZone } from '../tools/dates.js';
 import { assertSafeBinding, authSettings } from './auth.js';
 
 const host = process.env.HOST ?? '127.0.0.1';
@@ -34,10 +36,11 @@ const services = {
   http: createHttp(),
   drive: createDriveClient(auth),
   createBrowser: () => createBrowser(),
-  // The Run pipeline button: the same script as npm run pipeline, in its own process.
-  runPipeline: ({ onLine, onError = () => {} }) =>
+  // The Run pipeline button and the scheduler: the same scripts as npm run pipeline and npm run backup, each in its
+  // own process so a long run never blocks the server.
+  runScript: ({ script, onLine, onError = () => {} }) =>
     new Promise((resolve) => {
-      const child = spawn(process.execPath, ['--env-file-if-exists=.env', 'scripts/pipeline.js'], { cwd: ROOT, env: process.env, windowsHide: true });
+      const child = spawn(process.execPath, ['--env-file-if-exists=.env', script], { cwd: ROOT, env: process.env, windowsHide: true });
       let lastError = null;
       createInterface({ input: child.stdout }).on('line', onLine);
       createInterface({ input: child.stderr }).on('line', (l) => {
@@ -47,6 +50,8 @@ const services = {
       child.on('error', (err) => resolve({ code: 1, lastError: err.message }));
       child.on('close', (code) => resolve({ code: code ?? 1, lastError }));
     }),
+  runPipeline: (opts) => services.runScript({ ...opts, script: 'scripts/pipeline.js' }),
+  schedules: schedulesFromEnv(process.env),
   inbox: {
     ready: () => Boolean(process.env.GMAIL_REFRESH_TOKEN && process.env.EMAIL_ENC_KEY),
     gmail: (opts = {}) => createGmail({ auth: getInboxAuth(), ...opts }),
@@ -67,6 +72,12 @@ console.log(
   authMode === 'google'
     ? `Job Hunt UI: ${authConfig.publicUrl}  (Google sign-in on; ${authConfig.allowed.length} allowed account${authConfig.allowed.length === 1 ? '' : 's'})`
     : `Job Hunt UI: http://localhost:${port}  (API contract: http://localhost:${port}/api/openapi.json)`,
+);
+console.log(`Time zone: ${timeZone()}${process.env.TZ ? '' : ' (the computer\'s; set TZ in .env to fix it, e.g. TZ=America/New_York)'}`);
+console.log(
+  services.schedules.length
+    ? `Scheduled: ${services.schedules.map((j) => `${j.name} ${j.schedule.spec}`).join('; ')}`
+    : 'Scheduled: nothing (set SCHEDULE_PIPELINE, SCHEDULE_INBOX, or SCHEDULE_BACKUP in .env to run jobs from the server)',
 );
 
 const shutdown = async () => {

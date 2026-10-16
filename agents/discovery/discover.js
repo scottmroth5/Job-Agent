@@ -2,6 +2,7 @@
 // within the run, fetch full text for new postings, check location, and store them.
 // Scoring is a separate step (Phase 2c).
 import { normalizeUrl } from '../../tools/urls.js';
+import { localDay, localDaysAgo } from '../../tools/dates.js';
 import { identityKey, storedKey } from '../identity.js';
 import { keywordMatcher } from '../../tools/titles.js';
 import { checkLocation } from '../../tools/location.js';
@@ -35,11 +36,6 @@ const rank = (source) => {
 const UNKNOWN_COMPANY = '(unknown)';
 const knownCompany = (c) => c && c !== UNKNOWN_COMPANY && c.toLowerCase() !== 'see posting';
 
-function isoDaysAgo(now, days) {
-  const d = new Date(now);
-  d.setUTCDate(d.getUTCDate() - days);
-  return d.toISOString().slice(0, 10);
-}
 
 /** Runs async tasks with a concurrency limit and a pause after each task. */
 async function mapLimit(items, limit, pauseMs, sleep, fn) {
@@ -98,8 +94,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
     log = () => {},
   } = options;
   const { db } = store;
-  const today = now.toISOString().slice(0, 10);
-  const since = isoDaysAgo(now, maxAgeDays);
+  const today = localDay(now);
+  const since = localDaysAgo(now, maxAgeDays);
   const fullTimeRelevant = keywordMatcher(config.search.relevantTitleKeywords);
   const fractionalRelevant = keywordMatcher(config.search.fractionalTitleKeywords ?? []);
   // Fractional items also pass on the fractional keywords (e.g. CISO), which full-time searches do not target.

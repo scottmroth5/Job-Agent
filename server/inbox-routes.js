@@ -57,7 +57,11 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
   app.post(
     '/api/inbox/check',
     { schema: { summary: 'Check Gmail for new job email now', response: { 202: { type: 'object', properties: { taskId: { type: 'string' } } } } } },
-    async (req, reply) => {
+    async (req, reply) => reply.code(202).send({ taskId: startCheck() }),
+  );
+
+  /** Starts an inbox check as a task (the Inbox screen and the scheduler). */
+  function startCheck({ by = 'button' } = {}) {
       if (!inbox.ready()) throw Object.assign(new Error('Gmail is not signed in. Run "npm run inbox:auth" first.'), { statusCode: 400 });
       for (const name of ['inbox', 'inbox-backfill', 'pipeline']) {
         try {
@@ -66,7 +70,7 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
           throw Object.assign(new Error(`${err.message} Try again when it finishes.`), { statusCode: 409 });
         }
       }
-      checkTaskId = tasks.start('inbox', {}, async (step, { logger }) => {
+      checkTaskId = tasks.start('inbox', { by }, async (step, { logger }) => {
         const gmail = inbox.gmail({ onWait: (ms) => logger.warn(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
         // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
         const run = createTracer({ store, logger }).startRun('inbox', { model: inbox.cfg.model });
@@ -82,9 +86,8 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
           throw err;
         }
       });
-      return reply.code(202).send({ taskId: checkTaskId });
-    },
-  );
+      return checkTaskId;
+  }
 
   app.post(
     '/api/inbox/emails/:id/review',
@@ -132,5 +135,7 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
       return { id: req.params.id, status: req.body.status };
     },
   );
+
+  return { startCheck };
 }
 

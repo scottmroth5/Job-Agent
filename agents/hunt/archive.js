@@ -12,6 +12,7 @@ import { parseResultTitle } from '../discovery/sources/serper.js';
 import { identityKey, isRealCompany } from '../identity.js';
 import { lookups, sqlList } from '../lookups.js';
 import { addNote } from '../notes.js';
+import { localDay, localDaysAgo } from '../../tools/dates.js';
 
 export const ARCHIVE_AFTER_DAYS = 30;
 
@@ -20,9 +21,7 @@ export function findArchivable(db, { now = new Date(), days = ARCHIVE_AFTER_DAYS
   const lk = lookups(db);
   const closed = lk.closed();
   const keep = lk.neverAutoArchived();
-  const cutoff = new Date(now);
-  cutoff.setDate(cutoff.getDate() - days);
-  const cutoffIso = cutoff.toISOString().slice(0, 10);
+  const cutoffIso = localDaysAgo(now, days);
   return db
     .prepare(`SELECT id, company, title, status, discovered_on FROM postings WHERE stage IN ${sqlList(lk.ids('stage', 'active'))} ORDER BY id`)
     .all()
@@ -121,7 +120,7 @@ export function archiveListings(db, { config, now = new Date(), dryRun = false }
       for (const p of found) {
         const status = !evaluate.includes(p.status) ? p.status : /^duplicate of/.test(p.reason) ? 'duplicate' : 'passed';
         update.run({ id: p.id, stage, status, now: nowIso });
-        addNote(db, p.id, `Removed ${nowIso.slice(0, 10)}: ${p.reason}.`, { source: 'agent', now });
+        addNote(db, p.id, `Removed ${localDay(now)}: ${p.reason}.`, { source: 'agent', now });
         if (status !== p.status) history.run(p.id, p.status, status, nowIso);
       }
     })();

@@ -2,13 +2,13 @@
 // labeled case for the inbox eval (data/evals/inbox, gitignored, since it holds real email text).
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { repoPath } from '../../tools/paths.js';
+import { dataPath } from '../../tools/paths.js';
 import { applyActions, createOpportunity } from './actions.js';
 import { updateEmail, logDecision } from './store.js';
 import { encrypt } from './crypto.js';
 import { listOpenApplications } from './match.js';
 
-export const REVIEW_CASES_PATH = repoPath('data', 'evals', 'inbox', 'review-cases.jsonl');
+export const REVIEW_CASES_PATH = dataPath('evals', 'inbox', 'review-cases.jsonl');
 export const CHOICES = ['confirm', 'reassign', 'not_job', 'opportunity'];
 
 const parse = (s) => {

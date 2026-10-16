@@ -8,9 +8,9 @@ import { parse } from 'csv-parse/sync';
 import { createTracer } from '@scottmroth5/agent-core';
 import { openJobStore, DB_PATH } from '../db/index.js';
 import { importV1 } from '../db/import-v1.js';
-import { repoPath } from '../tools/paths.js';
+import { dataPath } from '../tools/paths.js';
 
-const SHEETS_DIR = repoPath('data', 'v1-export', 'sheets');
+const SHEETS_DIR = dataPath('v1-export', 'sheets');
 
 const readCsv = (path) =>
   parse(readFileSync(path), { columns: true, bom: true, skip_empty_lines: true, relax_column_count: true, trim: false });

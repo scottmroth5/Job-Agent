@@ -7,6 +7,7 @@ const MAX_LINES = 5000;
 
 export function createTaskRunner() {
   const tasks = new Map();
+  const finished = new Map(); // id -> promise that settles when the task ends
   let next = 1;
 
   /**
@@ -29,7 +30,7 @@ export function createTaskRunner() {
       task.steps.push({ at: new Date().toISOString(), message });
       if (log) line('step', message);
     };
-    Promise.resolve()
+    const done = Promise.resolve()
       .then(() => fn(step, { logger }))
       .then((result) => Object.assign(task, { status: 'done', result: result ?? null }))
       .catch((err) => {
@@ -39,7 +40,9 @@ export function createTaskRunner() {
       .finally(() => {
         task.finishedAt = new Date().toISOString();
         while (tasks.size > KEEP) tasks.delete(tasks.keys().next().value);
+        finished.delete(id);
       });
+    finished.set(id, done);
     return id;
   }
 
@@ -59,12 +62,19 @@ export function createTaskRunner() {
     },
     /** Recent tasks, newest first. */
     list: () => [...tasks.values()].reverse().map(brief),
-    /** Resolves when a task finishes (tests and scripts). */
+    /** Resolves with the task (done or failed) when it finishes (the scheduler, tests, and scripts). */
     async wait(id, timeoutMs = 10000) {
-      const t0 = Date.now();
-      while (tasks.get(String(id))?.status === 'running') {
-        if (Date.now() - t0 > timeoutMs) throw new Error(`Task ${id} did not finish in time`);
-        await new Promise((r) => setTimeout(r, 10));
+      const done = finished.get(String(id));
+      if (done) {
+        let timer;
+        const timeout = new Promise((_, reject) => {
+          timer = setTimeout(() => reject(new Error(`Task ${id} did not finish in time`)), timeoutMs);
+        });
+        try {
+          await Promise.race([done, timeout]);
+        } finally {
+          clearTimeout(timer);
+        }
       }
       return this.get(id);
     },

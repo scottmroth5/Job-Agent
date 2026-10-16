@@ -69,7 +69,21 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `scripts\register-schedule.ps1` | Run the pipeline and inbox automatically (default Monday and Thursday at 6:00 AM; `-Time`, `-Days`, `-Remove`). Logs in `data\logs` |
 | `npm run evals` | Run the inbox eval (`-- --all` adds the scoring eval; both cost money) |
 | `npm run eval:score` | Compare scoring models on jobs you applied to vs. passed on (costs money) |
-| `npm test` | Run the tests (no network or keys needed) |
+| `npm test` | Run the tests (no network or keys needed). GitHub runs them on every push, in Eastern time and in UTC |
+
+## Settings in .env
+
+Besides API keys and sign-in values, these settings change how the app runs. The same settings work on your computer and on a cloud server.
+
+| Setting | Example | What it does |
+|---|---|---|
+| `TZ` | `America/New_York` | Your time zone. Dates like "applied on" and "today" use it, and scheduled times are in it. Set it: a cloud server runs on UTC, where 10 PM Eastern is already tomorrow. |
+| `SCHEDULE_PIPELINE` | `Mon,Thu 06:00` | Run the pipeline from the server at these times, then check the inbox when Gmail is set up. |
+| `SCHEDULE_INBOX` | `daily 12:00` | An extra inbox check. |
+| `SCHEDULE_BACKUP` | `daily 23:00` | The encrypted backup. |
+| `DATA_DIR` | `/data` | Where the database, settings, Google sign-in, attachments, and logs live. Defaults to the repo's `data` folder. |
+
+Schedules are days (`daily`, `weekdays`, `weekends`, or names like `Mon,Thu`) and a 24-hour time. They run while the server runs; a run missed while the server was off or asleep runs when it comes back, if it was missed within the last 12 hours. The next pipeline run shows beside **Run pipeline**, and scheduled runs appear on the Activity tab. Use either these schedules or the Windows tasks (`scripts\register-schedule.ps1`, `scripts\register-backup-task.ps1`), not both, or jobs run twice.
 
 ## Gmail inbox setup (optional)
 

@@ -1,13 +1,13 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { openStore } from '@scottmroth5/agent-core';
-import { repoPath } from '../tools/paths.js';
+import { repoPath, dataPath } from '../tools/paths.js';
 import * as duplicateStatus from './migrations/008-duplicate-status.js';
 import * as lookups from './migrations/009-lookups.js';
 import * as postingNotes from './migrations/012-posting-notes.js';
 
 /** Default database file. Gitignored, like everything under data/. */
-export const DB_PATH = repoPath('data', 'job-agent.db');
+export const DB_PATH = dataPath('job-agent.db');
 
 const MIGRATIONS_DIR = repoPath('db', 'migrations');
 

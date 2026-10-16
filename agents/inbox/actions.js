@@ -4,6 +4,7 @@ import { storedKey } from '../identity.js';
 import { logDecision, linkThread, upsertContact, addReminder } from './store.js';
 import { lookups } from '../lookups.js';
 import { adoptNotesText } from '../notes.js';
+import { localDay } from '../../tools/dates.js';
 
 // The built-in statuses the inbox moves jobs to; ranks and closed statuses come from status groups (agents/lookups.js).
 const TARGET = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };
@@ -117,7 +118,7 @@ export function createOpportunity(db, { email, c, decidedBy, promptVersion, now 
     db
       .prepare(`INSERT INTO postings (company, title, company_title_key, source, discovered_on, stage, status, notes, created_at, updated_at)
         VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?)`)
-      .run(company, title, storedKey({ company, title }), nowIso.slice(0, 10), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso).lastInsertRowid,
+      .run(company, title, storedKey({ company, title }), localDay(now), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso).lastInsertRowid,
   );
   db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
   adoptNotesText(db, { postingId: id, source: 'agent', now });

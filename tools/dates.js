@@ -4,6 +4,29 @@
 const pad = (n) => String(n).padStart(2, '0');
 const iso = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 
+// "Today" for the user is a calendar day in the app's time zone: TZ in .env (for example America/New_York),
+// else the machine's zone. A server runs on UTC, so never take today from toISOString(): at 10 PM Eastern that
+// is already tomorrow. Timestamps stay ISO UTC; only calendar days use these.
+
+/** The app's time zone name. */
+export const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+/** The calendar day (YYYY-MM-DD) of a moment, in the app's time zone. */
+export function localDay(at = new Date()) {
+  const d = at instanceof Date ? at : new Date(at);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** The local calendar day N days before a moment. */
+export function localDaysAgo(at, days) {
+  const d = new Date(at);
+  d.setDate(d.getDate() - days);
+  return localDay(d);
+}
+
+/** A stored value as a local calendar day: a YYYY-MM-DD date passes through; an ISO timestamp is converted. */
+export const dayOf = (v) => (v == null || v === '' ? null : /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : localDay(new Date(v)));
+
 /** Parses "6/26/2026" (v1 sheet format) or "2026-06-26". Returns an ISO date or null. */
 export function parseSheetDate(raw) {
   const s = String(raw ?? '').trim();

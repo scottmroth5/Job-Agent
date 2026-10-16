@@ -11,7 +11,7 @@ import { checkPassphrase } from '../tools/backup/crypto.js';
 import { createBackupDrive } from '../tools/backup/drive.js';
 import { localDate, runBackup } from '../tools/backup/run.js';
 import { getGoogleAuth } from '../tools/google/auth.js';
-import { repoPath } from '../tools/paths.js';
+import { dataPath } from '../tools/paths.js';
 
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
@@ -32,7 +32,7 @@ async function main() {
     const r = await runBackup({
       db: store.db,
       passphrase,
-      extras: [{ name: 'config/job-search.json', path: repoPath('data', 'config', 'job-search.json') }],
+      extras: [{ name: 'config/job-search.json', path: dataPath('config', 'job-search.json') }],
       folders: [{ name: 'attachments', dir: ATTACHMENTS_DIR }],
       drive: toDir ? null : createBackupDrive(getGoogleAuth()),
       toDir,

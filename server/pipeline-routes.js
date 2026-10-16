@@ -34,40 +34,45 @@ export function progressLine(line) {
  * @param {(opts: { onLine: (line: string) => void, onError: (line: string) => void }) => Promise<{ code: number, lastError: string | null }>} ctx.runPipeline
  *   onLine gets each stdout line, onError each stderr line
  */
-export function registerPipelineRoutes(app, { db, tasks, runPipeline }) {
+export function registerPipelineRoutes(app, { db, tasks, runPipeline, schedule = () => null }) {
   let taskId = null;
 
-  app.get('/api/pipeline', { schema: { summary: 'Last pipeline run and whether one is running', response: { 200: anyObject } } }, async () => {
+  /** Starts a pipeline run as a task (the button and the scheduler); throws 409 when one is already running. */
+  const start = ({ by = 'button' } = {}) => {
+    if (taskId && tasks.get(taskId)?.status === 'running') throw Object.assign(new Error('The pipeline is already running.'), { statusCode: 409 });
+    for (const name of LOCKS) {
+      try {
+        assertNoRunningRun(db, name);
+      } catch (err) {
+        throw Object.assign(new Error(`${err.message} Try again when it finishes.`), { statusCode: 409 });
+      }
+    }
+    taskId = tasks.start('pipeline', { by }, async (step, { logger }) => {
+      step(by === 'schedule' ? 'Starting (scheduled)' : 'Starting');
+      const { code, lastError } = await runPipeline({
+        onLine: (line) => {
+          logger.info(line);
+          const p = progressLine(line);
+          if (p) step(p, { log: false });
+        },
+        onError: (line) => logger.error(line),
+      });
+      if (code !== 0) throw new Error(lastError ? `The pipeline stopped: ${lastError}` : `The pipeline stopped with exit code ${code}.`);
+      return { ...pipelineState(db).lastFinished };
+    });
+    return taskId;
+  };
+
+  app.get('/api/pipeline', { schema: { summary: 'Last pipeline run, whether one is running, and the next scheduled run', response: { 200: anyObject } } }, async () => {
     const task = taskId ? tasks.get(taskId) : null;
-    return { ...pipelineState(db), taskId: task?.status === 'running' ? taskId : null };
+    return { ...pipelineState(db), taskId: task?.status === 'running' ? taskId : null, nextScheduled: schedule()?.next ?? null, schedule: schedule()?.schedule ?? null };
   });
 
   app.post(
     '/api/pipeline/run',
     { schema: { summary: 'Run the pipeline now (discover, score, write materials, archive, email the report)', response: { 202: { type: 'object', properties: { taskId: { type: 'string' } } } } } },
-    async (req, reply) => {
-      if (taskId && tasks.get(taskId)?.status === 'running') throw Object.assign(new Error('The pipeline is already running.'), { statusCode: 409 });
-      for (const name of LOCKS) {
-        try {
-          assertNoRunningRun(db, name);
-        } catch (err) {
-          throw Object.assign(new Error(`${err.message} Try again when it finishes.`), { statusCode: 409 });
-        }
-      }
-      taskId = tasks.start('pipeline', {}, async (step, { logger }) => {
-        step('Starting');
-        const { code, lastError } = await runPipeline({
-          onLine: (line) => {
-            logger.info(line);
-            const p = progressLine(line);
-            if (p) step(p, { log: false });
-          },
-          onError: (line) => logger.error(line),
-        });
-        if (code !== 0) throw new Error(lastError ? `The pipeline stopped: ${lastError}` : `The pipeline stopped with exit code ${code}.`);
-        return { ...pipelineState(db).lastFinished };
-      });
-      return reply.code(202).send({ taskId });
-    },
+    async (req, reply) => reply.code(202).send({ taskId: start() }),
   );
+
+  return { start };
 }
