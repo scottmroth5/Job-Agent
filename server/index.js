@@ -2,7 +2,7 @@
 // Local only (AUTH_MODE=none binds to 127.0.0.1). Google, Claude and the knowledge doc load on first use.
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { createClaude } from '@scottmroth5/agent-core';
+import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
 import { createHttp } from '../tools/http.js';
@@ -32,7 +32,7 @@ const auth = getGoogleAuth();
 // The knowledge doc is re-read at most every 10 minutes, so edits to it show up without a restart.
 let knowledgeCache = { text: null, at: 0 };
 const services = {
-  claude: createClaude(),
+  claude: createJobClaude(store.db),
   http: createHttp(),
   drive: createDriveClient(auth),
   createBrowser: () => createBrowser(),
@@ -66,14 +66,17 @@ const services = {
   },
 };
 
-const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode, auth: { settings: authConfig } });
+// TRUST_PROXY: set behind a reverse proxy so client addresses (for rate limits) come from X-Forwarded-For:
+// "true", a hop count ("1"), or the proxy's addresses ("127.0.0.1"). Unset: the direct connection's address.
+const trustProxy = !process.env.TRUST_PROXY ? false : process.env.TRUST_PROXY === 'true' ? true : /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY;
+const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode, auth: { settings: authConfig }, trustProxy });
 await app.listen({ host, port });
 console.log(
   authMode === 'google'
     ? `Job Hunt UI: ${authConfig.publicUrl}  (Google sign-in on; ${authConfig.allowed.length} allowed account${authConfig.allowed.length === 1 ? '' : 's'})`
     : `Job Hunt UI: http://localhost:${port}  (API contract: http://localhost:${port}/api/openapi.json)`,
 );
-console.log(`Time zone: ${timeZone()}${process.env.TZ ? '' : ' (the computer\'s; set TZ in .env to fix it, e.g. TZ=America/New_York)'}`);
+console.log(`Time zone: ${timeZone()}${process.env.TZ ? '' : ' (the computer\'s; set TZ in .env to fix it, e.g. TZ=America/Chicago)'}`);
 console.log(
   services.schedules.length
     ? `Scheduled: ${services.schedules.map((j) => `${j.name} ${j.schedule.spec}`).join('; ')}`

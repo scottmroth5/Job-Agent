@@ -28,6 +28,11 @@ test('catches a planted secret from .env values', () => {
   assert.equal(findPersonalHits('const key = "sk-test-0123456789abcdef";', terms).length, 1);
 });
 
+test('.env app options (schedules, budget, paths) are not private; everything else, including TZ, is', () => {
+  const env = 'SCHEDULE_PIPELINE=Mon,Thu 06:00\nSCHEDULE_BACKUP="daily 23:00"\nMONTHLY_CLAUDE_BUDGET_USD=75.00\nDATA_DIR=/mnt/volume\nTZ=Pacific/Example\nSESSION_SECRET=0123456789abcdef0123';
+  assert.deepEqual(envValues(env), ['Pacific/Example', '0123456789abcdef0123']);
+});
+
 test('personal-data locations are refused regardless of .gitignore', () => {
   for (const f of ['data/config/job-search.json', 'data/job-agent.db', '.env', '.env.local', 'server/.env']) assert.ok(isForbiddenPath(f), f);
   for (const f of ['db/index.js', 'tools/data.js', 'config/job-search.example.json', 'docs/env.md']) assert.ok(!isForbiddenPath(f), f);

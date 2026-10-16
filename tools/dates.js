@@ -4,8 +4,8 @@
 const pad = (n) => String(n).padStart(2, '0');
 const iso = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 
-// "Today" for the user is a calendar day in the app's time zone: TZ in .env (for example America/New_York),
-// else the machine's zone. A server runs on UTC, so never take today from toISOString(): at 10 PM Eastern that
+// "Today" for the user is a calendar day in the app's time zone: TZ in .env (for example America/Chicago),
+// else the machine's zone. A server runs on UTC, so never take today from toISOString(): in the evening in the Americas that
 // is already tomorrow. Timestamps stay ISO UTC; only calendar days use these.
 
 /** The app's time zone name. */

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import ListsAdmin from './ListsAdmin.jsx';
+import SpendingAdmin from './SpendingAdmin.jsx';
 
 function PromptList({ prompts, selected, onSelect }) {
   return (
@@ -193,8 +194,27 @@ function PromptEditor({ name, onSaved }) {
   );
 }
 
+const SECTIONS = [
+  ['prompts', 'Prompts'],
+  ['lists', 'Lists'],
+  ['spending', 'Spending'],
+];
+const sectionFromHash = () => {
+  const s = /^#\/admin\/(\w+)/.exec(window.location.hash)?.[1];
+  return SECTIONS.some(([k]) => k === s) ? s : 'prompts';
+};
+
 export default function AdminPage() {
-  const [section, setSection] = useState('prompts');
+  const [section, setSectionState] = useState(sectionFromHash);
+  const setSection = (s) => {
+    setSectionState(s);
+    window.history.replaceState(null, '', `#/admin/${s}`);
+  };
+  useEffect(() => {
+    const onHash = () => setSectionState(sectionFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
   const [prompts, setPrompts] = useState([]);
   const [selected, setSelected] = useState('score');
   const [error, setError] = useState(null);
@@ -206,10 +226,7 @@ export default function AdminPage() {
   return (
     <>
       <div className="segmented admin-sections" role="tablist" aria-label="Admin">
-        {[
-          ['prompts', 'Prompts'],
-          ['lists', 'Lists'],
-        ].map(([k, l]) => (
+        {SECTIONS.map(([k, l]) => (
           <button key={k} role="tab" aria-selected={section === k} className={section === k ? 'on' : ''} onClick={() => setSection(k)}>
             {l}
           </button>
@@ -217,6 +234,8 @@ export default function AdminPage() {
       </div>
       {section === 'lists' ? (
         <ListsAdmin />
+      ) : section === 'spending' ? (
+        <SpendingAdmin />
       ) : (
         <div className="admin">
           {error && <div className="error">{error}</div>}

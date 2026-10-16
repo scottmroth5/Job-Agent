@@ -336,3 +336,18 @@ ul.notes > li:last-child { border-bottom: none; }
 .note-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-bottom: 4px; }
 .note-meta .row { margin-left: auto; display: inline-flex; gap: 10px; }
 .note-editor { margin: 4px 0 10px; }
+
+/* Claude budget: the header link and Admin > Spending. */
+a.budget { color: inherit; text-decoration: none; border-bottom: 1px dotted var(--muted); }
+a.budget.warn { color: var(--mid); font-weight: 600; }
+a.budget.over { color: var(--low); font-weight: 600; }
+.spending { max-width: 640px; }
+.spending .meter .fill.ok { background: var(--good); }
+.spending .meter .fill.warn { background: var(--mid); }
+.spending .meter .fill.over { background: var(--low); }
+.budget-form { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; margin-top: 12px; }
+.spending table { width: 100%; }
+.spending th, .spending td { text-align: left; }
+.spending td:nth-child(n + 2), .spending th:nth-child(n + 2) { text-align: right; }
+.budget-form label { margin-bottom: 0; }
+.budget-form input { width: 140px; }

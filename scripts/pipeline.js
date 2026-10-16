@@ -3,7 +3,8 @@
 // This is what the scheduler (Phase 3) will call.
 //   npm run pipeline                 full run
 //   npm run pipeline -- --no-email   skip the email (prints its subject instead)
-import { createClaude, createTracer } from '@scottmroth5/agent-core';
+import { createTracer } from '@scottmroth5/agent-core';
+import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
 import { createHttp } from '../tools/http.js';
@@ -65,7 +66,7 @@ async function main() {
     } catch (err) {
       pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${err.message}`);
     }
-    const claude = createClaude();
+    const claude = createJobClaude(store.db);
     if (knowledge) {
       await step(tracer, 'score', (run) => scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run }), (s) =>
         s.aborted ? 'aborted' : s.failures.length ? 'partial' : 'ok',

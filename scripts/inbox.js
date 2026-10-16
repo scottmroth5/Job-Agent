@@ -3,7 +3,8 @@
 //   npm run inbox:backfill                           the last 180 days (config/inbox.json backfillDays)
 //   npm run inbox:backfill -- --days=30 --dry-run    count what would be classified and estimate the cost
 // Output is counts, notices, and job titles only; email content is never printed.
-import { createClaude, createTracer } from '@scottmroth5/agent-core';
+import { createTracer } from '@scottmroth5/agent-core';
+import { createJobClaude } from '../tools/claude.js';
 import { openJobStore } from '../db/index.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { exitWhenDone } from '../tools/exit.js';
@@ -32,7 +33,7 @@ async function main() {
     const run = dryRun ? null : createTracer({ store }).startRun(name, { model: cfg.model, promptVersion: getPrompt(store.db, 'inbox-classify').version });
     try {
       const log = (level, m) => (run ? run.log(level, m) : console.log(m));
-      const s = await runInbox({ store, gmail, claude: createClaude(), cfg, key, run, log, options: { mode, days, dryRun } });
+      const s = await runInbox({ store, gmail, claude: createJobClaude(store.db), cfg, key, run, log, options: { mode, days, dryRun } });
       const totals = run?.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length });
 
       console.log(`\n${dryRun ? 'DRY RUN: ' : ''}${s.fetched} messages checked (${s.source}); ${s.alreadySeen} already processed, ${s.skipped} not job related.`);

@@ -4,7 +4,8 @@
 //   npm run add -- --title="Fractional CTO" --company="Acme" --description-file=jd.txt --track=fractional
 //   options: --notes="..." --location="..." --rate="$150-$200/hr" --hours="10-15 hrs" --write-materials
 import { readFileSync } from 'node:fs';
-import { createClaude, createTracer } from '@scottmroth5/agent-core';
+import { createTracer } from '@scottmroth5/agent-core';
+import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
 import { createHttp } from '../tools/http.js';
@@ -48,7 +49,7 @@ async function main() {
       config,
       http: createHttp(),
       browser,
-      claude: createClaude(),
+      claude: createJobClaude(store.db),
       knowledge: await loadKnowledge({ auth }),
       drive: createDriveClient(auth),
       run,

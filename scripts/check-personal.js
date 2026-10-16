@@ -42,11 +42,17 @@ export function maskTerm(term) {
   return term.length <= 4 ? `${term[0]}***` : `${term.slice(0, 2)}***${term.slice(-1)} (${term.length} chars)`;
 }
 
-/** Values from a .env file. */
+// .env settings that are app options, not secrets or personal values, so their values (like "daily 23:00") may
+// appear in code and docs. Everything else in .env is treated as private, including TZ, which hints at location.
+export const NON_SECRET_ENV_KEYS = new Set(['SCHEDULE_PIPELINE', 'SCHEDULE_INBOX', 'SCHEDULE_BACKUP', 'DATA_DIR', 'MONTHLY_CLAUDE_BUDGET_USD', 'TRUST_PROXY', 'AUTH_MODE', 'HOST', 'PORT', 'PLAYWRIGHT_CHANNEL']);
+
+/** Values from a .env file, except the app options above. */
 export function envValues(text) {
   return text
     .split(/\r?\n/)
-    .map((l) => /^\s*[A-Za-z_][A-Za-z0-9_]*\s*=\s*(.*)$/.exec(l)?.[1]?.trim().replace(/^(['"])(.*)\1$/, '$2'))
+    .map((l) => /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(l))
+    .filter((m) => m && !NON_SECRET_ENV_KEYS.has(m[1]))
+    .map((m) => m[2].trim().replace(/^(['"])(.*)\1$/, '$2'))
     .filter((v) => v && v.length >= ENV_MIN_LENGTH);
 }
 

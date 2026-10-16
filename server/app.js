@@ -13,6 +13,7 @@ import { registerAttachmentRoutes } from './attachments.js';
 import { registerPrepRoutes } from './prep-routes.js';
 import { registerNoteRoutes } from './notes-routes.js';
 import { createScheduler } from './scheduler.js';
+import { errorReply, registerRateLimits, registerSecurityHeaders } from './security.js';
 import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
@@ -44,20 +45,28 @@ const taskAccepted = { 202: { type: 'object', properties: { taskId: { type: 'str
  * @param {string} [ctx.authMode]   'none' (default) or 'google'
  * @param {object} [ctx.auth]       { settings: authSettings(), exchange? } for google mode (tests pass a fake exchange)
  */
-export async function buildApp({ store, config, services, webDir, authMode = 'none', auth = {}, logger = false }) {
-  const app = Fastify({ logger });
+export async function buildApp({ store, config, services, webDir, authMode = 'none', auth = {}, logger = false, trustProxy = false }) {
+  // trustProxy: behind a reverse proxy (Caddy in the cloud), the client's address comes from X-Forwarded-For.
+  const app = Fastify({ logger, trustProxy });
   const { db } = store;
   const tasks = createTaskRunner();
+
+  // Every route, for the test that checks each one needs sign-in.
+  const routes = [];
+  app.addHook('onRoute', (r) => routes.push({ method: r.method, url: r.url }));
+  app.decorate('routeList', routes);
 
   await app.register(swagger, {
     openapi: { info: { title: 'Job Agent API', version: '1.0.0', description: 'Job Hunt UI backend' } },
   });
+  registerSecurityHeaders(app, { https: Boolean(auth.settings?.publicUrl?.startsWith('https://')) });
+  if (authMode !== 'none') registerRateLimits(app, { now: auth.now });
   registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now });
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
 
   app.setErrorHandler((err, req, reply) => {
-    const status = err.statusCode ?? (err.validation ? 400 : 500);
-    reply.code(status).send({ error: err.message });
+    const { status, body } = errorReply(err, req, services.log ?? console);
+    reply.code(status).send(body);
   });
 
   /** Runs a background action as a traced task; refuses while a pipeline step is running. */

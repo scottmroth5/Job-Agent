@@ -1,6 +1,6 @@
 # Tests on every push and pull request. No secrets and no real data: the tests use synthetic fixtures only, and
 # the personal-data scan skips itself without the gitignored config (it runs for real in the pre-commit hook).
-# The suite runs twice, in Eastern time and in UTC, so a calendar-day bug that only shows on a UTC server fails here.
+# The suite runs twice, in a US time zone and in UTC, so a calendar-day bug that only shows on a UTC server fails here.
 name: CI
 
 on:
@@ -19,7 +19,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        tz: [America/New_York, UTC]
+        tz: [America/Los_Angeles, UTC]
     env:
       TZ: ${{ matrix.tz }}
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
@@ -30,6 +30,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Known vulnerabilities in what the app ships (dev tools excluded); high or critical fails the build.
+      - run: npm audit --omit=dev --audit-level=high
       - run: npm test
       - run: npm run web:build
       - run: npm run check:personal -- --all

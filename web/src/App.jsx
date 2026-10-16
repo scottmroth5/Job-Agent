@@ -100,7 +100,15 @@ export default function App() {
           <h1>Job Hunt</h1>
           {summary && (
             <div className="muted small">
-              {summary.pipeline} in pipeline · ${summary.spend30Days.toFixed(2)} spent in the last 30 days
+              {summary.pipeline} in pipeline ·{' '}
+              {summary.budget ? (
+                <a href="#/admin/spending" className={`budget ${summary.budget.level}`} title="Claude spending this month against your monthly cap (Admin > Spending)">
+                  ${summary.budget.spentUsd.toFixed(2)} of ${summary.budget.limitUsd.toFixed(0)} Claude budget this month
+                  {summary.budget.level === 'over' ? ': used up, Claude calls are paused' : ''}
+                </a>
+              ) : (
+                `$${summary.spend30Days.toFixed(2)} spent in the last 30 days`
+              )}
             </div>
           )}
         </div>

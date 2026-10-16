@@ -2,7 +2,8 @@
 //   npm run score                         score every unscored v2 posting
 //   npm run score -- --dry-run            list what would be scored and an estimated cost
 //   npm run score -- --model=claude-sonnet-5-5 --limit=10 --ids=12,15 --all-unscored
-import { createClaude, createTracer } from '@scottmroth5/agent-core';
+import { createTracer } from '@scottmroth5/agent-core';
+import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
 import { assertNoRunningRun } from '../tools/runs.js';
@@ -56,7 +57,7 @@ async function main() {
       const summary = await scorePostings({
         store,
         config,
-        claude: createClaude(),
+        claude: createJobClaude(store.db),
         knowledge,
         model: args.model,
         run,

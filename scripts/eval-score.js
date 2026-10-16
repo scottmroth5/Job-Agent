@@ -3,7 +3,8 @@
 //   npm run eval:score -- --rebuild                   recreate the cases
 //   npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 [--max-usd=2] [--limit=N]
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { createClaude, createTracer } from '@scottmroth5/agent-core';
+import { createTracer } from '@scottmroth5/agent-core';
+import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
@@ -67,7 +68,7 @@ async function evaluate(argv) {
 
   const run = createTracer({ store }).startRun('eval-score', { models, cases: cases.length });
   try {
-    const result = await runEval({ cases, models, claude: createClaude(), config, knowledge, run, db: store.db, log: (m) => console.log(`  ${m}`) });
+    const result = await runEval({ cases, models, claude: createJobClaude(store.db), config, knowledge, run, db: store.db, log: (m) => console.log(`  ${m}`) });
     const totals = run.finish('ok', { models, cases: cases.length });
 
     const rows = [

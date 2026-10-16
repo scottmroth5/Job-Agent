@@ -8,6 +8,7 @@ import { listAttachments } from './attachments.js';
 import { listPreps } from '../agents/hunt/prep.js';
 import { addNote, listNotes } from '../agents/notes.js';
 import { localDay } from '../tools/dates.js';
+import { budgetStatus } from '../agents/budget.js';
 
 /** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
 const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
@@ -249,6 +250,7 @@ export function summary(db, config = {}, now = new Date()) {
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
     spend30Days: db.prepare('SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= ?').pluck().get(since),
+    budget: budgetStatus(db, { now }),
     inboxNeedsReview: db.prepare("SELECT COUNT(*) FROM emails WHERE review_status = 'needs_review'").pluck().get(),
     lastRun: db.prepare("SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') ORDER BY id DESC LIMIT 1").get() ?? null,
   };

@@ -128,7 +128,16 @@ Scripts that need secrets load .env through node --env-file.
 Calendar days come from tools/dates.js localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
 which is UTC (10 PM Eastern is already tomorrow). Timestamps stay ISO UTC.
 Personal data paths come from tools/paths.js dataPath(...) (DATA_DIR, default the repo's data folder); never repoPath('data', ...).
-CI (.github/workflows/ci.yml) runs npm test in America/New_York and UTC, plus the web build and the personal-data scan.
+CI (.github/workflows/ci.yml) runs npm audit (production, high), npm test in America/Los_Angeles and UTC, the web build, and the personal-data scan.
+
+## Spending and internet safety
+Make Claude clients only with tools/claude.js createJobClaude(db): it applies the monthly cap (agents/budget.js), which refuses
+calls once this calendar month's run_calls cost reaches the cap (Admin > Spending, else MONTHLY_CLAUDE_BUDGET_USD, else $50).
+Every Claude call must pass a trace so its cost lands in run_calls, or the cap cannot see it.
+server/security.js: security headers on every response (strict CSP: scripts only from 'self'; a route that sets its own CSP keeps
+it), rate limits in google mode (sign-in 30 per 15 minutes per address; 100 refused requests blocks the address for the window;
+TRUST_PROXY behind a proxy), and errorReply (5xx bodies are generic; details go to the server log, never request bodies).
+test/security.test.js walks app.routeList: a new route is covered automatically and must need sign-in unless it is /auth/* or /healthz.
 
 ## Inbox
 Pre-filter first: only threads the user started, known contacts, known company domains, and config/inbox.json atsDomains;

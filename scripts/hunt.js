@@ -3,7 +3,8 @@
 //   npm run hunt -- --dry-run            what would be written, with an estimated cost
 //   npm run hunt -- --ids=12,15          specific postings (scored first if needed); add --regenerate for new versions
 //   npm run hunt -- --no-docs            store letters without creating Google Docs
-import { createClaude, createTracer } from '@scottmroth5/agent-core';
+import { createTracer } from '@scottmroth5/agent-core';
+import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
 import { getGoogleAuth } from '../tools/google/auth.js';
@@ -40,7 +41,7 @@ async function main() {
     assertNoRunningRun(store.db, 'hunt');
     const auth = getGoogleAuth();
     const knowledge = await loadKnowledge({ auth });
-    const claude = createClaude();
+    const claude = createJobClaude(store.db);
     const tracer = createTracer({ store });
 
     if (args.ids?.length) {

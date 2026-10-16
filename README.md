@@ -69,7 +69,7 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `scripts\register-schedule.ps1` | Run the pipeline and inbox automatically (default Monday and Thursday at 6:00 AM; `-Time`, `-Days`, `-Remove`). Logs in `data\logs` |
 | `npm run evals` | Run the inbox eval (`-- --all` adds the scoring eval; both cost money) |
 | `npm run eval:score` | Compare scoring models on jobs you applied to vs. passed on (costs money) |
-| `npm test` | Run the tests (no network or keys needed). GitHub runs them on every push, in Eastern time and in UTC |
+| `npm test` | Run the tests (no network or keys needed). GitHub runs them on every push, in a US time zone and in UTC |
 
 ## Settings in .env
 
@@ -77,11 +77,15 @@ Besides API keys and sign-in values, these settings change how the app runs. The
 
 | Setting | Example | What it does |
 |---|---|---|
-| `TZ` | `America/New_York` | Your time zone. Dates like "applied on" and "today" use it, and scheduled times are in it. Set it: a cloud server runs on UTC, where 10 PM Eastern is already tomorrow. |
+| `TZ` | `America/Chicago` | Your time zone. Dates like "applied on" and "today" use it, and scheduled times are in it. Set it: a cloud server runs on UTC, where 10 PM Eastern is already tomorrow. |
 | `SCHEDULE_PIPELINE` | `Mon,Thu 06:00` | Run the pipeline from the server at these times, then check the inbox when Gmail is set up. |
 | `SCHEDULE_INBOX` | `daily 12:00` | An extra inbox check. |
 | `SCHEDULE_BACKUP` | `daily 23:00` | The encrypted backup. |
 | `DATA_DIR` | `/data` | Where the database, settings, Google sign-in, attachments, and logs live. Defaults to the repo's `data` folder. |
+| `MONTHLY_CLAUDE_BUDGET_USD` | `50` | The monthly Claude spending cap, until you set one on **Admin > Spending** (which wins). Default $50. When this calendar month's spend reaches it, Claude calls stop until the 1st; the rest of the app keeps working. The header shows spend against the cap. |
+| `TRUST_PROXY` | `127.0.0.1` | Only behind a reverse proxy (for example Caddy in the cloud): who to trust for the visitor's address, so rate limits count real visitors. `true`, a hop count, or the proxy's address. |
+
+Once the app is on the internet (Google sign-in on), it also sends security headers on every page (a strict content security policy, no framing, HTTPS-only when `PUBLIC_URL` is https), limits sign-in attempts to 30 per address per 15 minutes, turns away an address after 100 refused requests in 15 minutes, and answers server errors with a plain message (details go to the server log only). A test checks that every page and API route needs sign-in.
 
 Schedules are days (`daily`, `weekdays`, `weekends`, or names like `Mon,Thu`) and a 24-hour time. They run while the server runs; a run missed while the server was off or asleep runs when it comes back, if it was missed within the last 12 hours. The next pipeline run shows beside **Run pipeline**, and scheduled runs appear on the Activity tab. Use either these schedules or the Windows tasks (`scripts\register-schedule.ps1`, `scripts\register-backup-task.ps1`), not both, or jobs run twice.
 

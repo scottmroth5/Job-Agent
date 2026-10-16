@@ -4,6 +4,7 @@ import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersi
 import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.js';
 import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.js';
+import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.js';
 import { buildClassifyRequest } from '../agents/inbox/classify.js';
 import { listOpenApplications } from '../agents/inbox/match.js';
 
@@ -67,6 +68,25 @@ function samplePosting(db, name, postingId) {
 }
 
 export function registerAdminRoutes(app, { db, config }) {
+  const spending = () => ({ ...budgetStatus(db), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: spendByLabel(db) });
+
+  app.get('/api/admin/budget', { schema: { summary: "This month's Claude spend against the monthly cap, by feature", response: { 200: anyObject } } }, async () => spending());
+
+  app.put(
+    '/api/admin/budget',
+    {
+      schema: {
+        summary: 'Set the monthly Claude spending cap in US dollars',
+        body: { type: 'object', required: ['limitUsd'], additionalProperties: false, properties: { limitUsd: { type: 'number', exclusiveMinimum: 0, maximum: 100000 } } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req) => {
+      setBudgetLimit(db, req.body.limitUsd);
+      return spending();
+    },
+  );
+
   app.get('/api/admin/prompts', { schema: { summary: 'The editable prompts', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
     NAMES.map((name) => {
       const p = getPrompt(db, name);
