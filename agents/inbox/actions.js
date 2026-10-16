@@ -3,6 +3,7 @@
 import { storedKey } from '../identity.js';
 import { logDecision, linkThread, upsertContact, addReminder } from './store.js';
 import { lookups } from '../lookups.js';
+import { adoptNotesText } from '../notes.js';
 
 // The built-in statuses the inbox moves jobs to; ranks and closed statuses come from status groups (agents/lookups.js).
 const TARGET = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };
@@ -119,6 +120,7 @@ export function createOpportunity(db, { email, c, decidedBy, promptVersion, now 
       .run(company, title, storedKey({ company, title }), nowIso.slice(0, 10), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso).lastInsertRowid,
   );
   db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
+  adoptNotesText(db, { postingId: id, source: 'agent', now });
   linkThread(db, email.threadId, id, 'outreach', now);
   upsertContact(db, { email: c.extracted.contact_email ?? email.senderEmail, name: c.extracted.contact_name, company, postingId: id }, now);
   logDecision(db, { postingId: id, emailId: email.id, gmailMessageId: email.gmailMessageId, action: 'opportunity', decidedBy, promptVersion, detail: { company, title } }, now);

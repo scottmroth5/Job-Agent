@@ -11,6 +11,9 @@ Job specific logic stays in this repo; never add it to agent-core.
 /agents/hunt        cover letters, resume tailoring, application tracking, prep.js (meeting prep)
 /tools              job specific helpers: config, urls, dates, template, google (auth, docs, gmail), markdown.js (the one safe
                     Markdown renderer, shared by the web page and the prep Google Docs; job notes are Markdown)
+/agents/notes.js    a job's notes are separate entries (posting_notes: body, source user/agent/earlier, created_at, updated_at).
+                    Change notes only through this module: it keeps postings.notes as every entry's text, oldest first, for
+                    code that reads notes as one text. Code that inserts a job with notes text calls adoptNotesText
 /db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.js, applied in id order), openJobStore, v1 import.
                     Never rebuild postings in a migration: migrations run in a transaction with foreign keys on, so a drop cascades.
                     008 shows the safe way to loosen a CHECK constraint (writable_schema). Back up data/job-agent.db before schema changes

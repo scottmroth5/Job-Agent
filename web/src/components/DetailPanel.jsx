@@ -255,14 +255,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               )}
             </section>
 
-            <Notes
-              key={job.id}
-              value={job.notes ?? ''}
-              onSave={async (text) => {
-                setJob(await api.update(id, { notes: text }));
-                onChanged();
-              }}
-            />
+            <Notes key={job.id} jobId={job.id} entries={job.noteEntries ?? []} onChanged={async () => { await load(); onChanged(); }} />
 
             <MeetingPrep job={job} onChanged={async () => { await load(); onChanged(); }} />
 

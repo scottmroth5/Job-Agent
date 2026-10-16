@@ -11,7 +11,7 @@ An AI job-search assistant that finds postings, scores them against your backgro
 - **Preps you for meetings**: from a job's panel, **Prepare for a meeting** asks who the meeting is with (one person or a group) and anything else to know, researches the people and company online, and writes a prep document (who they are, company snapshot, your opening, fit table, stories, likely questions, gaps, questions to ask, and close). It appears in the app and as a Google Doc. Claude Opus 5.5, about $1 to $2 each.
 - **Emails a summary** of each run, including its cost.
 - **Reads your job email** (optional): matches confirmations, rejections, interview requests, assessments, and offers in Gmail to your applications, moves their status forward, records funnel dates, and labels the threads `Job/<Company>`. It never sends, deletes, or archives mail.
-- **Web page** (local only) to filter jobs, open application links and letters, track status, keep formatted notes (bold, italics, bullets, links), attach files to a job (a tailored resume, an offer letter; 25 MB each), add jobs you find yourself, run the pipeline, review job email on an Inbox screen, edit the prompts Claude follows, and add or archive your own statuses, stages, and tracks (Admin > Lists).
+- **Web page** (local only) to filter jobs, open application links and letters, track status, keep dated notes, each formatted (bold, italics, bullets, links) and editable, attach files to a job (a tailored resume, an offer letter; 25 MB each), add jobs you find yourself, run the pipeline, review job email on an Inbox screen, edit the prompts Claude follows, and add or archive your own statuses, stages, and tracks (Admin > Lists).
 
 ## How it works
 

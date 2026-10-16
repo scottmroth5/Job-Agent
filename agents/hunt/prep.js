@@ -10,6 +10,7 @@ import { renderMarkdown } from '../../tools/markdown.js';
 import { ensurePrepFolder } from '../../tools/google/drive.js';
 import { getPrompt } from '../prompts.js';
 import { formatAnalysis } from './letters.js';
+import { listNotes, notesForPrompt } from '../notes.js';
 
 export const PREP_MODEL = 'claude-opus-5-5';
 // Research plus a long document: high effort, room for thinking, streamed so a long answer never times out.
@@ -55,7 +56,7 @@ const meetingWhen = (iso) => {
 const block = (label, text) => (text ? `${label}\n${text}\n\n` : '');
 
 /** claude.send options for one prep. */
-export function buildPrepRequest(posting, input, { config, knowledge, prompt, analysis = null, letter = null, now = new Date() }) {
+export function buildPrepRequest(posting, input, { config, knowledge, prompt, analysis = null, letter = null, notes = posting.notes, now = new Date() }) {
   const people = input.attendees
     .map((a) => {
       const who = [a.name, a.role, a.organization].filter(Boolean).join(', ');
@@ -72,7 +73,7 @@ export function buildPrepRequest(posting, input, { config, knowledge, prompt, an
     meetingBlock: block('The meeting:', meeting || 'Details not given.'),
     attendeesBlock: block('People in the meeting:', people),
     contextBlock: block('What the candidate wants you to know about this meeting:', input.context),
-    notesBlock: block("The candidate's notes about this job:", posting.notes ? truncate(posting.notes, NOTES_CHARS) : ''),
+    notesBlock: block("The candidate's notes about this job (oldest first; the latest notes are the most current):", notes ? truncate(notes, NOTES_CHARS) : ''),
     analysisBlock: block('Fit analysis from scoring:', analysis ? formatAnalysis(analysis) : ''),
     letterBlock: block('The cover letter the candidate sent:', letter ?? ''),
     jobContentBlock: block(`Job posting${posting.url ? ` (${posting.url})` : ''}:`, text ? truncate(text, CONTENT_CHARS) : ''),
@@ -163,12 +164,13 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
   const analysisJson = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId);
   const letter = db.prepare("SELECT content FROM artifacts WHERE posting_id = ? AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").pluck().get(postingId);
   const prompt = getPrompt(db, 'meeting-prep');
+  const notes = notesForPrompt(listNotes(db, postingId));
 
   const people = prepInput.attendees.length;
   onStep(prepInput.research ? `Researching ${people === 1 ? 'the person' : `${people} people`} and the company, then writing the prep (a few minutes)` : 'Writing the prep');
   run?.log?.('info', `#${postingId}: meeting prep for ${people} ${people === 1 ? 'person' : 'people'}${prepInput.research ? ' with research' : ''}`);
   const res = await claude.send({
-    ...buildPrepRequest(posting, prepInput, { config, knowledge, prompt, analysis: analysisJson ? JSON.parse(analysisJson) : null, letter, now }),
+    ...buildPrepRequest(posting, prepInput, { config, knowledge, prompt, analysis: analysisJson ? JSON.parse(analysisJson) : null, letter, notes, now }),
     trace: run,
   });
   const content = extractDocument(res.content ?? [{ type: 'text', text: res.text }]);

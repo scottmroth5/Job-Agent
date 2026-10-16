@@ -13,6 +13,7 @@ import * as fractionaljobs from './discovery/sources/fractionaljobs.js';
 import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/score.js';
 import { generateForPostings } from './hunt/generate.js';
 import { lookups } from './lookups.js';
+import { adoptNotesText } from './notes.js';
 
 export const MANUAL_SOURCE = 'manual';
 export { isRealCompany };
@@ -192,6 +193,7 @@ export async function addPosting(input, ctx) {
       }).lastInsertRowid,
   );
   db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'user', ?)").run(id, lk.role('status', 'default'), nowIso);
+  adoptNotesText(db, { postingId: id, source: 'user' });
   step(`Saved as job #${id} (${lk.label('track', track)})`);
 
   // 5. Score

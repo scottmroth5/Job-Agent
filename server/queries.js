@@ -6,6 +6,7 @@ import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/ident
 import { lookups, sqlList } from '../agents/lookups.js';
 import { listAttachments } from './attachments.js';
 import { listPreps } from '../agents/hunt/prep.js';
+import { addNote, listNotes } from '../agents/notes.js';
 
 /** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
 const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
@@ -146,6 +147,7 @@ export function getPosting(db, id, config = {}) {
     copies: findCopies(db, r),
     attachments: listAttachments(db, r.id),
     meetingPreps: listPreps(db, r.id),
+    noteEntries: listNotes(db, r.id),
     analysis: parse(r.analysis_json),
     notes: r.notes,
     text: r.jd_text ?? r.fetched_text ?? null,
@@ -164,7 +166,8 @@ export function getPosting(db, id, config = {}) {
 }
 
 /**
- * Applies an edit from the UI. patch: { status, notes, appliedOn, stage, track, title, company, location,
+ * Applies an edit from the UI. notes adds a new note (agents/notes.js); notes are edited one by one through their own routes.
+ * patch: { status, notes, appliedOn, stage, track, title, company, location,
  * description, rateText, hoursText, duplicateOf }. Status changes are recorded in status_history as the user's.
  * A company or title edit recomputes the duplicate key; duplicateOf marks this copy duplicate and archives it, with a note
  * pointing at the other.
@@ -187,7 +190,8 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
     if (lk.groupOf('status', patch.status) === 'waiting' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = nowIso.slice(0, 10);
   }
   if (patch.appliedOn !== undefined) set.applied_on = patch.appliedOn || null;
-  if (patch.notes !== undefined) set.notes = patch.notes || null;
+  const newNotes = [];
+  if (patch.notes?.trim()) newNotes.push({ body: patch.notes, source: 'user' });
   if (patch.stage !== undefined) set.stage = patch.stage;
   if (patch.track !== undefined) set.track = patch.track;
   if (patch.title !== undefined && patch.title.trim()) set.title = patch.title.trim();
@@ -201,7 +205,7 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
     const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${nowIso.slice(0, 10)}.`;
     set.stage = lk.role('stage', 'archive');
     if (current.status !== 'duplicate') set.status = 'duplicate';
-    set.notes = [set.notes ?? current.notes, note].filter(Boolean).join('\n');
+    newNotes.push({ body: note, source: 'agent' });
   }
   if (patch.location !== undefined) set.location = patch.location || null;
   if (patch.description !== undefined) set.jd_text = patch.description?.trim() || null;
@@ -220,12 +224,13 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
     );
   }
   const keys = Object.keys(set);
-  if (keys.length) {
+  if (keys.length || newNotes.length) {
     db.transaction(() => {
-      db.prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id`).run({ ...set, updated_at: nowIso, id });
+      if (keys.length) db.prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id`).run({ ...set, updated_at: nowIso, id });
       if (set.status) {
         db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
       }
+      for (const n of newNotes) addNote(db, id, n.body, { source: n.source, now });
     })();
   }
   return getPosting(db, id, config);

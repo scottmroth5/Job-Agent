@@ -11,6 +11,7 @@ import { skipReason } from '../../tools/listings.js';
 import { parseResultTitle } from '../discovery/sources/serper.js';
 import { identityKey, isRealCompany } from '../identity.js';
 import { lookups, sqlList } from '../lookups.js';
+import { addNote } from '../notes.js';
 
 export const ARCHIVE_AFTER_DAYS = 30;
 
@@ -113,14 +114,14 @@ export function archiveListings(db, { config, now = new Date(), dryRun = false }
   const found = [...skipped, ...findDuplicates(db).filter((p) => !seen.has(p.id))];
   if (!dryRun && found.length) {
     const nowIso = now.toISOString();
-    const update = db.prepare(`UPDATE postings SET stage = @stage, status = @status, updated_at = @now,
-      notes = CASE WHEN TRIM(COALESCE(notes, '')) = '' THEN @note ELSE notes || char(10) || @note END WHERE id = @id`);
+    const update = db.prepare('UPDATE postings SET stage = @stage, status = @status, updated_at = @now WHERE id = @id');
     const history = db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'agent', ?)");
     const stage = lk.role('stage', 'archive');
     db.transaction(() => {
       for (const p of found) {
         const status = !evaluate.includes(p.status) ? p.status : /^duplicate of/.test(p.reason) ? 'duplicate' : 'passed';
-        update.run({ id: p.id, stage, status, now: nowIso, note: `Removed ${nowIso.slice(0, 10)}: ${p.reason}.` });
+        update.run({ id: p.id, stage, status, now: nowIso });
+        addNote(db, p.id, `Removed ${nowIso.slice(0, 10)}: ${p.reason}.`, { source: 'agent', now });
         if (status !== p.status) history.run(p.id, p.status, status, nowIso);
       }
     })();

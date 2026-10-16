@@ -328,3 +328,11 @@ label.check { flex-direction: row; align-items: center; gap: 8px; font-size: 14p
   .prep-reader { position: absolute; inset: 0; width: 100%; max-height: none; overflow: visible; box-shadow: none; }
   .prep-reader .links, .prep-reader .close { display: none; }
 }
+
+/* Dated notes. */
+ul.notes { list-style: none; padding: 0; margin: 0; }
+ul.notes > li { padding: 8px 0; border-bottom: 1px solid var(--border); }
+ul.notes > li:last-child { border-bottom: none; }
+.note-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-bottom: 4px; }
+.note-meta .row { margin-left: auto; display: inline-flex; gap: 10px; }
+.note-editor { margin: 4px 0 10px; }

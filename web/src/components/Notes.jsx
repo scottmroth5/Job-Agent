@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { api } from '../api.js';
 import { renderMarkdown } from '../../../tools/markdown.js';
 
 /** Formatted Markdown, rendered safely (tools/markdown.js escapes everything first). */
@@ -27,10 +28,9 @@ function listLines(el, ordered) {
   return { next: value.slice(0, start) + changed + value.slice(end), select: [start, start + changed.length] };
 }
 
-/** The job's notes: formatted when reading; Markdown with a small toolbar when editing. */
-export default function Notes({ value, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value ?? '');
+/** Markdown text box with Bold, Italic, list, and Link buttons (Ctrl+B, Ctrl+I, Ctrl+K; Ctrl+Enter saves). */
+function NoteEditor({ initial = '', saveLabel, onSave, onCancel }) {
+  const [draft, setDraft] = useState(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const area = useRef(null);
@@ -51,21 +51,14 @@ export default function Notes({ value, onSave }) {
     const url = window.prompt('Link address (https://...)');
     if (url && /^(https?:\/\/|mailto:)/i.test(url.trim())) apply((el) => wrap(el, '[', `](${url.trim()})`, 'link text'));
   };
-
-  const start = () => {
-    setDraft(value ?? '');
-    setEditing(true);
-    requestAnimationFrame(() => area.current?.focus());
-  };
   const save = async () => {
+    if (!draft.trim()) return;
     setSaving(true);
     setError(null);
     try {
       await onSave(draft);
-      setEditing(false);
     } catch (err) {
       setError(err.message);
-    } finally {
       setSaving(false);
     }
   };
@@ -75,22 +68,11 @@ export default function Notes({ value, onSave }) {
     else if (mod && e.key.toLowerCase() === 'i') { e.preventDefault(); italic(); }
     else if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); link(); }
     else if (mod && e.key === 'Enter') { e.preventDefault(); save(); }
-    else if (e.key === 'Escape') { e.stopPropagation(); setEditing(false); }
+    else if (e.key === 'Escape') { e.stopPropagation(); onCancel(); }
   };
 
-  if (!editing) {
-    return (
-      <section>
-        <h3>
-          Notes <button className="link small" onClick={start}>{value ? 'Edit' : 'Add notes'}</button>
-        </h3>
-        {value ? <Markdown text={value} /> : <p className="muted small">No notes yet.</p>}
-      </section>
-    );
-  }
   return (
-    <section>
-      <h3>Notes</h3>
+    <div className="note-editor">
       <div className="md-toolbar" role="toolbar" aria-label="Formatting">
         <button type="button" title="Bold (Ctrl+B)" onClick={bold}><b>B</b></button>
         <button type="button" title="Italic (Ctrl+I)" onClick={italic}><i>I</i></button>
@@ -98,12 +80,99 @@ export default function Notes({ value, onSave }) {
         <button type="button" title="Numbered list" onClick={() => apply((el) => listLines(el, true))}>1. List</button>
         <button type="button" title="Link (Ctrl+K)" onClick={link}>Link</button>
       </div>
-      <textarea ref={area} rows={8} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} placeholder="Your notes about this job" />
+      <textarea ref={area} rows={6} value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} onKeyDown={onKeyDown} placeholder="Your note" />
       <div className="row">
-        <button className="primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save notes'}</button>
-        <button onClick={() => setEditing(false)}>Cancel</button>
+        <button className="primary" disabled={saving || !draft.trim()} onClick={save}>{saving ? 'Saving…' : saveLabel}</button>
+        <button onClick={onCancel} disabled={saving}>Cancel</button>
         <span className="muted small">**bold**, *italic*, - bullet, [text](https://...)</span>
       </div>
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+}
+
+const day = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const time = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const stamp = (iso) => new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+
+/** "Created Oct 16, 2026 · edited Oct 18, 2026", with the exact times on hover. */
+function NoteDates({ note }) {
+  if (note.source === 'earlier') {
+    return <span title="These notes were written before notes had dates">Earlier notes, from before {day(note.createdAt)}</span>;
+  }
+  const edited = note.updatedAt !== note.createdAt;
+  return (
+    <span title={`Created ${stamp(note.createdAt)}${edited ? `\nLast edited ${stamp(note.updatedAt)}` : ''}`}>
+      Created {day(note.createdAt)}
+      {edited && ` · edited ${day(note.updatedAt) === day(note.createdAt) ? `at ${time(note.updatedAt)}` : day(note.updatedAt)}`}
+      {note.source === 'agent' && ' · added by Job Agent'}
+    </span>
+  );
+}
+
+/** A job's notes: newest first, each with its dates; add a new one, or edit or delete any of them. */
+export default function Notes({ jobId, entries, onChanged }) {
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [error, setError] = useState(null);
+
+  const remove = async (note) => {
+    if (!window.confirm(`Delete the note from ${day(note.createdAt)}?`)) return;
+    setError(null);
+    try {
+      await api.deleteNote(note.id);
+      await onChanged();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  return (
+    <section>
+      <h3>
+        Notes {!adding && <button className="link small" onClick={() => { setAdding(true); setEditing(null); }}>+ Add a note</button>}
+      </h3>
+      {adding && (
+        <NoteEditor
+          saveLabel="Add note"
+          onCancel={() => setAdding(false)}
+          onSave={async (body) => {
+            await api.addNote(jobId, body);
+            setAdding(false);
+            await onChanged();
+          }}
+        />
+      )}
+      {!entries.length && !adding && <p className="muted small">No notes yet.</p>}
+      <ul className="notes">
+        {entries.map((n) => (
+          <li key={n.id}>
+            <div className="note-meta muted small">
+              <NoteDates note={n} />
+              {editing !== n.id && (
+                <span className="row">
+                  <button className="link small" onClick={() => { setEditing(n.id); setAdding(false); }}>Edit</button>
+                  <button className="link small" onClick={() => remove(n)}>Delete</button>
+                </span>
+              )}
+            </div>
+            {editing === n.id ? (
+              <NoteEditor
+                initial={n.body}
+                saveLabel="Save changes"
+                onCancel={() => setEditing(null)}
+                onSave={async (body) => {
+                  await api.updateNote(n.id, body);
+                  setEditing(null);
+                  await onChanged();
+                }}
+              />
+            ) : (
+              <Markdown text={n.body} />
+            )}
+          </li>
+        ))}
+      </ul>
       {error && <div className="error">{error}</div>}
     </section>
   );

@@ -2,6 +2,7 @@
 // Pure logic over parsed CSV rows; scripts/import-v1.js handles files and output.
 import { normalizeUrl, companyTitleKey } from '../tools/urls.js';
 import { parseSheetDate, parsePostedDate } from '../tools/dates.js';
+import { adoptNotesText } from '../agents/notes.js';
 
 const STATUS_MAP = {
   '': 'new',
@@ -234,6 +235,9 @@ export function importV1(store, { discovered = [], hunt = [] }, { now = new Date
       }
     }
   });
+
+  // Imported notes text becomes one 'earlier' note per job (its date was never recorded in v1).
+  adoptNotesText(db, { source: 'earlier', now: new Date(now) });
 
   counts.byStageStatus = db
     .prepare('SELECT stage, status, COUNT(*) AS n FROM postings GROUP BY stage, status ORDER BY stage, n DESC')

@@ -58,6 +58,12 @@ export const api = {
   update: (id, patch) => request('PATCH', `/api/postings/${id}`, patch),
   add: (job) => request('POST', '/api/postings', job),
   action: (id, action) => request('POST', `/api/postings/${id}/actions/${action}`),
+  addNote: (id, body) => request('POST', `/api/postings/${id}/notes`, { body }),
+  updateNote: (noteId, body) => request('PATCH', `/api/notes/${noteId}`, { body }),
+  deleteNote: async (noteId) => {
+    const res = await send(`/api/notes/${noteId}`, { method: 'DELETE' });
+    if (!res.ok && res.status !== 204) throw new Error(`Delete failed (${res.status})`);
+  },
   startPrep: (id, body) => request('POST', `/api/postings/${id}/meeting-prep`, body),
   prep: (prepId) => request('GET', `/api/meeting-preps/${prepId}`),
   deletePrep: async (prepId) => {
