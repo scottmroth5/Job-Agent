@@ -32,9 +32,12 @@ export function createDriveClient(auth) {
   };
 }
 
-/** The remembered cover letter folder, or a new one if it was never made, deleted, or trashed. */
-export async function ensureLetterFolder(client, db) {
-  const known = getSetting(db, FOLDER_SETTING);
+export const PREP_FOLDER_NAME = 'Job Agent Meeting Prep';
+const PREP_FOLDER_SETTING = 'drive.meetingPrepFolderId';
+
+/** A remembered app folder, or a new one if it was never made, deleted, or trashed. */
+async function ensureAppFolder(client, db, name, setting) {
+  const known = getSetting(db, setting);
   if (known) {
     try {
       const file = await client.getFile(known);
@@ -43,7 +46,13 @@ export async function ensureLetterFolder(client, db) {
       // not found or no longer accessible; make a new one
     }
   }
-  const id = await client.createFolder(LETTER_FOLDER_NAME);
-  setSetting(db, FOLDER_SETTING, id);
+  const id = await client.createFolder(name);
+  setSetting(db, setting, id);
   return id;
 }
+
+/** The cover letter folder. */
+export const ensureLetterFolder = (client, db) => ensureAppFolder(client, db, LETTER_FOLDER_NAME, FOLDER_SETTING);
+
+/** The meeting prep folder. */
+export const ensurePrepFolder = (client, db) => ensureAppFolder(client, db, PREP_FOLDER_NAME, PREP_FOLDER_SETTING);

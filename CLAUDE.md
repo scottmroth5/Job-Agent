@@ -1,15 +1,16 @@
 ## Purpose
 Job Discovery and Job Hunt agents built on the shared agent-core package.
 agent-core comes from the public Agent-Core repo as a git dependency pinned to a version tag
-("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.0"). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
+("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.2"; meeting prep needs 0.2.2's tools, streaming, and pause_turn resume). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
 Job specific logic stays in this repo; never add it to agent-core.
 
 ## Structure
 /agents/discovery   finds, researches, and scores postings: sources/ (one module per job source, parse functions exported for tests),
                     details.js (full text: source, LinkedIn guest endpoint, JSON-LD, page text, browser), discover.js (one run),
                     prompts/*.md templates, schemas/*.json output schemas
-/agents/hunt        cover letters, resume tailoring, application tracking
-/tools              job specific helpers: config, urls, dates, template, google (auth, docs, gmail)
+/agents/hunt        cover letters, resume tailoring, application tracking, prep.js (meeting prep)
+/tools              job specific helpers: config, urls, dates, template, google (auth, docs, gmail), markdown.js (the one safe
+                    Markdown renderer, shared by the web page and the prep Google Docs; job notes are Markdown)
 /db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.js, applied in id order), openJobStore, v1 import.
                     Never rebuild postings in a migration: migrations run in a transaction with foreign keys on, so a drop cascades.
                     008 shows the safe way to loosen a CHECK constraint (writable_schema). Back up data/job-agent.db before schema changes
@@ -90,7 +91,7 @@ data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images op
 ## Prompts
 agents/prompts.js is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active
 (prompt_versions table, with history), else the repo file, which stays the default. The UI's Admin screen (#/admin) edits
-the four templates; placeholders are validated on save, and output schemas stay read-only in the repo because code reads
+every template in PROMPTS; placeholders are validated on save, and output schemas stay read-only in the repo because code reads
 their fields. Personal wording belongs in edits or the knowledge doc, never in the repo defaults.
 
 ## Tracks
@@ -102,6 +103,11 @@ Go Fractional is bot-protected: it is never scraped, and search.siteSearch stays
 Letters: Sonnet 5.5 at medium effort; v1's cleanup (strip greeting/sign-off, no dashes) and config.coverLetterChecks run in code,
 plus a word-limit flag. Letter Docs go to the app's own "Job Agent Cover Letters" Drive folder (drive.file scope).
 Nothing is overwritten: --regenerate creates new artifacts and Docs. Report HTML escapes every value.
+Meeting prep (agents/hunt/prep.js, server/prep-routes.js, Prepare for a meeting in the job panel): Opus 5.5 at high effort,
+streamed, with server-side refusal fallbacks; with research on it uses web_search_20260209 (max 15) and web_fetch (max 5).
+Input is the people (name, role, firm, link, what the user knows), meeting kind, format, time, and free context, plus the
+knowledge doc, posting, analysis, latest letter, and notes. The document is the Markdown after the last tool block, saved
+in meeting_preps (UUID keys) and as a Google Doc in "Job Agent Meeting Prep". About $1 to $2 each; logs hold counts only.
 
 ## Scoring
 Default model and promotion threshold live in agents/discovery/score.js with the eval evidence behind them.

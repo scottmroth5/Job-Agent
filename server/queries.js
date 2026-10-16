@@ -5,6 +5,7 @@ import { PROMOTE_AT } from '../agents/discovery/score.js';
 import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.js';
 import { lookups, sqlList } from '../agents/lookups.js';
 import { listAttachments } from './attachments.js';
+import { listPreps } from '../agents/hunt/prep.js';
 
 /** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
 const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
@@ -144,6 +145,7 @@ export function getPosting(db, id, config = {}) {
     ...toRow(r, config),
     copies: findCopies(db, r),
     attachments: listAttachments(db, r.id),
+    meetingPreps: listPreps(db, r.id),
     analysis: parse(r.analysis_json),
     notes: r.notes,
     text: r.jd_text ?? r.fetched_text ?? null,

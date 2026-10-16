@@ -10,6 +10,7 @@ import { registerLookupRoutes } from './lookups-routes.js';
 import { lookups } from '../agents/lookups.js';
 import { funnel } from './funnel.js';
 import { registerAttachmentRoutes } from './attachments.js';
+import { registerPrepRoutes } from './prep-routes.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { registerAdminRoutes } from './admin.js';
@@ -272,6 +273,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerAdminRoutes(app, { db, config });
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });
+  registerPrepRoutes(app, { store, config, services, startTask });
   if (services.runPipeline) registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline });
   if (services.inbox) registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox });
 

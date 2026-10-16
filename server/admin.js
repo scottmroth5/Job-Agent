@@ -3,6 +3,7 @@
 import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersions, validateTemplate } from '../agents/prompts.js';
 import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.js';
+import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.js';
 import { buildClassifyRequest } from '../agents/inbox/classify.js';
 import { listOpenApplications } from '../agents/inbox/match.js';
 
@@ -13,6 +14,15 @@ const SAMPLE_EMAIL = {
   subject: 'Thank you for applying to Example Co',
   body: 'Hi,\n\nThanks for applying to the VP of Engineering role at Example Co. Our team will review your application.',
 };
+
+// The meeting prep prompt previews with a made-up person and meeting.
+const SAMPLE_MEETING = normalizePrepInput({
+  attendees: [{ name: 'Sample Person', role: 'Hiring manager' }],
+  meetingAt: '2026-10-15T10:00',
+  kind: 'Hiring manager',
+  format: 'Video',
+  context: 'First conversation after the recruiter screen.',
+});
 
 const NAMES = Object.keys(PROMPTS);
 const nameParams = { type: 'object', required: ['name'], properties: { name: { type: 'string', enum: NAMES } } };
@@ -125,6 +135,10 @@ export function registerAdminRoutes(app, { db, config }) {
       let text;
       if (name === 'score' || name === 'score-fractional') {
         text = buildScoreRequest(posting, { config, knowledge: '', model: DEFAULT_SCORE_MODEL, prompt: draft }).prompt;
+      } else if (name === 'meeting-prep') {
+        const analysis = posting.analysis_json ? JSON.parse(posting.analysis_json) : null;
+        text = buildPrepRequest(posting, SAMPLE_MEETING, { config, knowledge: '', prompt: draft, analysis }).prompt;
+        return { problems: [], text, posting: { id: posting.id, title: posting.title, company: posting.company }, message: 'Previewed with a made-up person and meeting.' };
       } else {
         const analysis = JSON.parse(posting.analysis_json);
         const current = { tweaks: getPrompt(db, 'resume-tweaks'), letter: getPrompt(db, 'cover-letter') };

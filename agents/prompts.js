@@ -40,6 +40,13 @@ export const PROMPTS = {
     allowed: HUNT_PLACEHOLDERS,
     required: ['company', 'roleTitle', 'analysis'],
   },
+  'meeting-prep': {
+    label: 'Meeting prep',
+    usedBy: 'Writing meeting prep documents from a job (Prepare for a meeting in the job panel)',
+    file: ['agents', 'hunt', 'prompts', 'meeting-prep.md'],
+    allowed: ['candidateName', 'company', 'roleTitle', 'today', 'meetingBlock', 'attendeesBlock', 'contextBlock', 'notesBlock', 'analysisBlock', 'letterBlock', 'jobContentBlock', 'researchBlock'],
+    required: ['company', 'attendeesBlock'],
+  },
   'inbox-classify': {
     label: 'Inbox email classification',
     usedBy: 'Classifying job emails from Gmail (npm run inbox); the untrusted-email rules are fixed in code',

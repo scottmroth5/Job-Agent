@@ -4,6 +4,8 @@ import { useLookups } from '../lookups.jsx';
 import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM } from '../format.js';
 import TaskProgress from './TaskProgress.jsx';
 import Attachments from './Attachments.jsx';
+import Notes from './Notes.jsx';
+import MeetingPrep from './MeetingPrep.jsx';
 
 
 function List({ items }) {
@@ -21,7 +23,6 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const lk = useLookups();
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
-  const [notes, setNotes] = useState('');
   const [terms, setTerms] = useState({ rateText: '', hoursText: '' });
   const [paste, setPaste] = useState('');
   const [task, setTask] = useState(null);
@@ -33,7 +34,6 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
     try {
       const j = await api.get(id);
       setJob(j);
-      setNotes(j.notes ?? '');
       setTerms({ rateText: j.rateText ?? rateText(j), hoursText: hoursText(j).replace(' hrs/wk', ' hrs') });
       setError(null);
     } catch (err) {
@@ -255,11 +255,16 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               )}
             </section>
 
-            <section>
-              <h3>Notes</h3>
-              <textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Your notes about this job" />
-              {notes !== (job.notes ?? '') && <button onClick={() => save({ notes })}>Save notes</button>}
-            </section>
+            <Notes
+              key={job.id}
+              value={job.notes ?? ''}
+              onSave={async (text) => {
+                setJob(await api.update(id, { notes: text }));
+                onChanged();
+              }}
+            />
+
+            <MeetingPrep job={job} onChanged={async () => { await load(); onChanged(); }} />
 
             <Attachments jobId={job.id} items={job.attachments ?? []} onChanged={async () => { await load(); onChanged(); }} />
 

@@ -8,9 +8,10 @@ An AI job-search assistant that finds postings, scores them against your backgro
 - **Checks location** against where you can work, before any AI call, so an on-site role in the wrong city never scores high.
 - **Scores every job 1 to 10** with Claude against a Google Doc you write about yourself. Fractional roles also get a High / Medium / Stretch fit, pay, hours, and an annualized estimate.
 - **Writes materials** for jobs scoring 7 or higher: resume tweaks, and a cover letter saved as a Google Doc, with rule checks that flag letters for review.
+- **Preps you for meetings**: from a job's panel, **Prepare for a meeting** asks who the meeting is with (one person or a group) and anything else to know, researches the people and company online, and writes a prep document (who they are, company snapshot, your opening, fit table, stories, likely questions, gaps, questions to ask, and close). It appears in the app and as a Google Doc. Claude Opus 5.5, about $1 to $2 each.
 - **Emails a summary** of each run, including its cost.
 - **Reads your job email** (optional): matches confirmations, rejections, interview requests, assessments, and offers in Gmail to your applications, moves their status forward, records funnel dates, and labels the threads `Job/<Company>`. It never sends, deletes, or archives mail.
-- **Web page** (local only) to filter jobs, open application links and letters, track status, attach files to a job (a tailored resume, an offer letter; 25 MB each), add jobs you find yourself, run the pipeline, review job email on an Inbox screen, edit the prompts Claude follows, and add or archive your own statuses, stages, and tracks (Admin > Lists).
+- **Web page** (local only) to filter jobs, open application links and letters, track status, keep formatted notes (bold, italics, bullets, links), attach files to a job (a tailored resume, an offer letter; 25 MB each), add jobs you find yourself, run the pipeline, review job email on an Inbox screen, edit the prompts Claude follows, and add or archive your own statuses, stages, and tracks (Admin > Lists).
 
 ## How it works
 
