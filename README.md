@@ -148,9 +148,19 @@ To restore, `npm run backup:restore -- --file latest --out data/restore/job-agen
 
 Your `.env` and Google sign-in files are not backed up, because they hold the passphrase and sign-in tokens. Keep your API keys and passphrase in your password manager.
 
+## Running in the cloud (optional)
+
+To reach the app from your phone and run the schedule without this computer on, it can run on one small Linux server (a 2 GB AWS Lightsail instance works) in Docker, with Caddy in front for HTTPS. Google sign-in must be on: the server refuses to start without it.
+
+- **The image** (`Dockerfile`) holds code, the built web page, and Chromium. It never holds `.env` or `data/`.
+- **The server** keeps everything in `/opt/job-agent`: `compose.yml`, `Caddyfile`, and `deploy.sh` from the `deploy` folder, the `.env` (start from `deploy/cloud.env.example`), and `data/` mounted into the container at `/data`. Make `data/` owned by uid 1000, the container's user.
+- **Deploys** (`.github/workflows/deploy.yml`): after CI passes on `main`, GitHub builds the image, publishes it to `ghcr.io/<owner>/job-agent`, and runs `deploy.sh deploy sha-<commit>` over SSH. `deploy.sh` waits for `/healthz` and goes back to the last good image if the new one fails. From the Actions tab, "Run workflow" deploys any earlier tag or rolls back. The deploy step stays off until the repository variable `DEPLOY_ENABLED` is `true`; the workflow lists the four secrets it needs. Make the published package public once (GitHub, Packages, job-agent, Package settings) so the server can pull it, or log the server in to ghcr.io.
+- **The schedule** moves to the server's `.env` (`SCHEDULE_PIPELINE`, `SCHEDULE_BACKUP`). Turn the Windows tasks off at the same moment (`register-schedule.ps1 -Remove`); running both creates two diverging job lists.
+- **Your data** moves with one copy over SSH: the database (copied with SQLite's backup command so it is consistent), `data/config`, `data/google`, and `.env`. Then add `https://<your address>/auth/google/callback` to the web client's redirect URIs.
+
 ## Privacy
 
-Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The only copy that leaves your machine is the optional encrypted backup to your own Google Drive. The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
+Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The only copy that leaves your machine is the optional encrypted backup to your own Google Drive (and, if you run it in the cloud, the server that then holds these files instead). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
 
 Job sites have their own terms of use. The agent reads public listings at a polite pace, backs off when rate limited, and does not try to get around sites that block automated access; for those, paste the description through the web page instead.
 

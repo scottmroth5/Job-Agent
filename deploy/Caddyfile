@@ -1,0 +1,14 @@
+# HTTPS in front of the app. Caddy gets a free Let's Encrypt certificate for SITE_ADDRESS on first start (the
+# domain's DNS must already point at the server, and ports 80 and 443 must be open) and renews it on its own.
+# The app sets its own security headers (server/security.js); Caddy only adds compression and forwards.
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	reverse_proxy app:5178 {
+		# The Run pipeline progress and the Activity tab poll; keep slow responses from being cut off.
+		transport http {
+			read_timeout 5m
+		}
+	}
+	# No access log: request URLs can carry job search terms, and the app keeps its own logs to counts only.
+}

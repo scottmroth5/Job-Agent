@@ -1,0 +1,19 @@
+# Personal data and secrets never enter the image (the same rule as .gitignore, enforced again here).
+.env
+.env.*
+data/
+*.pem
+client_secret*.json
+token*.json
+
+# Rebuilt inside the image, or not needed to run the server.
+node_modules/
+web/dist/
+.git/
+.githooks/
+.github/
+legacy/
+docs/
+deploy/
+Dockerfile
+.dockerignore
