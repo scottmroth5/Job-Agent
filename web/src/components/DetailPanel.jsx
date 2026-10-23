@@ -6,6 +6,7 @@ import TaskProgress from './TaskProgress.jsx';
 import Attachments from './Attachments.jsx';
 import Notes from './Notes.jsx';
 import MeetingPrep from './MeetingPrep.jsx';
+import { useDemo } from '../demo.jsx';
 
 
 function List({ items }) {
@@ -21,6 +22,7 @@ function List({ items }) {
 
 export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const lk = useLookups();
+  const demo = useDemo();
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
   const [terms, setTerms] = useState({ rateText: '', hoursText: '' });
@@ -126,7 +128,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                     <div className="muted">
                       {job.company}
                       {job.location ? ` · ${job.location}` : ''} · {job.source}
-                      <button className="link-button" onClick={() => setIdent({ title: job.title, company: job.company })} title="Fix the title or company so duplicates are recognized">
+                      <button className="link-button demo-hide" onClick={() => setIdent({ title: job.title, company: job.company })} title="Fix the title or company so duplicates are recognized">
                         Edit
                       </button>
                     </div>
@@ -143,7 +145,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             </div>
 
             <div className="links">
-              {job.url && <a className="button primary" href={job.url} target="_blank" rel="noreferrer">Open posting / apply ↗</a>}
+              {job.url && !demo && <a className="button primary" href={job.url} target="_blank" rel="noreferrer">Open posting / apply ↗</a>}
               {job.letter?.url && <a className="button" href={job.letter.url} target="_blank" rel="noreferrer">Cover letter (Google Doc) ↗</a>}
               {job.tweaks && <button onClick={copyTweaks}>{copied ? 'Copied!' : 'Copy resume tweaks'}</button>}
             </div>
@@ -158,16 +160,16 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                     </span>
                     <span className="row">
                       {onOpen && <button onClick={() => onOpen(c.id)}>Open it</button>}
-                      {lk.groupOf('stage', job.stage) !== 'archived' && <button onClick={() => save({ duplicateOf: c.id })}>Mark this one duplicate</button>}
+                      {lk.groupOf('stage', job.stage) !== 'archived' && <button className="demo-hide" onClick={() => save({ duplicateOf: c.id })}>Mark this one duplicate</button>}
                     </span>
                   </div>
                 ))}
               </div>
             )}
             {job.letter?.flags?.length > 0 && <div className="warn-box">Cover letter needs review: {job.letter.flags.join('; ')}</div>}
-            {job.letter && !job.letter.url && <div className="warn-box">The cover letter was written but not saved as a Doc yet; the next run retries it.</div>}
+            {job.letter && !job.letter.url && !demo && <div className="warn-box">The cover letter was written but not saved as a Doc yet; the next run retries it.</div>}
 
-            <section className="grid2">
+            <fieldset className="grid2 plain" disabled={demo}>
               <label>
                 Status
                 <select value={job.status} onChange={(e) => save({ status: e.target.value })}>
@@ -196,10 +198,10 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                   ))}
                 </select>
               </label>
-            </section>
+            </fieldset>
 
             {fractional && (
-              <section className="terms-box">
+              <fieldset className="terms-box plain" disabled={demo}>
                 <div className="grid2">
                   <label>
                     Rate
@@ -216,7 +218,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                   {job.extra?.industry ? ` · ${job.extra.industry}` : ''}
                   {job.extra?.notes?.length ? ` · ${job.extra.notes.join(', ')}` : ''}
                 </div>
-              </section>
+              </fieldset>
             )}
 
             <section>
@@ -259,9 +261,9 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
 
             <MeetingPrep job={job} onChanged={async () => { await load(); onChanged(); }} />
 
-            <Attachments jobId={job.id} items={job.attachments ?? []} onChanged={async () => { await load(); onChanged(); }} />
+            {!demo && <Attachments jobId={job.id} items={job.attachments ?? []} onChanged={async () => { await load(); onChanged(); }} />}
 
-            {job.needsDescription && (
+            {job.needsDescription && !demo && (
               <section className="warn-box">
                 <h3>Needs a description</h3>
                 <p className="small">The posting could not be read automatically. Paste the job description to score it and write materials.</p>
@@ -272,6 +274,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               </section>
             )}
 
+            {!demo && (
             <section>
               <h3>Actions</h3>
               <div className="links">
@@ -283,6 +286,14 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               </div>
               <TaskProgress task={task} />
             </section>
+            )}
+
+            {demo && job.letter?.content && (
+              <section>
+                <h3>Cover letter</h3>
+                <pre className="tweaks">{job.letter.content}</pre>
+              </section>
+            )}
 
             {job.tweaks && (
               <section>

@@ -3,6 +3,8 @@
 # deploy.sh sets IMAGE_TAG; by hand: IMAGE_TAG=<tag> docker compose up -d
 #
 # Only Caddy is reachable from outside (ports 80 and 443). The app listens on the private Docker network.
+# demo is the public, read-only showcase at DEMO_SITE_ADDRESS: the same image on made-up sample data, with none of
+# the app's secrets, a fresh database on every start, and its own small memory and CPU limits.
 
 name: job-agent
 
@@ -33,11 +35,47 @@ services:
         max-size: 10m
         max-file: "5"
 
+  demo:
+    image: ${IMAGE:-ghcr.io/scottmroth5/job-agent}:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    # No env_file: the demo never sees the app's API keys, Google tokens, or session secret.
+    environment:
+      AUTH_MODE: demo
+      PUBLIC_URL: https://${DEMO_SITE_ADDRESS:?set DEMO_SITE_ADDRESS in .env}
+      DATA_DIR: /data
+      HOST: 0.0.0.0
+      PORT: "5178"
+      TRUST_PROXY: "1"
+      TZ: ${TZ:-UTC}
+    # Builds the sample database, then serves it. A restart resets the demo.
+    command: ["sh", "-c", "node scripts/demo-seed.js --force && exec node server/index.js"]
+    # Nothing on disk survives or is shared: the code is read-only and the sample data lives in memory.
+    read_only: true
+    tmpfs:
+      - /data:size=64m,uid=1000,gid=1000,mode=0700
+      - /tmp:size=16m
+    expose:
+      - "5178"
+    init: true
+    mem_limit: 384m
+    cpus: 0.5
+    pids_limit: 100
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: local
+      options:
+        max-size: 5m
+        max-file: "2"
+
   caddy:
     image: caddy:2
     restart: unless-stopped
     depends_on:
       - app
+      - demo
     ports:
       - "80:80"
       - "443:443"
@@ -45,6 +83,7 @@ services:
     environment:
       # The public address, e.g. jobs.example.com. Set in the server's .env.
       SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in .env}
+      DEMO_SITE_ADDRESS: ${DEMO_SITE_ADDRESS:?set DEMO_SITE_ADDRESS in .env}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

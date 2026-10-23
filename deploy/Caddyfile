@@ -12,3 +12,10 @@
 	}
 	# No access log: request URLs can carry job search terms, and the app keeps its own logs to counts only.
 }
+
+# The public demo: sample data only, read-only, kept out of search engines.
+{$DEMO_SITE_ADDRESS} {
+	encode zstd gzip
+	header X-Robots-Tag "noindex, nofollow"
+	reverse_proxy demo:5178
+}

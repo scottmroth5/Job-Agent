@@ -10,6 +10,7 @@ import InboxPage from './components/InboxPage.jsx';
 import PipelineButton from './components/PipelineButton.jsx';
 import ActivityPage from './components/ActivityPage.jsx';
 import FunnelPage from './components/FunnelPage.jsx';
+import { DemoBanner, DemoContext } from './demo.jsx';
 
 const viewFromHash = () => {
   const h = window.location.hash;
@@ -90,11 +91,14 @@ export default function App() {
     if (Object.keys(fix).length) setFilters((f) => ({ ...f, ...fix }));
   }, [lk, filters.track, filters.stage, filters.status]);
 
+  const demo = Boolean(me?.demo);
   const set = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
   const toggleStack = (id) => setStack((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
 
   return (
-    <div className="app">
+    <DemoContext.Provider value={demo}>
+    <div className={demo ? 'app demo' : 'app'}>
+      {demo && <DemoBanner />}
       <header className="topbar">
         <div>
           <h1>Job Hunt</h1>
@@ -121,14 +125,14 @@ export default function App() {
           <a href="#/activity" className={view === 'activity' ? 'on' : ''}>Activity</a>
           <a href="#/admin" className={view === 'admin' ? 'on' : ''}>Admin</a>
         </nav>
-        <PipelineButton onFinished={refresh} />
+        {!demo && <PipelineButton onFinished={refresh} />}
         {me?.authMode === 'google' && (
           <div className="signed-in small">
             <span className="muted" title="Signed in with Google">{me.email}</span>
             <button className="link" onClick={async () => { await api.signOut(); window.location.href = '/auth/signed-out'; }}>Sign out</button>
           </div>
         )}
-        {view === 'jobs' && <button className="primary" onClick={() => setAdding(true)}>+ Add job</button>}
+        {view === 'jobs' && !demo && <button className="primary" onClick={() => setAdding(true)}>+ Add job</button>}
       </header>
 
       {view === 'admin' ? (
@@ -212,5 +216,6 @@ export default function App() {
         />
       )}
     </div>
+    </DemoContext.Provider>
   );
 }
