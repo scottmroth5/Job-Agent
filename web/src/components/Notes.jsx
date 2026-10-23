@@ -130,7 +130,7 @@ export default function Notes({ jobId, entries, onChanged }) {
   return (
     <section>
       <h3>
-        Notes {!adding && <button className="link small" onClick={() => { setAdding(true); setEditing(null); }}>+ Add a note</button>}
+        Notes {!adding && <button className="link small demo-hide" onClick={() => { setAdding(true); setEditing(null); }}>+ Add a note</button>}
       </h3>
       {adding && (
         <NoteEditor
@@ -151,8 +151,8 @@ export default function Notes({ jobId, entries, onChanged }) {
               <NoteDates note={n} />
               {editing !== n.id && (
                 <span className="row">
-                  <button className="link small" onClick={() => { setEditing(n.id); setAdding(false); }}>Edit</button>
-                  <button className="link small" onClick={() => remove(n)}>Delete</button>
+                  <button className="link small demo-hide" onClick={() => { setEditing(n.id); setAdding(false); }}>Edit</button>
+                  <button className="link small demo-hide" onClick={() => remove(n)}>Delete</button>
                 </span>
               )}
             </div>

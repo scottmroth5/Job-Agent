@@ -3,17 +3,25 @@
 //   AUTH_MODE=google  "Sign in with Google": only addresses in AUTH_ALLOWED_EMAILS get in. Every page and
 //                     API route needs the signed session cookie except /auth/* and /healthz. Works the
 //                     same locally and in the cloud; only PUBLIC_URL (and the client's redirect URI) change.
+//   AUTH_MODE=demo    A public, read-only showcase over a sample database (npm run demo:seed): no login, every
+//                     request that would change data is refused, and the server starts without Claude, Gmail,
+//                     or Drive (server/index.js), so nothing a visitor does can spend money or reach an account.
 import { createHash, randomBytes } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { escapeHtml } from '../tools/html.js';
 import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, cookie } from './session.js';
 
 export const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
-export const MODES = ['none', 'google'];
+export const MODES = ['none', 'google', 'demo'];
 export const SESSION_DAYS = 30;
 const LOGIN_MINUTES = 10;
 const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
 const OPEN_PATHS = [/^\/auth\//, /^\/healthz$/];
+const READ_METHODS = ['GET', 'HEAD', 'OPTIONS'];
+// The only non-read request a demo visitor may make: filling a prompt draft with a sample job. It writes nothing
+// and calls no model (server/admin.js), so the Admin screen's preview works in the demo.
+const DEMO_WRITES = [/^\/api\/admin\/prompts\/[a-z-]+\/preview$/];
+export const DEMO_REFUSAL = 'This is a read-only demo with sample data, so changes are turned off.';
 
 /** Sign-in settings from the environment (.env). */
 export function authSettings(env = process.env) {
@@ -36,6 +44,18 @@ export function assertSafeBinding({ host, mode = 'none', settings = {} }) {
   const loopback = LOOPBACK.includes(host);
   if (mode === 'none') {
     if (!loopback) throw new Error(`AUTH_MODE=none only allows localhost; refusing to listen on ${host}. Set AUTH_MODE=google before exposing the server.`);
+    return;
+  }
+  if (mode === 'demo') {
+    if (loopback) return;
+    if (!settings.publicUrl) throw new Error('AUTH_MODE=demo needs PUBLIC_URL in .env when the server is reachable from other computers.');
+    let demoUrl;
+    try {
+      demoUrl = new URL(settings.publicUrl);
+    } catch {
+      throw new Error('PUBLIC_URL must be a full URL such as https://demo.example.com.');
+    }
+    if (demoUrl.protocol !== 'https:') throw new Error(`PUBLIC_URL must use https when the server listens on ${host}.`);
     return;
   }
   const missing = [
@@ -84,8 +104,18 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
   app.get('/api/me', { schema: { summary: 'The signed-in user (google mode) or the open mode', response: { 200: { type: 'object', additionalProperties: true } } } }, async (req) => ({
     authMode: mode,
     email: req.user ?? null,
+    ...(mode === 'demo' ? { demo: true } : {}),
   }));
   if (mode === 'none') return;
+  if (mode === 'demo') {
+    app.addHook('onRequest', async (req, reply) => {
+      if (READ_METHODS.includes(req.method)) return;
+      const path = req.url.split('?')[0];
+      if (req.method === 'POST' && DEMO_WRITES.some((re) => re.test(path))) return;
+      return reply.code(403).send({ error: DEMO_REFUSAL });
+    });
+    return;
+  }
   if (mode !== 'google') throw new Error(`AUTH_MODE "${mode}" is not supported.`);
 
   const key = sessionKey(settings.secret);

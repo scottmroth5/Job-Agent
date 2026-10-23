@@ -210,7 +210,7 @@ export default function MeetingPrep({ job, onChanged }) {
   return (
     <section>
       <h3>
-        Meeting prep <button className="link small" onClick={() => setAsking(true)}>Prepare for a meeting</button>
+        Meeting prep <button className="link small demo-hide" onClick={() => setAsking(true)}>Prepare for a meeting</button>
       </h3>
       {preps.length ? (
         <ul className="preps">
@@ -223,7 +223,7 @@ export default function MeetingPrep({ job, onChanged }) {
               </span>
               <span className="row">
                 {p.docUrl && <a className="small" href={p.docUrl} target="_blank" rel="noreferrer">Google Doc</a>}
-                <button className="link small" onClick={() => remove(p)}>Delete</button>
+                <button className="link small demo-hide" onClick={() => remove(p)}>Delete</button>
               </span>
             </li>
           ))}

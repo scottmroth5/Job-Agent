@@ -1,5 +1,6 @@
 // Starts the Job Hunt UI server: npm run ui, then open http://localhost:5178
 // Local only (AUTH_MODE=none binds to 127.0.0.1). Google, Claude and the knowledge doc load on first use.
+// AUTH_MODE=demo serves the sample database read-only with every outside service off (npm run demo).
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { createJobClaude } from '../tools/claude.js';
@@ -18,6 +19,7 @@ import { buildApp } from './app.js';
 import { schedulesFromEnv } from './scheduler.js';
 import { timeZone } from '../tools/dates.js';
 import { assertSafeBinding, authSettings } from './auth.js';
+import { SAMPLE_TASKS } from '../demo/sample-data.js';
 
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number(process.env.PORT ?? 5178);
@@ -27,11 +29,14 @@ assertSafeBinding({ host, mode: authMode, settings: authConfig });
 
 const config = loadConfig();
 const store = openJobStore();
-const auth = getGoogleAuth();
+// The demo runs on sample data with no accounts: no Google sign-in, Claude client, browser, or schedule, so a
+// visitor can never reach a real account or spend money, even through a route the read-only check missed.
+const demo = authMode === 'demo';
+const auth = demo ? null : getGoogleAuth();
 
 // The knowledge doc is re-read at most every 10 minutes, so edits to it show up without a restart.
 let knowledgeCache = { text: null, at: 0 };
-const services = {
+const realServices = () => ({
   claude: createJobClaude(store.db),
   http: createHttp(),
   drive: createDriveClient(auth),
@@ -64,7 +69,25 @@ const services = {
     }
     return knowledgeCache.text;
   },
+});
+
+const demoOff = () => {
+  throw Object.assign(new Error('Turned off in the demo.'), { statusCode: 403 });
 };
+const demoServices = () => ({
+  claude: null,
+  http: null,
+  drive: null,
+  createBrowser: null,
+  runScript: async () => ({ code: 1, lastError: 'Turned off in the demo.' }),
+  runPipeline: async () => ({ code: 1, lastError: 'Turned off in the demo.' }),
+  schedules: [],
+  inbox: { ready: () => false, gmail: demoOff, key: demoOff, cfg: loadInboxConfig() },
+  knowledge: async () => '',
+  sampleTasks: SAMPLE_TASKS,
+});
+
+const services = demo ? demoServices() : realServices();
 
 // TRUST_PROXY: set behind a reverse proxy so client addresses (for rate limits) come from X-Forwarded-For:
 // "true", a hop count ("1"), or the proxy's addresses ("127.0.0.1"). Unset: the direct connection's address.
@@ -74,7 +97,9 @@ await app.listen({ host, port });
 console.log(
   authMode === 'google'
     ? `Job Hunt UI: ${authConfig.publicUrl}  (Google sign-in on; ${authConfig.allowed.length} allowed account${authConfig.allowed.length === 1 ? '' : 's'})`
-    : `Job Hunt UI: http://localhost:${port}  (API contract: http://localhost:${port}/api/openapi.json)`,
+    : demo
+      ? `Job Hunt demo: ${authConfig.publicUrl || `http://localhost:${port}`}  (read-only sample data; Claude, Gmail and Drive off)`
+      : `Job Hunt UI: http://localhost:${port}  (API contract: http://localhost:${port}/api/openapi.json)`,
 );
 console.log(`Time zone: ${timeZone()}${process.env.TZ ? '' : ' (the computer\'s; set TZ in .env to fix it, e.g. TZ=America/Chicago)'}`);
 console.log(

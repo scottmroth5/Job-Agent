@@ -37,22 +37,26 @@ flock -w 600 9 || fail "Another deploy is still running."
 
 compose() { IMAGE_TAG="$1" docker compose "${@:2}"; }
 
+# Both the app and the public demo must answer /healthz before a deploy counts as good.
 healthy() {
-  local waited=0
-  while (( waited < HEALTH_WAIT_SECONDS )); do
-    if docker compose exec -T app node -e "fetch('http://127.0.0.1:5178/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 3
-    waited=$(( waited + 3 ))
+  local waited=0 service
+  for service in app demo; do
+    while (( waited < HEALTH_WAIT_SECONDS )); do
+      if docker compose exec -T "$service" node -e "fetch('http://127.0.0.1:5178/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 3
+      waited=$(( waited + 3 ))
+    done
+    (( waited < HEALTH_WAIT_SECONDS )) || { log "$service is not answering /healthz"; return 1; }
   done
-  return 1
+  return 0
 }
 
 start_tag() {
   local tag="$1"
   log "Starting image $tag"
-  compose "$tag" pull app
+  compose "$tag" pull app demo
   compose "$tag" up -d --remove-orphans
   healthy
 }
@@ -69,7 +73,7 @@ case "$ACTION" in
       docker image prune -af --filter "until=168h" >/dev/null 2>&1 || true
     else
       log "Image $TAG did not pass /healthz within ${HEALTH_WAIT_SECONDS}s"
-      docker compose logs --tail 40 app >&2 || true
+      docker compose logs --tail 40 app demo >&2 || true
       if [[ -n "$current" ]]; then
         log "Going back to $current"
         start_tag "$current" || fail "The previous image $current is not healthy either. Check: docker compose logs app"

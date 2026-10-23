@@ -114,8 +114,8 @@ function PromptEditor({ name, onSaved }) {
       <div className="muted small">{draft.length.toLocaleString()} characters · required placeholders are outlined</div>
 
       <div className="links">
-        <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for this version (optional)" style={{ flex: '1 1 220px' }} disabled={!dirty} />
-        <button className="primary" disabled={!dirty} onClick={() => act(() => api.savePrompt(name, draft, note), 'Saved. The next run uses this version.')}>Save version</button>
+        <input className="demo-hide" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note for this version (optional)" style={{ flex: '1 1 220px' }} disabled={!dirty} />
+        <button className="primary demo-hide" disabled={!dirty} onClick={() => act(() => api.savePrompt(name, draft, note), 'Saved. The next run uses this version.')}>Save version</button>
         <button
           disabled={!dirty}
           onClick={() => {
@@ -170,7 +170,7 @@ function PromptEditor({ name, onSaved }) {
                     ) : (
                       <>
                         <button className="link" onClick={() => setDraft(v.template)}>load into editor</button>
-                        <button className="link" onClick={() => act(() => api.restorePrompt(name, v.id), 'Restored that version.')}>restore</button>
+                        <button className="link demo-hide" onClick={() => act(() => api.restorePrompt(name, v.id), 'Restored that version.')}>restore</button>
                       </>
                     )}
                   </td>

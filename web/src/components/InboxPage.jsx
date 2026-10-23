@@ -71,7 +71,7 @@ function ReviewCard({ email, applications, onDone, onOpenJob }) {
           <button onClick={() => setReassigning(false)}>Cancel</button>
         </div>
       ) : (
-        <div className="row inbox-actions">
+        <div className="row inbox-actions demo-hide">
           {email.guess && <button className="primary" disabled={busy} onClick={() => resolve('confirm')}>Confirm guess</button>}
           <button disabled={busy} onClick={() => setReassigning(true)}>Link to another job</button>
           <button disabled={busy} onClick={() => resolve('opportunity')}>New opportunity</button>
@@ -152,7 +152,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
 
   return (
     <div className="inbox">
-      <div className="inbox-top">
+      <div className="inbox-top demo-hide">
         <button className="primary" onClick={check} disabled={running || !data.signedIn}>{running ? 'Checking…' : 'Check inbox'}</button>
         <span className="muted small">
           {data.signedIn
@@ -196,7 +196,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
                   </td>
                   <td className="muted">{r.note ?? ''}{r.dueAt ? ` (due ${dateTime(r.dueAt)})` : ''}</td>
                   <td className="nowrap">
-                    <button onClick={() => closeReminder(r.id, 'done')}>Done</button> <button onClick={() => closeReminder(r.id, 'dismissed')}>Dismiss</button>
+                    <span className="demo-hide"><button onClick={() => closeReminder(r.id, 'done')}>Done</button> <button onClick={() => closeReminder(r.id, 'dismissed')}>Dismiss</button></span>
                   </td>
                 </tr>
               ))}

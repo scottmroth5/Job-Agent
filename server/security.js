@@ -69,20 +69,29 @@ export function createRateLimiter({ windowMs, max, now = () => Date.now() }) {
 
 export const SIGN_IN_LIMIT = { windowMs: 15 * 60 * 1000, max: 30 };
 export const REFUSED_LIMIT = { windowMs: 15 * 60 * 1000, max: 100 };
+// The public demo has no sign-in, so every request counts: plenty for a person clicking around (a screen makes a
+// handful of requests), far too few for a script hammering the server.
+export const DEMO_REQUEST_LIMIT = { windowMs: 15 * 60 * 1000, max: 1500 };
 
 /**
  * Rate limits for an internet-facing server: at most 30 sign-in requests (/auth/*) per address per 15 minutes,
  * and an address with more than 100 refused requests (401 or 403) in 15 minutes is turned away until the window
- * ends. Register before the sign-in check so a blocked address is refused first.
+ * ends. all (the public demo) also caps every request per address. Register before the sign-in check so a blocked
+ * address is refused first.
  */
-export function registerRateLimits(app, { signIn = SIGN_IN_LIMIT, refused = REFUSED_LIMIT, now } = {}) {
+export function registerRateLimits(app, { signIn = SIGN_IN_LIMIT, refused = REFUSED_LIMIT, all = null, now } = {}) {
   const signInLimiter = createRateLimiter({ ...signIn, now });
   const refusedLimiter = createRateLimiter({ ...refused, now });
+  const allLimiter = all ? createRateLimiter({ ...all, now }) : null;
   const tooMany = (reply, seconds) =>
     reply.code(429).header('retry-after', String(seconds)).send({ error: 'Too many requests from this address. Try again later.' });
 
   app.addHook('onRequest', async (req, reply) => {
     if (refusedLimiter.blocked(req.ip)) return tooMany(reply, refusedLimiter.retryAfter(req.ip));
+    if (allLimiter && req.url !== '/healthz') {
+      const r = allLimiter.hit(req.ip);
+      if (!r.allowed) return tooMany(reply, r.retryAfterSeconds);
+    }
     if (req.url.startsWith('/auth/')) {
       const r = signInLimiter.hit(req.ip);
       if (!r.allowed) return tooMany(reply, r.retryAfterSeconds);

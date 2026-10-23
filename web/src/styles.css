@@ -351,3 +351,21 @@ a.budget.over { color: var(--low); font-weight: 600; }
 .spending td:nth-child(n + 2), .spending th:nth-child(n + 2) { text-align: right; }
 .budget-form label { margin-bottom: 0; }
 .budget-form input { width: 140px; }
+
+/* Public demo (AUTH_MODE=demo): a banner, and the controls that would change data hidden. */
+.demo-banner {
+  background: #fff4d6;
+  color: #5a4300;
+  border: 1px solid #f0d58a;
+  border-radius: 8px;
+  padding: 8px 14px;
+  margin-bottom: 12px;
+  font-size: 0.92rem;
+}
+@media (prefers-color-scheme: dark) {
+  .demo-banner { background: #3a3014; color: #f3e2b0; border-color: #6b5821; }
+}
+.app.demo .demo-hide { display: none; }
+fieldset.plain { min-width: 0; }
+fieldset.plain:not(.terms-box) { border: 0; padding: 0; margin: 0; }
+fieldset.plain:disabled select, fieldset.plain:disabled input { opacity: 0.85; cursor: default; }

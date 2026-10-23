@@ -13,7 +13,7 @@ import { registerAttachmentRoutes } from './attachments.js';
 import { registerPrepRoutes } from './prep-routes.js';
 import { registerNoteRoutes } from './notes-routes.js';
 import { createScheduler } from './scheduler.js';
-import { errorReply, registerRateLimits, registerSecurityHeaders } from './security.js';
+import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.js';
 import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
@@ -50,6 +50,16 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const app = Fastify({ logger, trustProxy });
   const { db } = store;
   const tasks = createTaskRunner();
+  // The demo shows a few finished runs on the Activity tab; they replay recorded output and call nothing.
+  for (const sample of services.sampleTasks ?? []) {
+    tasks.start(sample.kind, sample.meta ?? {}, async (step, { logger }) => {
+      for (const entry of sample.output) {
+        if (entry.step) step(entry.step);
+        else logger[entry.level ?? 'info'](entry.text);
+      }
+      return sample.result ?? null;
+    });
+  }
 
   // Every route, for the test that checks each one needs sign-in.
   const routes = [];
@@ -60,7 +70,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     openapi: { info: { title: 'Job Agent API', version: '1.0.0', description: 'Job Hunt UI backend' } },
   });
   registerSecurityHeaders(app, { https: Boolean(auth.settings?.publicUrl?.startsWith('https://')) });
-  if (authMode !== 'none') registerRateLimits(app, { now: auth.now });
+  if (authMode !== 'none') registerRateLimits(app, { now: auth.now, all: authMode === 'demo' ? DEMO_REQUEST_LIMIT : null });
   registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now });
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
 

@@ -134,13 +134,24 @@ CI (.github/workflows/ci.yml) runs npm audit (production, high), npm test in Ame
 Dockerfile: node:22-bookworm-slim, production node_modules and Playwright Chromium in early layers (cached until
 package-lock.json changes), code and web/dist last; runs as node (uid 1000) with DATA_DIR=/data, HOST=0.0.0.0.
 .dockerignore keeps .env, data/, and credentials out of the image; keep it in step with .gitignore.
-deploy/ is copied to the server's /opt/job-agent: compose.yml (app plus Caddy, only Caddy publishes ports; it fixes
-DATA_DIR, HOST, PORT, TRUST_PROXY=1), Caddyfile (no access log), deploy.sh (deploy <tag> | rollback | up | status;
+deploy/ is copied to the server's /opt/job-agent: compose.yml (app, demo, and Caddy, only Caddy publishes ports; it fixes
+DATA_DIR, HOST, PORT, TRUST_PROXY=1; demo gets no env_file), Caddyfile (no access log), deploy.sh (deploy <tag> | rollback | up | status; healthy means app and demo both answer /healthz;
 the GitHub deploy key's authorized_keys line forces it, so it validates SSH_ORIGINAL_COMMAND), cloud.env.example.
 .github/workflows/deploy.yml runs after CI succeeds on a push to main: build, publish ghcr.io/<owner>/job-agent
 (sha-<7> and latest), then deploy over SSH when the DEPLOY_ENABLED variable is true. GitHub holds only the deploy
 host, user, key, and known_hosts; app secrets live in the server's .env. A new required setting needs a line in
 deploy/cloud.env.example.
+
+## Demo
+AUTH_MODE=demo (server/auth.js): no sign-in; every non-read request gets 403 except POST /api/admin/prompts/:name/preview,
+which writes nothing; server/index.js starts with demo services (no Google auth, Claude, browser, or schedule) and replays
+demo/sample-data.js SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI hides
+change controls through useDemo() (web/src/demo.jsx) and the demo-hide class; the server's refusal is what protects it.
+scripts/demo-seed.js builds the sample database (marked with the demo_database setting; it refuses any other database,
+checked read-only) from demo/sample-data.js; sample prompt edits are the repo defaults plus one line (PROMPT_EDITS) and must
+validate. Sample data is invented and on example.com domains; never copy the user's data, wording, or history into it.
+npm run demo previews it locally (demo-data/, gitignored); test/demo.test.js walks every route to prove it is read-only.
+A new route that changes data is refused in the demo automatically; a new read route must not call an outside service.
 
 ## Spending and internet safety
 Make Claude clients only with tools/claude.js createJobClaude(db): it applies the monthly cap (agents/budget.js), which refuses

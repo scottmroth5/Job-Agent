@@ -36,7 +36,9 @@
     "inbox:backfill": "node --env-file=.env scripts/inbox.js --backfill",
     "inbox:review": "node --env-file=.env scripts/inbox-review.js",
     "backup": "node --env-file=.env scripts/backup.js",
-    "backup:restore": "node --env-file=.env scripts/backup-restore.js"
+    "backup:restore": "node --env-file=.env scripts/backup-restore.js",
+    "demo:seed": "node scripts/demo-seed.js",
+    "demo": "vite build && node scripts/demo.js"
   },
   "keywords": [],
   "author": "",

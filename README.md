@@ -158,6 +158,14 @@ To reach the app from your phone and run the schedule without this computer on, 
 - **The schedule** moves to the server's `.env` (`SCHEDULE_PIPELINE`, `SCHEDULE_BACKUP`). Turn the Windows tasks off at the same moment (`register-schedule.ps1 -Remove`); running both creates two diverging job lists.
 - **Your data** moves with one copy over SSH: the database (copied with SQLite's backup command so it is consistent), `data/config`, `data/google`, and `.env`. Then add `https://<your address>/auth/google/callback` to the web client's redirect URIs.
 
+## Public demo (optional)
+
+`AUTH_MODE=demo` serves a read-only showcase on made-up data: a fictional candidate, fictional companies, and a sample search with scores, letters, notes, emails, a meeting prep, and pipeline history, dated relative to today. There is no sign-in, every request that would change data is refused, and the server starts without Claude, Gmail, or Drive, so a visitor can never spend money or reach an account.
+
+- **On this computer:** `npm run demo`, then open http://localhost:5180. It rebuilds `demo-data/` each time and never reads `.env`.
+- **The sample data** lives in `demo/sample-data.js`; `scripts/demo-seed.js` builds the database and refuses to replace one it did not make.
+- **In the cloud:** the `demo` service in `deploy/compose.yml` runs the same image with no secrets, a read-only filesystem, an in-memory database rebuilt on every start, and small memory and CPU limits. Caddy serves it at `DEMO_SITE_ADDRESS` with a `noindex` header. Every request is rate limited per address.
+
 ## Privacy
 
 Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The only copy that leaves your machine is the optional encrypted backup to your own Google Drive (and, if you run it in the cloud, the server that then holds these files instead). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
