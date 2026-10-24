@@ -454,3 +454,15 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
   .panel fieldset.grid2 { grid-template-columns: 1fr 1fr; }
   .panel .close { width: 44px; height: 44px; top: 4px; right: 4px; font-size: 26px; }
 }
+
+/* Funnel controls: the time window and the track, the same buttons as the Jobs screen; full width on a phone. */
+@media (max-width: 760px) {
+  .funnel .filters { display: flex; flex-direction: column; align-items: stretch; }
+  .funnel .filters .segmented { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+  .funnel .filters .segmented button { padding: 8px 4px; }
+}
+@media (max-width: 760px) {
+  /* Fractional cards: room for the stacking checkbox so it never sits on the title. */
+  .jobs tr:has(.stack-cell) td.col-title { padding-left: 28px; }
+  .jobs td.stack-cell { left: 10px; top: 13px; }
+}

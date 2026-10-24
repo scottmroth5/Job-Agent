@@ -59,12 +59,13 @@ export default function FunnelPage({ onOpenJob }) {
             </button>
           ))}
         </div>
-        <select value={track} onChange={(e) => setTrack(e.target.value)} aria-label="Track">
-          <option value="all">All tracks</option>
-          {lk.options('track', track).map((v) => (
-            <option key={v.id} value={v.id}>{v.label}</option>
+        <div className="segmented" role="tablist" aria-label="Track">
+          {[['all', 'All'], ...lk.options('track', track).map((v) => [v.id, v.label])].map(([k, l]) => (
+            <button key={k} role="tab" aria-selected={track === k} className={track === k ? 'on' : ''} onClick={() => setTrack(k)}>
+              {l}
+            </button>
           ))}
-        </select>
+        </div>
         <span className="muted small">
           {t.found.toLocaleString()} jobs found{range === 'all' ? '' : ' in this window'}, {t.scored7.toLocaleString()} scored 7+.
         </span>
