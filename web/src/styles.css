@@ -369,3 +369,88 @@ a.budget.over { color: var(--low); font-weight: 600; }
 fieldset.plain { min-width: 0; }
 fieldset.plain:not(.terms-box) { border: 0; padding: 0; margin: 0; }
 fieldset.plain:disabled select, fieldset.plain:disabled input { opacity: 0.85; cursor: default; }
+
+/* Header: the title links home; inside a screen, a back link to Home. Wide screens also keep the screen links. */
+.topbar h1 { font-size: 22px; margin: 0; display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 2px; }
+.topbar h1 a { color: inherit; text-decoration: none; }
+.topbar h1 .who { font-size: 14px; font-weight: 400; color: var(--muted); margin-left: 6px; }
+.topbar h1 .page-name { display: none; }
+.home-link { display: none; align-items: center; gap: 2px; text-decoration: none; color: var(--accent); font-weight: 600; min-height: 44px; }
+.home-link svg { width: 22px; height: 22px; }
+p.signed-in { display: block; text-align: center; margin-top: 18px; }
+
+/* Home: a tile per screen. */
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.tile { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px; min-height: 128px; background: var(--card); border: 1px solid var(--border); border-radius: 14px; color: var(--text); text-decoration: none; text-align: left; font: inherit; cursor: pointer; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04); transition: transform 0.08s ease, box-shadow 0.15s ease; }
+.tile:hover { box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08); }
+.tile:active { transform: scale(0.98); }
+.tile-art { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 14px; margin-bottom: 4px; }
+.tile-icon { width: 32px; height: 32px; }
+.tile-title { font-size: 17px; font-weight: 600; }
+.tile-stat { font-size: 13px; color: var(--muted); }
+.tile-stat.alert { color: var(--mid); font-weight: 600; }
+.t-jobs { background: #e3eef8; color: #1a5276; }
+.t-inbox { background: #e6f4ea; color: #1e7b45; }
+.t-funnel { background: #f3e8fb; color: #6c3a9a; }
+.t-activity { background: #fdf0e1; color: #a35a0b; }
+.t-admin { background: #eceff3; color: #475467; }
+.t-add { background: var(--accent); color: #fff; }
+@media (prefers-color-scheme: dark) {
+  .t-jobs { background: #1f3346; color: #8fc1e8; }
+  .t-inbox { background: #1d3527; color: #86d3a3; }
+  .t-funnel { background: #33254a; color: #c8a5ea; }
+  .t-activity { background: #3a2c18; color: #f0b86e; }
+  .t-admin { background: #2a3039; color: #b6c0cc; }
+}
+.home-card { display: block; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; color: var(--text); text-decoration: none; }
+.home-card .pipeline-run { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.budget-card .budget-line { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
+.budget-card .meter { display: block; margin: 8px 0 2px; }
+.budget-card .meter .fill { display: block; }
+.budget-card .fill.ok { background: var(--good); }
+.budget-card .fill.warn { background: var(--mid); }
+.budget-card .fill.over { background: var(--low); }
+.budget.ok { color: var(--text); }
+
+/* Jobs filters: stage, status, and search; the rest behind Advanced filters. */
+.advanced-toggle { white-space: nowrap; }
+.filters .add-job { margin-left: auto; }
+.filters.advanced { padding: 10px; border: 1px dashed var(--border); border-radius: var(--radius); }
+
+@media (max-width: 760px) {
+  /* Header: back to Home and the screen name; no tab row. */
+  .topbar { flex-wrap: nowrap; align-items: center; gap: 8px; min-height: 44px; }
+  /* Inside a screen: back link on the left, the screen name centered, like an iPhone app. */
+  .topbar:has(.home-link) { display: grid; grid-template-columns: 1fr auto 1fr; }
+  .topbar:has(.home-link) h1 { justify-content: center; }
+  .topbar .views { display: none; }
+  .home-link { display: inline-flex; }
+  .topbar h1 { font-size: 18px; min-width: 0; }
+  .topbar h1 .who { font-size: 13px; }
+  .topbar:has(.home-link) h1 > a, .topbar:has(.home-link) h1 .who { display: none; }
+  .topbar:has(.home-link) h1 .page-name { display: inline; font-size: 18px; }
+  .tiles { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .tile { min-height: 118px; padding: 12px; }
+
+  /* Filters: stage and status side by side, search full width, then the links. */
+  .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .filters input[type='search'] { grid-column: 1 / -1; }
+  .filters .advanced-toggle { justify-self: start; min-height: 40px; }
+  .filters .add-job { justify-self: end; margin: 0; }
+  .filters.advanced { grid-template-columns: 1fr 1fr; }
+  .filters.advanced .segmented { grid-column: 1 / -1; display: flex; }
+  .filters.advanced .segmented button { flex: 1; }
+  .filters.advanced label.date-filter { grid-column: 1 / -1; justify-content: space-between; }
+
+  /* Job cards: title and score, then company and place on one line, then pay and status. */
+  .jobs td.col-company, .jobs td.col-location { display: inline; width: auto; padding: 0; }
+  .jobs td.col-location:not(:empty)::before { content: ' · '; color: var(--muted); }
+  .jobs td.col-discoveredOn, .jobs td.col-letter.empty { display: none; }
+  .jobs td.col-pay { padding-top: 4px; }
+  .jobs td.col-pay::before { content: none; }
+  .jobs tr { padding: 12px; }
+
+  /* Job panel: short fields two to a row, and a bigger close target. */
+  .panel fieldset.grid2 { grid-template-columns: 1fr 1fr; }
+  .panel .close { width: 44px; height: 44px; top: 4px; right: 4px; font-size: 26px; }
+}

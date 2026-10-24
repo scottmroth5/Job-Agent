@@ -7,14 +7,16 @@ import AddJobDialog from './components/AddJobDialog.jsx';
 import StackingBar from './components/StackingBar.jsx';
 import AdminPage from './components/AdminPage.jsx';
 import InboxPage from './components/InboxPage.jsx';
-import PipelineButton from './components/PipelineButton.jsx';
+import HomePage from './components/HomePage.jsx';
 import ActivityPage from './components/ActivityPage.jsx';
 import FunnelPage from './components/FunnelPage.jsx';
 import { DemoBanner, DemoContext } from './demo.jsx';
 
+// #/ is the Home page; each screen has its own address.
+const VIEWS = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin' };
 const viewFromHash = () => {
-  const h = window.location.hash;
-  return h.startsWith('#/admin') ? 'admin' : h.startsWith('#/inbox') ? 'inbox' : h.startsWith('#/activity') ? 'activity' : h.startsWith('#/funnel') ? 'funnel' : 'jobs';
+  const name = /^#\/(\w+)/.exec(window.location.hash)?.[1];
+  return VIEWS[name] ? name : 'home';
 };
 // #/activity/12 opens task 12's output.
 const activityIdFromHash = () => /^#\/activity\/(\w+)/.exec(window.location.hash)?.[1] ?? null;
@@ -94,48 +96,60 @@ export default function App() {
   const demo = Boolean(me?.demo);
   const set = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
   const toggleStack = (id) => setStack((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  // Advanced filters live behind a link; the link shows how many are in use so a hidden one is never forgotten.
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const advancedInUse = [filters.track !== 'all', filters.needsDescription, Boolean(filters.discoveredAfter), Boolean(filters.minScore)].filter(Boolean).length;
+  const resetAdvanced = () => setFilters((f) => ({ ...f, track: 'all', needsDescription: false, discoveredAfter: '', minScore: '' }));
+  const shortName = me?.email ? me.email.split('@')[0] : null;
+  const signOut = async () => {
+    await api.signOut();
+    window.location.href = '/auth/signed-out';
+  };
 
   return (
     <DemoContext.Provider value={demo}>
     <div className={demo ? 'app demo' : 'app'}>
       {demo && <DemoBanner />}
       <header className="topbar">
-        <div>
-          <h1>Job Hunt</h1>
-          {summary && (
-            <div className="muted small">
-              {summary.pipeline} in pipeline ·{' '}
-              {summary.budget ? (
-                <a href="#/admin/spending" className={`budget ${summary.budget.level}`} title="Claude spending this month against your monthly cap (Admin > Spending)">
-                  ${summary.budget.spentUsd.toFixed(2)} of ${summary.budget.limitUsd.toFixed(0)} Claude budget this month
-                  {summary.budget.level === 'over' ? ': used up, Claude calls are paused' : ''}
-                </a>
-              ) : (
-                `$${summary.spend30Days.toFixed(2)} spent in the last 30 days`
-              )}
-            </div>
-          )}
-        </div>
-        <nav className="views" aria-label="Screens">
-          <a href="#/" className={view === 'jobs' ? 'on' : ''}>Jobs</a>
-          <a href="#/inbox" className={view === 'inbox' ? 'on' : ''}>
-            Inbox{summary?.inboxNeedsReview ? <span className="count-badge" title="Emails to review">{summary.inboxNeedsReview}</span> : null}
+        {view !== 'home' && (
+          <a href="#/" className="home-link" aria-label="Home">
+            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 18l-6-6 6-6" />
+            </svg>
+            <span>Home</span>
           </a>
-          <a href="#/funnel" className={view === 'funnel' ? 'on' : ''}>Funnel</a>
-          <a href="#/activity" className={view === 'activity' ? 'on' : ''}>Activity</a>
-          <a href="#/admin" className={view === 'admin' ? 'on' : ''}>Admin</a>
-        </nav>
-        {!demo && <PipelineButton onFinished={refresh} />}
-        {me?.authMode === 'google' && (
-          <div className="signed-in small">
-            <span className="muted" title="Signed in with Google">{me.email}</span>
-            <button className="link" onClick={async () => { await api.signOut(); window.location.href = '/auth/signed-out'; }}>Sign out</button>
-          </div>
         )}
-        {view === 'jobs' && !demo && <button className="primary" onClick={() => setAdding(true)}>+ Add job</button>}
+        <h1>
+          <a href="#/">Job Hunt</a>
+          {shortName && (
+            <span className="who" title={`Signed in with Google as ${me.email}`}>
+              {' '}({shortName})
+            </span>
+          )}
+          {view !== 'home' && <span className="page-name">{VIEWS[view]}</span>}
+        </h1>
+        {/* Wide screens keep the screen links; phones use the Home page tiles and the back link. */}
+        <nav className="views" aria-label="Screens">
+          <a href="#/" className={view === 'home' ? 'on' : ''}>Home</a>
+          {Object.entries(VIEWS).map(([k, label]) => (
+            <a key={k} href={`#/${k}`} className={view === k ? 'on' : ''}>
+              {label}
+              {k === 'inbox' && summary?.inboxNeedsReview ? <span className="count-badge" title="Emails to review">{summary.inboxNeedsReview}</span> : null}
+            </a>
+          ))}
+        </nav>
       </header>
 
-      {view === 'admin' ? (
+      {view === 'home' ? (
+        <>
+          <HomePage summary={summary} demo={demo} onAddJob={() => setAdding(true)} onPipelineFinished={refresh} />
+          {me?.authMode === 'google' && (
+            <p className="muted small signed-in">
+              Signed in as {me.email} · <button className="link" onClick={signOut}>Sign out</button>
+            </p>
+          )}
+        </>
+      ) : view === 'admin' ? (
         <AdminPage />
       ) : view === 'funnel' ? (
         <FunnelPage onOpenJob={setSelectedId} />
@@ -146,6 +160,33 @@ export default function App() {
       ) : (
       <>
       <div className="filters">
+        <select value={filters.stage} onChange={set('stage')} aria-label="Stage" disabled={filters.needsDescription}>
+          {lk.options('stage', filters.stage).map((s) => (
+            <option key={s.id} value={s.id}>{lk.label('stage', s.id, { markArchived: true })}</option>
+          ))}
+          <option value="all">All stages</option>
+        </select>
+        <select value={filters.status} onChange={set('status')} aria-label="Status">
+          <option value="active">Needs action</option>
+          <option value="progress">In progress</option>
+          <option value="all">Any status</option>
+          {lk.options('status', filters.status).map((s) => (
+            <option key={s.id} value={s.id}>{lk.label('status', s.id, { markArchived: true })}</option>
+          ))}
+        </select>
+        <input type="search" placeholder="Search role, company, location" value={filters.q} onChange={set('q')} aria-label="Search" />
+        <button type="button" className="link advanced-toggle" aria-expanded={showAdvanced} onClick={() => setShowAdvanced((v) => !v)}>
+          {showAdvanced ? 'Hide advanced filters' : 'Advanced filters'}
+          {advancedInUse > 0 && <span className="count-badge" title="Advanced filters in use">{advancedInUse}</span>}
+        </button>
+        {!demo && (
+          <button className="primary add-job" onClick={() => setAdding(true)}>
+            + Add job
+          </button>
+        )}
+      </div>
+      {showAdvanced && (
+      <div className="filters advanced">
         <div className="segmented" role="tablist" aria-label="Track">
           {[['all', 'All'], ...lk.options('track', filters.track).map((t) => [t.id, t.label])].map(([value, label]) => (
             <button key={value} role="tab" aria-selected={filters.track === value} className={filters.track === value ? 'on' : ''} onClick={() => setFilters((f) => ({ ...f, track: value }))}>
@@ -161,20 +202,6 @@ export default function App() {
         >
           Needs description{summary ? ` (${summary.needsDescription})` : ''}
         </button>
-        <select value={filters.stage} onChange={set('stage')} aria-label="Stage" disabled={filters.needsDescription}>
-          {lk.options('stage', filters.stage).map((s) => (
-            <option key={s.id} value={s.id}>{lk.label('stage', s.id, { markArchived: true })}</option>
-          ))}
-          <option value="all">All stages</option>
-        </select>
-        <select value={filters.status} onChange={set('status')} aria-label="Status">
-          <option value="active">Needs action</option>
-          <option value="progress">In progress</option>
-          <option value="all">Any status</option>
-          {lk.options('status', filters.status).map((s) => (
-            <option key={s.id} value={s.id}>{lk.label('status', s.id, { markArchived: true })}</option>
-          ))}
-        </select>
         <label className="date-filter" title="Only jobs discovered on or after this date">
           Discovered since
           <input type="date" value={filters.discoveredAfter} onChange={set('discoveredAfter')} max={new Date().toISOString().slice(0, 10)} />
@@ -185,8 +212,13 @@ export default function App() {
             <option key={n} value={n}>{n}+</option>
           ))}
         </select>
-        <input type="search" placeholder="Search role, company, location" value={filters.q} onChange={set('q')} aria-label="Search" />
+        {advancedInUse > 0 && (
+          <button type="button" className="link" onClick={resetAdvanced}>
+            Clear advanced filters
+          </button>
+        )}
       </div>
+      )}
 
       {lk.showsTerms(filters.track) && summary?.fractionalTarget && (
         <StackingBar jobs={jobs.filter((j) => stack.includes(j.id))} target={summary.fractionalTarget} onClear={() => setStack([])} />

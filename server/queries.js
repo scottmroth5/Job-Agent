@@ -246,6 +246,9 @@ export function summary(db, config = {}, now = new Date()) {
   return {
     counts,
     pipeline: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active').reduce((s, c) => s + c.n, 0),
+    // The Home page's counts: pipeline jobs that need action (the Jobs page's default view) and ones in progress.
+    needsAction: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.needsAction().includes(c.status)).reduce((s, c) => s + c.n, 0),
+    inProgress: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.inProgress().includes(c.status)).reduce((s, c) => s + c.n, 0),
     needsDescription: db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} WHERE ${awaitingDescription(lk)}`).pluck().get(),
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,

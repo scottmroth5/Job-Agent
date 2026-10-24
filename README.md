@@ -82,12 +82,12 @@ Besides API keys and sign-in values, these settings change how the app runs. The
 | `SCHEDULE_INBOX` | `daily 12:00` | An extra inbox check. |
 | `SCHEDULE_BACKUP` | `daily 23:00` | The encrypted backup. |
 | `DATA_DIR` | `/data` | Where the database, settings, Google sign-in, attachments, and logs live. Defaults to the repo's `data` folder. |
-| `MONTHLY_CLAUDE_BUDGET_USD` | `50` | The monthly Claude spending cap, until you set one on **Admin > Spending** (which wins). Default $50. When this calendar month's spend reaches it, Claude calls stop until the 1st; the rest of the app keeps working. The header shows spend against the cap. |
+| `MONTHLY_CLAUDE_BUDGET_USD` | `50` | The monthly Claude spending cap, until you set one on **Admin > Spending** (which wins). Default $50. When this calendar month's spend reaches it, Claude calls stop until the 1st; the rest of the app keeps working. The Home page shows spend against the cap. |
 | `TRUST_PROXY` | `127.0.0.1` | Only behind a reverse proxy (for example Caddy in the cloud): who to trust for the visitor's address, so rate limits count real visitors. `true`, a hop count, or the proxy's address. |
 
 Once the app is on the internet (Google sign-in on), it also sends security headers on every page (a strict content security policy, no framing, HTTPS-only when `PUBLIC_URL` is https), limits sign-in attempts to 30 per address per 15 minutes, turns away an address after 100 refused requests in 15 minutes, and answers server errors with a plain message (details go to the server log only). A test checks that every page and API route needs sign-in.
 
-Schedules are days (`daily`, `weekdays`, `weekends`, or names like `Mon,Thu`) and a 24-hour time. They run while the server runs; a run missed while the server was off or asleep runs when it comes back, if it was missed within the last 12 hours. The next pipeline run shows beside **Run pipeline**, and scheduled runs appear on the Activity tab. Use either these schedules or the Windows tasks (`scripts\register-schedule.ps1`, `scripts\register-backup-task.ps1`), not both, or jobs run twice.
+Schedules are days (`daily`, `weekdays`, `weekends`, or names like `Mon,Thu`) and a 24-hour time. They run while the server runs; a run missed while the server was off or asleep runs when it comes back, if it was missed within the last 12 hours. The next pipeline run shows beside **Run pipeline** on the Home page, and scheduled runs appear on the Activity tab. Use either these schedules or the Windows tasks (`scripts\register-schedule.ps1`, `scripts\register-backup-task.ps1`), not both, or jobs run twice.
 
 ## Gmail inbox setup (optional)
 

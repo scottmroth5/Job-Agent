@@ -63,7 +63,7 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
                 </td>
               )}
               {columns.map((c) => (
-                <td key={c.key} data-label={c.label} className={`col-${c.key}`}>
+                <td key={c.key} data-label={c.label} className={`col-${c.key}${c.key === 'letter' && !j.letter ? ' empty' : ''}`}>
                   {c.key === 'score' && (
                     <span className={scoreClass(j.score)}>
                       {j.score ?? '–'}
