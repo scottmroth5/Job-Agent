@@ -28,6 +28,22 @@ RUN npm ci
 COPY . .
 RUN npm run web:build && rm -rf node_modules
 
+# The country database for US-only access (server/geo.js): DB-IP's free IP to Country Lite (CC BY 4.0,
+# https://db-ip.com), this month's file or last month's. A failed download leaves no file, and the app then blocks
+# nothing and says so in its log; the weekly rebuild tries again.
+FROM debian:bookworm-slim AS geo
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+# GEO_STAMP (the build date, from the deploy workflow) makes each build download the file afresh rather than reuse the cache.
+ARG GEO_STAMP=none
+RUN echo "country database for build $GEO_STAMP" && mkdir -p /geo \
+ && for m in "$(date -u +%Y-%m)" "$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)"; do \
+      if curl -fsSL --max-time 120 -o /tmp/country.mmdb.gz "https://download.db-ip.com/free/dbip-country-lite-$m.mmdb.gz" \
+         && gunzip -c /tmp/country.mmdb.gz > /geo/country.mmdb && [ -s /geo/country.mmdb ]; then echo "country database $m"; break; fi; \
+      rm -f /geo/country.mmdb; \
+    done; rm -f /tmp/country.mmdb.gz; true
+
 # Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
 FROM node:22-bookworm-slim
 ENV NODE_ENV=production \
@@ -47,6 +63,7 @@ RUN apt-get update \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
            /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=build /app ./
+COPY --from=geo /geo /app/geo
 # Runs as the unprivileged node user (uid 1000); the mounted /data folder must be owned by that uid.
 RUN mkdir -p /data && chown node:node /data
 USER node

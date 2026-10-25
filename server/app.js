@@ -14,6 +14,7 @@ import { registerAttachmentRoutes } from './attachments.js';
 import { registerPrepRoutes } from './prep-routes.js';
 import { registerNoteRoutes } from './notes-routes.js';
 import { createScheduler } from './scheduler.js';
+import { BLOCKED_PAGE, geoBlocker } from './geo.js';
 import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.js';
 import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
@@ -47,9 +48,14 @@ const taskAccepted = { 202: { type: 'object', properties: { taskId: { type: 'str
  * @param {string} [ctx.authMode]   'none' (default) or 'google'
  * @param {object} [ctx.auth]       { settings: authSettings(), exchange? } for google mode (tests pass a fake exchange)
  */
-export async function buildApp({ store, config, services, webDir, authMode = 'none', auth = {}, logger = false, trustProxy = false }) {
+export async function buildApp({ store, config, services, webDir, authMode = 'none', auth = {}, logger = false, trustProxy = false, geo = {} }) {
   // trustProxy: behind a reverse proxy (Caddy in the cloud), the client's address comes from X-Forwarded-For.
   const app = Fastify({ logger, trustProxy });
+  // US-only access (server/geo.js, GEO_ALLOW): refused before anything else runs; the health check always passes.
+  const blocked = geoBlocker(geo);
+  app.addHook('onRequest', async (req, reply) => {
+    if (blocked(req)) return reply.code(403).type('text/html').header('Cache-Control', 'no-store').send(BLOCKED_PAGE);
+  });
   const { db } = store;
   const tasks = createTaskRunner();
   // The demo shows a few finished runs on the Activity tab; they replay recorded output and call nothing.

@@ -18,6 +18,7 @@ import { openJobStore } from '../db/index.js';
 import { buildApp } from './app.js';
 import { schedulesFromEnv } from './scheduler.js';
 import { timeZone } from '../tools/dates.js';
+import { geoAllowFromEnv, loadCountryLookup } from './geo.js';
 import { assertSafeBinding, authSettings } from './auth.js';
 import { SAMPLE_TASKS } from '../demo/sample-data.js';
 
@@ -92,7 +93,11 @@ const services = demo ? demoServices() : realServices();
 // TRUST_PROXY: set behind a reverse proxy so client addresses (for rate limits) come from X-Forwarded-For:
 // "true", a hop count ("1"), or the proxy's addresses ("127.0.0.1"). Unset: the direct connection's address.
 const trustProxy = !process.env.TRUST_PROXY ? false : process.env.TRUST_PROXY === 'true' ? true : /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY;
-const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode, auth: { settings: authConfig }, trustProxy });
+// US-only access (GEO_ALLOW, server/geo.js): the country database ships in the image; without it nothing is blocked.
+const geoAllow = geoAllowFromEnv();
+const geo = { allow: geoAllow, lookup: geoAllow.length ? await loadCountryLookup().catch(() => null) : null };
+if (geoAllow.length) console.log(geo.lookup ? `[geo] only ${geoAllow.join(', ')} allowed` : '[geo] the country database is missing: nothing is blocked (the next image build adds it)');
+const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode, auth: { settings: authConfig }, trustProxy, geo });
 await app.listen({ host, port });
 console.log(
   authMode === 'google'

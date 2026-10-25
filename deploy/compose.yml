@@ -22,6 +22,8 @@ services:
       HOST: 0.0.0.0
       PORT: "5178"
       TRUST_PROXY: loopback,linklocal,uniquelocal
+      # US-only access (server/geo.js); the health check always passes.
+      GEO_ALLOW: US
     volumes:
       # The database, config, Google tokens, attachments, and logs. Survives every deploy.
       - ./data:/data
@@ -48,6 +50,8 @@ services:
       HOST: 0.0.0.0
       PORT: "5178"
       TRUST_PROXY: loopback,linklocal,uniquelocal
+      # US-only access (server/geo.js); the health check always passes.
+      GEO_ALLOW: US
       TZ: ${TZ:-UTC}
     # Builds the sample database, then serves it. A restart resets the demo.
     command: ["sh", "-c", "node scripts/demo-seed.js --force && exec node server/index.js"]

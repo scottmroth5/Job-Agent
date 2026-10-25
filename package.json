@@ -57,6 +57,7 @@
     "csv-parse": "^7.0.3",
     "fastify": "^5.12.5",
     "google-auth-library": "^11.1.0",
+    "maxmind": "^5.0.7",
     "playwright": "^1.63.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

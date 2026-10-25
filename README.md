@@ -84,6 +84,7 @@ Besides API keys and sign-in values, these settings change how the app runs. The
 | `DATA_DIR` | `/data` | Where the database, settings, Google sign-in, attachments, and logs live. Defaults to the repo's `data` folder. |
 | `MONTHLY_CLAUDE_BUDGET_USD` | `50` | The monthly Claude spending cap, until you set one on **Admin > Spending** (which wins). Default $50. When this calendar month's spend reaches it, Claude calls stop until the 1st; the rest of the app keeps working. The Home page shows spend against the cap. |
 | `TRUST_PROXY` | `loopback,linklocal,uniquelocal` | Only behind a reverse proxy (for example Caddy in the cloud): which proxy addresses to trust for the visitor's address, so rate limits count real visitors. Name the proxy's addresses (as here, for a proxy on a private network); never a hop count like `1`, which makes the app see the proxy as every visitor. |
+| `GEO_ALLOW` | `US` | Only these countries (two-letter codes, comma separated) may use the site; everyone else gets a short page saying it is US only. The health check always works, and nothing is blocked when unset or when the country database is missing. The server image includes the database (IP to Country Lite by DB-IP, CC BY 4.0), refreshed weekly. |
 
 Once the app is on the internet (Google sign-in on), it also sends security headers on every page (a strict content security policy, no framing, HTTPS-only when `PUBLIC_URL` is https), limits sign-in attempts to 30 per address per 15 minutes, turns away an address after 100 refused requests in 15 minutes, and answers server errors with a plain message (details go to the server log only). A test checks that every page and API route needs sign-in.
 
@@ -167,6 +168,8 @@ To reach the app from your phone and run the schedule without this computer on, 
 - **In the cloud:** the `demo` service in `deploy/compose.yml` runs the same image with no secrets, a read-only filesystem, an in-memory database rebuilt on every start, and small memory and CPU limits. Caddy serves it at `DEMO_SITE_ADDRESS` with a `noindex` header. Every request is rate limited per address.
 
 ## Privacy
+
+Country data for US-only access: IP to Country Lite by DB-IP (https://db-ip.com), CC BY 4.0.
 
 Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The only copy that leaves your machine is the optional encrypted backup to your own Google Drive (and, if you run it in the cloud, the server that then holds these files instead). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
 
