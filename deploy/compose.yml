@@ -15,11 +15,13 @@ services:
     # Every setting and secret, from the server's own .env (never in GitHub or the image).
     env_file: .env
     environment:
-      # Fixed for the container, whatever .env says: data on the mounted disk, reachable by Caddy, one proxy hop.
+      # Fixed for the container, whatever .env says: data on the mounted disk, reachable by Caddy, and Caddy trusted
+      # as the proxy. TRUST_PROXY names private addresses, never a hop count: a count makes Fastify report Caddy's
+      # address for every visitor, so the per-address rate limits would be shared by everyone.
       DATA_DIR: /data
       HOST: 0.0.0.0
       PORT: "5178"
-      TRUST_PROXY: "1"
+      TRUST_PROXY: loopback,linklocal,uniquelocal
     volumes:
       # The database, config, Google tokens, attachments, and logs. Survives every deploy.
       - ./data:/data
@@ -45,7 +47,7 @@ services:
       DATA_DIR: /data
       HOST: 0.0.0.0
       PORT: "5178"
-      TRUST_PROXY: "1"
+      TRUST_PROXY: loopback,linklocal,uniquelocal
       TZ: ${TZ:-UTC}
     # Builds the sample database, then serves it. A restart resets the demo.
     command: ["sh", "-c", "node scripts/demo-seed.js --force && exec node server/index.js"]
