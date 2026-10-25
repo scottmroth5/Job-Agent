@@ -93,8 +93,15 @@ const page = (title, body) =>
   `<style>body{font:16px/1.5 system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#f6f7f9;color:#1d2330}` +
   `@media (prefers-color-scheme: dark){body{background:#12151b;color:#e6e9ef}a{color:#7fb3d9}}main{max-width:420px;padding:24px}</style></head>` +
   `<body><main><h1 style="font-size:20px">${escapeHtml(title)}</h1>${body}</main></body></html>`;
-/** Only same-site paths are allowed as the place to return to after signing in. */
-const safeNext = (next) => (typeof next === 'string' && /^\/(?!\/)/.test(next) && !next.startsWith('/auth/') ? next : '/');
+/**
+ * Only same-site paths are allowed as the place to return to after signing in. Browsers read a backslash as a slash,
+ * so "/\evil.example" would mean "//evil.example" (another site): backslashes, control characters, and anything that
+ * is not a single leading slash are refused, as are the sign-in pages themselves.
+ */
+export const safeNext = (next) =>
+  typeof next === 'string' && next.length <= 2000 && /^\/(?![/\\])/.test(next) && !/[\\\u0000-\u001f\u007f]/.test(next) && !next.startsWith('/auth/')
+    ? next
+    : '/';
 
 /**
  * Registers the auth hook and routes. In google mode, req.user is the signed-in email on every allowed request.

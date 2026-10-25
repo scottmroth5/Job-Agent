@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { openJobStore } from '../db/index.js';
 import { buildApp } from '../server/app.js';
-import { assertSafeBinding, authSettings } from '../server/auth.js';
+import { assertSafeBinding, authSettings, safeNext } from '../server/auth.js';
 
 // Synthetic accounts and a fake Google exchange; no network.
 const SITE = 'http://localhost:5178';
@@ -133,10 +133,15 @@ test('removing an address from the allowlist locks that session out at once; a f
 
 test('a return path can only be on this site', async () => {
   const { app, store, signIn } = await setup();
-  for (const next of ['//evil.example', 'https://evil.example', '/auth/logout']) {
+  // A backslash reads as a slash in browsers, so /\evil.example would be another site.
+  for (const next of ['//evil.example', 'https://evil.example', '/auth/logout', '/\\evil.example', '/\\/evil.example', '/\r\nSet-Cookie:x', '/x\ty', 'javascript:alert(1)']) {
     const { res } = await signIn(next);
     assert.equal(res.headers.location, '/', next);
   }
+  const { res } = await signIn('/#/jobs?x=1');
+  assert.equal(res.headers.location, '/#/jobs?x=1', 'a real page on this site is kept');
+  assert.equal(safeNext('/\u0000x'), '/');
+  assert.equal(safeNext('/'.padEnd(3000, 'a')), '/', 'overlong');
   await app.close();
   store.close();
 });
