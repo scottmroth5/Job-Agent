@@ -11,6 +11,11 @@
 #   DEPLOY_SSH_KEY       private half of the deploy key; its authorized_keys line forces /opt/job-agent/deploy.sh
 #   DEPLOY_KNOWN_HOSTS   the server's host key line (ssh-keyscan <address>), so GitHub never trusts an impostor
 # GitHub holds nothing else: the app's secrets and data stay on the server.
+#
+# Weekly security rebuild (Mondays 13:00 UTC, after Dependabot's morning updates): runs the checks again, then builds
+# the current main with the newest Node base image, scans it, and deploys it. A patch update that Dependabot
+# auto-merged starts no CI run of its own (merges by GITHUB_TOKEN never do), so this is how those updates ship.
+# Every image is scanned with Trivy before it is published; a fixable high or critical finding stops it.
 name: Deploy
 
 on:
@@ -18,6 +23,8 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  schedule:
+    - cron: '0 13 * * 1'
   workflow_dispatch:
     inputs:
       action:
@@ -38,12 +45,34 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # The weekly rebuild has no CI run before it, so it runs the checks here.
+  checks:
+    name: Weekly checks
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+      - run: npm run check:security
+
   image:
     name: Build and publish image
-    # After a passing CI run on a push to main, or a manual run that asks for a fresh build.
+    needs: checks
+    # After a passing CI run on a push to main, the weekly rebuild once its checks pass, or a manual fresh build.
     if: >-
+      always() && (
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push') ||
-      (github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.tag == '')
+      (github.event_name == 'schedule' && needs.checks.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.action == 'deploy' && inputs.tag == ''))
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -59,10 +88,12 @@ jobs:
       - id: names
         env:
           SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
           owner="$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
           echo "image=ghcr.io/${owner}/job-agent" >> "$GITHUB_OUTPUT"
-          echo "tag=sha-${SHA::7}" >> "$GITHUB_OUTPUT"
+          # The weekly rebuild of an unchanged commit gets its own tag, so the previous image stays there to roll back to.
+          if [ "$EVENT" = "schedule" ]; then echo "tag=sha-${SHA::7}-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"; else echo "tag=sha-${SHA::7}" >> "$GITHUB_OUTPUT"; fi
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
         with:
