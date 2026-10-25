@@ -10,7 +10,7 @@
 
 # Tools for installing dependencies. git: agent-core is a GitHub dependency. python3, make, g++: the fallback
 # if better-sqlite3 has no prebuilt binary for this platform.
-FROM node:22-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
@@ -29,7 +29,7 @@ COPY . .
 RUN npm run web:build && rm -rf node_modules
 
 # Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 ENV NODE_ENV=production \
     DATA_DIR=/data \
     HOST=0.0.0.0 \
