@@ -1,0 +1,2 @@
+# CodeQL alerts reviewed and accepted: rule id, the file, then why. The CI gate (ci.yml) skips exactly these pairs;
+# anything else that is high or critical fails CI and stops the deploy. Review this list when the code it names changes.
