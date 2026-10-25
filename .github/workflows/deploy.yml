@@ -69,6 +69,28 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Built first into the runner only, so the scan below can stop a vulnerable image before it is published.
+      # pull: always the newest base image, so fixed operating system packages come in.
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64
+          pull: true
+          load: true
+          push: false
+          tags: ${{ steps.names.outputs.image }}:${{ steps.names.outputs.tag }}
+          cache-from: type=gha
+      # A fixable high or critical vulnerability in the image (system packages or Node modules) stops the deploy.
+      # Accepted findings, if ever needed, go in .trivyignore with a reason. Pinned to a commit: tags can be moved.
+      - name: Scan the image (Trivy)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.names.outputs.image }}:${{ steps.names.outputs.tag }}
+          scan-type: image
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '1'
+          trivyignores: .trivyignore
       - uses: docker/build-push-action@v7
         with:
           context: .

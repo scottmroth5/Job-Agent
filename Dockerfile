@@ -38,10 +38,14 @@ ENV NODE_ENV=production \
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 # Chromium and its system libraries, matching the installed Playwright version; tzdata for the TZ setting.
+# Then npm, npx, yarn, and corepack are removed: only node runs here, and their bundled dependencies would fail the
+# image scan (Trivy) for code that never runs.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tzdata ca-certificates \
  && npx playwright install --with-deps chromium \
- && rm -rf /var/lib/apt/lists/* /root/.npm
+ && rm -rf /var/lib/apt/lists/* /root/.npm \
+ && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=build /app ./
 # Runs as the unprivileged node user (uid 1000); the mounted /data folder must be owned by that uid.
 RUN mkdir -p /data && chown node:node /data
