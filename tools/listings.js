@@ -10,13 +10,13 @@ const LIST_TITLE = [/\bjobs\b/i, /\bvacancies\b/i, /\bjob (listings|search|board
 
 // Search and browse pages on job boards (a link to one posting on the same site is not matched).
 const LIST_URL = [
-  /indeed\.[a-z.]+\/(q-|jobs\?|m\/jobs\?|[a-z-]+-jobs(\.html|\/|$))/i,
-  /ziprecruiter\.com\/(jobs-search|candidate\/search|Jobs\/)/,
-  /glassdoor\.[a-z.]+\/Job\/.*SRCH/i,
-  /simplyhired\.[a-z.]+\/search/i,
-  /monster\.[a-z.]+\/jobs\/(search|q-)/i,
-  /talent\.com\/jobs\?/i,
-  /linkedin\.com\/jobs\/(search|collections)(?![^#]*currentJobId=)/i,
+  /^https?:\/\/(?:[\w-]+\.)*indeed\.[a-z.]+\/(q-|jobs\?|m\/jobs\?|[a-z-]+-jobs(\.html|\/|$))/i,
+  /^https?:\/\/(?:[\w-]+\.)*ziprecruiter\.com\/(jobs-search|candidate\/search|Jobs\/)/,
+  /^https?:\/\/(?:[\w-]+\.)*glassdoor\.[a-z.]+\/Job\/.*SRCH/i,
+  /^https?:\/\/(?:[\w-]+\.)*simplyhired\.[a-z.]+\/search/i,
+  /^https?:\/\/(?:[\w-]+\.)*monster\.[a-z.]+\/jobs\/(search|q-)/i,
+  /^https?:\/\/(?:[\w-]+\.)*talent\.com\/jobs\?/i,
+  /^https?:\/\/(?:[\w-]+\.)*linkedin\.com\/jobs\/(search|collections)(?![^#]*currentJobId=)/i,
 ];
 
 /**

@@ -1,3 +1,23 @@
+/** Whether a hostname is the domain itself or one of its subdomains (never "evil-linkedin.com"). */
+export const hostIs = (host, domain) => {
+  const h = String(host ?? '').toLowerCase();
+  return h === domain || h.endsWith(`.${domain}`);
+};
+
+/**
+ * Whether a link is on a site (the domain or a subdomain) and, when given, under a path prefix. Parses the link
+ * rather than searching its text, so a look-alike host or the site's name in a path or query never matches.
+ */
+export function isOnSite(raw, domain, pathPrefix = '') {
+  let url;
+  try {
+    url = new URL(String(raw ?? ''));
+  } catch {
+    return false;
+  }
+  return /^https?:$/.test(url.protocol) && hostIs(url.hostname, domain) && url.pathname.toLowerCase().startsWith(pathPrefix.toLowerCase());
+}
+
 // Query parameters that only track where a click came from; they never identify a different job.
 const TRACKING = /^(utm_.*|trk.*|refid|trackingid|ref|gh_src|lever-source|source|src|fbclid|gclid|mc_.*)$/i;
 
@@ -18,7 +38,7 @@ export function normalizeUrl(raw) {
   }
   const host = url.hostname.toLowerCase().replace(/^www\./, '');
   let path = url.pathname.replace(/\/+$/, '') || '';
-  if (host.endsWith('linkedin.com')) {
+  if (hostIs(host, 'linkedin.com')) {
     // /jobs/view/some-title-at-company-1234567890 and /jobs/view/1234567890 are the same job.
     const jobId = /\/jobs\/view\/(?:[^/]*-)?(\d{6,})$/i.exec(path)?.[1];
     return jobId ? `linkedin.com/jobs/view/${jobId}` : `${host}${path.toLowerCase()}`;

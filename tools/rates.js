@@ -7,7 +7,7 @@ const UNITS = [
   ['project', /per\s+project|\bproject\b|fixed\s+fee/i],
 ];
 
-const money = /\$\s*(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*([kKmM])?/g;
+const money = /\$\s*(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)(?:\s*([kKmM]))?/g;
 const amount = (digits, suffix) => {
   const n = Number(digits.replace(/,/g, ''));
   return suffix?.toLowerCase() === 'k' ? n * 1000 : suffix?.toLowerCase() === 'm' ? n * 1_000_000 : n;
@@ -24,7 +24,7 @@ export function parseRate(text) {
   if (!values.length) return null;
   let [first, second] = values;
   // A range shares one scale when only one side has it: "$5K - 6K", "$10-20k/month".
-  const range = /\$\s*(\d[\d.,]*)\s*([kK])?\s*(?:-|–|—|to)\s*\$?\s*(\d[\d.,]*)\s*([kK])?/.exec(s);
+  const range = /\$\s*(\d[\d.,]*)(?:\s*([kK]))?\s*(?:-|–|—|to)\s*(?:\$\s*)?(\d[\d.,]*)(?:\s*([kK]))?/.exec(s);
   if (range) {
     first = amount(range[1], range[2] ?? range[4]);
     second = amount(range[3], range[4] ?? range[2]);
@@ -65,7 +65,7 @@ export function findPayInText(text) {
  */
 export function parseHours(text) {
   const s = String(text ?? '');
-  const m = /(\d+(?:\.\d+)?)\s*(?:(?:-|–|to)\s*(\d+(?:\.\d+)?))?\s*(?:\(|hrs?\b|hours?\b|h\/w|\/\s*w(ee)?k|per\s+week|$)/i.exec(s);
+  const m = /(?<![\d.])(\d+(?:\.\d+)?)\s*(?:(?:-|–|to)\s*(\d+(?:\.\d+)?)\s*)?(?:\(|hrs?\b|hours?\b|h\/w|\/\s*w(ee)?k|per\s+week|$)/i.exec(s);
   if (!m) return null;
   const a = Number(m[1]);
   const b = m[2] ? Number(m[2]) : a;

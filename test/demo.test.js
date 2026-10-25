@@ -47,7 +47,7 @@ async function demoApp(dbPath) {
   return { app, store };
 }
 
-const sampleUrl = (url) => url.replace(/:(\w+)/g, (_, name) => (name === 'id' ? '1' : name === 'action' ? 'score' : name === 'list' ? 'status' : name === 'name' ? 'score' : 'x')).replace('*', 'index.html');
+const sampleUrl = (url) => url.replace(/:(\w+)/g, (_, name) => (name === 'id' ? '1' : name === 'action' ? 'score' : name === 'list' ? 'status' : name === 'name' ? 'score' : 'x')).replaceAll('*', 'index.html');
 
 test('the seed builds a full sample search: jobs in every stage, scores, letters, emails, runs, and prompt edits', () => {
   const { dbPath, configPath, counts } = seeded();

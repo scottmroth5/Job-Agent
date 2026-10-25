@@ -2,7 +2,7 @@
 //   npm run eval:score -- --build                     create data/evals/score/cases.jsonl (no Claude calls)
 //   npm run eval:score -- --rebuild                   recreate the cases
 //   npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 [--max-usd=2] [--limit=N]
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createTracer } from '@scottmroth5/agent-core';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
@@ -25,19 +25,31 @@ const pct = (x) => (x == null ? '-' : `${Math.round(x * 100)}%`);
 const num = (x) => (x == null ? '-' : x.toFixed(2));
 
 async function build(rebuild) {
-  if (existsSync(CASES) && !rebuild) throw new Error(`${CASES} already exists. Use --rebuild to recreate it.`);
+  // Claim the cases file first ('wx' fails if it exists unless --rebuild), so the check and the write are one step.
+  mkdirSync(DIR, { recursive: true });
+  let fd;
+  try {
+    fd = openSync(CASES, rebuild ? 'w' : 'wx');
+  } catch (err) {
+    if (err.code === 'EEXIST') throw new Error(`${CASES} already exists. Use --rebuild to recreate it.`);
+    throw err;
+  }
   const config = loadConfig();
   const store = openJobStore();
   const browser = await createBrowser();
+  let written = false;
   try {
     const { cases, skipped, fetched } = await buildCases({ db: store.db, http: createHttp(), browser, config });
-    mkdirSync(DIR, { recursive: true });
-    writeFileSync(CASES, cases.map((c) => JSON.stringify(c)).join('\n') + '\n');
+    writeFileSync(fd, cases.map((c) => JSON.stringify(c)).join('\n') + '\n');
+    written = true;
     const count = (l) => cases.filter((c) => c.label === l).length;
     console.log(`Wrote ${cases.length} cases to ${CASES}: ${count('applied')} applied, ${count('passed')} passed.`);
     console.log(`Text: ${cases.length - fetched} from pasted descriptions, ${fetched} fetched again; ${skipped.noText} skipped with no text.`);
     console.log(`With a v1 score: ${cases.filter((c) => c.v1Score != null).length}.`);
   } finally {
+    closeSync(fd);
+    // A failed build leaves no empty cases file behind (only one this run created).
+    if (!written && !rebuild) rmSync(CASES, { force: true });
     await browser?.close();
     store.close();
   }

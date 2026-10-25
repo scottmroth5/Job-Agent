@@ -1,7 +1,7 @@
 // Manually added jobs: a link you found and/or a pasted description. Dedupe, get the text if
 // you did not paste it, check location and track, score, and write materials when it scores
 // well (or when asked). Used by the UI's Add job and by npm run add.
-import { normalizeUrl } from '../tools/urls.js';
+import { normalizeUrl, isOnSite } from '../tools/urls.js';
 import { identityKey, storedKey, isRealCompany } from './identity.js';
 import { checkLocation } from '../tools/location.js';
 import { detectTrack } from '../tools/track.js';
@@ -112,7 +112,7 @@ export async function addPosting(input, ctx) {
     hoursText: input.hoursText?.trim() || null,
     linkedinJobId: jobIdFromUrl(url),
   };
-  if (url && /fractionaljobs\.io\/jobs\//i.test(url)) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, url);
+  if (url && isOnSite(url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, url);
   if (pasted) {
     Object.assign(item, { fetchStatus: 'ok', fetchMethod: 'pasted' });
     // Still read the page for title/company/terms when they were not typed in.

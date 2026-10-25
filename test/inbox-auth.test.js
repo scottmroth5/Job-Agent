@@ -14,7 +14,7 @@ test('the inbox asks for exactly gmail.readonly and gmail.modify, offline, with 
   assert.equal(url.searchParams.get('access_type'), 'offline');
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.equal(url.searchParams.get('redirect_uri'), 'http://127.0.0.1:5555');
-  assert.ok(!INBOX_SCOPES.some((s) => /gmail\.send|mail\.google\.com\/?$/.test(s)), 'no send or full-mail scope');
+  assert.ok(!INBOX_SCOPES.some((s) => /gmail\.send$/.test(s) || /^https:\/\/mail\.google\.com\/?$/.test(s)), 'no send or full-mail scope');
 });
 
 test('the inbox client reads its token from GMAIL_REFRESH_TOKEN only', () => {

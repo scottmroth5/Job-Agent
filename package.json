@@ -46,6 +46,7 @@
   "license": "ISC",
   "description": "Job discovery and job hunt agents",
   "dependencies": {
+    "@fastify/rate-limit": "^11.2.1",
     "@fastify/static": "^10.1.5",
     "@fastify/swagger": "^9.9.1",
     "@googleapis/docs": "^14.0.1",

@@ -10,7 +10,14 @@ export function setEnvValues(values, path = ENV_PATH) {
     if (!/^[A-Z][A-Z0-9_]*$/.test(k)) throw new Error(`Invalid .env key: ${k}`);
     if (/[\r\n]/.test(String(v))) throw new Error(`The value for ${k} contains a line break.`);
   }
-  const lines = existsSync(path) ? readFileSync(path, 'utf8').split(/\r?\n/) : [];
+  // One read, no separate existence check: a missing file is simply empty.
+  let text = '';
+  try {
+    text = readFileSync(path, 'utf8');
+  } catch (err) {
+    if (err.code !== 'ENOENT') throw err;
+  }
+  const lines = text ? text.split(/\r?\n/) : [];
   if (lines.length && lines[lines.length - 1] === '') lines.pop();
   for (const [k, v] of Object.entries(values)) {
     const at = lines.findIndex((l) => l.startsWith(`${k}=`));

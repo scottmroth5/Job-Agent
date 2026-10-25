@@ -38,7 +38,7 @@ export function looksLikeInjection(email) {
 // Stops email text from closing the wrapper or looking like a template placeholder.
 const neutralize = (s) =>
   String(s ?? '')
-    .replace(/<\/?\s*email\b[^>]*>/gi, (m) => m.replace('<', '‹'))
+    .replace(/<\/?\s*email\b[^>]*>/gi, (m) => m.replace(/</g, '‹'))
     .replace(/\{\{/g, '{ {')
     .replace(/\}\}/g, '} }');
 

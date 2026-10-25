@@ -2,6 +2,7 @@
 // so company and description usually come later from the linked page's JobPosting data.
 import { RateLimitedError } from '../../../tools/http.js';
 import { jobIdFromUrl } from './linkedin.js';
+import { isOnSite } from '../../../tools/urls.js';
 
 export const SOURCE = 'Google Jobs';
 const API = 'https://google.serper.dev/search';
@@ -15,17 +16,30 @@ const SITE_NAMES = /^(linkedin|indeed(\.com)?|glassdoor|ziprecruiter|monster|sim
  *   "VP of Engineering - Acme - Remote Rocketship"
  */
 export function parseResultTitle(raw) {
+  // Search result titles come from the web, so this parses with linear steps only (whitespace collapsed first,
+  // then plain string searches); a crafted title can never make it slow.
   // Page-title wrappers such as Greenhouse's "Job Application for <title> at <company>".
-  const s = String(raw ?? '')
-    .replace(/\s*\.{3}$/, '')
-    .replace(/^(job application for|apply for|apply to|careers:)\s+/i, '')
-    .trim();
-  const hiring = /^(.+?) hiring (.+?)(?: in (.+?))?(?: \| .*)?$/i.exec(s);
-  if (hiring) return { title: hiring[2].trim(), company: hiring[1].trim(), location: hiring[3]?.trim() ?? null };
-  const parts = s.split(/\s+[-|–]\s+/).map((p) => p.trim()).filter(Boolean);
+  let s = String(raw ?? '').slice(0, 500).replace(/\s+/g, ' ').trim();
+  if (s.endsWith('...')) s = s.slice(0, -3).trimEnd();
+  s = s.replace(/^(job application for|apply for|apply to|careers:) /i, '').trim();
+  const lower = s.toLowerCase();
+
+  // "<company> hiring <title> in <location> | <site>"
+  const hiringAt = lower.indexOf(' hiring ');
+  if (hiringAt > 0) {
+    let rest = s.slice(hiringAt + ' hiring '.length);
+    const bar = rest.indexOf(' | ');
+    if (bar >= 0) rest = rest.slice(0, bar);
+    const inAt = rest.toLowerCase().indexOf(' in ');
+    const title = (inAt > 0 ? rest.slice(0, inAt) : rest).trim();
+    if (title) return { title, company: s.slice(0, hiringAt).trim(), location: inAt > 0 ? rest.slice(inAt + ' in '.length).trim() || null : null };
+  }
+
+  const parts = s.split(/ [-|–] /).map((p) => p.trim()).filter(Boolean);
   while (parts.length > 1 && SITE_NAMES.test(parts[parts.length - 1])) parts.pop();
-  const atMatch = /^(.+?) at (.+)$/i.exec(parts[0] ?? '');
-  if (atMatch) return { title: atMatch[1].trim(), company: atMatch[2].trim(), location: null };
+  const first = parts[0] ?? '';
+  const at = first.toLowerCase().indexOf(' at ');
+  if (at > 0 && at + ' at '.length < first.length) return { title: first.slice(0, at).trim(), company: first.slice(at + ' at '.length).trim(), location: null };
   return { title: parts[0] ?? s, company: parts.length > 1 ? parts[1] : null, location: null };
 }
 
@@ -96,7 +110,7 @@ export async function search({ http, config, apiKey = process.env.SERPER_API_KEY
         ...(data.jobs ?? data.organic ?? [])
           .map((r) => ({ ...parseResult(r, term), ...(searchTrack ? { searchTrack } : {}), ...(source ? { source } : {}) }))
           .filter((i) => !isNonJobSite(i.url))
-          .filter((i) => source !== GO_FRACTIONAL || /gofractional\.com\/jobs\//i.test(i.url ?? '')),
+          .filter((i) => source !== GO_FRACTIONAL || isOnSite(i.url, 'gofractional.com', '/jobs/')),
       );
     } catch (err) {
       if (err instanceof RateLimitedError) {

@@ -89,7 +89,13 @@ export async function runBackup({ db, passphrase, extras = [], folders = [], dri
 
     const dbBytes = readFileSync(snapshot);
     const files = [{ name: DB_ENTRY, data: dbBytes }];
-    for (const x of extras) if (existsSync(x.path)) files.push({ name: x.name, data: readFileSync(x.path) });
+    for (const x of extras) {
+      try {
+        files.push({ name: x.name, data: readFileSync(x.path) });
+      } catch (err) {
+        if (err.code !== 'ENOENT') throw err; // an optional file that is not there
+      }
+    }
     for (const f of folders) for (const x of filesUnder(f.dir, f.name)) files.push({ name: x.name, data: readFileSync(x.path) });
     const encrypted = encrypt(pack(files), passphrase, kdf);
     // Prove the file restores before it goes anywhere.
@@ -128,16 +134,28 @@ export async function runBackup({ db, passphrase, extras = [], folders = [], dri
  * restored database's integrity.
  */
 export function restoreBackup({ file, passphrase, outPath }) {
-  if (existsSync(outPath)) throw new Error(`${outPath} already exists; choose a new file name`);
   const files = unpack(decrypt(file, passphrase));
   const db = files.find((f) => f.name === DB_ENTRY);
   if (!db) throw new Error('The backup has no database in it');
   const others = files.filter((f) => f !== db);
   for (const f of others) if (!safeEntry(f.name)) throw new Error(`The backup holds an unsafe file name: ${JSON.stringify(f.name)}`);
   const restoredDir = join(dirname(outPath), 'restored');
-  if (others.length && existsSync(restoredDir)) throw new Error(`${restoredDir} already exists; move it aside first`);
-
-  writeFileSync(outPath, db.data);
+  // Creating is the check: mkdir and the 'wx' write fail when the target exists, so nothing is ever overwritten.
+  if (others.length) {
+    try {
+      mkdirSync(restoredDir);
+    } catch (err) {
+      if (err.code === 'EEXIST') throw new Error(`${restoredDir} already exists; move it aside first`);
+      throw err;
+    }
+  }
+  try {
+    writeFileSync(outPath, db.data, { flag: 'wx' });
+  } catch (err) {
+    if (others.length) rmSync(restoredDir, { recursive: true, force: true });
+    if (err.code === 'EEXIST') throw new Error(`${outPath} already exists; choose a new file name`);
+    throw err;
+  }
   const check = new Database(outPath, { readonly: true });
   const integrity = check.pragma('integrity_check', { simple: true });
   check.close();

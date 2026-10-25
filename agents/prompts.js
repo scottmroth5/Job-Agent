@@ -113,7 +113,7 @@ export function validateTemplate(name, template) {
   const t = String(template ?? '');
   if (!t.trim()) problems.push('The prompt is empty.');
   if (t.length > MAX_TEMPLATE_CHARS) problems.push(`The prompt is over ${MAX_TEMPLATE_CHARS.toLocaleString()} characters.`);
-  if (/\{\{\s+\w+|\w+\s+\}\}/.test(t)) problems.push('Placeholders must not contain spaces inside the braces, e.g. {{company}}.');
+  if (/\{\{\s|\s\}\}/.test(t)) problems.push('Placeholders must not contain spaces inside the braces, e.g. {{company}}.');
   const used = placeholdersIn(t);
   const unknown = used.filter((p) => !def.allowed.includes(p));
   if (unknown.length) problems.push(`Unknown placeholder${unknown.length > 1 ? 's' : ''}: ${unknown.map((p) => `{{${p}}}`).join(', ')}. Allowed: ${def.allowed.map((p) => `{{${p}}}`).join(', ')}.`);

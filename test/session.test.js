@@ -27,8 +27,13 @@ test('the secret must be at least 32 bytes', () => {
 });
 
 test('cookies parse and serialize with safe flags', () => {
-  assert.deepEqual(parseCookies('a=1; ja_session=x.y%3D; empty='), { a: '1', ja_session: 'x.y=', empty: '' });
-  assert.deepEqual(parseCookies(undefined), {});
+  assert.deepEqual({ ...parseCookies('a=1; ja_session=x.y%3D; empty=') }, { a: '1', ja_session: 'x.y=', empty: '' });
+  assert.deepEqual({ ...parseCookies(undefined) }, {});
+  // Crafted names never reach a prototype, odd names and undecodable values are dropped, and nothing throws.
+  const c = parseCookies('__proto__=x; constructor=y; prototype=z; bad name=1; a.b=2; enc=%E0%A4%A; ja_session=ok');
+  assert.equal(Object.getPrototypeOf(c), null);
+  assert.deepEqual(Object.keys(c), ['ja_session']);
+  assert.equal({}.x, undefined);
   assert.equal(cookie('ja_session', 'v', { maxAge: 60, secure: true }), 'ja_session=v; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=60');
   assert.equal(cookie('ja_session', '', { maxAge: 0 }), 'ja_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
 });

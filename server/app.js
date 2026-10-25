@@ -3,6 +3,7 @@
 import { existsSync } from 'node:fs';
 import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
+import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { createTracer } from '@scottmroth5/agent-core';
 import { listPostings, getPosting, updatePosting, summary } from './queries.js';
@@ -26,6 +27,7 @@ import { generateForPostings } from '../agents/hunt/generate.js';
 import { resolveDetails } from '../agents/discovery/details.js';
 import { jobIdFromUrl } from '../agents/discovery/sources/linkedin.js';
 import * as fractionaljobs from '../agents/discovery/sources/fractionaljobs.js';
+import { isOnSite } from '../tools/urls.js';
 import { checkLocation } from '../tools/location.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 
@@ -70,6 +72,16 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     openapi: { info: { title: 'Job Agent API', version: '1.0.0', description: 'Job Hunt UI backend' } },
   });
   registerSecurityHeaders(app, { https: Boolean(auth.settings?.publicUrl?.startsWith('https://')) });
+  // A ceiling on every route per address (@fastify/rate-limit): far above normal use, it stops floods and scripted
+  // abuse. The health check is exempt. The tighter limits for sign-in, refused requests, and the demo follow
+  // (server/security.js).
+  await app.register(fastifyRateLimit, {
+    global: true,
+    max: authMode === 'none' ? 6000 : 600,
+    timeWindow: '1 minute',
+    allowList: (req) => req.url === '/healthz',
+    errorResponseBuilder: (req, ctx) => ({ statusCode: 429, error: 'Too many requests from this address. Try again later.', retryAfter: Math.ceil(ctx.ttl / 1000) }),
+  });
   if (authMode !== 'none') registerRateLimits(app, { now: auth.now, all: authMode === 'demo' ? DEMO_REQUEST_LIMIT : null });
   registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now });
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
@@ -271,7 +283,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         // refetch
         step('Fetching the posting text');
         const item = { url: posting.url, title: posting.title, company: posting.company, location: posting.location, linkedinJobId: jobIdFromUrl(posting.url) };
-        if (/fractionaljobs\.io\/jobs\//i.test(posting.url ?? '')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, posting.url);
+        if (isOnSite(posting.url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, posting.url);
         await resolveDetails(item, { http: services.http, browser });
         const ok = item.fetchStatus === 'ok';
         db.prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN @text IS NULL THEN fetched_at ELSE @now END,

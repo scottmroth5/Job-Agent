@@ -1,0 +1,6 @@
+# CodeQL settings for CI (ci.yml). legacy/ holds the v1 Apps Script files for reference only: nothing runs or imports
+# them (CLAUDE.md), so their findings are not real risks to this app. web/dist is build output.
+name: Job-Agent CodeQL
+paths-ignore:
+  - legacy
+  - web/dist

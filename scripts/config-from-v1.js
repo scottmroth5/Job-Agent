@@ -68,10 +68,6 @@ export function buildConfig(props) {
 }
 
 function main() {
-  if (existsSync(CONFIG_PATH)) {
-    console.error(`${CONFIG_PATH} already exists. Delete it first to regenerate from the v1 export.`);
-    return 1;
-  }
   if (!existsSync(EXPORT_DIR)) {
     console.error(`No v1 export found at ${EXPORT_DIR}.`);
     return 1;
@@ -85,12 +81,23 @@ function main() {
   const props = {};
   for (const n of names) {
     const file = join(EXPORT_DIR, `${n}.txt`);
-    if (existsSync(file)) props[n] = readFileSync(file, 'utf8').trim();
+    try {
+      props[n] = readFileSync(file, 'utf8').trim();
+    } catch (err) {
+      if (err.code !== 'ENOENT') throw err;
+    }
   }
   const config = buildConfig(props);
   const problems = validateConfig(config);
   mkdirSync(dirname(CONFIG_PATH), { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n');
+  // 'wx' refuses to replace an existing config in the same step as writing it.
+  try {
+    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', { flag: 'wx' });
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    console.error(`${CONFIG_PATH} already exists. Delete it first to regenerate from the v1 export.`);
+    return 1;
+  }
 
   console.log(`Wrote ${CONFIG_PATH}`);
   console.log(`  search terms: ${config.search.terms.length}, relevant keywords: ${config.search.relevantTitleKeywords.length}, ` +
