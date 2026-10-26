@@ -18,5 +18,10 @@ deploy/
 Dockerfile
 .dockerignore
 
+# Left in the build folder by the workflow's image scan (Trivy's vulnerability database, hundreds of MB): the image
+# published after the scan must not copy it in.
+.cache/
+*.sarif
+
 # The app icon source (1024 px); the served sizes are in web/public.
 assets/

@@ -122,8 +122,9 @@ case "$ACTION" in
       if [[ -n "$current" && "$current" != "$TAG" ]]; then echo "$current" > "$PREVIOUS_FILE"; fi
       echo "$TAG" > "$CURRENT_FILE"
       log "Healthy on $TAG"
-      # Keep disk use in check: remove images no container uses that are over a week old.
-      docker image prune -af --filter "until=168h" >/dev/null 2>&1 || true
+      # Keep disk use in check: remove every image no container uses (a deploy a day of 1 GB images fills the disk in
+      # weeks). A rollback pulls the previous image again from the registry.
+      docker image prune -af >/dev/null 2>&1 || true
     else
       log "Image $TAG did not pass /healthz within ${HEALTH_WAIT_SECONDS}s"
       docker compose logs --tail 40 app demo >&2 || true
