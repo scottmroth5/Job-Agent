@@ -79,7 +79,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   // trustProxy: behind a reverse proxy (Caddy in the cloud), the client's address comes from X-Forwarded-For.
   const app = Fastify({ logger, trustProxy });
   // US-only access (server/geo.js, GEO_ALLOW): refused before anything else runs; the health check always passes.
-  const blocked = geoBlocker(geo);
+  const blocked = geoBlocker({ ...geo, log: geo.log ?? services.log ?? console });
   // Each user's own settings, background, and documents (agents/user-config.js): routes keep using config and services,
   // which answer for whoever the request runs as. The owner's are the settings file, the Google Doc, and their Drive.
   if (config) config = userConfigView(config, store.raw ?? store.db);

@@ -3,7 +3,10 @@
 // loopback addresses (inside the server). The country comes from DB-IP's free IP to Country Lite database (CC BY 4.0,
 // https://db-ip.com), downloaded into the image at build time (Dockerfile) and refreshed by the weekly rebuild.
 // GEO_ALLOW (comma-separated country codes) turns it on; unset, nothing is blocked (local runs, tests). Without the
-// database it fails open and says so in the server log.
+// database it fails open and says so in the server log. An address the database does not know is let through: iPhones
+// (iCloud Private Relay, new mobile IPv6 ranges) often arrive from such addresses, and blocking them locked out real
+// users; only an address placed in another country is refused. Each refusal is logged with its country and a shortened
+// address (the first half: a /24 or /48), never the full one, at most once an hour per shortened address.
 import { existsSync } from 'node:fs';
 import { isIP } from 'node:net';
 import maxmind from 'maxmind';
@@ -37,17 +40,34 @@ export async function loadCountryLookup(path = GEO_DB_PATH) {
   return (ip) => reader.get(ip)?.country?.iso_code ?? null;
 }
 
+/** The first half of an address, for logs: 203.0.113.x or 2001:db8:1:: (a /24 or /48). */
+export function shortAddress(ip) {
+  const a = String(ip ?? '');
+  if (isIP(a) === 4) return `${a.split('.').slice(0, 3).join('.')}.x`;
+  if (isIP(a) === 6) return `${a.split(':').slice(0, 3).join(':')}::`;
+  return 'unknown';
+}
+
 /**
  * The request check: returns true when the request must be refused. allow: country codes; lookup: ip -> country.
- * With no allow list, or no lookup (fail open), it never refuses.
+ * With no allow list, or no lookup (fail open), it never refuses. log.warn hears about refusals (see above).
  */
-export function geoBlocker({ allow = [], lookup = null } = {}) {
+export function geoBlocker({ allow = [], lookup = null, log = null, now = () => Date.now() } = {}) {
   if (!allow.length || !lookup) return () => false;
+  const logged = new Map(); // short address -> when last logged
   return (req) => {
     if (ALWAYS_OPEN.some((re) => re.test(req.url))) return false;
     const ip = req.ip;
     if (!ip || isPrivateAddress(ip)) return false;
-    return !allow.includes(lookup(ip));
+    const country = lookup(ip);
+    if (!country || allow.includes(country)) return false; // unknown addresses pass (see above)
+    const short = shortAddress(ip);
+    if (log?.warn && !(logged.has(short) && now() - logged.get(short) <= 3600_000)) {
+      if (logged.size > 1000) logged.clear();
+      logged.set(short, now());
+      log.warn(`[geo] refused ${country} ${short}`);
+    }
+    return true;
   };
 }
 

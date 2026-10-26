@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { openJobStore } from '../db/index.js';
 import { buildApp } from '../server/app.js';
-import { geoAllowFromEnv, geoBlocker, isPrivateAddress } from '../server/geo.js';
+import { geoAllowFromEnv, geoBlocker, isPrivateAddress, shortAddress } from '../server/geo.js';
 
 const COUNTRY = { '8.8.8.8': 'US', '81.2.69.142': 'GB', '203.0.113.9': null };
 const lookup = (ip) => COUNTRY[ip] ?? null;
@@ -25,6 +25,20 @@ test('settings and private addresses', () => {
   assert.equal([...compose.matchAll(/GEO_ALLOW: US/g)].length, 2, 'the app and the demo are US-only in production');
 });
 
+test('refusals are logged with the country and half the address, at most hourly per address', () => {
+  const warnings = [];
+  let clock = 0;
+  const blocked = geoBlocker({ allow: ['US'], lookup, log: { warn: (m) => warnings.push(m) }, now: () => clock });
+  assert.equal(blocked({ ip: '81.2.69.142', url: '/' }), true);
+  assert.equal(blocked({ ip: '81.2.69.142', url: '/other' }), true);
+  clock = 3_600_001;
+  blocked({ ip: '81.2.69.142', url: '/' });
+  assert.deepEqual(warnings, ['[geo] refused GB 81.2.69.x', '[geo] refused GB 81.2.69.x']);
+  assert.ok(!warnings.join(' ').includes('81.2.69.142'), 'never the full address');
+  assert.equal(blocked({ ip: '8.8.8.8', url: '/' }), false);
+  assert.equal(shortAddress('2001:db8:1234:5678::1'), '2001:db8:1234::');
+});
+
 async function appFrom(ip, { allow = ['US'] } = {}) {
   const store = openJobStore(':memory:');
   const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null }, trustProxy: TRUST_PROXY, geo: { allow, lookup } });
@@ -41,7 +55,7 @@ test('outside the US: the 403 page on pages, the API, and sign-in; the health ch
   }
   assert.equal((await uk('/healthz')).statusCode, 200, 'the deploy and Docker health check');
   const unknown = await appFrom('203.0.113.9');
-  assert.equal((await unknown('/api/postings')).statusCode, 403, 'a public address with no country is outside');
+  assert.equal((await unknown('/api/postings')).statusCode, 200, 'an address the database does not know passes (iPhones on iCloud Private Relay)');
 });
 
 test('in the US, from inside the server, or with blocking off: everything as usual', async () => {
