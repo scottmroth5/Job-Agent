@@ -54,7 +54,14 @@ export function renderMarkdown(md) {
       continue;
     }
     const heading = /^(#{1,4})\s+(.*)$/.exec(line);
-    if (heading) {
+    if (/^\s*```/.test(line)) {
+      // A fenced block (the guides' templates): shown exactly as written, escaped, up to the closing fence.
+      const code = [];
+      i += 1;
+      while (i < lines.length && !/^\s*```/.test(lines[i])) code.push(lines[i++]);
+      i += 1;
+      out.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+    } else if (heading) {
       const level = heading[1].length;
       out.push(`<h${level}>${renderInline(heading[2].replace(/\s*#+\s*$/, ''))}</h${level}>`);
       i += 1;
@@ -86,7 +93,7 @@ export function renderMarkdown(md) {
       out.push(`<blockquote>${renderMarkdown(quote.join('\n'))}</blockquote>`);
     } else {
       const para = [];
-      while (i < lines.length && lines[i].trim() && !/^(#{1,4})\s/.test(lines[i]) && !LIST_ITEM.test(lines[i]) && !/^\s*>/.test(lines[i]) && !(TABLE_ROW.test(lines[i]) && TABLE_RULE.test(lines[i + 1] ?? ''))) {
+      while (i < lines.length && lines[i].trim() && !/^(#{1,4})\s/.test(lines[i]) && !/^\s*```/.test(lines[i]) && !LIST_ITEM.test(lines[i]) && !/^\s*>/.test(lines[i]) && !(TABLE_ROW.test(lines[i]) && TABLE_RULE.test(lines[i + 1] ?? ''))) {
         para.push(lines[i++]);
       }
       out.push(`<p>${para.map((p) => renderInline(p.trim())).join('<br>')}</p>`);

@@ -11,7 +11,7 @@ import { OWNER_ID } from '../db/users.js';
 export const HELP_MODEL = 'claude-haiku-4-5';
 export const MAX_QUESTION_CHARS = 500;
 export const ASKS_PER_DAY = 30;
-const ORDER = ['getting-started', 'jobs', 'ai-and-costs', 'account'];
+const ORDER = ['getting-started', 'about-you', 'search-settings', 'jobs', 'prompts', 'ai-and-costs', 'account'];
 const anyObject = { type: 'object', additionalProperties: true };
 
 /** The guides, in reading order: { id, title, markdown }. */

@@ -134,7 +134,14 @@ Help (#/help, server/help-routes.js): guides in help/*.md (generic, rendered wit
 the guides only on the asker's own AI (HELP_MODEL, a traced 'help' run, ASKS_PER_DAY; nothing logged or stored). Time zones:
 users.time_zone (016) rides in the request or job context (runAsUser(uid, fn, { timeZone })); tools/dates.js localDay,
 localDaysAgo, dayOf, and timeZone() follow it, else the app's TZ. The owner, scripts, budgets (calendar months), and the
-scheduler use the app's zone. test/help-timezone.test.js. Each user's own Gmail and Drive
+scheduler use the app's zone. test/help-timezone.test.js.
+Onboarding: Home shows Get started (summary.setup: AI paid for, About you long enough, search complete) until all three
+are done. Build a draft (agents/draft-profile.js, POST /api/account/draft, Settings > About you): the user's resume and
+LinkedIn profile as PDFs (documents), text files and pasted text, and notes go to DRAFT_MODEL on their own AI with
+DRAFT_SCHEMA; it returns a draft About you and starting search with [add: ...] gaps and questions. Nothing is saved (the
+forms are filled for review), files are never kept, the materials are untrusted data (system prompt), DRAFTS_PER_DAY.
+The owner gets it too, to copy into their Google Doc. Guides with a template and made-up examples: help/about-you.md,
+help/search-settings.md, help/prompts.md. tools/markdown.js renders fenced blocks (escaped). test/onboarding.test.js. Each user's own Gmail and Drive
 wait on Google's verification of those scopes.
 
 ## UI and API

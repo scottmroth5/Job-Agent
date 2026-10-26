@@ -37,7 +37,7 @@ async function setup() {
 
 test('the guides load in reading order with titles; every guide is plain Markdown with no personal details', () => {
   const guides = loadGuides();
-  assert.deepEqual(guides.slice(0, 4).map((g) => g.id), ['getting-started', 'jobs', 'ai-and-costs', 'account']);
+  assert.deepEqual(guides.map((g) => g.id), ['getting-started', 'about-you', 'search-settings', 'jobs', 'prompts', 'ai-and-costs', 'account']);
   for (const g of guides) {
     assert.ok(g.title && g.markdown.length > 200, g.id);
     assert.ok(!/<script|javascript:/i.test(g.markdown), g.id);

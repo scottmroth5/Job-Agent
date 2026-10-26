@@ -47,6 +47,7 @@ export const api = {
   sendFeedback: (body, page) => request('POST', '/api/feedback', { body, page }),
   pauseAccount: () => request('POST', '/api/account/pause'),
   help: () => request('GET', '/api/help'),
+  buildDraft: (payload) => request('POST', '/api/account/draft', payload),
   askHelp: (question) => request('POST', '/api/help/ask', { question }),
   setTimeZone: (timeZone) => request('PUT', '/api/account/timezone', { timeZone }),
   resumeAccount: () => request('POST', '/api/account/resume'),

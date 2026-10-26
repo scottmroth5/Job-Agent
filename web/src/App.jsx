@@ -63,6 +63,11 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
 
+  // Back on Home: fresh counts and setup steps (a key or search saved in Settings shows at once).
+  useEffect(() => {
+    if (view === 'home') refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
   const refresh = useCallback(async () => {
     setLoading(true);
     try {

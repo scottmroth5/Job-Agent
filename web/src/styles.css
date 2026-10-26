@@ -395,12 +395,16 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
 .t-activity { background: #fdf0e1; color: #a35a0b; }
 .t-admin { background: #eceff3; color: #475467; }
 .t-add { background: var(--accent); color: #fff; }
+.t-settings { background: #e8f1f1; color: #1f6f6a; }
+.t-help { background: #fbeef2; color: #a33a5b; }
 @media (prefers-color-scheme: dark) {
   .t-jobs { background: #1f3346; color: #8fc1e8; }
   .t-inbox { background: #1d3527; color: #86d3a3; }
   .t-funnel { background: #33254a; color: #c8a5ea; }
   .t-activity { background: #3a2c18; color: #f0b86e; }
   .t-admin { background: #2a3039; color: #b6c0cc; }
+  .t-settings { background: #1c3332; color: #8fd0ca; }
+  .t-help { background: #3a2029; color: #eaa5bb; }
 }
 .home-card { display: block; background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 12px 14px; margin-bottom: 12px; color: var(--text); text-decoration: none; }
 .home-card .pipeline-run { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -540,3 +544,18 @@ button.danger-link { color: var(--low); padding: 0; }
 .help-title { font-size: 17px; font-weight: 600; padding: 0; text-align: left; }
 .help-answer { white-space: pre-wrap; background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; }
 .help-guide .markdown { margin-top: 8px; }
+
+/* Build a draft, and fenced blocks in guides and drafts. */
+.draft-builder { border: 1px dashed var(--border); border-radius: var(--radius); padding: 12px; margin: 10px 0; }
+.draft-builder h3 { margin: 0 0 6px; font-size: 15px; }
+.draft-files { margin: 0; padding-left: 18px; font-size: 13px; }
+.draft-result { margin-top: 12px; }
+.draft-preview { max-height: 420px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; }
+.markdown pre { white-space: pre-wrap; background: var(--bg); border-radius: 6px; padding: 10px; font: 12.5px/1.5 ui-monospace, Consolas, monospace; overflow-x: auto; }
+.get-started h2 { margin: 0 0 8px; font-size: 17px; }
+.setup-steps { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 8px; }
+.setup-steps li { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: start; }
+.step-why { display: block; }
+.step-mark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--accent); color: #fff; font-size: 12px; flex: none; }
+.setup-steps li.done .step-mark { background: var(--accent); }
+.setup-steps li.done s { color: var(--muted); }

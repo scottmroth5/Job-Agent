@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import DraftBuilder from './DraftBuilder.jsx';
 
 // Lists are edited one item per line.
 const lines = (v) => (v ?? []).join('\n');
@@ -58,10 +59,26 @@ export default function SearchSettings() {
       <section className="home-card">
         <h2>Your search</h2>
         <p className="muted">Your search settings come from data/config/job-search.json, and the facts about you from your Google Doc.</p>
+        <DraftBuilder owner />
       </section>
     );
   }
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  // A draft fills the forms (never saves): the user reviews it and saves each part.
+  const useDraftSearch = (d) => {
+    setForm({
+      ...form,
+      name: d.candidate.name || form.name, signoffName: d.candidate.signoffName || form.signoffName,
+      contactLine: d.candidate.contactLine || form.contactLine, linkedin: d.candidate.linkedin || form.linkedin,
+      terms: lines(d.search.terms), relevantTitleKeywords: lines(d.search.relevantTitleKeywords), noiseTitleKeywords: lines(d.search.noiseTitleKeywords),
+      homeLocations: lines(d.search.homeLocations), fractionalTerms: lines(d.search.fractionalTerms),
+    });
+    setNote('The draft search is in the form below: check it, then Save search settings.');
+  };
+  const useDraftProfile = (text) => {
+    setProfile(text);
+    setNote('The draft is in About you: edit it, then Save.');
+  };
   const saveSearch = (e) => {
     e.preventDefault();
     run(
@@ -83,8 +100,9 @@ export default function SearchSettings() {
         <h2>About you</h2>
         <p className="muted small">
           What scoring, letters, and meeting prep know about you: your experience, strengths, what you want next, and anything to avoid. Paste your
-          resume and add notes. At least {data.profileChars.min} characters.
+          resume and add notes, or build a draft from your materials. At least {data.profileChars.min} characters. Help has a template and examples.
         </p>
+        <DraftBuilder onUseProfile={useDraftProfile} onUseSearch={useDraftSearch} />
         <form onSubmit={(e) => { e.preventDefault(); run(() => api.saveAccountProfile(profile), 'Saved.'); }}>
           <textarea className="profile-text" rows={12} maxLength={data.profileChars.max} value={profile} onChange={(e) => setProfile(e.target.value)} />
           <div className="row">

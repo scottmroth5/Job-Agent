@@ -59,3 +59,11 @@ test('plain notes written before formatting existed still read the same', () => 
   assert.equal(renderMarkdown(''), '');
   assert.equal(renderMarkdown(null), '');
 });
+
+test('fenced blocks: shown exactly as written and escaped, and they end a paragraph', () => {
+  assert.equal(
+    renderMarkdown('Intro\n```\n## Not a heading\n<script>x</script> **not bold**\n```\nAfter'),
+    '<p>Intro</p>\n<pre><code>## Not a heading\n&lt;script&gt;x&lt;/script&gt; **not bold**</code></pre>\n<p>After</p>',
+  );
+  assert.equal(renderMarkdown('```\nunclosed'), '<pre><code>unclosed</code></pre>', 'an unclosed fence runs to the end');
+});

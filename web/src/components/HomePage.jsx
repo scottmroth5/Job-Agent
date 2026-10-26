@@ -148,8 +148,33 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
       setSaving(false);
     }
   };
+  // A new user's first steps, until all three are done (summary.setup; never shown to the owner or in the demo).
+  const setup = !demo && s?.setup && !(s.setup.ai && s.setup.aboutYou && s.setup.search) ? s.setup : null;
   return (
     <div className="home">
+      {setup && (
+        <section className="home-card get-started">
+          <h2>Get started</h2>
+          <ol className="setup-steps">
+            {[
+              [setup.ai, 'Add your Claude API key', 'so scoring, letters, and meeting prep can run'],
+              [setup.aboutYou, 'Write About you', 'or build a draft from your resume and LinkedIn profile'],
+              [setup.search, 'Set up your search', 'the job titles and places to look for'],
+            ].map(([done, title, why]) => (
+              <li key={title} className={done ? 'done' : ''}>
+                <span className="step-mark" aria-hidden="true">{done ? '✓' : ''}</span>
+                <span>
+                  {done ? <s>{title}</s> : <a href="#/settings">{title}</a>}
+                  {!done && <span className="muted small step-why">{why}</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <p className="muted small">
+            Then press Run pipeline below. New here? <a href="#/help">Help</a> has a getting-started guide and examples.
+          </p>
+        </section>
+      )}
       <div className="tiles">
         {order.map((k, i) => (
           <Tile

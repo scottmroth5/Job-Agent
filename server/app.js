@@ -23,6 +23,8 @@ import { currentUserId, runAsUser } from '../db/scope.js';
 import { OWNER_ID, touchLastSeen } from '../db/users.js';
 import { registerFeedbackRoutes } from './feedback-routes.js';
 import { registerHelpRoutes } from './help-routes.js';
+import { registerDraftRoutes } from './draft-routes.js';
+import { MIN_PROFILE_CHARS, userConfig, userProfile } from '../agents/user-config.js';
 import { adminWaiting } from './admin-queries.js';
 
 // Routes for admins: the Users screen and the feedback users sent (server/app.js refuses anyone else).
@@ -81,6 +83,11 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   // which answer for whoever the request runs as. The owner's are the settings file, the Google Doc, and their Drive.
   if (config) config = userConfigView(config, store.raw ?? store.db);
   const asOwner = () => (currentUserId() ?? OWNER_ID) === OWNER_ID;
+  const setupOf = (uid) => {
+    const raw = store.raw ?? db;
+    const u = raw.prepare('SELECT name, ai_source, claude_key_enc IS NOT NULL AS has_key FROM users WHERE id = ?').get(uid);
+    return { ai: u.ai_source === 'owner' || Boolean(u.has_key), aboutYou: userProfile(raw, uid).length >= MIN_PROFILE_CHARS, search: userConfig(raw, uid, u.name).ready };
+  };
   const ownerDrive = services.drive;
   const ownerKnowledge = services.knowledge;
   services = {
@@ -203,6 +210,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   app.get('/api/summary', { schema: { summary: 'Counts, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async (req) => ({
     ...summary(db, config),
     layout: getLayout(db),
+    // A new user's setup (the Home checklist): AI paid for, About you long enough, search complete.
+    ...(req.uid && req.uid !== OWNER_ID ? { setup: setupOf(req.uid) } : {}),
     // What waits for an admin (the Admin tile's count): requests for access and open feedback.
     ...(req.role === 'admin' && authMode !== 'demo' ? { adminWaiting: adminWaiting(db) } : {}),
   }));
@@ -383,6 +392,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });
   registerHelpRoutes(app, { store, services });
+  registerDraftRoutes(app, { store, services });
   registerPages(app);
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });
