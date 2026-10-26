@@ -349,6 +349,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     scheduler = createScheduler({
       jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: runners[j.name], lastRanAt: lastRanAt(j.name) })),
       log: services.log ?? console,
+      // A failed scheduled job emails the owner (server/alerts.js); the next success clears it.
+      onResult: services.alerts ? (name, ok, error) => services.alerts.jobResult(name, ok, error) : null,
     });
     app.addHook('onReady', async () => {
       scheduler.start();

@@ -16,7 +16,9 @@ Job specific logic stays in this repo; never add it to agent-core.
                     code that reads notes as one text. Code that inserts a job with notes text calls adoptNotesText
 /db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.js, applied in id order), openJobStore, v1 import.
                     Never rebuild postings in a migration: migrations run in a transaction with foreign keys on, so a drop cascades.
-                    008 shows the safe way to loosen a CHECK constraint (writable_schema). Back up data/job-agent.db before schema changes
+                    008 shows the safe way to loosen a CHECK constraint (writable_schema). openJobStore takes a checked copy
+                    (data/backups/pre-migration-<stamp>.db, newest 5 kept) before any of its migrations changes a file; npm run
+                    db:pending migrates a throwaway copy (exit 0 none, 10 pending, 1 failed). Back up data/job-agent.db before schema changes
 /scripts            command-line entry points (see Commands)
 /config             job-search.example.json: the shape of the real, gitignored data/config/job-search.json
 /server             Fastify API over the SQLite store (app.js routes, queries.js, tasks.js, auth.js); serves the built UI
@@ -73,6 +75,7 @@ npm run inbox                     process new Gmail since the stored historyId (
 npm run inbox:review              resolve needs_review emails; each choice becomes a case in data/evals/inbox/review-cases.jsonl
 npm run backup                    encrypted backup (database, data/config/job-search.json, data/attachments) to the "Job Agent
                                   Backups" Drive folder; -- --to <folder> writes it to a folder; -- --check-passphrase checks .env
+npm run db:pending                migrations a database open would apply, tried on a throwaway copy (deploy.sh runs it first)
 npm run backup:restore -- --file latest --out data/restore/job-agent.db   decrypt into NEW files (never over the live database)
 powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nightly 11pm backup task ("Job Agent nightly backup";
                                   scripts\backup-nightly.cmd, logs to data\logs\backup.log)
@@ -90,6 +93,9 @@ Every task keeps its output (server/tasks.js: steps plus log lines; pass the tas
 the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
 while a pipeline step is running. web/dist is build output (gitignored).
+A failed scheduled job emails the owner (server/alerts.js: EMAIL_ADDRESS only, once per kind a day, cleared by the next success).
+deploy.sh: when the new image has pending migrations, it backs up to Drive with the current image first and, if the deploy
+fails, restores the pre-migration copy before restarting the old image (--no-backup, --skip-db-check for old tags).
 The in-app scheduler (server/scheduler.js) runs SCHEDULE_PIPELINE (then the inbox), SCHEDULE_INBOX, and SCHEDULE_BACKUP from .env
 while the server runs, through the same task starters as the buttons (pipeline-routes start, inbox-routes startCheck); it
 catches up a run missed in the last 12 hours. GET /api/schedule lists the jobs. It replaces the Windows tasks in the cloud;

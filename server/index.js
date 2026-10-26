@@ -19,6 +19,8 @@ import { buildApp } from './app.js';
 import { schedulesFromEnv } from './scheduler.js';
 import { timeZone } from '../tools/dates.js';
 import { geoAllowFromEnv, loadCountryLookup } from './geo.js';
+import { createAlerts } from './alerts.js';
+import { sendEmail } from '../tools/google/gmail.js';
 import { assertSafeBinding, authSettings } from './auth.js';
 import { SAMPLE_TASKS } from '../demo/sample-data.js';
 
@@ -70,6 +72,13 @@ const realServices = () => ({
     }
     return knowledgeCache.text;
   },
+  // Failure emails (server/alerts.js), only ever to the owner's own address, like the run report.
+  alerts: createAlerts({
+    db: store.db,
+    send: (email) => sendEmail(auth, email),
+    to: () => process.env.EMAIL_ADDRESS || null,
+    appUrl: () => authConfig.publicUrl ?? '',
+  }),
 });
 
 const demoOff = () => {
@@ -90,13 +99,19 @@ const demoServices = () => ({
 
 const services = demo ? demoServices() : realServices();
 
-// TRUST_PROXY: set behind a reverse proxy so client addresses (for rate limits) come from X-Forwarded-For:
-// "true", a hop count ("1"), or the proxy's addresses ("127.0.0.1"). Unset: the direct connection's address.
+// TRUST_PROXY: set behind a reverse proxy so client addresses (for rate limits) come from X-Forwarded-For: the proxy's
+// addresses, e.g. "loopback,linklocal,uniquelocal" for Caddy on a private network. Never a hop count ("1"): Fastify
+// then reports the proxy as every visitor (test/proxy.test.js). Unset: the direct connection's address.
 const trustProxy = !process.env.TRUST_PROXY ? false : process.env.TRUST_PROXY === 'true' ? true : /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY;
 // US-only access (GEO_ALLOW, server/geo.js): the country database ships in the image; without it nothing is blocked.
 const geoAllow = geoAllowFromEnv();
 const geo = { allow: geoAllow, lookup: geoAllow.length ? await loadCountryLookup().catch(() => null) : null };
 if (geoAllow.length) console.log(geo.lookup ? `[geo] only ${geoAllow.join(', ')} allowed` : '[geo] the country database is missing: nothing is blocked (the next image build adds it)');
+if (geoAllow.length && !geo.lookup) {
+  services.alerts?.alert('geo-db', 'US-only blocking is off', 'The country database is missing from the server image, so visitors outside the allowed countries are not blocked. The next image build (or the weekly rebuild) adds it.', { once: true }).catch(() => {});
+} else if (geo.lookup) {
+  services.alerts?.recovered('geo-db');
+}
 const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode, auth: { settings: authConfig }, trustProxy, geo });
 await app.listen({ host, port });
 console.log(

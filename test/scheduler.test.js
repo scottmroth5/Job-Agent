@@ -18,6 +18,19 @@ test('schedule specs: day names, groups, and times; mistakes are errors, not sil
   assert.throws(() => schedulesFromEnv({ SCHEDULE_BACKUP: 'nightly' }), /not a schedule/);
 });
 
+test('several parts joined by |: each part runs at its own times', () => {
+  const s = parseSchedule('Mon,Thu 06:00 | Sat 09:30');
+  assert.equal(s.spec, 'Mon,Thu 06:00 | Sat 09:30');
+  // Friday Oct 16, 2026 at 10 PM: next is Saturday 9:30 (before Monday 6:00); last was Thursday 6:00.
+  assert.deepEqual(nextRun(s, local(2026, 10, 16, 22)), local(2026, 10, 17, 9, 30));
+  assert.deepEqual(lastRun(s, local(2026, 10, 16, 22)), local(2026, 10, 15, 6));
+  // Saturday at noon: the last run is that morning's 9:30.
+  assert.deepEqual(lastRun(s, local(2026, 10, 17, 12)), local(2026, 10, 17, 9, 30));
+  assert.throws(() => parseSchedule('Mon 06:00 | Funday 07:00'), /not a day/);
+  assert.throws(() => parseSchedule('Mon 06:00 |'), /not a schedule/);
+  assert.equal(schedulesFromEnv({ SCHEDULE_PIPELINE: 'weekdays 06:00 | Sat 08:00' })[0].schedule.parts.length, 2);
+});
+
 test('next and last run times, in local time', () => {
   const s = parseSchedule('Mon,Thu 06:00');
   // Friday Oct 16, 2026 at 10 PM: next is Monday Oct 19 at 6:00; last was Thursday Oct 15 at 6:00.

@@ -11,6 +11,7 @@
     "config:from-v1": "node scripts/config-from-v1.js",
     "check:personal": "node scripts/check-personal.js",
     "check:security": "node scripts/security-check.js",
+    "db:pending": "node scripts/migrations-pending.js",
     "hooks:install": "git config core.hooksPath .githooks",
     "google:login": "node --env-file=.env scripts/google-login.js",
     "google:check": "node --env-file=.env scripts/google-check.js",

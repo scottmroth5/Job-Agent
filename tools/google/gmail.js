@@ -7,9 +7,12 @@ const encodeHeader = (s) => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${Buffer.
 export function buildRawEmail({ to, subject, text, html }) {
   if (!to || !subject) throw new TypeError('buildRawEmail: to and subject are required');
   if (!text === !html) throw new TypeError('buildRawEmail: pass exactly one of text or html');
+  // Headers can never gain a line: an address with control characters is refused, and a subject loses them.
+  if (/[\u0000-\u001f\u007f]/.test(String(to))) throw new TypeError('buildRawEmail: the address has control characters');
+  const cleanSubject = String(subject).replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
   const message = [
     `To: ${to}`,
-    `Subject: ${encodeHeader(subject)}`,
+    `Subject: ${encodeHeader(cleanSubject)}`,
     'MIME-Version: 1.0',
     `Content-Type: ${html ? 'text/html' : 'text/plain'}; charset=UTF-8`,
     'Content-Transfer-Encoding: base64',
