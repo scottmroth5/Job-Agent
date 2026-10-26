@@ -12,6 +12,7 @@
     "check:personal": "node scripts/check-personal.js",
     "check:security": "node scripts/security-check.js",
     "db:pending": "node scripts/migrations-pending.js",
+    "backup:test": "node --env-file-if-exists=.env scripts/backup-verify.js",
     "hooks:install": "git config core.hooksPath .githooks",
     "google:login": "node --env-file=.env scripts/google-login.js",
     "google:check": "node --env-file=.env scripts/google-check.js",

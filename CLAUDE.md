@@ -81,6 +81,10 @@ npm run backup                    encrypted backup (database, data/config/job-se
                                   Backups" Drive folder; -- --to <folder> writes it to a folder; -- --check-passphrase checks .env
 npm run db:pending                migrations a database open would apply, tried on a throwaway copy (deploy.sh runs it first)
 npm run backup:restore -- --file latest --out data/restore/job-agent.db   decrypt into NEW files (never over the live database)
+npm run backup:test               restore test: the newest Drive backup (or -- --file <path>) decrypted into the OS temp folder,
+                                  integrity-checked, table counts compared with the live database, then deleted. Counts only.
+                                  Scheduled monthly (SCHEDULE_RESTORE_TEST, default "monthly 1 05:00" whenever SCHEDULE_BACKUP
+                                  is set; "off" disables); a failure emails the owner like any scheduled job
 powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nightly 11pm backup task ("Job Agent nightly backup";
                                   scripts\backup-nightly.cmd, logs to data\logs\backup.log)
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md

@@ -44,7 +44,7 @@ export function createAlerts({ db, send, to, appUrl = () => '', clock = () => ne
   /** The scheduler's report for one run of a job: an email when it failed, recovery when it worked. */
   async function jobResult(name, ok, error) {
     if (ok) return recovered(`job:${name}`);
-    const what = { pipeline: 'the scheduled pipeline', inbox: 'the scheduled inbox check', backup: 'the nightly backup' }[name] ?? `the scheduled ${name}`;
+    const what = { pipeline: 'the scheduled pipeline', inbox: 'the scheduled inbox check', backup: 'the nightly backup', 'restore-test': 'the monthly backup restore test' }[name] ?? `the scheduled ${name}`;
     return alert(`job:${name}`, `${what} failed`, `${what[0].toUpperCase()}${what.slice(1)} failed on ${localDay(clock())}: ${error ?? 'no details'}.`);
   }
 

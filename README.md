@@ -151,6 +151,8 @@ A nightly backup encrypts the job database, your search settings, and attached f
 
 To write the backup to a folder instead (a USB drive, for example): `npm run backup -- --to E:\JobBackups`.
 
+Once a month (the 1st, 5:00 AM, whenever backups are scheduled) the app also **tests** the newest backup: it decrypts it into a temporary folder, checks the database is sound and has every table, compares row counts with the live data, and deletes the copy. If it fails you get an email. Run it yourself with `npm run backup:test`; turn it off with `SCHEDULE_RESTORE_TEST=off`.
+
 To restore, `npm run backup:restore -- --file latest --out data/restore/job-agent.db` downloads the newest backup and writes **new** files: the database, plus your settings and attachments in `data/restore/restored`. It never touches the live database. The script prints the steps to swap the restored files in.
 
 Your `.env` and Google sign-in files are not backed up, because they hold the passphrase and sign-in tokens. Keep your API keys and passphrase in your password manager.

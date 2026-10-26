@@ -14,7 +14,9 @@ test('schedule specs: day names, groups, and times; mistakes are errors, not sil
   assert.deepEqual([...parseSchedule('daily 23:00').days].length, 7);
   assert.deepEqual([...parseSchedule('monday, thursday 06:00').days].sort(), [1, 4]);
   for (const bad of ['Mon 25:00', 'Funday 06:00', 'monkey 06:00', '06:00', 'daily', '']) assert.throws(() => parseSchedule(bad), /schedule|time|day/, bad);
-  assert.deepEqual(schedulesFromEnv({ SCHEDULE_PIPELINE: 'Mon,Thu 06:00', SCHEDULE_BACKUP: 'daily 23:00', SCHEDULE_INBOX: ' ' }).map((j) => j.name), ['pipeline', 'backup']);
+  assert.deepEqual(schedulesFromEnv({ SCHEDULE_PIPELINE: 'Mon,Thu 06:00', SCHEDULE_BACKUP: 'daily 23:00', SCHEDULE_INBOX: ' ' }).map((j) => j.name), ['pipeline', 'backup', 'restore-test'], 'the restore test follows the backup');
+  assert.deepEqual(schedulesFromEnv({ SCHEDULE_BACKUP: 'daily 23:00', SCHEDULE_RESTORE_TEST: 'off' }).map((j) => j.name), ['backup']);
+  assert.deepEqual(schedulesFromEnv({ SCHEDULE_PIPELINE: 'Mon 06:00' }).map((j) => j.name), ['pipeline'], 'no backup, no restore test');
   assert.throws(() => schedulesFromEnv({ SCHEDULE_BACKUP: 'nightly' }), /not a schedule/);
 });
 
@@ -29,6 +31,17 @@ test('several parts joined by |: each part runs at its own times', () => {
   assert.throws(() => parseSchedule('Mon 06:00 | Funday 07:00'), /not a day/);
   assert.throws(() => parseSchedule('Mon 06:00 |'), /not a schedule/);
   assert.equal(schedulesFromEnv({ SCHEDULE_PIPELINE: 'weekdays 06:00 | Sat 08:00' })[0].schedule.parts.length, 2);
+});
+
+test('monthly schedules: that day of each month, 1 to 28', () => {
+  const s = parseSchedule('monthly 1 05:00');
+  assert.deepEqual([s.monthDay, s.hour, s.minute], [1, 5, 0]);
+  // Oct 16, 2026: next is Nov 1 at 5:00; last was Oct 1 at 5:00. A year end rolls over.
+  assert.deepEqual(nextRun(s, local(2026, 10, 16, 12)), local(2026, 11, 1, 5));
+  assert.deepEqual(lastRun(s, local(2026, 10, 16, 12)), local(2026, 10, 1, 5));
+  assert.deepEqual(nextRun(s, local(2026, 12, 20)), local(2027, 1, 1, 5));
+  assert.deepEqual(nextRun(s, local(2026, 11, 1, 4, 59)), local(2026, 11, 1, 5), 'the same day, before the time');
+  for (const bad of ['monthly 31 05:00', 'monthly 0 05:00', 'monthly 1 25:00']) assert.throws(() => parseSchedule(bad), /day of the month|time/, bad);
 });
 
 test('next and last run times, in local time', () => {
@@ -120,7 +133,7 @@ test('API: /api/schedule lists the jobs, and a missed backup runs as a task when
       },
       runPipeline: async () => ({ code: 0, lastError: null }),
       // Daily at the minute just passed, so the never-run backup counts as missed and catches up at start.
-      schedules: schedulesFromEnv({ SCHEDULE_BACKUP: `daily ${String(new Date(Date.now() - 60000).getHours()).padStart(2, '0')}:${String(new Date(Date.now() - 60000).getMinutes()).padStart(2, '0')}`, SCHEDULE_PIPELINE: 'Mon,Thu 06:00' }),
+      schedules: schedulesFromEnv({ SCHEDULE_RESTORE_TEST: 'off', SCHEDULE_BACKUP: `daily ${String(new Date(Date.now() - 60000).getHours()).padStart(2, '0')}:${String(new Date(Date.now() - 60000).getMinutes()).padStart(2, '0')}`, SCHEDULE_PIPELINE: 'Mon,Thu 06:00' }),
       log: { info: () => {}, warn: () => {} },
     },
   });

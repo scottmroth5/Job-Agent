@@ -4,6 +4,8 @@
 //   SCHEDULE_PIPELINE="Mon,Thu 06:00"   the pipeline, then an inbox check when Gmail is set up
 //   SCHEDULE_INBOX="daily 12:00"        an extra inbox check
 //   SCHEDULE_BACKUP="daily 23:00"       the encrypted backup
+//   SCHEDULE_RESTORE_TEST="monthly 1 05:00"  restores the newest backup into a scratch copy and checks it; on by default
+//                                       (monthly 1 05:00) whenever SCHEDULE_BACKUP is set; "off" turns it off
 // A spec is a day list (daily, weekdays, weekends, or names like Mon,Thu) and a 24-hour time (HH:MM), or several of
 // those joined by "|" for different times on different days: "Mon,Thu 06:00 | Sat 09:00".
 // A run missed while the server was off (or the computer asleep) runs when it comes back, if the missed time was
@@ -13,6 +15,7 @@ const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const FULL_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const GROUPS = { daily: [0, 1, 2, 3, 4, 5, 6], weekdays: [1, 2, 3, 4, 5], weekends: [0, 6] };
 export const CATCH_UP_HOURS = 12;
+export const DEFAULT_RESTORE_TEST = 'monthly 1 05:00';
 const CHECK_EVERY_MS = 30 * 1000;
 
 /**
@@ -20,6 +23,14 @@ const CHECK_EVERY_MS = 30 * 1000;
  * which run at each part's times. Throws a message that says what is wrong.
  */
 export function parseSchedule(spec) {
+  // Monthly: "monthly 1 05:00" runs on that day of the month (1 to 28, so every month has it).
+  const monthly = /^\s*monthly\s+(\d{1,2})\s+(\d{1,2}):(\d{2})\s*$/i.exec(String(spec ?? ''));
+  if (monthly) {
+    const [monthDay, hour, minute] = monthly.slice(1).map(Number);
+    if (monthDay < 1 || monthDay > 28) throw new Error(`"${spec}": the day of the month must be 1 to 28.`);
+    if (hour > 23 || minute > 59) throw new Error(`"${spec}": the time must be between 00:00 and 23:59.`);
+    return { spec: String(spec).trim(), monthDay, hour, minute, days: null };
+  }
   const parts = String(spec ?? '').split('|');
   if (parts.length > 1) {
     const parsed = parts.map((p) => parseSchedule(p));
@@ -43,15 +54,17 @@ export function parseSchedule(spec) {
   return { spec: String(spec).trim(), days, hour, minute };
 }
 
+// Whether a schedule runs on a date: its day of the month, or one of its weekdays.
+const onDay = (s, t) => (s.monthDay ? t.getDate() === s.monthDay : s.days.has(t.getDay()));
 const at = (base, s) => new Date(base.getFullYear(), base.getMonth(), base.getDate(), s.hour, s.minute, 0, 0);
 
 /** The next scheduled time strictly after `from`, in local time (the earliest of the parts' next times). */
 export function nextRun(s, from = new Date()) {
   if (s.parts) return s.parts.map((p) => nextRun(p, from)).filter(Boolean).sort((a, b) => a - b)[0] ?? null;
-  for (let i = 0; i <= 7; i += 1) {
+  for (let i = 0; i <= (s.monthDay ? 62 : 7); i += 1) {
     const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i);
     const t = at(day, s);
-    if (s.days.has(t.getDay()) && t > from) return t;
+    if (onDay(s, t) && t > from) return t;
   }
   return null;
 }
@@ -59,10 +72,10 @@ export function nextRun(s, from = new Date()) {
 /** The latest scheduled time at or before `when` (the latest of the parts' last times). */
 export function lastRun(s, when = new Date()) {
   if (s.parts) return s.parts.map((p) => lastRun(p, when)).filter(Boolean).sort((a, b) => b - a)[0] ?? null;
-  for (let i = 0; i <= 7; i += 1) {
+  for (let i = 0; i <= (s.monthDay ? 62 : 7); i += 1) {
     const day = new Date(when.getFullYear(), when.getMonth(), when.getDate() - i);
     const t = at(day, s);
-    if (s.days.has(t.getDay()) && t <= when) return t;
+    if (onDay(s, t) && t <= when) return t;
   }
   return null;
 }
@@ -73,6 +86,9 @@ export function schedulesFromEnv(env = process.env) {
   for (const [name, key] of [['pipeline', 'SCHEDULE_PIPELINE'], ['inbox', 'SCHEDULE_INBOX'], ['backup', 'SCHEDULE_BACKUP']]) {
     if (env[key]?.trim()) jobs.push({ name, schedule: parseSchedule(env[key]) });
   }
+  // The restore test follows the backup: monthly by default once backups are scheduled, unless turned off.
+  const restore = env.SCHEDULE_RESTORE_TEST?.trim() || (env.SCHEDULE_BACKUP?.trim() ? DEFAULT_RESTORE_TEST : '');
+  if (restore && restore.toLowerCase() !== 'off') jobs.push({ name: 'restore-test', schedule: parseSchedule(restore) });
   return jobs;
 }
 

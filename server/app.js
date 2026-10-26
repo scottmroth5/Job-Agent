@@ -414,6 +414,15 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
       step('Backup done');
     });
 
+  // The monthly restore test as a task (scheduled), the same script as npm run backup:test, in its own process.
+  const startRestoreTest = () =>
+    tasks.start('restore-test', { by: 'schedule' }, async (step, { logger }) => {
+      step('Testing the newest backup');
+      const { code, lastError } = await services.runScript({ script: 'scripts/backup-verify.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
+      if (code !== 0) throw new Error(lastError ? `The restore test failed: ${lastError}` : `The restore test failed with exit code ${code}.`);
+      step('Restore test passed');
+    });
+
   // The in-app scheduler (server/scheduler.js): each job starts the same task as its button, and waits for it.
   if (services.schedules?.length) {
     const HOURS = 3600 * 1000;
@@ -435,6 +444,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
       }),
       inbox: inboxChecks && (() => finish(inboxChecks.startCheck({ by: 'schedule' }), 1)),
       backup: services.runScript && (() => finish(startBackup(), 1)),
+      'restore-test': services.runScript && (() => finish(startRestoreTest(), 1)),
     };
     // The owner's runs: the schedule is theirs (users' scheduled runs follow it).
     const lastRanAt = (name) => () => db.prepare('SELECT started_at FROM runs WHERE name = ? AND (user_id IS NULL OR user_id = 1) ORDER BY id DESC LIMIT 1').pluck().get(name) ?? null;
