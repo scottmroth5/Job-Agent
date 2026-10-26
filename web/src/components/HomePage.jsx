@@ -2,6 +2,7 @@ import { useState } from 'react';
 import PipelineButton from './PipelineButton.jsx';
 import { api } from '../api.js';
 import { arranged, moved } from '../layout.js';
+import { isOwner, useMe } from '../me.jsx';
 
 // Simple line illustrations for the tiles (inline SVG: nothing to download, and they follow the text color).
 const ICONS = {
@@ -40,6 +41,14 @@ const ICONS = {
     <>
       <circle cx="24" cy="24" r="17" />
       <path d="M24 16v16M16 24h16" />
+    </>
+  ),
+  settings: (
+    <>
+      <path d="M10 14h28M10 24h28M10 34h28" />
+      <circle cx="18" cy="14" r="3.5" />
+      <circle cx="30" cy="24" r="3.5" />
+      <circle cx="20" cy="34" r="3.5" />
     </>
   ),
 };
@@ -92,12 +101,14 @@ function Tile({ href, onClick, icon, title, stat, alert, arrange }) {
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 // The tiles in their default order; the keys match server/layout.js LAYOUT_AREAS.home.
-export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'add'];
+export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'add'];
 
 /** The start page: a tile for each screen with what needs attention, the pipeline, and this month's Claude budget. */
 export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, onLayoutSaved }) {
   const s = summary;
   const budget = s?.budget;
+  // Adding a job and running the pipeline use the owner's own settings and accounts until each user has their own.
+  const owner = isOwner(useMe());
   const [draft, setDraft] = useState(null); // the order being arranged, or null when not arranging
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -107,7 +118,8 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
     funnel: { href: '#/funnel', title: 'Funnel', stat: s ? `${s.inProgress ?? 0} in progress` : null },
     activity: { href: '#/activity', title: 'Activity', stat: 'Runs and their output' },
     admin: { href: '#/admin', title: 'Admin', stat: 'Prompts, lists, spending' },
-    add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo },
+    settings: { href: '#/settings', title: 'Settings', stat: 'Account and AI key' },
+    add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo || !owner },
   };
   // The saved order comes with the summary, so it applies as soon as the page has its numbers.
   const order = (draft ?? arranged(HOME_TILES, s?.layout?.home)).filter((k) => !tiles[k].hidden);
@@ -159,7 +171,7 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
         </div>
       )}
 
-      {!demo && (
+      {!demo && owner && (
         <section className="home-card">
           <PipelineButton onFinished={onPipelineFinished} />
         </section>
@@ -170,13 +182,18 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
           <span className="budget-line">
             <span>Claude this month</span>
             <span className={`budget ${budget.level}`}>
-              ${budget.spentUsd.toFixed(2)} of ${budget.limitUsd.toFixed(0)}
+              ${budget.spentUsd.toFixed(2)}
+              {budget.limitUsd != null ? ` of $${budget.limitUsd.toFixed(0)}` : ''}
             </span>
           </span>
+          {budget.limitUsd != null && (
           <span className="meter">
             <span className={`fill ${budget.level}`} style={{ width: `${Math.min(100, Math.round((budget.spentUsd / budget.limitUsd) * 100))}%` }} />
           </span>
-          {budget.level === 'over' && <span className="small budget over">Used up: Claude calls are paused until the 1st or until you raise it.</span>}
+          )}
+          {budget.level === 'over' && (
+            <span className="small budget over">Used up: Claude calls are paused until the 1st or until {owner ? 'you raise it' : 'the owner raises it'}.</span>
+          )}
         </a>
       )}
     </div>

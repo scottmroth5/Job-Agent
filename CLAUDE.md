@@ -84,35 +84,44 @@ powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nigh
                                   scripts\backup-nightly.cmd, logs to data\logs\backup.log)
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
 
-## Users (multi-user, phase 1)
+## Users (multi-user, phases 1 and 2)
 db/users.js: users table, the owner is user 1 (admin); every row before 013 is theirs. Every user table (USER_TABLES in
 db/migrations/013-users.js) has user_id NOT NULL, and keys that were unique app-wide are unique per user. Every query on a
 user table says "user_id = @uid" (joins and subqueries too: "s.user_id = p.user_id"); inserts give user_id @uid, or copy it
 from the job row (INSERT ... SELECT ... FROM postings WHERE id = ? AND user_id = @uid) so another user's job gets nothing.
 store.db is scoped (db/scope.js): @uid is the user of the current request or job (runAsUser, AsyncLocalStorage), else
 fallbackUid: the owner for scripts and tests; the server has none, so a user-table query outside a request or job throws.
-store.raw is unscoped: migrations, backups, and (when cross-user admin reads arrive) server/admin-queries.js only.
-Requests run as their user (server/app.js: decided in onRequest, google mode's users row for the address, else the owner
-while AUTH_ALLOWED_EMAILS holds only the owner's addresses, paused or pending gets 403; run as them from preHandler).
-OWNER_ONLY routes use the owner's own accounts or shared settings (pipeline, inbox, AI actions, lists, cap): others get 403; scheduled jobs and child scripts run as the owner; tasks keep their user and the task routes
-show only that user's. Per-user settings live in user_settings (getUserSetting: inbox cursor, Drive folders, layouts);
-app_settings is app-wide (alerts, spending cap, demo marker). App-wide in phase 1: lookups (lists), runs and run_calls (Activity
-history and spending), the pipeline lock. test/user-scope.test.js fails on any query on a user table that does not name
-user_id; test/user-isolation.test.js calls every route as a second user against the owner's demo data. Later phases:
-registration and approval, per-user Claude keys, config, Gmail, Drive, schedules, and runs.
+store.raw is unscoped: migrations, backups, and server/admin-queries.js (the admin's cross-user reads: counts and account
+facts, never anyone's jobs or key) only.
+Accounts (phase 2): any verified Google address signs in (server/auth.js); AUTH_ALLOWED_EMAILS are the owner's addresses
+(accountFor; syncOwnerEmail gives user 1 the first). Anyone else: no row goes to /auth/register (name, note, terms; a form
+post, no script; MAX_PENDING open requests at most), pending to /auth/waiting, rejected to /auth/not-approved; API calls get
+403 with { account }. Paused accounts get in read-only (no writes, no AI). Admin > Users (server/users-routes.js, admin role,
+never in the demo): approve, reject, pause, resume, and AI setup. server/notices.js sends the account emails (see Hard rules).
+Requests run as their user (server/app.js: decided in onRequest, run as them from preHandler). OWNER_ONLY routes use the
+owner's own accounts or shared settings (pipeline, inbox, AI actions, lists, cap): others get 403 until phase 3 gives each user
+their own. Scheduled jobs and child scripts run as the owner; tasks keep their user and the task routes show only that user's.
+Per-user settings live in user_settings (getUserSetting: inbox cursor, Drive folders, layouts); app_settings is app-wide
+(alerts, the owner's cap, allowance-notice months, demo marker). runs.user_id (014) is stamped by tools/trace.js
+createJobTracer, the only way to start a traced run. App-wide still: lookups (lists) and the pipeline lock.
+test/user-scope.test.js fails on any query on a user table that does not name user_id; test/user-isolation.test.js calls
+every route as a second user against the owner's demo data; test/registration.test.js covers accounts, emails, and keys.
+Later phases: per-user config, knowledge doc, Gmail, Drive, schedules (3); Users screen extras and catalogs (4, 5); account
+export and deletion, help (6).
 
 ## UI and API
 The Home page (#/) is a tile per screen; Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
 with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
 icons drawn by node scripts/make-icons.js (test/icons.test.js fails if the committed PNGs are stale).
 AUTH_MODE=none (default) binds to 127.0.0.1 with no login. AUTH_MODE=google (server/auth.js) is "Sign in with Google":
-only AUTH_ALLOWED_EMAILS get in, the session is a signed cookie (server/session.js, SESSION_SECRET), every route but /auth/*,
-/healthz, and the Add to Home Screen files (manifest.webmanifest, icon-180/192/512.png) needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
+any verified address gets a session and its account decides the rest (Users above); the session is a signed cookie
+(server/session.js, SESSION_SECRET); every route but /auth/*, /healthz, /privacy and /terms (server/pages.js, from
+PRIVACY.md and TERMS.md), and the Add to Home Screen files (manifest.webmanifest, icon-180/192/512.png) needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
 server/app.js holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
 The Run pipeline button (server/pipeline-routes.js) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.js) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.js, and closes reminders.
-Every task keeps its output (server/tasks.js: steps plus log lines; pass the task's logger to createTracer so run logs land there);
+Every task keeps its output (server/tasks.js: steps plus log lines; pass the task's logger to createJobTracer so run logs land there);
 the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
 while a pipeline step is running. web/dist is build output (gitignored).
@@ -185,9 +194,14 @@ npm run demo previews it locally (demo-data/, gitignored); test/demo.test.js wal
 A new route that changes data is refused in the demo automatically; a new read route must not call an outside service.
 
 ## Spending and internet safety
-Make Claude clients only with tools/claude.js createJobClaude(db): it applies the monthly cap (agents/budget.js), which refuses
-calls once this calendar month's run_calls cost reaches the cap (Admin > Spending, else MONTHLY_CLAUDE_BUDGET_USD, else $50).
-Every Claude call must pass a trace so its cost lands in run_calls, or the cap cannot see it.
+Make Claude clients only with tools/claude.js createJobClaude(db). Each call is paid by the user it runs as: the owner, and
+users the owner put on their key (users.ai_source 'owner'), use ANTHROPIC_API_KEY; anyone else their own key, saved in
+Settings (server/account-routes.js: checked with Anthropic's free model list, sealed by tools/secret-box.js with USER_KEY_SECRET
+and the user id, never returned, logged, or shown, even to the admin). No key, no AI (NoClaudeKeyError). Caps (agents/budget.js
+checkBudget, from run_calls joined to runs.user_id): everything on the owner's key against the owner's cap (Admin > Spending,
+else MONTHLY_CLAUDE_BUDGET_USD, else $50), and each user on it against their own monthly cap (Admin > Users); the first
+refusal of a month emails that user and the owner. Every Claude call must pass a trace (a createJobTracer run) so its cost
+lands in run_calls with its user, or the caps cannot see it.
 server/security.js: security headers on every response (strict CSP: scripts only from 'self'; a route that sets its own CSP keeps
 it), rate limits in google mode (sign-in 30 per 15 minutes per address; 100 refused requests blocks the address for the window;
 TRUST_PROXY behind a proxy), and errorReply (5xx bodies are generic; details go to the server log, never request bodies).
@@ -213,6 +227,8 @@ Health-Review): an online SQLite snapshot that must pass its integrity check, pa
 gzipped, then AES-256-GCM with a scrypt key from JOB_BACKUP_PASSPHRASE (.env only, never uploaded or logged) and a fresh
 salt and nonce per file, verified by decrypting before upload with the drive.file scope. Plaintext snapshots live only in
 the OS temp folder. Never back up .env or data/google. Kept: 7 nightly, 3 weekly, 1 monthly.
-Never send email to anyone but the user; the run report to the user's own address is the only email the app sends.
+Email goes only to the owner (the run report, failure alerts, access requests) and to a person about their own account
+(approved, not approved, paused, allowance reached), through server/notices.js, which picks each recipient itself: names,
+addresses, and links only, never job data. Never send anything else, or to anyone else.
 Run npm install from PowerShell, never WSL: node_modules holds Windows builds of native modules (better-sqlite3).
 Output JSON schemas must avoid minimum/maximum/minLength/maxLength and complex array constraints (the API rejects them); use enum or validate in code.

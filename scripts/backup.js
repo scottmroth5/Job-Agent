@@ -4,7 +4,7 @@
 //   npm run backup                          back up now and upload
 //   npm run backup -- --to E:\JobBackups     write the encrypted file to a folder (e.g. a USB drive), no upload
 //   npm run backup -- --check-passphrase    check JOB_BACKUP_PASSPHRASE in .env, then stop
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { openJobStore } from '../db/index.js';
 import { ATTACHMENTS_DIR } from '../server/attachments.js';
 import { checkPassphrase } from '../tools/backup/crypto.js';
@@ -27,7 +27,7 @@ async function main() {
   }
   const toDir = arg('--to');
   const store = openJobStore();
-  const run = createTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('backup', { to: toDir ? 'folder' : 'google-drive' });
+  const run = createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('backup', { to: toDir ? 'folder' : 'google-drive' });
   try {
     const r = await runBackup({
       db: store.db,

@@ -53,6 +53,8 @@ services:
       # US-only access (server/geo.js); the health check always passes.
       GEO_ALLOW: US
       TZ: ${TZ:-UTC}
+      # The banner's "Request access" link: the real app, where someone signs in with Google and asks.
+      REQUEST_ACCESS_URL: https://${SITE_ADDRESS:?set SITE_ADDRESS in .env}
     # Builds the sample database, then serves it. A restart resets the demo.
     command: ["sh", "-c", "node scripts/demo-seed.js --force && exec node server/index.js"]
     # Nothing on disk survives or is shared: the code is read-only and the sample data lives in memory.

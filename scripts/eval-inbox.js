@@ -2,7 +2,7 @@
 // Calls Claude once per pre-filtered case (about 40 Haiku calls, a few cents).
 //   npm run eval:inbox -- [--model=claude-haiku-4-5] [--max-usd=0.25] [--verbose]
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { repoPath, dataPath } from '../tools/paths.js';
 import { openJobStore } from '../db/index.js';
@@ -27,7 +27,7 @@ async function main() {
 
   const store = openJobStore();
   const promptVersion = getPrompt(store.db, 'inbox-classify').version;
-  const run = createTracer({ store }).startRun('eval-inbox', { model, promptVersion });
+  const run = createJobTracer({ store }).startRun('eval-inbox', { model, promptVersion });
   try {
     const results = await runInboxEval({ cases, applications, claude: createJobClaude(store.db), cfg, model, trace: run, log: argv.includes('--verbose') ? (m) => console.log(`  ${m}`) : () => {} });
     const m = inboxMetrics(results);

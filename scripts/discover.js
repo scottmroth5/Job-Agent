@@ -2,7 +2,7 @@
 //   npm run discover                              full run
 //   npm run discover -- --dry-run --limit=20      preview, writes nothing
 //   npm run discover -- --sources=himalayas,linkedin --no-details
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { loadConfig } from '../tools/config.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
@@ -37,7 +37,7 @@ async function main() {
       throw err;
     }
   }
-  const run = createTracer({ store }).startRun('discover', { dryRun: args.dryRun, sources: Object.keys(args.sources), limit: args.limit });
+  const run = createJobTracer({ store }).startRun('discover', { dryRun: args.dryRun, sources: Object.keys(args.sources), limit: args.limit });
   const browser = args.details ? await createBrowser() : null;
   if (args.details && !browser) console.log('Playwright is not installed; pages that need JavaScript will be marked needs_browser.');
 

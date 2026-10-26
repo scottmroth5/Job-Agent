@@ -30,7 +30,7 @@ async function setup() {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({
     AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'client.apps.example', GOOGLE_WEB_CLIENT_SECRET: 'secret',
-    AUTH_ALLOWED_EMAILS: 'a@example.com, b@example.com', SESSION_SECRET: secret,
+    AUTH_ALLOWED_EMAILS: 'a@example.com', SESSION_SECRET: secret,
   });
   const webDir = mkdtempSync(join(tmpdir(), 'web-'));
   writeFileSync(join(webDir, 'index.html'), '<!doctype html><title>Job Hunt</title>');
@@ -105,12 +105,18 @@ test('isolation: no write route sent by B changes any of A\'s rows', async () =>
   store.close();
 });
 
-test('a paused or pending account gets no data, and a signed-in owner address with no row of its own is the owner', async () => {
+test('a paused account can look at its own data but change nothing; a pending one gets nothing', async () => {
   const { store, app, B, asA, asB } = await setup();
   store.raw.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(B);
-  const res = await app.inject({ url: '/api/postings', headers: { cookie: asB } });
-  assert.equal(res.statusCode, 403);
-  assert.ok(!MARKERS.some((m) => res.body.includes(m)));
+  const look = await app.inject({ url: '/api/postings', headers: { cookie: asB } });
+  assert.deepEqual([look.statusCode, look.json()], [200, []]);
+  const change = await app.inject({ method: 'PUT', url: '/api/layout/home', headers: { cookie: asB, origin: SITE }, payload: { order: ['inbox'] } });
+  assert.equal(change.statusCode, 403);
+  assert.match(change.json().error, /paused/);
+  store.raw.prepare("UPDATE users SET status = 'pending' WHERE id = ?").run(B);
+  const pending = await app.inject({ url: '/api/postings', headers: { cookie: asB } });
+  assert.deepEqual([pending.statusCode, pending.json().account], [403, 'pending']);
+  assert.ok(!MARKERS.some((m) => pending.body.includes(m)));
   assert.ok((await app.inject({ url: '/api/postings', headers: { cookie: asA } })).json().length >= 10);
   await app.close();
   store.close();

@@ -129,8 +129,10 @@ app from another device or the cloud. It uses the Google Cloud project you alrea
    AUTH_ALLOWED_EMAILS=you@gmail.com
    PUBLIC_URL=http://localhost:5178
    ```
-3. **Create the session secret:** `npm run auth:setup`. It also lists anything still missing. `npm run auth:setup -- --rotate` replaces the secret, which signs everyone out.
-4. **Turn it on:** add `AUTH_MODE=google` to `.env` and restart `npm run ui`. Opening the page now sends you to Google. Only the addresses in `AUTH_ALLOWED_EMAILS` get in; anyone else sees "not allowed". Sessions last 30 days. Remove `AUTH_MODE` to go back to no login.
+3. **Create the secrets:** `npm run auth:setup` creates `SESSION_SECRET` and `USER_KEY_SECRET` (which encrypts the Claude keys other users save) and lists anything still missing. Keep a copy of `USER_KEY_SECRET` in your password manager: without it, saved keys can't be read. `npm run auth:setup -- --rotate` replaces the session secret, which signs everyone out.
+4. **Turn it on:** add `AUTH_MODE=google` to `.env` and restart `npm run ui`. Opening the page now sends you to Google. The addresses in `AUTH_ALLOWED_EMAILS` are yours, the owner's. Sessions last 30 days. Remove `AUTH_MODE` to go back to no login.
+
+**Other people** sign in with Google and fill in a short request (their name, a note, and accepting the [terms](TERMS.md) and [privacy policy](PRIVACY.md)). You get an email; approve or reject them on **Admin > Users**, and they get an email back. For each user you choose who pays for their AI: **their own key**, which they add under **Settings** (encrypted, never shown again, not even to you), or **your key**, with a monthly cap you set. You can pause and resume accounts there too. Until each account has its own search settings, Gmail, and Drive, the pipeline, inbox, adding jobs, and AI actions stay yours only.
 
 The scheduled run and the `npm run` commands don't go through the web page, so they are unaffected.
 

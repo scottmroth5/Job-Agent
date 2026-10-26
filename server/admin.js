@@ -7,6 +7,7 @@ import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.js';
 import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.js';
 import { buildClassifyRequest } from '../agents/inbox/classify.js';
 import { listOpenApplications } from '../agents/inbox/match.js';
+import { OWNER_ID } from '../db/users.js';
 
 // The inbox prompt previews with a made-up email; real email bodies are never shown here.
 const SAMPLE_EMAIL = {
@@ -68,9 +69,10 @@ function samplePosting(db, name, postingId) {
 }
 
 export function registerAdminRoutes(app, { db, config }) {
-  const spending = () => ({ ...budgetStatus(db), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: spendByLabel(db) });
+  // The signed-in user's spend: the owner sees everything on their key; anyone else, their own.
+  const spending = (uid = OWNER_ID) => ({ ...budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: spendByLabel(db, { uid }) });
 
-  app.get('/api/admin/budget', { schema: { summary: "This month's Claude spend against the monthly cap, by feature", response: { 200: anyObject } } }, async () => spending());
+  app.get('/api/admin/budget', { schema: { summary: "This month's Claude spend against the monthly cap, by feature", response: { 200: anyObject } } }, async (req) => spending(req.uid));
 
   app.put(
     '/api/admin/budget',
@@ -83,7 +85,7 @@ export function registerAdminRoutes(app, { db, config }) {
     },
     async (req) => {
       setBudgetLimit(db, req.body.limitUsd);
-      return spending();
+      return spending(req.uid);
     },
   );
 

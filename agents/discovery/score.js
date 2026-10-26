@@ -229,7 +229,7 @@ async function mapLimit(items, limit, fn) {
  * @param {{send: Function}} ctx.claude         from agent-core createClaude()
  * @param {string} ctx.knowledge                Candidate Knowledge text (system prompt)
  * @param {string} ctx.model
- * @param {object} [ctx.run]                    trace run from createTracer().startRun()
+ * @param {object} [ctx.run]                    trace run from createJobTracer().startRun()
  * @param {object} [ctx.options]                { ids, allUnscored, limit, concurrency = 3, promoteAt = 8, maxConsecutiveFailures = 5 }
  */
 export async function scorePostings({ store, config, claude, knowledge, model, run, now = new Date(), options = {} }) {

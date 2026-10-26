@@ -1,14 +1,14 @@
 // Moves finished or stale jobs out of the pipeline (v1's archive rules).
 //   npm run archive -- --dry-run    list what would move
 //   npm run archive                 move them
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { openJobStore } from '../db/index.js';
 import { archivePostings } from '../agents/hunt/archive.js';
 
 const dryRun = process.argv.includes('--dry-run');
 const store = openJobStore();
 try {
-  const run = dryRun ? null : createTracer({ store }).startRun('archive');
+  const run = dryRun ? null : createJobTracer({ store }).startRun('archive');
   const result = archivePostings(store.db, { dryRun });
   const after = dryRun ? result.remaining - result.archived.length : result.remaining;
   console.log(`${dryRun ? 'DRY RUN: would archive' : 'Archived'} ${result.archived.length} jobs; ${after} ${dryRun ? 'would remain' : 'remain'} in the pipeline.`);

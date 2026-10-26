@@ -20,6 +20,9 @@ import { schedulesFromEnv } from './scheduler.js';
 import { timeZone } from '../tools/dates.js';
 import { geoAllowFromEnv, loadCountryLookup } from './geo.js';
 import { createAlerts } from './alerts.js';
+import { createNotices } from './notices.js';
+import { getSetting, setSetting } from '../db/settings.js';
+import { getUser, OWNER_ID, syncOwnerEmail } from '../db/users.js';
 import { sendEmail } from '../tools/google/gmail.js';
 import { assertSafeBinding, authSettings } from './auth.js';
 import { SAMPLE_TASKS } from '../demo/sample-data.js';
@@ -40,8 +43,23 @@ const auth = demo ? null : getGoogleAuth();
 
 // The knowledge doc is re-read at most every 10 minutes, so edits to it show up without a restart.
 let knowledgeCache = { text: null, at: 0 };
+// Account emails (server/notices.js): to the owner, or to a person about their own account; never anyone else.
+const notices = demo
+  ? {}
+  : createNotices({ send: (email) => sendEmail(auth, email), owner: () => process.env.EMAIL_ADDRESS || null, appUrl: () => authConfig.publicUrl ?? '' });
+// A user on the owner's key who uses up their allowance, and the owner, hear about it once a month.
+const onCapReached = async (uid, err) => {
+  if (uid === OWNER_ID || err.scope !== 'user') return;
+  const key = `allowance-notice:${uid}`;
+  if (getSetting(store.raw, key) === err.status.month) return;
+  setSetting(store.raw, key, err.status.month);
+  await notices.allowanceReached?.(getUser(store.raw, uid), err.status);
+};
+// The owner's account row carries their first allowed address, for the Users screen.
+if (authMode === 'google') syncOwnerEmail(store.raw, authConfig.allowed);
 const realServices = () => ({
-  claude: createJobClaude(store.db),
+  claude: createJobClaude(store.db, { onCapReached }),
+  notices,
   http: createHttp(),
   drive: createDriveClient(auth),
   createBrowser: () => createBrowser(),

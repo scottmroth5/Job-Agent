@@ -5,11 +5,18 @@ import { createContext, useContext } from 'react';
 export const DemoContext = createContext(false);
 export const useDemo = () => useContext(DemoContext);
 
-export function DemoBanner() {
+/** requestAccessUrl (REQUEST_ACCESS_URL): the real app, where someone can sign in and ask for access. */
+export function DemoBanner({ requestAccessUrl = null }) {
   return (
     <div className="demo-banner" role="note">
       <strong>Demo</strong> · A fictional candidate&apos;s job search with made-up companies and sample data. Look around freely;
       changes and AI actions are turned off here.
+      {requestAccessUrl && (
+        <>
+          {' '}
+          <a href={requestAccessUrl}>Request access</a> to use it for your own search.
+        </>
+      )}
     </div>
   );
 }

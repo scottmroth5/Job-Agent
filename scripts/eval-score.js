@@ -3,7 +3,7 @@
 //   npm run eval:score -- --rebuild                   recreate the cases
 //   npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 [--max-usd=2] [--limit=N]
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { createHttp } from '../tools/http.js';
@@ -78,7 +78,7 @@ async function evaluate(argv) {
     throw new Error(`Estimate is over the $${maxUsd.toFixed(2)} budget. Raise --max-usd or use --limit.`);
   }
 
-  const run = createTracer({ store }).startRun('eval-score', { models, cases: cases.length });
+  const run = createJobTracer({ store }).startRun('eval-score', { models, cases: cases.length });
   try {
     const result = await runEval({ cases, models, claude: createJobClaude(store.db), config, knowledge, run, db: store.db, log: (m) => console.log(`  ${m}`) });
     const totals = run.finish('ok', { models, cases: cases.length });

@@ -3,7 +3,7 @@
 //   npm run inbox:backfill                           the last 180 days (config/inbox.json backfillDays)
 //   npm run inbox:backfill -- --days=30 --dry-run    count what would be classified and estimate the cost
 // Output is counts, notices, and job titles only; email content is never printed.
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { openJobStore } from '../db/index.js';
 import { assertNoRunningRun } from '../tools/runs.js';
@@ -30,7 +30,7 @@ async function main() {
     const gmail = createGmail({ auth: getInboxAuth(), onWait: (ms) => console.log(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
     const name = mode === 'backfill' ? 'inbox-backfill' : 'inbox';
     if (!dryRun) assertNoRunningRun(store.db, name);
-    const run = dryRun ? null : createTracer({ store }).startRun(name, { model: cfg.model, promptVersion: getPrompt(store.db, 'inbox-classify').version });
+    const run = dryRun ? null : createJobTracer({ store }).startRun(name, { model: cfg.model, promptVersion: getPrompt(store.db, 'inbox-classify').version });
     try {
       const log = (level, m) => (run ? run.log(level, m) : console.log(m));
       const s = await runInbox({ store, gmail, claude: createJobClaude(store.db), cfg, key, run, log, options: { mode, days, dryRun } });

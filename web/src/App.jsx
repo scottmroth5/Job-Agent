@@ -11,9 +11,11 @@ import HomePage from './components/HomePage.jsx';
 import ActivityPage from './components/ActivityPage.jsx';
 import FunnelPage from './components/FunnelPage.jsx';
 import { DemoBanner, DemoContext } from './demo.jsx';
+import { MeContext } from './me.jsx';
+import SettingsPage from './components/SettingsPage.jsx';
 
 // #/ is the Home page; each screen has its own address.
-const VIEWS = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin' };
+const VIEWS = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin', settings: 'Settings' };
 const viewFromHash = () => {
   const name = /^#\/(\w+)/.exec(window.location.hash)?.[1];
   return VIEWS[name] ? name : 'home';
@@ -108,8 +110,9 @@ export default function App() {
 
   return (
     <DemoContext.Provider value={demo}>
+    <MeContext.Provider value={me}>
     <div className={demo ? 'app demo' : 'app'}>
-      {demo && <DemoBanner />}
+      {demo && <DemoBanner requestAccessUrl={me?.requestAccessUrl} />}
       <header className="topbar">
         {view !== 'home' && (
           <a href="#/" className="home-link" aria-label="Home">
@@ -149,6 +152,8 @@ export default function App() {
             </p>
           )}
         </>
+      ) : view === 'settings' ? (
+        <SettingsPage />
       ) : view === 'admin' ? (
         <AdminPage />
       ) : view === 'funnel' ? (
@@ -248,6 +253,7 @@ export default function App() {
         />
       )}
     </div>
+    </MeContext.Provider>
     </DemoContext.Provider>
   );
 }

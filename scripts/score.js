@@ -2,7 +2,7 @@
 //   npm run score                         score every unscored v2 posting
 //   npm run score -- --dry-run            list what would be scored and an estimated cost
 //   npm run score -- --model=claude-sonnet-5-5 --limit=10 --ids=12,15 --all-unscored
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
@@ -52,7 +52,7 @@ async function main() {
     assertNoRunningRun(store.db, 'score');
     const knowledge = await loadKnowledge();
     console.log(`Candidate Knowledge loaded: ${knowledge.length.toLocaleString()} characters.`);
-    const run = createTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });
+    const run = createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });
     try {
       const summary = await scorePostings({
         store,

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { isOwner, useMe } from '../me.jsx';
 
 const LABELS = {
   score: 'Scoring full-time jobs',
@@ -12,8 +13,12 @@ const LABELS = {
 };
 const usd = (n) => `$${n.toFixed(2)}`;
 
-/** Admin > Spending: this month's Claude spend against the monthly cap, by feature, and the cap itself. */
+/**
+ * Admin > Spending: this month's Claude spend, by feature. The owner sees everything on their key against the cap and
+ * sets it; a user on the owner's key sees their allowance; a user with their own key sees their spend, with no cap.
+ */
 export default function SpendingAdmin() {
+  const me = useMe();
   const [b, setB] = useState(null);
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState(false);
@@ -21,7 +26,7 @@ export default function SpendingAdmin() {
 
   const show = (data) => {
     setB(data);
-    setDraft(String(data.limitUsd));
+    setDraft(String(data.limitUsd ?? ''));
   };
   useEffect(() => {
     api.budget().then(show, (err) => setError(err.message));
@@ -40,21 +45,34 @@ export default function SpendingAdmin() {
   };
 
   if (!b) return error ? <div className="error">{error}</div> : <p className="muted">Loading…</p>;
-  const pct = Math.min(100, Math.round((b.spentUsd / b.limitUsd) * 100));
+  const capped = b.limitUsd != null;
+  const pct = capped ? Math.min(100, Math.round((b.spentUsd / b.limitUsd) * 100)) : 0;
   return (
     <div className="spending">
       <h2>Claude spending, {b.monthLabel}</h2>
-      <p>
-        <b>{usd(b.spentUsd)}</b> of {usd(b.limitUsd)} this month ({pct}%), {usd(b.remainingUsd)} left.
-      </p>
-      <div className="meter" role="img" aria-label={`${pct}% of the monthly budget used`}>
-        <div className={`fill ${b.level}`} style={{ width: `${pct}%` }} />
-      </div>
-      {b.level === 'over' && (
+      {capped ? (
+        <>
+          <p>
+            <b>{usd(b.spentUsd)}</b> of {usd(b.limitUsd)} this month ({pct}%), {usd(b.remainingUsd)} left.
+            {!isOwner(me) && ' The owner pays for this allowance.'}
+          </p>
+          <div className="meter" role="img" aria-label={`${pct}% of the monthly budget used`}>
+            <div className={`fill ${b.level}`} style={{ width: `${pct}%` }} />
+          </div>
+        </>
+      ) : (
+        <p>
+          <b>{usd(b.spentUsd)}</b> this month, on your own Claude key (Anthropic bills you; set limits in your Anthropic console).
+        </p>
+      )}
+      {isOwner(me) && b.level === 'over' && (
         <p className="warn-box">The budget is used up, so Claude calls are paused until next month or until you raise it. Scoring, letters, meeting prep, and inbox reading wait; everything else keeps working.</p>
       )}
-      {b.level === 'warn' && <p className="warn-box">Over 80% of this month's budget is used.</p>}
+      {!isOwner(me) && b.level === 'over' && <p className="warn-box">This month's allowance is used up, so AI is off until next month or until the owner raises it.</p>}
+      {capped && b.level === 'warn' && <p className="warn-box">Over 80% of this month's budget is used.</p>}
 
+      {isOwner(me) && (
+      <>
       <form className="row budget-form" onSubmit={save}>
         <label>
           Monthly budget (US dollars)
@@ -67,8 +85,11 @@ export default function SpendingAdmin() {
       </form>
       <p className="muted small">
         When this month's spend reaches the budget, the app stops making Claude calls until the 1st or until you raise it. The call that crosses the line
-        finishes, so the total can go slightly over. {b.source === 'default' ? `The default is $${b.defaultUsd}.` : ''}
+        finishes, so the total can go slightly over. {b.source === 'default' ? `The default is $${b.defaultUsd}.` : ''} It covers your own AI and the users you
+        put on your key (Admin &gt; Users).
       </p>
+      </>
+      )}
       {error && <div className="error">{error}</div>}
 
       <h3>This month by feature</h3>

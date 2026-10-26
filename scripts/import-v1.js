@@ -5,7 +5,7 @@ import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parse } from 'csv-parse/sync';
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { openJobStore, DB_PATH } from '../db/index.js';
 import { importV1 } from '../db/import-v1.js';
 import { dataPath } from '../tools/paths.js';
@@ -42,7 +42,7 @@ function main() {
   }
 
   const store = openJobStore();
-  const run = createTracer({ store }).startRun('import-v1', { files: files.hunt.length + 1 });
+  const run = createJobTracer({ store }).startRun('import-v1', { files: files.hunt.length + 1 });
   try {
     const counts = importV1(
       store,

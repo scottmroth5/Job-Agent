@@ -15,7 +15,7 @@ export function createTaskRunner() {
 
   /**
    * Starts fn(step, { logger }) in the background and returns the task's id. step(message) records a progress
-   * step; logger.info/warn/error(text) records an output line (pass it to createTracer to capture run logs).
+   * step; logger.info/warn/error(text) records an output line (pass it to createJobTracer to capture run logs).
    */
   function start(kind, meta, fn) {
     const id = String(next++);

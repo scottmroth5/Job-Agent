@@ -23,12 +23,23 @@ async function request(method, path, body) {
     throw new Error('Sign in required.');
   }
   const data = await res.json().catch(() => ({}));
+  // An account that is no longer usable (pending, not approved, removed): the page itself says what to do.
+  if (res.status === 403 && data.account) {
+    window.location.href = '/';
+    throw new Error(data.error ?? 'No access.');
+  }
   if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
   return data;
 }
 
 export const api = {
   me: () => request('GET', '/api/me'),
+  account: () => request('GET', '/api/account'),
+  saveClaudeKey: (key) => request('PUT', '/api/account/claude-key', { key }),
+  removeClaudeKey: () => request('DELETE', '/api/account/claude-key'),
+  users: () => request('GET', '/api/admin/users'),
+  decideUser: (id, decision) => request('POST', `/api/admin/users/${id}/${decision}`),
+  setUserAi: (id, source, capUsd = null) => request('PUT', `/api/admin/users/${id}/ai`, { source, capUsd }),
   /** Sends the file as the raw body with its name and type in headers (no multipart). */
   uploadAttachment: async (jobId, file) => {
     const res = await send(`/api/postings/${jobId}/attachments`, {

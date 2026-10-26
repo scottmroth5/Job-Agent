@@ -499,3 +499,20 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
 .tile-move button { min-width: 44px; min-height: 44px; font-size: 22px; line-height: 1; border-radius: 10px; }
 .arrange-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: -4px 0 14px; }
 .arrange-bar .error { margin: 0; }
+
+/* Settings and Admin > Users (multi-user). */
+.settings { display: grid; gap: 12px; max-width: 720px; }
+.settings h2 { font-size: 17px; margin: 0 0 8px; }
+.key-form label, .ai-setup label { display: grid; gap: 4px; font-size: 13px; }
+.user-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+.user-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; display: grid; gap: 8px; }
+.user-card.status-pending { border-color: var(--accent); }
+.user-card.status-rejected { opacity: 0.7; }
+.user-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.request-note { margin: 0; font-style: italic; overflow-wrap: anywhere; }
+.ai-setup { align-items: flex-end; }
+.user-card .row button { min-height: 36px; }
+/* The key and AI forms wrap: on a phone the field takes its own line and the buttons follow, left-aligned. */
+.key-form, .ai-setup { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; justify-content: flex-start; }
+.key-form label { flex: 1 1 260px; }
+.key-form input { width: 100%; font: 14px ui-monospace, Consolas, monospace; }

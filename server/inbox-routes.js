@@ -1,6 +1,6 @@
 // Inbox screen: check Gmail, resolve emails that need review, and close reminders. Email subjects and
 // summaries are shown to the user here (local server only); they are never logged.
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { runInbox } from '../agents/inbox/process.js';
 import { listNeedsReview, resolveReview, CHOICES } from '../agents/inbox/review.js';
@@ -73,7 +73,7 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
       checkTaskId = tasks.start('inbox', { by }, async (step, { logger }) => {
         const gmail = inbox.gmail({ onWait: (ms) => logger.warn(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
         // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
-        const run = createTracer({ store, logger }).startRun('inbox', { model: inbox.cfg.model });
+        const run = createJobTracer({ store, logger }).startRun('inbox', { model: inbox.cfg.model });
         try {
           step('Reading new mail');
           const s = await runInbox({ store, gmail, claude, cfg: inbox.cfg, key: inbox.key(), run, log: run.log });

@@ -9,7 +9,7 @@ import { openStore } from '@scottmroth5/agent-core';
 import { loadMigrations, openJobStore } from '../db/index.js';
 import { USER_TABLES } from '../db/migrations/013-users.js';
 import { runAsUser, scopeDb } from '../db/scope.js';
-import { addUser, OWNER_ID, userForEmail } from '../db/users.js';
+import { accountFor, addUser, OWNER_ID, syncOwnerEmail } from '../db/users.js';
 
 function before013(path) {
   const store = openStore(path, { app: 'job-agent', migrations: loadMigrations().filter((m) => m.id < '013') });
@@ -120,12 +120,17 @@ test('scopeDb binds the current user, and a user-table query with no user throws
   });
 });
 
-test('sign-in: an address with its own active row is that user; a paused one is nobody; any other allowed address is the owner', () => {
+test('sign-in: an owner address is the owner; any other address is its own row (with its status), or nobody yet', () => {
   const store = openJobStore(':memory:');
   const second = addUser(store.raw, { email: 'Second@Example.com' });
-  assert.equal(userForEmail(store.raw, 'second@example.com'), second);
-  assert.equal(userForEmail(store.raw, 'owner@example.com'), OWNER_ID);
+  const owners = ['Owner@Example.com', 'other-owner@example.com'];
+  assert.deepEqual(accountFor(store.raw, 'second@example.com', owners), { uid: second, status: 'active', role: 'user' });
+  assert.deepEqual(accountFor(store.raw, 'owner@example.com', owners), { uid: OWNER_ID, status: 'active', role: 'admin' });
+  assert.equal(accountFor(store.raw, 'other-owner@example.com', owners).uid, OWNER_ID);
+  assert.equal(accountFor(store.raw, 'stranger@example.com', owners), null);
   store.raw.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(second);
-  assert.equal(userForEmail(store.raw, 'second@example.com'), null);
+  assert.equal(accountFor(store.raw, 'second@example.com', owners).status, 'paused');
+  syncOwnerEmail(store.raw, owners);
+  assert.equal(store.raw.prepare('SELECT email FROM users WHERE id = ?').pluck().get(OWNER_ID), 'owner@example.com');
   store.close();
 });

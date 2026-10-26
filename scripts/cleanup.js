@@ -6,7 +6,7 @@
 //   - moves untouched pipeline jobs with no description back to Discovered, where the UI flags them
 //   npm run cleanup -- --dry-run    list what would change
 //   npm run cleanup                 change it
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { openJobStore } from '../db/index.js';
 import { loadConfig } from '../tools/config.js';
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';
@@ -16,7 +16,7 @@ const dryRun = process.argv.includes('--dry-run');
 const config = loadConfig();
 const store = openJobStore();
 try {
-  const run = dryRun ? null : createTracer({ store }).startRun('cleanup');
+  const run = dryRun ? null : createJobTracer({ store }).startRun('cleanup');
   // Keys are derived data, so they are recomputed even in a dry run; the preview then reflects the current rules.
   const rekeyed = rekeyPostings(store.db);
   if (rekeyed) console.log(`Updated the duplicate key on ${rekeyed} jobs.`);

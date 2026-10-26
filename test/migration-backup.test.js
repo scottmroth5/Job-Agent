@@ -15,8 +15,10 @@ function olderDatabase() {
   const path = join(dir, 'job-agent.db');
   const all = loadMigrations();
   const store = openStore(path, { app: 'job-agent', migrations: all.slice(0, -1) });
-  store.db.prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-    VALUES ('k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')`).run();
+  // The owner's job once 013 has added user_id.
+  const owned = Boolean(store.db.prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
+  store.db.prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
+    VALUES (${owned ? '1, ' : ''}'k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')`).run();
   store.close();
   return { dir, path, last: all.at(-1).id };
 }

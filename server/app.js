@@ -5,7 +5,7 @@ import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { listPostings, getPosting, updatePosting, summary } from './queries.js';
 import { registerLookupRoutes } from './lookups-routes.js';
 import { lookups } from '../agents/lookups.js';
@@ -20,7 +20,7 @@ import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { runAsUser } from '../db/scope.js';
-import { OWNER_ID, userForEmail } from '../db/users.js';
+import { OWNER_ID } from '../db/users.js';
 
 // Routes that act with the owner's own accounts and settings (their knowledge doc, search settings, Gmail, Drive, and
 // Claude budget) or change what every user shares (the lists, the spending cap). Until each account has its own
@@ -32,6 +32,10 @@ export const OWNER_ONLY = new Set([
   'POST /api/admin/lookups/:list', 'PATCH /api/admin/lookups/:list/:id', 'PUT /api/admin/lookups/:list/roles',
 ]);
 import { registerAdminRoutes } from './admin.js';
+import { registerAccountRoutes } from './account-routes.js';
+import { registerPages } from './pages.js';
+import { registerUserRoutes } from './users-routes.js';
+import { claudeKeyWorks } from '../tools/claude.js';
 import { getLayout, registerLayoutRoutes } from './layout.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
 import { registerInboxRoutes } from './inbox-routes.js';
@@ -102,20 +106,26 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     errorResponseBuilder: (req, ctx) => ({ statusCode: 429, error: 'Too many requests from this address. Try again later.', retryAfter: Math.ceil(ctx.ttl / 1000) }),
   });
   if (authMode !== 'none') registerRateLimits(app, { now: auth.now, all: authMode === 'demo' ? DEMO_REQUEST_LIMIT : null });
-  registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now });
+  registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now, db, notices: services.notices ?? {} });
   // Multi-user (db/scope.js): each route handler, and every task it starts, runs as the signed-in user; with no sign-in
   // (AUTH_MODE none, and the demo) that is the owner. The user is decided, and refused if inactive or not allowed this
   // route, as soon as auth has run (onRequest, before the body is read); the handler runs as them from preHandler, after
   // the body, which arrives in socket events that would not carry the context. A signed-out request on an open path
   // (/auth/*, /healthz) gets no user, so a query on a user table there throws instead of reading anyone's rows.
+  // auth.js has already sent anyone without an active or paused account to request access or wait.
   app.addHook('onRequest', async (req, reply) => {
-    if (authMode === 'google' && !req.user) return;
-    const uid = authMode === 'google' ? userForEmail(db, req.user) : OWNER_ID;
-    if (!uid) return reply.code(403).send({ error: 'This account is not active.' });
-    if (uid !== OWNER_ID && OWNER_ONLY.has(`${req.method} ${req.routeOptions.url}`)) {
-      return reply.code(403).send({ error: 'Only the owner can do this for now.' });
+    if (authMode === 'google' && !req.account) return;
+    const account = authMode === 'google' ? req.account : { uid: OWNER_ID, status: 'active', role: 'admin' };
+    const route = `${req.method} ${req.routeOptions.url}`;
+    if (account.status === 'paused' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+      return reply.code(403).send({ error: 'Your account is paused: you can look, but not change anything.' });
     }
-    req.uid = uid;
+    if (account.uid !== OWNER_ID && OWNER_ONLY.has(route)) return reply.code(403).send({ error: 'Only the owner can do this for now.' });
+    if (account.role !== 'admin' && String(req.routeOptions.url ?? '').startsWith('/api/admin/users')) {
+      return reply.code(403).send({ error: 'Only an admin can manage users.' });
+    }
+    req.uid = account.uid;
+    req.role = account.role;
   });
   app.addHook('preHandler', (req, reply, done) => (req.uid ? runAsUser(req.uid, done) : done()));
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
@@ -136,7 +146,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     }
     return tasks.start(kind, meta, async (step, { logger }) => {
       // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
-      const run = createTracer({ store, logger }).startRun(`ui-${kind}`, meta);
+      const run = createJobTracer({ store, logger }).startRun(`ui-${kind}`, meta);
       const browser = services.createBrowser ? await services.createBrowser() : null;
       try {
         const result = await fn(step, { run, browser });
@@ -340,6 +350,10 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
 
   registerAdminRoutes(app, { db, config });
   registerLayoutRoutes(app, { db });
+  registerAccountRoutes(app, { db, checkKey: services.checkClaudeKey ?? claudeKeyWorks });
+  // The Users screen never exists in the demo.
+  if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {} });
+  registerPages(app);
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });
   registerPrepRoutes(app, { store, config, services, startTask });

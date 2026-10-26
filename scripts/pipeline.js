@@ -3,7 +3,7 @@
 // This is what the scheduler (Phase 3) will call.
 //   npm run pipeline                 full run
 //   npm run pipeline -- --no-email   skip the email (prints its subject instead)
-import { createTracer } from '@scottmroth5/agent-core';
+import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { loadKnowledge } from '../tools/knowledge.js';
@@ -44,7 +44,7 @@ async function main() {
   const config = loadConfig();
   const store = openJobStore();
   for (const name of ['pipeline', 'discover', 'score', 'hunt']) assertNoRunningRun(store.db, name);
-  const tracer = createTracer({ store });
+  const tracer = createJobTracer({ store });
   const pipelineRun = tracer.startRun('pipeline');
   const auth = getGoogleAuth();
   const browser = await createBrowser();

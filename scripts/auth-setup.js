@@ -1,5 +1,6 @@
 // Prepares .env for Google sign-in (AUTH_MODE=google). Creates SESSION_SECRET when missing (or with --rotate,
-// which signs everyone out) and reports which sign-in settings are still missing. Never prints values.
+// which signs everyone out), creates USER_KEY_SECRET when missing (never rotated: it unlocks the Claude keys users
+// saved), and reports which sign-in settings are still missing. Never prints values.
 //   npm run auth:setup
 //   npm run auth:setup -- --rotate
 import { randomBytes } from 'node:crypto';
@@ -13,10 +14,15 @@ if (rotate || !hasEnvValue('SESSION_SECRET')) {
   console.log('SESSION_SECRET is already set (use --rotate to replace it and sign everyone out).');
 }
 
+if (!hasEnvValue('USER_KEY_SECRET')) {
+  setEnvValues({ USER_KEY_SECRET: randomBytes(48).toString('base64') });
+  console.log(`Created USER_KEY_SECRET in ${ENV_PATH}. Keep a copy in your password manager: without it, saved user keys cannot be read.`);
+}
+
 const needed = {
   GOOGLE_WEB_CLIENT_ID: 'the Web application OAuth client ID (Google Cloud > Clients)',
   GOOGLE_WEB_CLIENT_SECRET: "that client's secret",
-  AUTH_ALLOWED_EMAILS: 'the Google accounts allowed to sign in, comma separated',
+  AUTH_ALLOWED_EMAILS: 'your own Google addresses (the owner), comma separated; others request access',
   PUBLIC_URL: 'where the app is opened, e.g. http://localhost:5178 (its redirect URI is PUBLIC_URL/auth/google/callback)',
 };
 const missing = Object.entries(needed).filter(([k]) => !hasEnvValue(k));

@@ -43,7 +43,8 @@ async function fullApp({ authMode = 'google', publicUrl = 'https://jobs.example.
   return { app, store };
 }
 
-const OPEN = [/^\/auth\//, /^\/healthz$/];
+// Public on purpose: sign-in itself, the health check, and the privacy policy and terms (linked before sign-in).
+const OPEN = [/^\/auth\//, /^\/healthz$/, /^\/(privacy|terms)$/];
 const sampleUrl = (url) => url.replace(/:(\w+)/g, (_, name) => (name === 'id' ? '1' : name === 'action' ? 'score' : name === 'list' ? 'status' : name === 'name' ? 'score' : 'x')).replaceAll('*', 'index.html');
 
 test('every route except sign-in and /healthz needs sign-in: API routes answer 401, pages redirect to sign-in', async () => {

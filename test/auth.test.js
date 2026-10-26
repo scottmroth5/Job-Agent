@@ -75,7 +75,7 @@ test('an allowed, verified account gets a session and reaches the API; sign out 
   assert.ok(session);
   assert.equal(seen[0].redirectUri, `${SITE}/auth/google/callback`);
   assert.ok(seen[0].codeVerifier.length >= 43, 'the PKCE verifier is sent with the code');
-  assert.deepEqual((await app.inject({ url: '/api/me', headers: { cookie: session } })).json(), { authMode: 'google', email: 'pat@example.com' });
+  assert.deepEqual((await app.inject({ url: '/api/me', headers: { cookie: session } })).json(), { authMode: 'google', email: 'pat@example.com', role: 'admin', status: 'active', owner: true, name: null });
   assert.equal((await app.inject({ url: '/api/postings', headers: { cookie: session } })).statusCode, 200);
 
   // Writes need this site's Origin.
@@ -91,9 +91,8 @@ test('an allowed, verified account gets a session and reaches the API; sign out 
   store.close();
 });
 
-test('refused: not on the allowlist, unverified email, wrong state or nonce, expired login, Google errors', async () => {
+test('refused: unverified email, wrong state or nonce, expired login, Google errors (other addresses: test/registration.test.js)', async () => {
   for (const [claims, status, text] of [
-    [{ email: 'eve@example.com' }, 403, /eve@example.com is not allowed/],
     [{ email_verified: false }, 403, /not verified/],
     [{ nonce: 'other' }, 400, /did not match/],
   ]) {
@@ -119,11 +118,12 @@ test('refused: not on the allowlist, unverified email, wrong state or nonce, exp
   failing.store.close();
 });
 
-test('removing an address from the allowlist locks that session out at once; a forged cookie is refused', async () => {
+test("removing an address from the allowlist takes the owner's access away at once; a forged cookie is refused", async () => {
   const { app, store, signIn } = await setup();
   const { session } = await signIn();
   settings.allowed.splice(settings.allowed.indexOf('pat@example.com'), 1);
-  assert.equal((await app.inject({ url: '/api/postings', headers: { cookie: session } })).statusCode, 401);
+  const res = await app.inject({ url: '/api/postings', headers: { cookie: session } });
+  assert.deepEqual([res.statusCode, res.json().account], [403, 'none'], 'now an address with no account');
   settings.allowed.push('pat@example.com');
   const forged = `ja_session=${Buffer.from(JSON.stringify({ email: 'pat@example.com', exp: Date.now() + 1e9 })).toString('base64url')}.AAAA`;
   assert.equal((await app.inject({ url: '/api/postings', headers: { cookie: forged } })).statusCode, 401);
@@ -160,7 +160,7 @@ test('binding rules: none stays on localhost; google needs complete settings and
 test('open mode: /api/me reports no login', async () => {
   const store = openJobStore(':memory:');
   const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
-  assert.deepEqual((await app.inject('/api/me')).json(), { authMode: 'none', email: null });
+  assert.deepEqual((await app.inject('/api/me')).json(), { authMode: 'none', email: null, owner: true, role: 'admin' });
   assert.equal((await app.inject('/api/postings')).statusCode, 200);
   await app.close();
   store.close();

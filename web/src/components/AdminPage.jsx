@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
 import ListsAdmin from './ListsAdmin.jsx';
 import SpendingAdmin from './SpendingAdmin.jsx';
+import UsersAdmin from './UsersAdmin.jsx';
+import { useDemo } from '../demo.jsx';
+import { isAdmin, isOwner, useMe } from '../me.jsx';
 
 function PromptList({ prompts, selected, onSelect }) {
   return (
@@ -194,10 +197,12 @@ function PromptEditor({ name, onSaved }) {
   );
 }
 
+// [key, label, who sees it]: the lists are shared by everyone, so only the owner edits them; Users is for admins.
 const SECTIONS = [
-  ['prompts', 'Prompts'],
-  ['lists', 'Lists'],
-  ['spending', 'Spending'],
+  ['prompts', 'Prompts', () => true],
+  ['lists', 'Lists', (me, demo) => isOwner(me) || demo],
+  ['spending', 'Spending', () => true],
+  ['users', 'Users', (me, demo) => isAdmin(me) && !demo],
 ];
 const sectionFromHash = () => {
   const s = /^#\/admin\/(\w+)/.exec(window.location.hash)?.[1];
@@ -205,7 +210,12 @@ const sectionFromHash = () => {
 };
 
 export default function AdminPage() {
-  const [section, setSectionState] = useState(sectionFromHash);
+  const me = useMe();
+  const demo = useDemo();
+  const sections = SECTIONS.filter(([, , shown]) => shown(me, demo));
+  const [asked, setSectionState] = useState(sectionFromHash);
+  // The section in the address, once this person may see it (who they are arrives just after the page loads).
+  const section = sections.some(([k]) => k === asked) ? asked : 'prompts';
   const setSection = (s) => {
     setSectionState(s);
     window.history.replaceState(null, '', `#/admin/${s}`);
@@ -226,13 +236,15 @@ export default function AdminPage() {
   return (
     <>
       <div className="segmented admin-sections" role="tablist" aria-label="Admin">
-        {SECTIONS.map(([k, l]) => (
+        {sections.map(([k, l]) => (
           <button key={k} role="tab" aria-selected={section === k} className={section === k ? 'on' : ''} onClick={() => setSection(k)}>
             {l}
           </button>
         ))}
       </div>
-      {section === 'lists' ? (
+      {section === 'users' ? (
+        <UsersAdmin />
+      ) : section === 'lists' ? (
         <ListsAdmin />
       ) : section === 'spending' ? (
         <SpendingAdmin />
