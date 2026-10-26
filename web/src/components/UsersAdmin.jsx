@@ -87,6 +87,47 @@ function AiSetup({ user, onSaved }) {
   );
 }
 
+/** Deletes a user's account and everything in it, once their address is typed. */
+function DeleteUser({ user, onDeleted }) {
+  const [open, setOpen] = useState(false);
+  const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState(null);
+  if (!open) {
+    return (
+      <p>
+        <button type="button" className="link danger-link" onClick={() => setOpen(true)}>
+          Delete account…
+        </button>
+      </p>
+    );
+  }
+  const remove = async (e) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      await api.deleteUser(user.id, confirm.trim());
+      onDeleted();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  return (
+    <form className="row key-form" onSubmit={remove}>
+      <label>
+        Deletes {user.email}'s account and everything in it. Type their address to confirm.
+        <input value={confirm} onChange={(e) => setConfirm(e.target.value)} autoComplete="off" spellCheck="false" />
+      </label>
+      <button type="submit" className="danger" disabled={confirm.trim().toLowerCase() !== user.email}>
+        Delete
+      </button>
+      <button type="button" onClick={() => setOpen(false)}>
+        Cancel
+      </button>
+      {error && <span className="error">{error}</span>}
+    </form>
+  );
+}
+
 function Feedback() {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
@@ -180,6 +221,7 @@ export default function UsersAdmin() {
               </div>
             )}
             {!u.owner && ['active', 'paused'].includes(u.status) && <AiSetup user={u} onSaved={refresh} />}
+            {!u.owner && <DeleteUser user={u} onDeleted={refresh} />}
           </li>
         ))}
       </ul>

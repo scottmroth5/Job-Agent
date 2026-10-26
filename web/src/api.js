@@ -45,6 +45,10 @@ export const api = {
   decideUser: (id, decision) => request('POST', `/api/admin/users/${id}/${decision}`),
   setUserAi: (id, source, capUsd = null, confirmEmail = undefined) => request('PUT', `/api/admin/users/${id}/ai`, { source, capUsd, ...(confirmEmail ? { confirmEmail } : {}) }),
   sendFeedback: (body, page) => request('POST', '/api/feedback', { body, page }),
+  pauseAccount: () => request('POST', '/api/account/pause'),
+  resumeAccount: () => request('POST', '/api/account/resume'),
+  deleteAccount: (confirmEmail) => request('POST', '/api/account/delete', { confirmEmail }),
+  deleteUser: (id, confirmEmail) => request('POST', `/api/admin/users/${id}/delete`, { confirmEmail }),
   adminFeedback: () => request('GET', '/api/admin/feedback'),
   feedbackDone: (id) => request('POST', `/api/admin/feedback/${id}/done`),
   /** Sends the file as the raw body with its name and type in headers (no multipart). */

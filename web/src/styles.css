@@ -531,3 +531,6 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
 .feedback-admin .request-note { font-style: normal; white-space: pre-wrap; }
 .setup-chips .chip { font: 12px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif; border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; color: var(--muted); }
 .setup-chips .chip.used { color: var(--text); background: var(--accent-soft); border-color: transparent; }
+button.danger { background: var(--low); border-color: var(--low); color: #fff; }
+button.danger:disabled { opacity: 0.5; }
+button.danger-link { color: var(--low); padding: 0; }

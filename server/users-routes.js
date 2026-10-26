@@ -3,11 +3,34 @@
 // registered in the demo. Each decision emails the person about their own account (server/notices.js).
 import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.js';
 import { listUsers } from './admin-queries.js';
+import { deleteAccount } from '../agents/account-data.js';
+import { ATTACHMENTS_DIR } from './attachments.js';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };
 
-export function registerUserRoutes(app, { db, notices = {} }) {
+export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATTACHMENTS_DIR }) {
+  // Deleting someone's account removes everything that is theirs; their address must be typed to confirm.
+  app.post(
+    '/api/admin/users/:id/delete',
+    {
+      schema: {
+        summary: "Delete a user's account and everything in it (admin; type their address to confirm)",
+        params: idParams,
+        body: { type: 'object', required: ['confirmEmail'], additionalProperties: false, properties: { confirmEmail: { type: 'string' } } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req) => {
+      const user = getUser(db, req.params.id);
+      if (!user) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
+      if (req.body.confirmEmail.trim().toLowerCase() !== user.email) throw Object.assign(new Error(`Type ${user.email} to confirm.`), { statusCode: 400 });
+      const counts = deleteAccount(db, user.id, { attachmentsDir });
+      await notices.accountDeleted?.(user, { byOwner: true });
+      return { deleted: true, jobs: counts.postings ?? 0 };
+    },
+  );
+
   app.get('/api/admin/users', { schema: { summary: 'Every account, with its AI setup and this month\'s spend (admin)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
     listUsers(db),
   );

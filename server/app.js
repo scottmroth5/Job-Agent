@@ -26,6 +26,8 @@ import { adminWaiting } from './admin-queries.js';
 
 // Routes for admins: the Users screen and the feedback users sent (server/app.js refuses anyone else).
 const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback'];
+// What a paused account may still change: resume itself (when it paused itself) or delete itself.
+const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
 import { profileForAI, scheduledUsers, userConfigView } from '../agents/user-config.js';
 
 // Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
@@ -134,7 +136,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     if (authMode === 'google' && !req.account) return;
     const account = authMode === 'google' ? req.account : { uid: OWNER_ID, status: 'active', role: 'admin' };
     const route = `${req.method} ${req.routeOptions.url}`;
-    if (account.status === 'paused' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    if (account.status === 'paused' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !PAUSED_MAY.has(route)) {
       return reply.code(403).send({ error: 'Your account is paused: you can look, but not change anything.' });
     }
     if (account.uid !== OWNER_ID && OWNER_ONLY.has(route)) return reply.code(403).send({ error: 'Only the owner can do this for now.' });
@@ -373,9 +375,9 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
 
   registerAdminRoutes(app, { db, config });
   registerLayoutRoutes(app, { db });
-  registerAccountRoutes(app, { db, checkKey: services.checkClaudeKey ?? claudeKeyWorks });
+  registerAccountRoutes(app, { db, checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   // The Users screen never exists in the demo.
-  if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {} });
+  if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });
   registerPages(app);
   registerLookupRoutes(app, { db });

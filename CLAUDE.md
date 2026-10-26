@@ -85,7 +85,7 @@ powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nigh
                                   scripts\backup-nightly.cmd, logs to data\logs\backup.log)
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
 
-## Users (multi-user, phases 1 to 4)
+## Users (multi-user, phases 1 to 6)
 db/users.js: users table, the owner is user 1 (admin); every row before 013 is theirs. Every user table (USER_TABLES in
 db/migrations/013-users.js) has user_id NOT NULL, and keys that were unique app-wide are unique per user. Every query on a
 user table says "user_id = @uid" (joins and subqueries too: "s.user_id = p.user_id"); inserts give user_id @uid, or copy it
@@ -123,7 +123,13 @@ feedback table, db/user-tables.js lists the user tables since 013): any user wri
 FEEDBACK_PER_DAY a day; it is emailed to the owner with the sender as Reply-To (buildRawEmail allows one plain address) and
 listed on Users with Mark done. ADMIN_ONLY prefixes in server/app.js: /api/admin/users, /api/admin/feedback. The Home Admin
 tile counts waiting requests and open feedback (summary.adminWaiting, admins only). test/feedback.test.js covers these.
-Later phases: per-user catalogs (5); account export and deletion, help (6). Each user's own Gmail and Drive
+Phase 5 (per-user lists) was skipped: the status, stage, and track lists stay shared and the owner's to edit.
+Phase 6 (agents/account-data.js): Settings > Your data and account. Download my data (GET /api/account/export: every
+user-table row plus the account and runs; never the sealed key or email bodies). Pause (and resume, only when self-paused:
+decided_by = self; PAUSED_MAY in server/app.js lets a paused account resume or delete). Delete my account (typed address):
+every user-table row (db/user-tables.js order), attached file folders, the account; runs on their own key are deleted, runs
+on the owner's key are kept for the owner's cap with meta and summary cleared. The owner deletes an account the same way
+(POST /api/admin/users/:id/delete). Both email the person; a self-delete also tells the owner. test/account-data.test.js. Each user's own Gmail and Drive
 wait on Google's verification of those scopes.
 
 ## UI and API

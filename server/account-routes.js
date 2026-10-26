@@ -6,6 +6,9 @@ import { getUser, OWNER_ID, setClaudeKey } from '../db/users.js';
 import { boxKey, seal } from '../tools/secret-box.js';
 import { MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
 import { validateConfig } from '../tools/config.js';
+import { deleteAccount, exportAccount } from '../agents/account-data.js';
+import { ATTACHMENTS_DIR } from './attachments.js';
+import { localDay } from '../tools/dates.js';
 
 const anyObject = { type: 'object', additionalProperties: true };
 // Anthropic API keys: "sk-ant-" then letters, digits, dashes, and underscores.
@@ -19,6 +22,8 @@ function account(db, uid) {
     name: u.name,
     role: u.role,
     status: u.status,
+    // A user who paused themselves can resume themselves; the owner's pause is the owner's to lift.
+    pausedBySelf: u.status === 'paused' && db.prepare('SELECT decided_by FROM users WHERE id = ?').pluck().get(uid) === uid,
     owner: uid === OWNER_ID,
     // Where AI calls are paid from: 'env' (the owner's ANTHROPIC_API_KEY), 'owner' (the owner's key, with a cap), 'own'.
     ai: { paidBy: uid === OWNER_ID ? 'env' : u.ai_source, keySet: u.has_key, budget },
@@ -29,7 +34,48 @@ function account(db, uid) {
  * @param {object} o
  * @param {(apiKey: string) => Promise<boolean>} [o.checkKey]  tools/claude.js claudeKeyWorks (tests pass a fake)
  */
-export function registerAccountRoutes(app, { db, checkKey }) {
+export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR }) {
+  // Phase 6: take your data with you, pause yourself, or delete your account. Deleting needs your address typed.
+  app.get('/api/account/export', { schema: { summary: 'Download everything that is yours, as JSON', response: { 200: anyObject } } }, async (req, reply) =>
+    reply
+      .header('Content-Disposition', `attachment; filename="job-hunt-export-${localDay()}.json"`)
+      .header('Cache-Control', 'no-store')
+      .send(exportAccount(db, req.uid ?? OWNER_ID)),
+  );
+  app.post(
+    '/api/account/delete',
+    {
+      schema: {
+        summary: 'Delete your account and everything in it (type your address to confirm)',
+        body: { type: 'object', required: ['confirmEmail'], additionalProperties: false, properties: { confirmEmail: { type: 'string' } } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req) => {
+      const uid = req.uid ?? OWNER_ID;
+      if (uid === OWNER_ID) throw Object.assign(new Error("The owner's account cannot be deleted."), { statusCode: 400 });
+      const user = getUser(db, uid);
+      if (req.body.confirmEmail.trim().toLowerCase() !== user.email) throw Object.assign(new Error(`Type ${user.email} to confirm.`), { statusCode: 400 });
+      const counts = deleteAccount(db, uid, { attachmentsDir });
+      await notices.accountDeleted?.(user, { byOwner: false });
+      return { deleted: true, jobs: counts.postings ?? 0 };
+    },
+  );
+  app.post('/api/account/pause', { schema: { summary: 'Pause your own account (you can resume it yourself)', response: { 200: anyObject } } }, async (req) => {
+    const uid = req.uid ?? OWNER_ID;
+    if (uid === OWNER_ID) throw Object.assign(new Error('The owner cannot be paused.'), { statusCode: 400 });
+    db.prepare("UPDATE users SET status = 'paused', decided_at = ?, decided_by = ?, updated_at = ? WHERE id = ? AND status = 'active'").run(new Date().toISOString(), uid, new Date().toISOString(), uid);
+    return account(db, uid);
+  });
+  app.post('/api/account/resume', { schema: { summary: 'Resume your account, when you paused it yourself', response: { 200: anyObject } } }, async (req) => {
+    const uid = req.uid ?? OWNER_ID;
+    const row = db.prepare('SELECT status, decided_by FROM users WHERE id = ?').get(uid);
+    if (row?.status !== 'paused') throw Object.assign(new Error('Your account is not paused.'), { statusCode: 400 });
+    if (row.decided_by !== uid) throw Object.assign(new Error('The owner paused your account, so only they can resume it.'), { statusCode: 403 });
+    db.prepare("UPDATE users SET status = 'active', decided_at = ?, updated_at = ? WHERE id = ?").run(new Date().toISOString(), new Date().toISOString(), uid);
+    return account(db, uid);
+  });
+
   app.get('/api/account', { schema: { summary: 'Your account: who you are and how your AI is paid for', response: { 200: anyObject } } }, async (req) =>
     account(db, req.uid ?? OWNER_ID),
   );

@@ -52,6 +52,15 @@ export function createNotices({ send, owner, appUrl, log = console }) {
         `${who(user)} wrote${page ? ` (on ${page})` : ''}:\n\n${body}\n\nReply to this email to answer them. See all feedback on Admin > Users: ${link('#/admin/users')}\n`,
         user.email,
       ),
+    /** To the user, and to the owner when the user did it: an account and everything in it was deleted. */
+    accountDeleted: async (user, { byOwner = false } = {}) => {
+      await deliver(
+        user.email,
+        'your account was deleted',
+        'Your Job Hunt account and everything in it (jobs, notes, letters, settings, and your saved key) have been deleted. Encrypted backups that still hold them are replaced within about a month.\n',
+      );
+      if (!byOwner) await deliver(owner(), 'a user deleted their account', `${who(user)} deleted their Job Hunt account.\n`);
+    },
     /** To the user and the owner, once a month: a user on the owner's key reached their allowance. */
     allowanceReached: async (user, status) => {
       const amount = `$${status.limitUsd.toFixed(2)}`;

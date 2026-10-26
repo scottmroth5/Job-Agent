@@ -3,6 +3,7 @@ import { api } from '../api.js';
 import { useDemo } from '../demo.jsx';
 import SearchSettings from './SearchSettings.jsx';
 import FeedbackForm from './FeedbackForm.jsx';
+import AccountControls from './AccountControls.jsx';
 
 const usd = (n) => `$${Number(n).toFixed(2)}`;
 
@@ -100,6 +101,7 @@ export default function SettingsPage() {
 
       {!demo && <SearchSettings />}
       {!demo && !account.owner && <FeedbackForm />}
+      {!demo && !account.owner && <AccountControls account={account} onChange={setAccount} />}
 
       <p className="muted small">
         <a href="/privacy" target="_blank" rel="noreferrer">Privacy policy</a> · <a href="/terms" target="_blank" rel="noreferrer">Terms</a>

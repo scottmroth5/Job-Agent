@@ -30,7 +30,14 @@ On the server that runs the app, and in an encrypted backup in the owner's Googl
 
 ## Your choices
 
-You can remove your Claude key in Settings at any time. To have your account and data deleted, ask the owner. You can also revoke the app's Google access at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
+Under Settings you can, at any time:
+
+- **Download your data:** everything that is yours, as one file.
+- **Remove your Claude key.**
+- **Pause your account,** and resume it later.
+- **Delete your account:** it and everything in it are deleted at once. Copies inside the encrypted backups are replaced as the backups rotate, within about a month.
+
+You can also revoke the app's Google access at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
 
 ## Contact
 
