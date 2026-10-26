@@ -62,8 +62,12 @@ export async function signIn({ scopes, save, command }) {
         err ? reject(err) : resolve(value);
       };
       if (url.searchParams.get('state') !== state) return finish(400, 'Sign-in failed: state mismatch.', new Error('State mismatch; try again.'));
-      const error = url.searchParams.get('error');
-      if (error) return finish(400, `Sign-in cancelled (${error}).`, new Error(`Google returned: ${error}`));
+      // Google's error code is not echoed anywhere (terminal or page): only a fixed message chosen from it.
+      if (url.searchParams.has('error')) {
+        const cancelled = url.searchParams.get('error') === 'access_denied';
+        const message = cancelled ? 'The sign-in was cancelled on the Google page.' : 'Google returned an error instead of signing in.';
+        return finish(400, `${message} Close this tab and try again.`, new Error(`${message} Run "${command}" again.`));
+      }
       try {
         const { tokens } = await client.getToken({ code: url.searchParams.get('code'), codeVerifier, redirect_uri: redirectUri });
         if (!tokens.refresh_token) throw new Error('Google did not return a refresh token.');
