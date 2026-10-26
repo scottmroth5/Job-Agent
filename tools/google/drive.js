@@ -1,7 +1,7 @@
 // Google Drive: the app's cover letter folder and Docs created from HTML.
 // The drive.file permission only reaches files this app created, so the app makes and remembers its own folder.
 import { drive as driveApi } from '@googleapis/drive';
-import { getSetting, setSetting } from '../../db/settings.js';
+import { getUserSetting, setUserSetting } from '../../db/settings.js';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const DOC_MIME = 'application/vnd.google-apps.document';
@@ -37,7 +37,7 @@ const PREP_FOLDER_SETTING = 'drive.meetingPrepFolderId';
 
 /** A remembered app folder, or a new one if it was never made, deleted, or trashed. */
 async function ensureAppFolder(client, db, name, setting) {
-  const known = getSetting(db, setting);
+  const known = getUserSetting(db, setting);
   if (known) {
     try {
       const file = await client.getFile(known);
@@ -47,7 +47,7 @@ async function ensureAppFolder(client, db, name, setting) {
     }
   }
   const id = await client.createFolder(name);
-  setSetting(db, setting, id);
+  setUserSetting(db, setting, id);
   return id;
 }
 

@@ -86,7 +86,7 @@ export function defaultPrompt(name) {
 export function getPrompt(db, name) {
   const def = definition(name);
   const base = defaultPrompt(name);
-  const row = db ? db.prepare('SELECT id, template, note, created_at FROM prompt_versions WHERE name = ? AND active = 1').get(name) : null;
+  const row = db ? db.prepare('SELECT id, template, note, created_at FROM prompt_versions WHERE name = ? AND user_id = @uid AND active = 1').get(name) : null;
   const template = row?.template ?? base.template;
   return {
     name,
@@ -131,8 +131,8 @@ export function savePrompt(db, name, { template, note }, now = new Date()) {
   const current = getPrompt(db, name);
   if (current.template === template) return current;
   db.transaction(() => {
-    db.prepare('UPDATE prompt_versions SET active = 0 WHERE name = ? AND active = 1').run(name);
-    db.prepare('INSERT INTO prompt_versions (name, template, note, active, created_at) VALUES (?, ?, ?, 1, ?)').run(name, template, note?.trim() || null, now.toISOString());
+    db.prepare('UPDATE prompt_versions SET active = 0 WHERE name = ? AND user_id = @uid AND active = 1').run(name);
+    db.prepare('INSERT INTO prompt_versions (user_id, name, template, note, active, created_at) VALUES (@uid, ?, ?, ?, 1, ?)').run(name, template, note?.trim() || null, now.toISOString());
   })();
   return getPrompt(db, name);
 }
@@ -142,11 +142,11 @@ export function restorePrompt(db, name, versionId) {
   definition(name);
   db.transaction(() => {
     if (versionId != null) {
-      const row = db.prepare('SELECT id FROM prompt_versions WHERE id = ? AND name = ?').get(versionId, name);
+      const row = db.prepare('SELECT id FROM prompt_versions WHERE id = ? AND name = ? AND user_id = @uid').get(versionId, name);
       if (!row) throw Object.assign(new Error(`Version ${versionId} of "${name}" not found.`), { statusCode: 404 });
     }
-    db.prepare('UPDATE prompt_versions SET active = 0 WHERE name = ? AND active = 1').run(name);
-    if (versionId != null) db.prepare('UPDATE prompt_versions SET active = 1 WHERE id = ?').run(versionId);
+    db.prepare('UPDATE prompt_versions SET active = 0 WHERE name = ? AND user_id = @uid AND active = 1').run(name);
+    if (versionId != null) db.prepare('UPDATE prompt_versions SET active = 1 WHERE id = ? AND user_id = @uid').run(versionId);
   })();
   return getPrompt(db, name);
 }
@@ -155,7 +155,7 @@ export function restorePrompt(db, name, versionId) {
 export function listVersions(db, name) {
   const base = defaultPrompt(name);
   return db
-    .prepare('SELECT id, template, note, active, created_at FROM prompt_versions WHERE name = ? ORDER BY id DESC')
+    .prepare('SELECT id, template, note, active, created_at FROM prompt_versions WHERE name = ? AND user_id = @uid ORDER BY id DESC')
     .all(name)
     .map((r) => ({ id: r.id, note: r.note, active: Boolean(r.active), createdAt: r.created_at, version: hash(r.template, base.schemaText), template: r.template }));
 }

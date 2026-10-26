@@ -16,8 +16,8 @@ function setup() {
   const add = (o = {}) =>
     Number(
       db
-        .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, track, fetch_status, created_at, updated_at)
-          VALUES (@k, 'Example Co', @title, @k, @on, @stage, @status, @track, 'ok', 'x', 'x')`)
+        .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, track, fetch_status, created_at, updated_at)
+          VALUES (1, @k, 'Example Co', @title, @k, @on, @stage, @status, @track, 'ok', 'x', 'x')`)
         .run({ k: `k${Math.random()}`, title: 'CTO', on: '2026-01-01', stage: 'pipeline', status: 'new', track: 'fulltime', ...o }).lastInsertRowid,
     );
   return { store, db, add };

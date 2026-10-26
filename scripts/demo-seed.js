@@ -42,23 +42,23 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
   const { db } = store;
   setSetting(db, MARKER, 'true');
 
-  const insertPosting = db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, source, location, salary, posted_on,
+  const insertPosting = db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, location, salary, posted_on,
       discovered_on, stage, status, applied_on, fetched_text, fetched_at, fetch_status, fetch_method, workplace, location_check, track,
       rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, created_at, updated_at)
-    VALUES (@url, @url, @company, @title, @key, @source, @location, @salary, @postedOn, @discoveredOn, @stage, @status, @appliedOn,
+    VALUES (@uid, @url, @url, @company, @title, @key, @source, @location, @salary, @postedOn, @discoveredOn, @stage, @status, @appliedOn,
       @text, @fetchedAt, @fetchStatus, @fetchMethod, @workplace, @locationCheck, @track, @rateText, @rateMin, @rateMax, @rateUnit,
       @hoursMin, @hoursMax, @createdAt, @updatedAt)`);
-  const insertScore = db.prepare(`INSERT INTO scores (posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
-    VALUES (?, ?, ?, ?, 'v2', ?, 'default', ?, ?)`);
-  const insertArtifact = db.prepare(`INSERT INTO artifacts (posting_id, kind, content, doc_name, flags_json, source, model, prompt_version, run_id, created_at)
-    VALUES (?, ?, ?, ?, ?, 'v2', ?, 'default', ?, ?)`);
-  const insertHistory = db.prepare('INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, ?, ?)');
-  const insertSighting = db.prepare('INSERT INTO posting_sightings (posting_id, source, url, seen_on) VALUES (?, ?, ?, ?)');
-  const insertEmail = db.prepare(`INSERT INTO emails (id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id,
+  const insertScore = db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
+    VALUES (@uid, ?, ?, ?, ?, 'v2', ?, 'default', ?, ?)`);
+  const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, doc_name, flags_json, source, model, prompt_version, run_id, created_at)
+    VALUES (@uid, ?, ?, ?, ?, ?, 'v2', ?, 'default', ?, ?)`);
+  const insertHistory = db.prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, ?, ?)');
+  const insertSighting = db.prepare('INSERT INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?)');
+  const insertEmail = db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id,
       match_rule, confidence, review_status, review_reason, summary, prompt_version, model, created_at, updated_at)
-    VALUES (@id, @gmailId, @threadId, @sender, @domain, @sentAt, @subject, @type, @postingId, @rule, @confidence, @review, @reason,
+    VALUES (@uid, @id, @gmailId, @threadId, @sender, @domain, @sentAt, @subject, @type, @postingId, @rule, @confidence, @review, @reason,
       @summary, 'default', 'claude-haiku-4-5', @sentAt, @sentAt)`);
-  const insertReminder = db.prepare('INSERT INTO reminders (id, posting_id, email_id, kind, due_at, note, status, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+  const insertReminder = db.prepare('INSERT INTO reminders (user_id, id, posting_id, email_id, kind, due_at, note, status, created_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?)');
   const insertRun = db.prepare(`INSERT INTO runs (name, meta, status, started_at, finished_at, duration_ms, calls, input_tokens, output_tokens,
       cache_read_tokens, cost_usd, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   const insertCall = db.prepare(`INSERT INTO run_calls (run_id, label, model, stop_reason, input_tokens, output_tokens, cache_read_tokens, cost_usd,
@@ -179,7 +179,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     // An open reminder (an interview or a take home exercise coming up), tied to the job's latest email.
     if (job.reminder) {
       const [kind, dueIn, note] = job.reminder;
-      const lastEmail = db.prepare('SELECT id FROM emails WHERE posting_id = ? ORDER BY sent_at DESC LIMIT 1').pluck().get(id) ?? null;
+      const lastEmail = db.prepare('SELECT id FROM emails WHERE posting_id = ? AND user_id = @uid ORDER BY sent_at DESC LIMIT 1').pluck().get(id) ?? null;
       insertReminder.run(randomUUID(), id, lastEmail, kind, at(dueIn, 13, 0).toISOString(), note, 'open', iso(1, 9, 0));
     }
     if (job.prep) insertPrep(db, id, job, at(2, 19, 0).toISOString(), run);
@@ -205,7 +205,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
   emails += 1;
 
   // Prompt edits shown on the Admin screen, each a saved version on top of the repo default.
-  const savePrompt = db.prepare('INSERT INTO prompt_versions (name, template, note, active, created_at) VALUES (?, ?, ?, 1, ?)');
+  const savePrompt = db.prepare('INSERT INTO prompt_versions (user_id, name, template, note, active, created_at) VALUES (@uid, ?, ?, ?, 1, ?)');
   for (const [i, p] of prompts.entries()) savePrompt.run(p.name, p.template, p.note ?? 'Tuned for this search', iso(20 - i, 16, 0));
 
   store.close();
@@ -345,9 +345,9 @@ A 45 minute video interview with Morgan Lee (CTO) and Riley Chen (VP Product). E
 ## Watch outs
 - They may probe depth in their exact market; connect it to the regulated platform work you have done.
 - Ask early about the reporting line and the team's current managers.`;
-  db.prepare(`INSERT INTO meeting_preps (id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
+  db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
       doc_name, model, prompt_version, cost_usd, web_searches, run_id, created_at)
-    VALUES (?, ?, ?, ?, 'interview', 'video', ?, 1, ?, ?, 'claude-opus-5-5', 'default', 1.42, 9, ?, ?)`).run(
+    VALUES (@uid, ?, ?, ?, ?, 'interview', 'video', ?, 1, ?, ?, 'claude-opus-5-5', 'default', 1.42, 9, ?, ?)`).run(
     randomUUID(), postingId, JSON.stringify(attendees), null, 'Second round; they asked for a 90 day plan conversation.', content,
     `Meeting prep: ${job.company}`, runId, createdAt,
   );

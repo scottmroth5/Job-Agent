@@ -198,7 +198,7 @@ export function selectPostings(db, { ids, allUnscored = false, limit, rescore = 
   const where = [];
   // rescore (with ids) scores again even when a v2 score exists and whatever the status; used by the UI's Re-score.
   if (!(rescore && ids?.length)) {
-    where.push("NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.source IN ('v2', 'v2-rule'))");
+    where.push("NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule'))");
     where.push(`p.status NOT IN ${sqlList(lookups(db).closed())}`);
   }
   const params = [];
@@ -208,7 +208,7 @@ export function selectPostings(db, { ids, allUnscored = false, limit, rescore = 
   } else if (!allUnscored) {
     where.push('p.fetch_status IS NOT NULL');
   }
-  const sql = `SELECT p.* FROM postings p ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY p.id${limit ? ' LIMIT ?' : ''}`;
+  const sql = `SELECT p.* FROM postings p WHERE p.user_id = @uid ${where.length ? `AND ${where.join(' AND ')}` : ''} ORDER BY p.id${limit ? ' LIMIT ?' : ''}`;
   return db.prepare(sql).all(...params, ...(limit ? [limit] : []));
 }
 
@@ -241,16 +241,16 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
   const prompts = loadScorePrompts(db);
   const postings = selectPostings(db, { ids, allUnscored, limit, rescore }).map((p) => ({ ...p, scorePrompt: lookups(db).scorePrompt(p.track) }));
 
-  const insertScore = db.prepare(`INSERT INTO scores (posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+  const insertScore = db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
+    VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   // A job without a description stays in Discovered (the UI flags it) until text is pasted and it is re-scored.
   const lk = lookups(db);
-  const promote = db.prepare(`UPDATE postings SET stage = '${lk.role('stage', 'promote')}', updated_at = ? WHERE id = ? AND stage IN ${sqlList(lk.ids('stage', 'found'))}
+  const promote = db.prepare(`UPDATE postings SET stage = '${lk.role('stage', 'promote')}', updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${sqlList(lk.ids('stage', 'found'))}
     AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != ''`);
   // Fractional scoring reports pay and hours from the posting text; keep what the source already gave.
   const fillTerms = db.prepare(`UPDATE postings SET rate_min = COALESCE(rate_min, @rateMin), rate_max = COALESCE(rate_max, @rateMax),
       rate_unit = COALESCE(rate_unit, @rateUnit), hours_min = COALESCE(hours_min, @hoursMin), hours_max = COALESCE(hours_max, @hoursMax)
-    WHERE id = @id`);
+    WHERE id = @id AND user_id = @uid`);
 
   const summary = { selected: postings.length, scored: 0, ruleScored: 0, distribution: {}, promoted: [], failures: [], aborted: false };
   let consecutive = 0;

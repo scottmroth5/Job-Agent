@@ -12,8 +12,8 @@ function app(db, company, title, o = {}) {
   const row = { status: 'applied', stage: 'pipeline', company_domain: null, ...o };
   return Number(
     db
-      .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
-        VALUES (?, ?, ?, ?, '2026-09-01', ?, ?, ?, ?, ?)`)
+      .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
+        VALUES (1, ?, ?, ?, ?, '2026-09-01', ?, ?, ?, ?, ?)`)
       .run(`k${Math.random()}`, company, title, storedKey({ company, title }), row.stage, row.status, row.company_domain, now, now).lastInsertRowid,
   );
 }
@@ -43,14 +43,14 @@ test('open applications include archived applied jobs but not passed ones', () =
 
 test('rule 1: a known thread', () => {
   const { store, db, ids } = setup();
-  db.prepare("INSERT INTO email_threads (thread_id, posting_id, kind, created_at) VALUES ('t-1', ?, 'application', ?)").run(ids.sample, now);
+  db.prepare("INSERT INTO email_threads (user_id, thread_id, posting_id, kind, created_at) VALUES (1, 't-1', ?, 'application', ?)").run(ids.sample, now);
   assert.deepEqual(matchEmail(db, email({ threadId: 't-1' }), { atsDomains }), { postingId: ids.sample, rule: 'thread' });
   store.close();
 });
 
 test('rule 2: a known contact (case-insensitive)', () => {
   const { store, db, ids } = setup();
-  db.prepare("INSERT INTO contacts (id, email, posting_id, source, created_at, updated_at) VALUES ('c1', 'recruiter@agency.example', ?, 'email', ?, ?)").run(ids.sample2, now, now);
+  db.prepare("INSERT INTO contacts (user_id, id, email, posting_id, source, created_at, updated_at) VALUES (1, 'c1', 'recruiter@agency.example', ?, 'email', ?, ?)").run(ids.sample2, now, now);
   assert.deepEqual(matchEmail(db, email({ senderEmail: 'Recruiter@Agency.example' }), { atsDomains }), { postingId: ids.sample2, rule: 'contact' });
   store.close();
 });
@@ -78,7 +78,7 @@ test('rule 4: ATS subject parsing, by company and title or by company alone', ()
 
 test('the cascade stops at the first rule that matches, and returns null for the model to try', () => {
   const { store, db, ids } = setup();
-  db.prepare("INSERT INTO email_threads (thread_id, posting_id, kind, created_at) VALUES ('t-2', ?, 'application', ?)").run(ids.sample, now);
+  db.prepare("INSERT INTO email_threads (user_id, thread_id, posting_id, kind, created_at) VALUES (1, 't-2', ?, 'application', ?)").run(ids.sample, now);
   const both = email({ threadId: 't-2', senderDomain: 'example.com', subject: 'Thank you for applying to Example Co' });
   assert.deepEqual(matchEmail(db, both, { atsDomains }), { postingId: ids.sample, rule: 'thread' });
   assert.equal(matchEmail(db, email({ subject: 'Quick question about your background' }), { atsDomains }), null);

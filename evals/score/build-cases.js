@@ -14,11 +14,11 @@ export const MIN_CASE_TEXT = 500;
 export async function buildCases({ db, http, browser = null, config, log = () => {} }) {
   const rows = db
     .prepare(`SELECT p.id, p.company, p.title, p.location, p.url, p.status, p.jd_text,
-        (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.source = 'v1-analysis' ORDER BY s.id DESC LIMIT 1) AS v1_score,
-        (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.source = 'v1-quick' ORDER BY s.id DESC LIMIT 1) AS v1_quick
-      FROM postings p WHERE (p.status IN ${sqlList(lookups(db).inProgress())} OR p.status = 'passed')
+        (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-analysis' ORDER BY s.id DESC LIMIT 1) AS v1_score,
+        (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-quick' ORDER BY s.id DESC LIMIT 1) AS v1_quick
+      FROM postings p WHERE p.user_id = @uid AND (p.status IN ${sqlList(lookups(db).inProgress())} OR p.status = 'passed')
         -- a status the agent set (cleanup of list pages, excluded sites, duplicates) is not the user's choice
-        AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = p.id ORDER BY h.id DESC LIMIT 1), '') != 'agent'
+        AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = p.id AND h.user_id = p.user_id ORDER BY h.id DESC LIMIT 1), '') != 'agent'
       ORDER BY p.id`)
     .all();
 

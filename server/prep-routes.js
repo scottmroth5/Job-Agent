@@ -48,7 +48,7 @@ export function registerPrepRoutes(app, { store, config, services, startTask }) 
     },
     async (req, reply) => {
       const id = req.params.id;
-      if (!db.prepare('SELECT 1 FROM postings WHERE id = ?').get(id)) return reply.code(404).send({ error: 'Job not found' });
+      if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id)) return reply.code(404).send({ error: 'Job not found' });
       if (!req.body.attendees.some((a) => a.name?.trim())) return reply.code(400).send({ error: 'Add at least one person the meeting is with.' });
       const taskId = startTask('meeting-prep', { id }, async (step, { run }) => {
         const r = await writeMeetingPrep({
@@ -74,7 +74,7 @@ export function registerPrepRoutes(app, { store, config, services, startTask }) 
   );
 
   app.get('/api/meeting-preps/:id', { schema: { summary: 'One meeting prep with its text (Markdown) and what was asked', params: uuidParams, response: { 200: anyObject } } }, async (req, reply) => {
-    const r = db.prepare('SELECT * FROM meeting_preps WHERE id = ?').get(req.params.id);
+    const r = db.prepare('SELECT * FROM meeting_preps WHERE id = ? AND user_id = @uid').get(req.params.id);
     if (!r) return reply.code(404).send({ error: 'Meeting prep not found' });
     return {
       id: r.id,
@@ -96,7 +96,7 @@ export function registerPrepRoutes(app, { store, config, services, startTask }) 
   });
 
   app.delete('/api/meeting-preps/:id', { schema: { summary: 'Delete a meeting prep from the app (its Google Doc stays in Drive)', params: uuidParams } }, async (req, reply) => {
-    const r = db.prepare('DELETE FROM meeting_preps WHERE id = ?').run(req.params.id);
+    const r = db.prepare('DELETE FROM meeting_preps WHERE id = ? AND user_id = @uid').run(req.params.id);
     if (!r.changes) return reply.code(404).send({ error: 'Meeting prep not found' });
     return reply.code(204).send();
   });

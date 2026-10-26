@@ -4,10 +4,12 @@ import { openStore } from '@scottmroth5/agent-core';
 import { openJobStore, loadMigrations } from '../db/index.js';
 
 // Synthetic data only.
+// Used before 013 (no user_id yet) and after it (the owner's job).
+const hasUser = (db) => Boolean(db.prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
 const insert = (db, o = {}) =>
   db
-    .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, track, created_at, updated_at)
-      VALUES (@k, 'Example Co', 'CTO', 'example|cto', '2026-10-01', @stage, @status, @track, 'x', 'x')`)
+    .prepare(`INSERT INTO postings (${hasUser(db) ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, track, created_at, updated_at)
+      VALUES (${hasUser(db) ? '1, ' : ''}@k, 'Example Co', 'CTO', 'example|cto', '2026-10-01', @stage, @status, @track, 'x', 'x')`)
     .run({ k: `k${Math.random()}`, stage: 'discovered', status: 'new', track: 'fulltime', ...o });
 
 test('009 seeds the built-in values in order, with groups, settings, and roles', () => {

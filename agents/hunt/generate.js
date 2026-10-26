@@ -27,13 +27,13 @@ export function loadHuntPrompts(db = null) {
 /** Postings eligible for tweaks/letters, with their latest v2 analysis and what already exists. */
 export function selectForHunt(db, { ids, promoteAt = PROMOTE_AT } = {}) {
   const base = `SELECT p.*,
-      (SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS analysis_json,
-      (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS v2_score,
-      EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks' AND a.source = 'v2') AS has_tweaks,
-      EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'cover_letter' AND a.source = 'v2') AS has_letter,
-      (SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'cover_letter' AND a.source = 'v2'
+      (SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS analysis_json,
+      (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS v2_score,
+      EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks' AND a.source = 'v2') AS has_tweaks,
+      EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' AND a.source = 'v2') AS has_letter,
+      (SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' AND a.source = 'v2'
          AND a.doc_id IS NULL ORDER BY a.id DESC LIMIT 1) AS letter_missing_doc
-    FROM postings p`;
+    FROM (SELECT * FROM postings WHERE user_id = @uid) p`;
   if (ids?.length) return db.prepare(`${base} WHERE p.id IN (${ids.map(() => '?').join(', ')}) ORDER BY p.id`).all(...ids);
   return db
     .prepare(`SELECT * FROM (${base} WHERE p.stage IN ${sqlList(lookups(db).ids('stage', 'active'))} AND p.status IN ${sqlList(lookups(db).ids('status', 'evaluate', 'waiting'))})
@@ -97,10 +97,10 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
   const prompts = loadHuntPrompts(db);
   const postings = selectForHunt(db, { ids, promoteAt });
 
-  const insertArtifact = db.prepare(`INSERT INTO artifacts (posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at)
-    VALUES (?, ?, ?, ?, 'v2', ?, ?, ?, ?)`);
-  const setDoc = db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ?');
-  const letterById = db.prepare('SELECT content FROM artifacts WHERE id = ?');
+  const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at)
+    VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?)`);
+  const setDoc = db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid');
+  const letterById = db.prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid');
 
   const summary = { selected: postings.length, tweaks: 0, letters: 0, docs: 0, docFailures: [], flagged: [], skipped: [], failures: [], aborted: false };
   let consecutive = 0;

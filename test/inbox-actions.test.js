@@ -24,8 +24,8 @@ function setup(status = 'applied') {
   const { db } = store;
   const postingId = Number(
     db
-      .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-        VALUES ('k1', 'Example Co', 'VP of Engineering', ?, '2026-09-01', 'pipeline', ?, 'x', 'x')`)
+      .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
+        VALUES (1, 'k1', 'Example Co', 'VP of Engineering', ?, '2026-09-01', 'pipeline', ?, 'x', 'x')`)
       .run(storedKey({ company: 'Example Co', title: 'VP of Engineering' }), status).lastInsertRowid,
   );
   const email = { gmailMessageId: 'g1', threadId: 't1', senderEmail: 'pat.recruiter@example.com', senderDomain: 'example.com', sentAt: '2026-09-30T14:00:00Z', subject: 's' };

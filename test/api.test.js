@@ -38,16 +38,16 @@ async function setup() {
   const store = openJobStore(':memory:');
   const add = (o) =>
     Number(
-      store.db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, source, stage, status, track, rate_text, rate_min, rate_max, rate_unit,
+      store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, rate_text, rate_min, rate_max, rate_unit,
           hours_min, hours_max, fetched_text, location, discovered_on, created_at, updated_at)
-        VALUES (@url, @url, @company, @title, @url, 'LinkedIn', @stage, 'new', @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @text, 'Remote', '2026-09-30', 'x', 'x')`)
+        VALUES (1, @url, @url, @company, @title, @url, 'LinkedIn', @stage, 'new', @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @text, 'Remote', '2026-09-30', 'x', 'x')`)
         .run({ rate_text: null, rate_min: null, rate_max: null, rate_unit: null, hours_min: null, hours_max: null, text: DESCRIPTION, stage: 'pipeline', track: 'fulltime', ...o }).lastInsertRowid,
     );
   const full = add({ url: 'https://jobs.example.com/1', company: 'Full Co', title: 'VP Engineering' });
   const frac = add({ url: 'https://jobs.example.com/2', company: 'Frac Co', title: 'Fractional CTO', track: 'fractional', rate_text: '$200 / hr', rate_min: 200, rate_max: 200, rate_unit: 'hour', hours_min: 15, hours_max: 15 });
   const found = add({ url: 'https://jobs.example.com/3', company: 'New Co', title: 'CTO', stage: 'discovered', text: null });
-  store.db.prepare("INSERT INTO scores (posting_id, score, reason, analysis_json, source, created_at) VALUES (?, 9, 'Great', ?, 'v2', 'x')").run(frac, JSON.stringify({ fit: 'High', whyItFits: 'w' }));
-  store.db.prepare("INSERT INTO artifacts (posting_id, kind, content, doc_url, flags_json, source, created_at) VALUES (?, 'cover_letter', 'Body', 'https://docs.example.com/x', '[\"weak closer\"]', 'v2', 'x')").run(frac);
+  store.db.prepare("INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, created_at) VALUES (1, ?, 9, 'Great', ?, 'v2', 'x')").run(frac, JSON.stringify({ fit: 'High', whyItFits: 'w' }));
+  store.db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, doc_url, flags_json, source, created_at) VALUES (1, ?, 'cover_letter', 'Body', 'https://docs.example.com/x', '[\"weak closer\"]', 'v2', 'x')").run(frac);
   const app = await buildApp({ store, config, services: services() });
   return { store, app, ids: { full, frac, found } };
 }

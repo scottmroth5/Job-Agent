@@ -13,11 +13,11 @@ const toEntry = (r) => ({ id: r.id, postingId: r.posting_id, body: r.body, sourc
 /** Rewrites postings.notes from the entries. */
 function refresh(db, postingId, nowIso) {
   const text = db
-    .prepare('SELECT body FROM posting_notes WHERE posting_id = ? ORDER BY created_at, rowid')
+    .prepare('SELECT body FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at, rowid')
     .pluck()
     .all(postingId)
     .join('\n');
-  db.prepare(`UPDATE postings SET notes = ?${nowIso ? ', updated_at = ?' : ''} WHERE id = ?`).run(...[text || null, ...(nowIso ? [nowIso] : []), postingId]);
+  db.prepare(`UPDATE postings SET notes = ?${nowIso ? ', updated_at = ?' : ''} WHERE id = ? AND user_id = @uid`).run(...[text || null, ...(nowIso ? [nowIso] : []), postingId]);
 }
 
 /**
@@ -28,17 +28,17 @@ function refresh(db, postingId, nowIso) {
 export function adoptNotesText(db, { postingId = null, source = 'earlier', now = new Date() } = {}) {
   const nowIso = now.toISOString();
   const rows = db
-    .prepare(`SELECT id, notes FROM postings p WHERE TRIM(COALESCE(p.notes, '')) <> ''
-      AND NOT EXISTS (SELECT 1 FROM posting_notes n WHERE n.posting_id = p.id) ${postingId ? 'AND p.id = ?' : ''}`)
+    .prepare(`SELECT id, notes FROM postings p WHERE p.user_id = @uid AND TRIM(COALESCE(p.notes, '')) <> ''
+      AND NOT EXISTS (SELECT 1 FROM posting_notes n WHERE n.posting_id = p.id AND n.user_id = p.user_id) ${postingId ? 'AND p.id = ?' : ''}`)
     .all(...(postingId ? [postingId] : []));
-  const insert = db.prepare('INSERT INTO posting_notes (id, posting_id, body, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)');
+  const insert = db.prepare('INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) VALUES (@uid, ?, ?, ?, ?, ?, ?)');
   for (const r of rows) insert.run(randomUUID(), r.id, r.notes.trim(), source, nowIso, nowIso);
   return rows.length;
 }
 
 /** A job's notes, newest first. */
 export function listNotes(db, postingId) {
-  return db.prepare('SELECT * FROM posting_notes WHERE posting_id = ? ORDER BY created_at DESC, rowid DESC').all(postingId).map(toEntry);
+  return db.prepare('SELECT * FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC, rowid DESC').all(postingId).map(toEntry);
 }
 
 const checkBody = (body) => {
@@ -56,32 +56,36 @@ export function addNote(db, postingId, body, { source = 'user', now = new Date()
   const id = randomUUID();
   db.transaction(() => {
     adoptNotesText(db, { postingId, now });
-    db.prepare('INSERT INTO posting_notes (id, posting_id, body, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, postingId, text, source, nowIso, nowIso);
+    // The note takes its owner from the job, so a job that is not this user's gets no note.
+    const added = db
+      .prepare('INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) SELECT user_id, ?, id, ?, ?, ?, ? FROM postings WHERE id = ? AND user_id = @uid')
+      .run(id, text, source, nowIso, nowIso, postingId);
+    if (!added.changes) throw Object.assign(new Error('Job not found.'), { statusCode: 404 });
     refresh(db, postingId, nowIso);
   })();
-  return toEntry(db.prepare('SELECT * FROM posting_notes WHERE id = ?').get(id));
+  return toEntry(db.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(id));
 }
 
 /** Edits a note's text; its created date stays, its updated date moves. Null when there is no such note. */
 export function updateNote(db, noteId, body, { now = new Date() } = {}) {
   const text = checkBody(body);
-  const row = db.prepare('SELECT * FROM posting_notes WHERE id = ?').get(noteId);
+  const row = db.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId);
   if (!row) return null;
   if (text === row.body) return toEntry(row);
   const nowIso = now.toISOString();
   db.transaction(() => {
-    db.prepare('UPDATE posting_notes SET body = ?, updated_at = ? WHERE id = ?').run(text, nowIso, noteId);
+    db.prepare('UPDATE posting_notes SET body = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(text, nowIso, noteId);
     refresh(db, row.posting_id, nowIso);
   })();
-  return toEntry(db.prepare('SELECT * FROM posting_notes WHERE id = ?').get(noteId));
+  return toEntry(db.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId));
 }
 
 /** Deletes a note. False when there is no such note. */
 export function deleteNote(db, noteId, { now = new Date() } = {}) {
-  const row = db.prepare('SELECT posting_id FROM posting_notes WHERE id = ?').get(noteId);
+  const row = db.prepare('SELECT posting_id FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId);
   if (!row) return false;
   db.transaction(() => {
-    db.prepare('DELETE FROM posting_notes WHERE id = ?').run(noteId);
+    db.prepare('DELETE FROM posting_notes WHERE id = ? AND user_id = @uid').run(noteId);
     refresh(db, row.posting_id, now.toISOString());
   })();
   return true;

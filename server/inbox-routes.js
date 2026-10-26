@@ -29,13 +29,13 @@ export function inboxOverview(db, { ready }) {
     })),
     reminders: db
       .prepare(`SELECT r.id, r.kind, r.due_at AS dueAt, r.note, r.created_at AS createdAt, p.id AS postingId, p.company, p.title
-        FROM reminders r JOIN postings p ON p.id = r.posting_id WHERE r.status = 'open' ORDER BY COALESCE(r.due_at, r.created_at)`)
+        FROM reminders r JOIN postings p ON p.id = r.posting_id AND p.user_id = r.user_id WHERE r.user_id = @uid AND r.status = 'open' ORDER BY COALESCE(r.due_at, r.created_at)`)
       .all(),
     recent: db
       .prepare(`SELECT e.id, e.sent_at AS sentAt, e.sender, e.subject, e.type, e.match_rule AS matchRule, e.review_status AS reviewStatus,
           e.summary, p.id AS postingId, p.company, p.title, p.status
-        FROM emails e JOIN postings p ON p.id = e.posting_id
-        WHERE e.review_status IN ('auto', 'confirmed', 'reassigned', 'new_opportunity') ORDER BY e.sent_at DESC LIMIT 40`)
+        FROM emails e JOIN postings p ON p.id = e.posting_id AND p.user_id = e.user_id
+        WHERE e.user_id = @uid AND e.review_status IN ('auto', 'confirmed', 'reassigned', 'new_opportunity') ORDER BY e.sent_at DESC LIMIT 40`)
       .all(),
     openApplications: listOpenApplications(db).map(({ id, company, title, status }) => ({ id, company, title, status })),
   };
@@ -130,7 +130,7 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
       },
     },
     async (req, reply) => {
-      const r = db.prepare("UPDATE reminders SET status = ? WHERE id = ? AND status = 'open'").run(req.body.status, req.params.id);
+      const r = db.prepare("UPDATE reminders SET status = ? WHERE id = ? AND user_id = @uid AND status = 'open'").run(req.body.status, req.params.id);
       if (!r.changes) return reply.code(404).send({ error: 'Reminder not found or already closed.' });
       return { id: req.params.id, status: req.body.status };
     },

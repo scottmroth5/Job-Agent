@@ -136,7 +136,7 @@ const isoLocalDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padSt
 /** Lists a job's preps, newest first, without their text. */
 export function listPreps(db, postingId) {
   return db
-    .prepare('SELECT id, attendees_json, meeting_at, meeting_kind, meeting_format, research, doc_url, cost_usd, web_searches, created_at FROM meeting_preps WHERE posting_id = ? ORDER BY created_at DESC')
+    .prepare('SELECT id, attendees_json, meeting_at, meeting_kind, meeting_format, research, doc_url, cost_usd, web_searches, created_at FROM meeting_preps WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC')
     .all(postingId)
     .map((r) => ({
       id: r.id,
@@ -158,11 +158,11 @@ export function listPreps(db, postingId) {
  */
 export async function writeMeetingPrep({ store, config, claude, knowledge, drive = null, run = null, postingId, input, onStep = () => {}, now = new Date() }) {
   const { db } = store;
-  const posting = db.prepare('SELECT * FROM postings WHERE id = ?').get(postingId);
+  const posting = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(postingId);
   if (!posting) throw new Error('Job not found');
   const prepInput = normalizePrepInput(input);
-  const analysisJson = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId);
-  const letter = db.prepare("SELECT content FROM artifacts WHERE posting_id = ? AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").pluck().get(postingId);
+  const analysisJson = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId);
+  const letter = db.prepare("SELECT content FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").pluck().get(postingId);
   const prompt = getPrompt(db, 'meeting-prep');
   const notes = notesForPrompt(listNotes(db, postingId));
 
@@ -177,9 +177,9 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
   if (content.length < 200) throw new Error('The prep came back empty or too short; try again.');
 
   const id = randomUUID();
-  db.prepare(`INSERT INTO meeting_preps (id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
+  db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
       model, prompt_version, cost_usd, web_searches, run_id, created_at)
-    VALUES (@id, @postingId, @attendees, @meetingAt, @kind, @format, @context, @research, @content, @model, @version, @cost, @searches, @runId, @createdAt)`).run({
+    VALUES (@uid, @id, @postingId, @attendees, @meetingAt, @kind, @format, @context, @research, @content, @model, @version, @cost, @searches, @runId, @createdAt)`).run({
     id,
     postingId,
     attendees: JSON.stringify(prepInput.attendees),
@@ -206,7 +206,7 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
       const folderId = await ensurePrepFolder(drive, db);
       const name = prepDocName(posting.company, prepInput.attendees, isoLocalDate(prepInput.meetingAt ? new Date(prepInput.meetingAt) : now));
       const doc = await drive.createDocFromHtml({ name, html: prepHtml(content), folderId });
-      db.prepare('UPDATE meeting_preps SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ?').run(doc.id, doc.url, name, id);
+      db.prepare('UPDATE meeting_preps SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
       docUrl = doc.url;
     } catch (err) {
       docError = `${err.name}: ${err.message}`;

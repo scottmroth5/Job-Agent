@@ -27,29 +27,29 @@ export function collectReport(db, { since, promoteAt = PROMOTE_AT }) {
   const active = sqlList(lk.ids('stage', 'active'));
   const orderCase = `CASE ${REPORT_ORDER.map((g, i) => lk.ids('status', g).length ? `WHEN p.status IN ${sqlList(lk.ids('status', g))} THEN ${i}` : '').join(' ')} ELSE ${REPORT_ORDER.length} END`;
 
-  const latestScore = `(SELECT %s FROM scores s WHERE s.posting_id = p.id AND s.source IN ('v2', 'v2-rule', 'v1-analysis') ORDER BY s.id DESC LIMIT 1)`;
-  const letter = `(SELECT %s FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'cover_letter' ORDER BY a.id DESC LIMIT 1)`;
+  const latestScore = `(SELECT %s FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule', 'v1-analysis') ORDER BY s.id DESC LIMIT 1)`;
+  const letter = `(SELECT %s FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' ORDER BY a.id DESC LIMIT 1)`;
   const cols = `p.id, p.company, p.title, p.location, p.url, p.status, p.stage,
       ${latestScore.replace('%s', 'score')} AS score, ${latestScore.replace('%s', 'reason')} AS reason,
       ${latestScore.replace('%s', 'analysis_json')} AS analysis_json,
       ${letter.replace('%s', 'doc_url')} AS letter_url, ${letter.replace('%s', 'flags_json')} AS letter_flags,
       ${letter.replace('%s', 'id')} AS letter_id,
-      EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks') AS has_tweaks`;
+      EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks') AS has_tweaks`;
 
   const promoted = db
-    .prepare(`SELECT ${cols} FROM postings p WHERE p.stage IN ${active}
-      AND EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.source = 'v2' AND s.score >= ? AND s.created_at >= ?)
+    .prepare(`SELECT ${cols} FROM postings p WHERE p.user_id = @uid AND p.stage IN ${active}
+      AND EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v2' AND s.score >= ? AND s.created_at >= ?)
       ORDER BY score DESC, p.id`)
     .all(promoteAt, since)
     .map((p) => ({ ...p, analysis: parse(p.analysis_json), flags: parse(p.letter_flags) ?? [] }));
 
   const pipeline = db
-    .prepare(`SELECT ${cols} FROM postings p WHERE p.stage IN ${active} ORDER BY ${orderCase}, score DESC, p.id`)
+    .prepare(`SELECT ${cols} FROM postings p WHERE p.user_id = @uid AND p.stage IN ${active} ORDER BY ${orderCase}, score DESC, p.id`)
     .all()
     .map((p) => ({ ...p, flags: parse(p.letter_flags) ?? [] }));
 
   const statusCounts = Object.fromEntries(
-    db.prepare(`SELECT status, COUNT(*) AS n FROM postings WHERE stage IN ${active} GROUP BY status`).all().map((r) => [r.status, r.n]),
+    db.prepare(`SELECT status, COUNT(*) AS n FROM postings WHERE user_id = @uid AND stage IN ${active} GROUP BY status`).all().map((r) => [r.status, r.n]),
   );
   // Status labels and display order for the counts line (closed statuses are left out, as before).
   const statusOrder = REPORT_ORDER.flatMap((g) => lk.ids('status', g)).map((id) => ({ id, label: lk.label('status', id) }));

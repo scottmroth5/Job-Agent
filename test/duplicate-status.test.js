@@ -11,8 +11,8 @@ test('the duplicate status is allowed and closes a job like passed', () => {
   const { db } = store;
   const id = Number(
     db
-      .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-        VALUES ('k', 'Example Co', 'CTO', 'k', '2026-10-01', 'pipeline', 'duplicate', 'x', 'x')`)
+      .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
+        VALUES (1, 'k', 'Example Co', 'CTO', 'k', '2026-10-01', 'pipeline', 'duplicate', 'x', 'x')`)
       .run().lastInsertRowid,
   );
   assert.throws(() => db.prepare("UPDATE postings SET status = 'maybe' WHERE id = ?").run(id), /status is not in the status list/);

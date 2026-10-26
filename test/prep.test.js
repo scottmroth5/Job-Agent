@@ -117,8 +117,8 @@ function fakeServices({ docFails = false } = {}) {
 async function setup(opts) {
   const store = openJobStore(':memory:');
   const id = Number(
-    store.db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, source, stage, status, track, fetched_text, notes, location, discovered_on, created_at, updated_at)
-      VALUES ('https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'example|vp engineering', 'LinkedIn', 'pipeline', 'applied', 'fulltime', ?, ?, 'Remote', '2026-10-01', 'x', 'x')`)
+    store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, fetched_text, notes, location, discovered_on, created_at, updated_at)
+      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'example|vp engineering', 'LinkedIn', 'pipeline', 'applied', 'fulltime', ?, ?, 'Remote', '2026-10-01', 'x', 'x')`)
       .run(posting.fetched_text, posting.notes).lastInsertRowid,
   );
   const fake = fakeServices(opts);

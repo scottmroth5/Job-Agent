@@ -22,12 +22,12 @@ const parse = (s) => {
 /** Emails waiting for review, oldest first, with the best-guess application when there is one. */
 export function listNeedsReview(db) {
   return db
-    .prepare("SELECT * FROM emails WHERE review_status = 'needs_review' ORDER BY sent_at, id")
+    .prepare("SELECT * FROM emails WHERE user_id = @uid AND review_status = 'needs_review' ORDER BY sent_at, id")
     .all()
     .map((e) => {
       const extracted = parse(e.extracted_json);
       const guessId = e.posting_id ?? extracted.best_guess_application_id ?? null;
-      const guess = guessId ? db.prepare('SELECT id, company, title, status FROM postings WHERE id = ?').get(guessId) ?? null : null;
+      const guess = guessId ? db.prepare('SELECT id, company, title, status FROM postings WHERE id = ? AND user_id = @uid').get(guessId) ?? null : null;
       return { ...e, extracted, guess };
     });
 }
@@ -57,7 +57,7 @@ export function resolveReview(db, e, choice, { postingId, body = null, key = nul
   db.transaction(() => {
     if (choice === 'confirm' || choice === 'reassign') {
       const target = choice === 'confirm' ? e.guess?.id : postingId;
-      if (!target || !db.prepare('SELECT 1 FROM postings WHERE id = ?').get(target)) throw new Error(choice === 'confirm' ? 'There is no best guess to confirm; reassign instead.' : `Job #${postingId} was not found.`);
+      if (!target || !db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(target)) throw new Error(choice === 'confirm' ? 'There is no best guess to confirm; reassign instead.' : `Job #${postingId} was not found.`);
       const r = applyActions(db, { email, postingId: target, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
       updateEmail(db, e.id, { postingId: target, matchRule: 'user', confidence: 1, reviewStatus: choice === 'confirm' ? 'confirmed' : 'reassigned', reviewReason: null, ...(body && key && !e.body_enc ? { bodyEnc: encrypt(body, key) } : {}) }, now);
       out = { postingId: target, ...r };

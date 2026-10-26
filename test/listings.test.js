@@ -65,8 +65,8 @@ function insert(db, o) {
   const row = { url: `https://example.com/${Math.random()}`, stage: 'pipeline', status: 'new', ...o };
   return Number(
     db
-      .prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
-        VALUES (@url, @url, 'See posting', @title, @url, @stage, @status, '2026-09-21', 'x', 'x')`)
+      .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
+        VALUES (1, @url, @url, 'See posting', @title, @url, @stage, @status, '2026-09-21', 'x', 'x')`)
       .run(row).lastInsertRowid,
   );
 }
@@ -156,7 +156,7 @@ test('jobs judged 7+ without a description are flagged and counted; others are n
     return id;
   };
   const score = (id, value, source, analysis = {}) =>
-    db.prepare("INSERT INTO scores (posting_id, score, reason, analysis_json, source, created_at) VALUES (?, ?, 'r', ?, ?, 'x')").run(id, value, JSON.stringify(analysis), source);
+    db.prepare("INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, created_at) VALUES (1, ?, ?, 'r', ?, ?, 'x')").run(id, value, JSON.stringify(analysis), source);
   const v1High = add('VP Engineering');
   score(v1High, 9, 'v1-quick');
   const capped = add('Head of Engineering');
@@ -276,7 +276,7 @@ test("discovery's first status entry does not count as removed by cleanup", () =
   const add = (stage) => {
     const id = insert(db, { title: 'x', stage });
     db.prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
-    db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, 'new', 'agent', 'x')").run(id);
+    db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, 'new', 'agent', 'x')").run(id);
     return id;
   };
   const older = add('discovered');
@@ -302,7 +302,7 @@ test('copies already archived as duplicates are not pointed out again', async ()
   assert.equal(listPostings(db, {}).find((r) => r.id === kept).hasCopies, false);
   assert.deepEqual(getPosting(db, kept).copies, []);
   const passedEarlier = add({ stage: 'archived', status: 'passed' });
-  db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, 'new', 'passed', 'user', 'x')").run(passedEarlier);
+  db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, 'new', 'passed', 'user', 'x')").run(passedEarlier);
   assert.deepEqual(getPosting(db, kept).copies.map((c) => c.id), [passedEarlier], 'a copy the user passed on is shown');
   store.close();
 });

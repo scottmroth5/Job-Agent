@@ -133,8 +133,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
   });
 
   // 4. Dedupe against the database and within this run
-  const byUrl = db.prepare('SELECT id, source, stage FROM postings WHERE url_key = ?');
-  const byCompanyTitle = db.prepare('SELECT id, source, stage FROM postings WHERE company_title_key = ? ORDER BY id LIMIT 1');
+  const byUrl = db.prepare('SELECT id, source, stage FROM postings WHERE url_key = ? AND user_id = @uid');
+  const byCompanyTitle = db.prepare('SELECT id, source, stage FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1');
   const sightings = []; // { postingId, source, url }
   const upgrades = []; // existing discovered postings that a higher-priority source found again
   const seenUrl = new Set();
@@ -221,19 +221,19 @@ export async function runDiscovery({ store, config, http, browser = null, source
     const nowIso = now.toISOString();
     const found = sqlList(lookups(db).ids('stage', 'found'));
     const insert = db.prepare(`INSERT INTO postings
-      (url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
+      (user_id, url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
        discovered_on, stage, status, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, workplace, location_check,
        source_job_id, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
-      VALUES (@url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on, @posted_raw,
+      VALUES (@uid, @url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on, @posted_raw,
        @discovered_on, @stage, @status, @fetched_text, @fetched_at, @fetch_status, @fetch_method, @fetch_attempts, @workplace, @location_check,
        @source_job_id, @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra_json, @now, @now)`);
-    const history = db.prepare(`INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'agent', ?)`);
-    const sighting = db.prepare('INSERT OR IGNORE INTO posting_sightings (posting_id, source, url, seen_on) VALUES (?, ?, ?, ?)');
+    const history = db.prepare(`INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)`);
+    const sighting = db.prepare('INSERT OR IGNORE INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?)');
     const upgrade = db.prepare(`UPDATE postings SET url = @url, url_key = @url_key, source = @source,
         fetched_text = COALESCE(fetched_text, @fetched_text), location = COALESCE(location, @location),
         salary = COALESCE(salary, @salary), posted_on = COALESCE(posted_on, @posted_on),
         workplace = COALESCE(workplace, @workplace), updated_at = @now
-      WHERE id = @id AND stage IN ${found}`);
+      WHERE id = @id AND user_id = @uid AND stage IN ${found}`);
 
     store.tx(() => {
       for (const item of toInsert) {
@@ -304,7 +304,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
   if (!dryRun && details && retryPending) {
     const pending = db
       .prepare(`SELECT id, url, company, title, location, workplace, source_job_id, source FROM postings
-        WHERE stage IN ${sqlList(lookups(db).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
+        WHERE user_id = @uid AND stage IN ${sqlList(lookups(db).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
           AND fetch_attempts < ? AND discovered_on >= ?
           ${insertedIds.length ? `AND id NOT IN (${insertedIds.map(() => '?').join(', ')})` : ''}`)
       .all(...RETRYABLE, MAX_FETCH_ATTEMPTS, since, ...insertedIds);
@@ -324,7 +324,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
         workplace = COALESCE(workplace, @workplace), location_check = @locationCheck,
         company = CASE WHEN company = '${UNKNOWN_COMPANY}' AND @company IS NOT NULL THEN @company ELSE company END,
         company_title_key = CASE WHEN company = '${UNKNOWN_COMPANY}' AND @company IS NOT NULL THEN @ctKey ELSE company_title_key END,
-        updated_at = @now WHERE id = @id`);
+        updated_at = @now WHERE id = @id AND user_id = @uid`);
     await resolveAll(items, {
       http,
       browser,

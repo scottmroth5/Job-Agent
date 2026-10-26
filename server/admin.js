@@ -55,12 +55,12 @@ function detail(db, name) {
 function samplePosting(db, name, postingId) {
   const needsAnalysis = name === 'resume-tweaks' || name === 'cover-letter';
   const track = name === 'score-fractional' ? 'fractional' : name === 'score' ? 'fulltime' : null;
-  const analysisSql = `(SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1)`;
-  if (postingId) return db.prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ?`).get(postingId) ?? null;
+  const analysisSql = `(SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1)`;
+  if (postingId) return db.prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) ?? null;
   return (
     db
       .prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p
-        WHERE (p.fetched_text IS NOT NULL OR p.jd_text IS NOT NULL) ${track ? 'AND p.track = @track' : ''}
+        WHERE p.user_id = @uid AND (p.fetched_text IS NOT NULL OR p.jd_text IS NOT NULL) ${track ? 'AND p.track = @track' : ''}
         ${needsAnalysis ? `AND ${analysisSql} IS NOT NULL` : ''}
         ORDER BY p.id DESC LIMIT 1`)
       .get(track ? { track } : {}) ?? null

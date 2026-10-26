@@ -1,5 +1,5 @@
 // Which messages to look at: new ones since the stored Gmail historyId, or a window of days.
-import { getSetting, setSetting } from '../../db/settings.js';
+import { getUserSetting, setUserSetting } from '../../db/settings.js';
 import { HistoryExpiredError } from './gmail.js';
 
 export const CURSOR_KEY = 'inbox.historyId';
@@ -12,7 +12,7 @@ const windowQuery = (days) => `newer_than:${days}d -in:chats`;
  * The cursor is not saved here: call saveCursor(db, nextHistoryId) once the messages are processed.
  */
 export async function newMessageIds({ gmail, db, fallbackDays = 7 }) {
-  const stored = getSetting(db, CURSOR_KEY);
+  const stored = getUserSetting(db, CURSOR_KEY);
   if (stored) {
     try {
       const { messageIds, historyId } = await gmail.historySince(stored);
@@ -32,4 +32,4 @@ export async function backfillMessageIds({ gmail, days = 180 }) {
   return { messageIds: await gmail.listMessages(windowQuery(days)), nextHistoryId: historyId, mode: 'backfill' };
 }
 
-export const saveCursor = (db, historyId) => historyId && setSetting(db, CURSOR_KEY, String(historyId));
+export const saveCursor = (db, historyId) => historyId && setUserSetting(db, CURSOR_KEY, String(historyId));

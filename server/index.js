@@ -31,7 +31,8 @@ const authMode = authConfig.mode;
 assertSafeBinding({ host, mode: authMode, settings: authConfig });
 
 const config = loadConfig();
-const store = openJobStore();
+// No fallback user: a query on a user table outside a request or scheduled job throws (db/scope.js).
+const store = openJobStore(undefined, { fallbackUid: null });
 // The demo runs on sample data with no accounts: no Google sign-in, Claude client, browser, or schedule, so a
 // visitor can never reach a real account or spend money, even through a route the read-only check missed.
 const demo = authMode === 'demo';

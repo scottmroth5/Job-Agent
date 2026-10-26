@@ -12,7 +12,7 @@ export function registerNoteRoutes(app, { db }) {
   );
 
   app.post('/api/postings/:id/notes', { schema: { summary: 'Add a note to a job (Markdown)', params: idParams, body, response: { 201: anyObject } } }, async (req, reply) => {
-    if (!db.prepare('SELECT 1 FROM postings WHERE id = ?').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
+    if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
     return reply.code(201).send(addNote(db, req.params.id, req.body.body, { source: 'user' }));
   });
 

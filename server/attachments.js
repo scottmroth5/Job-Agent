@@ -29,7 +29,7 @@ export const cleanType = (t) => (/^[a-z0-9][\w.+-]*\/[\w.+-]+$/i.test(String(t ?
 const toRow = (r) => ({ id: r.id, postingId: r.posting_id, filename: r.filename, contentType: r.content_type, sizeBytes: r.size_bytes, createdAt: r.created_at });
 
 export function listAttachments(db, postingId) {
-  return db.prepare('SELECT * FROM attachments WHERE posting_id = ? ORDER BY created_at, id').all(postingId).map(toRow);
+  return db.prepare('SELECT * FROM attachments WHERE posting_id = ? AND user_id = @uid ORDER BY created_at, id').all(postingId).map(toRow);
 }
 
 /** Content-Disposition with an ASCII fallback and the full name in UTF-8 (RFC 6266 / 5987). */
@@ -60,7 +60,7 @@ export function registerAttachmentRoutes(app, { db, dir = ATTACHMENTS_DIR, maxBy
     },
     async (req, reply) => {
       const postingId = req.params.id;
-      if (!db.prepare('SELECT 1 FROM postings WHERE id = ?').get(postingId)) return reply.code(404).send({ error: 'Job not found' });
+      if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(postingId)) return reply.code(404).send({ error: 'Job not found' });
       const body = req.body;
       if (!Buffer.isBuffer(body) || body.length === 0) return reply.code(400).send({ error: 'Send the file as the request body (application/octet-stream).' });
       let name;
@@ -81,8 +81,8 @@ export function registerAttachmentRoutes(app, { db, dir = ATTACHMENTS_DIR, maxBy
       mkdirSync(join(dir, String(postingId)), { recursive: true });
       writeFileSync(fileOf(row), body, { mode: 0o600 });
       try {
-        db.prepare(`INSERT INTO attachments (id, posting_id, filename, content_type, size_bytes, sha256, created_at)
-          VALUES (@id, @posting_id, @filename, @content_type, @size_bytes, @sha256, @created_at)`).run(row);
+        db.prepare(`INSERT INTO attachments (user_id, id, posting_id, filename, content_type, size_bytes, sha256, created_at)
+          VALUES (@uid, @id, @posting_id, @filename, @content_type, @size_bytes, @sha256, @created_at)`).run(row);
       } catch (err) {
         unlinkSync(fileOf(row));
         throw err;
@@ -92,7 +92,7 @@ export function registerAttachmentRoutes(app, { db, dir = ATTACHMENTS_DIR, maxBy
   );
 
   app.get('/api/attachments/:id/file', { schema: { summary: 'Download an attachment', params: uuidParams } }, async (req, reply) => {
-    const a = db.prepare('SELECT * FROM attachments WHERE id = ?').get(req.params.id);
+    const a = db.prepare('SELECT * FROM attachments WHERE id = ? AND user_id = @uid').get(req.params.id);
     if (!a || !existsSync(fileOf(a))) return reply.code(404).send({ error: 'Attachment not found' });
     const inline = INLINE_TYPES.test(a.content_type) && req.query?.download === undefined;
     return reply
@@ -105,9 +105,9 @@ export function registerAttachmentRoutes(app, { db, dir = ATTACHMENTS_DIR, maxBy
   });
 
   app.delete('/api/attachments/:id', { schema: { summary: 'Delete an attachment and its file', params: uuidParams } }, async (req, reply) => {
-    const a = db.prepare('SELECT * FROM attachments WHERE id = ?').get(req.params.id);
+    const a = db.prepare('SELECT * FROM attachments WHERE id = ? AND user_id = @uid').get(req.params.id);
     if (!a) return reply.code(404).send({ error: 'Attachment not found' });
-    db.prepare('DELETE FROM attachments WHERE id = ?').run(a.id);
+    db.prepare('DELETE FROM attachments WHERE id = ? AND user_id = @uid').run(a.id);
     if (existsSync(fileOf(a))) unlinkSync(fileOf(a));
     return reply.code(204).send();
   });

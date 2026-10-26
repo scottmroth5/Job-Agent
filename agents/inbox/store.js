@@ -6,9 +6,9 @@ const iso = (d = new Date()) => d.toISOString();
 
 export function insertEmail(db, e, now = new Date()) {
   const id = randomUUID();
-  db.prepare(`INSERT INTO emails (id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id, match_rule,
+  db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id, match_rule,
       confidence, review_status, review_reason, summary, extracted_json, body_enc, prompt_version, model, created_at, updated_at)
-    VALUES (@id, @gmailMessageId, @threadId, @sender, @senderDomain, @sentAt, @subject, @type, @postingId, @matchRule,
+    VALUES (@uid, @id, @gmailMessageId, @threadId, @sender, @senderDomain, @sentAt, @subject, @type, @postingId, @matchRule,
       @confidence, @reviewStatus, @reviewReason, @summary, @extractedJson, @bodyEnc, @promptVersion, @model, @now, @now)`).run({
     id,
     gmailMessageId: e.gmailMessageId,
@@ -38,14 +38,14 @@ const EMAIL_COLUMNS = { postingId: 'posting_id', matchRule: 'match_rule', confid
 export function updateEmail(db, id, patch, now = new Date()) {
   const keys = Object.keys(patch).filter((k) => EMAIL_COLUMNS[k]);
   if (!keys.length) return;
-  db.prepare(`UPDATE emails SET ${keys.map((k) => `${EMAIL_COLUMNS[k]} = @${k}`).join(', ')}, updated_at = @now WHERE id = @id`).run({ ...patch, id, now: iso(now) });
+  db.prepare(`UPDATE emails SET ${keys.map((k) => `${EMAIL_COLUMNS[k]} = @${k}`).join(', ')}, updated_at = @now WHERE id = @id AND user_id = @uid`).run({ ...patch, id, now: iso(now) });
 }
 
-export const emailSeen = (db, gmailMessageId) => Boolean(db.prepare('SELECT 1 FROM emails WHERE gmail_message_id = ?').get(gmailMessageId));
+export const emailSeen = (db, gmailMessageId) => Boolean(db.prepare('SELECT 1 FROM emails WHERE gmail_message_id = ? AND user_id = @uid').get(gmailMessageId));
 
 export function logDecision(db, d, now = new Date()) {
-  db.prepare(`INSERT INTO decision_log (id, posting_id, email_id, gmail_message_id, action, from_status, to_status, decided_by, prompt_version, detail_json, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+  db.prepare(`INSERT INTO decision_log (user_id, id, posting_id, email_id, gmail_message_id, action, from_status, to_status, decided_by, prompt_version, detail_json, created_at)
+    VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     randomUUID(),
     d.postingId ?? null,
     d.emailId ?? null,
@@ -61,27 +61,27 @@ export function logDecision(db, d, now = new Date()) {
 }
 
 export function linkThread(db, threadId, postingId, kind = 'application', now = new Date()) {
-  db.prepare(`INSERT INTO email_threads (thread_id, posting_id, kind, created_at) VALUES (?, ?, ?, ?)
-    ON CONFLICT (thread_id) DO UPDATE SET posting_id = excluded.posting_id`).run(threadId, postingId, kind, iso(now));
+  db.prepare(`INSERT INTO email_threads (user_id, thread_id, posting_id, kind, created_at) VALUES (@uid, ?, ?, ?, ?)
+    ON CONFLICT (user_id, thread_id) DO UPDATE SET posting_id = excluded.posting_id`).run(threadId, postingId, kind, iso(now));
 }
 
 /** Adds or updates a contact; an existing link to an application is kept unless postingId is given. */
 export function upsertContact(db, { email, name = null, company = null, postingId = null, source = 'email' }, now = new Date()) {
   const addr = String(email ?? '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) return null;
-  db.prepare(`INSERT INTO contacts (id, email, name, company, posting_id, source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT (email) DO UPDATE SET name = COALESCE(excluded.name, name), company = COALESCE(excluded.company, company),
+  db.prepare(`INSERT INTO contacts (user_id, id, email, name, company, posting_id, source, created_at, updated_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT (user_id, email) DO UPDATE SET name = COALESCE(excluded.name, name), company = COALESCE(excluded.company, company),
       posting_id = COALESCE(excluded.posting_id, posting_id), updated_at = excluded.updated_at`).run(randomUUID(), addr, name, company, postingId, source, iso(now), iso(now));
   return addr;
 }
 
 export const isContact = (db) => {
-  const q = db.prepare('SELECT 1 FROM contacts WHERE email = ?');
+  const q = db.prepare('SELECT 1 FROM contacts WHERE email = ? AND user_id = @uid');
   return (email) => Boolean(q.get(String(email ?? '').toLowerCase()));
 };
 
 export const isCompanyDomain = (db) => {
-  const domains = db.prepare('SELECT DISTINCT company_domain FROM postings WHERE company_domain IS NOT NULL').pluck().all();
+  const domains = db.prepare('SELECT DISTINCT company_domain FROM postings WHERE user_id = @uid AND company_domain IS NOT NULL').pluck().all();
   return (domain) => domainIn(domain, domains);
 };
 
@@ -89,11 +89,11 @@ export const isCompanyDomain = (db) => {
 export function learnDomain(db, postingId, domain, { atsDomains, personalDomains = [] }) {
   const d = String(domain ?? '').toLowerCase();
   if (!d || domainIn(d, atsDomains) || domainIn(d, personalDomains)) return false;
-  return db.prepare('UPDATE postings SET company_domain = ? WHERE id = ? AND company_domain IS NULL').run(d, postingId).changes > 0;
+  return db.prepare('UPDATE postings SET company_domain = ? WHERE id = ? AND user_id = @uid AND company_domain IS NULL').run(d, postingId).changes > 0;
 }
 
 export function addReminder(db, { postingId, emailId, kind, dueAt = null, note = null }, now = new Date()) {
   const id = randomUUID();
-  db.prepare('INSERT INTO reminders (id, posting_id, email_id, kind, due_at, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, postingId, emailId, kind, dueAt, note, iso(now));
+  db.prepare('INSERT INTO reminders (user_id, id, posting_id, email_id, kind, due_at, note, created_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?)').run(id, postingId, emailId, kind, dueAt, note, iso(now));
   return id;
 }

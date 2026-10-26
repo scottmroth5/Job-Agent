@@ -8,8 +8,8 @@ async function setup() {
   const store = openJobStore(':memory:');
   const job = Number(
     store.db
-      .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-        VALUES ('k1', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'applied', 'x', 'x')`)
+      .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
+        VALUES (1, 'k1', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'applied', 'x', 'x')`)
       .run().lastInsertRowid,
   );
   const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: { weeksPerYear: 48 } }, services: { createBrowser: async () => null } });

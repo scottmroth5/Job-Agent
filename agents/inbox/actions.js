@@ -60,7 +60,7 @@ export function parseDeadline(text) {
  * Returns { statusChange, review, notices[], reminderId }.
  */
 export function applyActions(db, { email, postingId, c, decidedBy, promptVersion, now = new Date() }) {
-  const posting = db.prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ?').get(postingId);
+  const posting = db.prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(postingId);
   if (!posting) return { statusChange: null, review: 'the application no longer exists', notices: [], reminderId: null };
   const nowIso = now.toISOString();
   const base = { postingId, emailId: email.id, gmailMessageId: email.gmailMessageId, decidedBy, promptVersion };
@@ -83,8 +83,8 @@ export function applyActions(db, { email, postingId, c, decidedBy, promptVersion
     db.transaction(() => {
       const appliedOn = lk.groupOf('status', to) === 'waiting' && !posting.applied_on ? dateOnly(email.sentAt) : posting.applied_on;
       const stage = lk.isClosed(to) ? lk.role('stage', 'archive') : posting.stage;
-      db.prepare('UPDATE postings SET status = ?, applied_on = ?, stage = ?, updated_at = ? WHERE id = ?').run(to, appliedOn, stage, nowIso, postingId);
-      db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'agent', ?)").run(postingId, from, to, nowIso);
+      db.prepare('UPDATE postings SET status = ?, applied_on = ?, stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(to, appliedOn, stage, nowIso, postingId);
+      db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)").run(postingId, from, to, nowIso);
       logDecision(db, { ...base, action: 'status_change', fromStatus: from, toStatus: to, detail: { emailDate: email.sentAt, type: c.type } }, now);
     })();
     statusChange = plan.change;
@@ -116,11 +116,11 @@ export function createOpportunity(db, { email, c, decidedBy, promptVersion, now 
   const notes = `From a recruiter email on ${dateOnly(email.sentAt)}: ${c.summary}\nGmail thread: https://mail.google.com/mail/u/0/#all/${email.threadId}`;
   const id = Number(
     db
-      .prepare(`INSERT INTO postings (company, title, company_title_key, source, discovered_on, stage, status, notes, created_at, updated_at)
-        VALUES (?, ?, ?, 'email', ?, ?, ?, ?, ?, ?)`)
+      .prepare(`INSERT INTO postings (user_id, company, title, company_title_key, source, discovered_on, stage, status, notes, created_at, updated_at)
+        VALUES (@uid, ?, ?, ?, 'email', ?, ?, ?, ?, ?, ?)`)
       .run(company, title, storedKey({ company, title }), localDay(now), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso).lastInsertRowid,
   );
-  db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
+  db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
   adoptNotesText(db, { postingId: id, source: 'agent', now });
   linkThread(db, email.threadId, id, 'outreach', now);
   upsertContact(db, { email: c.extracted.contact_email ?? email.senderEmail, name: c.extracted.contact_name, company, postingId: id }, now);

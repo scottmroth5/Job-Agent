@@ -19,6 +19,18 @@ import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHea
 import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
+import { runAsUser } from '../db/scope.js';
+import { OWNER_ID, userForEmail } from '../db/users.js';
+
+// Routes that act with the owner's own accounts and settings (their knowledge doc, search settings, Gmail, Drive, and
+// Claude budget) or change what every user shares (the lists, the spending cap). Until each account has its own
+// (later phases), only the owner may call them, so nobody else's rows can receive the owner's email or documents.
+export const OWNER_ONLY = new Set([
+  'POST /api/postings', 'POST /api/postings/:id/actions/:action', 'POST /api/postings/:id/meeting-prep',
+  'POST /api/pipeline/run', 'POST /api/inbox/check', 'POST /api/inbox/emails/:id/review',
+  'PUT /api/admin/budget', 'POST /api/admin/prompts/:name/preview',
+  'POST /api/admin/lookups/:list', 'PATCH /api/admin/lookups/:list/:id', 'PUT /api/admin/lookups/:list/roles',
+]);
 import { registerAdminRoutes } from './admin.js';
 import { getLayout, registerLayoutRoutes } from './layout.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
@@ -91,6 +103,21 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   });
   if (authMode !== 'none') registerRateLimits(app, { now: auth.now, all: authMode === 'demo' ? DEMO_REQUEST_LIMIT : null });
   registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now });
+  // Multi-user (db/scope.js): each route handler, and every task it starts, runs as the signed-in user; with no sign-in
+  // (AUTH_MODE none, and the demo) that is the owner. The user is decided, and refused if inactive or not allowed this
+  // route, as soon as auth has run (onRequest, before the body is read); the handler runs as them from preHandler, after
+  // the body, which arrives in socket events that would not carry the context. A signed-out request on an open path
+  // (/auth/*, /healthz) gets no user, so a query on a user table there throws instead of reading anyone's rows.
+  app.addHook('onRequest', async (req, reply) => {
+    if (authMode === 'google' && !req.user) return;
+    const uid = authMode === 'google' ? userForEmail(db, req.user) : OWNER_ID;
+    if (!uid) return reply.code(403).send({ error: 'This account is not active.' });
+    if (uid !== OWNER_ID && OWNER_ONLY.has(`${req.method} ${req.routeOptions.url}`)) {
+      return reply.code(403).send({ error: 'Only the owner can do this for now.' });
+    }
+    req.uid = uid;
+  });
+  app.addHook('preHandler', (req, reply, done) => (req.uid ? runAsUser(req.uid, done) : done()));
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
 
   app.setErrorHandler((err, req, reply) => {
@@ -263,7 +290,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     },
     async (req, reply) => {
       const { id, action } = req.params;
-      const posting = db.prepare('SELECT * FROM postings WHERE id = ?').get(id);
+      const posting = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id);
       if (!posting) return notFound(reply);
       const taskId = startTask(action, { id }, async (step, { run, browser }) => {
         if (action === 'score') {
@@ -274,8 +301,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
           return { scored: s.scored, promoted: s.promoted.includes(id) };
         }
         if (action === 'write-materials' || action === 'regenerate') {
-          if (posting.stage === 'discovered') db.prepare("UPDATE postings SET stage = 'pipeline', updated_at = ? WHERE id = ?").run(new Date().toISOString(), id);
-          const hasScore = db.prepare("SELECT 1 FROM scores WHERE posting_id = ? AND source IN ('v2', 'v2-rule')").get(id);
+          if (posting.stage === 'discovered') db.prepare("UPDATE postings SET stage = 'pipeline', updated_at = ? WHERE id = ? AND user_id = @uid").run(new Date().toISOString(), id);
+          const hasScore = db.prepare("SELECT 1 FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule')").get(id);
           const knowledge = await services.knowledge();
           if (!hasScore) {
             step('Scoring first');
@@ -295,7 +322,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         const ok = item.fetchStatus === 'ok';
         db.prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN @text IS NULL THEN fetched_at ELSE @now END,
             fetch_status = @status, fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
-            location_check = @check, updated_at = @now WHERE id = @id`).run({
+            location_check = @check, updated_at = @now WHERE id = @id AND user_id = @uid`).run({
           id,
           text: ok ? item.description : null,
           status: item.fetchStatus,
@@ -349,7 +376,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     };
     const lastRanAt = (name) => () => db.prepare('SELECT started_at FROM runs WHERE name = ? ORDER BY id DESC LIMIT 1').pluck().get(name) ?? null;
     scheduler = createScheduler({
-      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: runners[j.name], lastRanAt: lastRanAt(j.name) })),
+      // Scheduled jobs are the owner's (phase 1); each user's own schedule comes with per-user feeds.
+      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: () => runAsUser(OWNER_ID, runners[j.name]), lastRanAt: lastRanAt(j.name) })),
       log: services.log ?? console,
       // A failed scheduled job emails the owner (server/alerts.js); the next success clears it.
       onResult: services.alerts ? (name, ok, error) => services.alerts.jobResult(name, ok, error) : null,
@@ -365,8 +393,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     jobs: scheduler?.status() ?? [],
   }));
 
-  app.get('/api/tasks', { schema: { summary: 'Recent background tasks, newest first (without output)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
-    tasks.list(),
+  app.get('/api/tasks', { schema: { summary: 'Recent background tasks, newest first (without output)', response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
+    tasks.list({ uid: req.uid ?? 0 }),
   );
 
   app.get(
@@ -379,13 +407,13 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         response: { 200: anyObject },
       },
     },
-    async (req, reply) => tasks.log(req.params.id, req.query.from ?? 0) ?? reply.code(404).send({ error: 'Task not found' }),
+    async (req, reply) => tasks.log(req.params.id, req.query.from ?? 0, { uid: req.uid ?? 0 }) ?? reply.code(404).send({ error: 'Task not found' }),
   );
 
   app.get(
     '/api/tasks/:id',
     { schema: { summary: 'Progress of a background action', params: { type: 'object', properties: { id: { type: 'string' } } }, response: { 200: anyObject } } },
-    async (req, reply) => tasks.get(req.params.id) ?? reply.code(404).send({ error: 'Task not found' }),
+    async (req, reply) => tasks.get(req.params.id, { uid: req.uid ?? 0 }) ?? reply.code(404).send({ error: 'Task not found' }),
   );
 
   if (webDir && existsSync(webDir)) {

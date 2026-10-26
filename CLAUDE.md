@@ -1,7 +1,8 @@
 ## Purpose
 Job Discovery and Job Hunt agents built on the shared agent-core package.
 agent-core comes from the public Agent-Core repo as a git dependency pinned to a version tag
-("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.2"; meeting prep needs 0.2.2's tools, streaming, and pause_turn resume). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
+("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.3"; meeting prep needs 0.2.2's tools, streaming, and pause_turn resume;
+migration 013 needs 0.2.3's foreignKeys: false table rebuilds). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
 Job specific logic stays in this repo; never add it to agent-core.
 
 ## Structure
@@ -15,8 +16,10 @@ Job specific logic stays in this repo; never add it to agent-core.
                     Change notes only through this module: it keeps postings.notes as every entry's text, oldest first, for
                     code that reads notes as one text. Code that inserts a job with notes text calls adoptNotesText
 /db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.js, applied in id order), openJobStore, v1 import.
-                    Never rebuild postings in a migration: migrations run in a transaction with foreign keys on, so a drop cascades.
-                    008 shows the safe way to loosen a CHECK constraint (writable_schema). openJobStore takes a checked copy
+                    Rebuild a table only in a migration that exports foreignKeys = false (agent-core runs it with foreign keys off,
+                    then foreign_key_check and integrity_check must pass before it commits); in any other migration a drop cascades.
+                    013 shows a rebuild (indexes, triggers, and views made again); 008 loosens a CHECK in place (writable_schema).
+                    A migration keeps its own copy of any app code it runs (012), since app queries change later. openJobStore takes a checked copy
                     (data/backups/pre-migration-<stamp>.db, newest 5 kept) before any of its migrations changes a file; npm run
                     db:pending migrates a throwaway copy (exit 0 none, 10 pending, 1 failed). Back up data/job-agent.db before schema changes
 /scripts            command-line entry points (see Commands)
@@ -80,6 +83,23 @@ npm run backup:restore -- --file latest --out data/restore/job-agent.db   decryp
 powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nightly 11pm backup task ("Job Agent nightly backup";
                                   scripts\backup-nightly.cmd, logs to data\logs\backup.log)
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
+
+## Users (multi-user, phase 1)
+db/users.js: users table, the owner is user 1 (admin); every row before 013 is theirs. Every user table (USER_TABLES in
+db/migrations/013-users.js) has user_id NOT NULL, and keys that were unique app-wide are unique per user. Every query on a
+user table says "user_id = @uid" (joins and subqueries too: "s.user_id = p.user_id"); inserts give user_id @uid, or copy it
+from the job row (INSERT ... SELECT ... FROM postings WHERE id = ? AND user_id = @uid) so another user's job gets nothing.
+store.db is scoped (db/scope.js): @uid is the user of the current request or job (runAsUser, AsyncLocalStorage), else
+fallbackUid: the owner for scripts and tests; the server has none, so a user-table query outside a request or job throws.
+store.raw is unscoped: migrations, backups, and (when cross-user admin reads arrive) server/admin-queries.js only.
+Requests run as their user (server/app.js: decided in onRequest, google mode's users row for the address, else the owner
+while AUTH_ALLOWED_EMAILS holds only the owner's addresses, paused or pending gets 403; run as them from preHandler).
+OWNER_ONLY routes use the owner's own accounts or shared settings (pipeline, inbox, AI actions, lists, cap): others get 403; scheduled jobs and child scripts run as the owner; tasks keep their user and the task routes
+show only that user's. Per-user settings live in user_settings (getUserSetting: inbox cursor, Drive folders, layouts);
+app_settings is app-wide (alerts, spending cap, demo marker). App-wide in phase 1: lookups (lists), runs and run_calls (Activity
+history and spending), the pipeline lock. test/user-scope.test.js fails on any query on a user table that does not name
+user_id; test/user-isolation.test.js calls every route as a second user against the owner's demo data. Later phases:
+registration and approval, per-user Claude keys, config, Gmail, Drive, schedules, and runs.
 
 ## UI and API
 The Home page (#/) is a tile per screen; Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned

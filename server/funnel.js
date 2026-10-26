@@ -38,15 +38,15 @@ export function applications(db, { now = new Date() } = {}) {
   const lk = lookups(db);
   const group = (status) => lk.groupOf('status', status);
   const history = new Map();
-  for (const h of db.prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history ORDER BY changed_at, id').all()) {
+  for (const h of db.prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history WHERE user_id = @uid ORDER BY changed_at, id').all()) {
     history.set(h.posting_id, [...(history.get(h.posting_id) ?? []), h]);
   }
   const emails = new Map();
-  for (const e of db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE posting_id IS NOT NULL AND review_status IN ${LINKED}`).all()) {
+  for (const e of db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).all()) {
     emails.set(e.posting_id, [...(emails.get(e.posting_id) ?? []), e]);
   }
 
-  const rows = db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings').all();
+  const rows = db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid').all();
   const out = [];
   for (const p of rows) {
     const hist = history.get(p.id) ?? [];
@@ -102,8 +102,8 @@ export function funnel(db, { days = null, track = null, now = new Date() } = {})
 
   const found = db
     .prepare(`SELECT COUNT(*) AS n,
-        SUM(CASE WHEN (SELECT s.score FROM scores s WHERE s.posting_id = p.id ORDER BY CASE WHEN s.source IN ('v2', 'v2-rule') THEN 0 ELSE 1 END, s.id DESC LIMIT 1) >= ? THEN 1 ELSE 0 END) AS strong
-      FROM postings p WHERE (? IS NULL OR p.discovered_on >= ?) AND (? IS NULL OR p.track = ?)`)
+        SUM(CASE WHEN (SELECT s.score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id ORDER BY CASE WHEN s.source IN ('v2', 'v2-rule') THEN 0 ELSE 1 END, s.id DESC LIMIT 1) >= ? THEN 1 ELSE 0 END) AS strong
+      FROM postings p WHERE p.user_id = @uid AND (? IS NULL OR p.discovered_on >= ?) AND (? IS NULL OR p.track = ?)`)
     .get(PROMOTE_AT, since, since, track, track);
 
   const count = (key) => apps.filter((a) => a[key].reached).length;

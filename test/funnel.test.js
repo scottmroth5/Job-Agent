@@ -14,14 +14,14 @@ function setup() {
   const job = (o = {}) =>
     Number(
       db
-        .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, created_at, updated_at)
-          VALUES (@k, @company, @title, @k, @source, @track, @found, 'pipeline', @status, @applied, 'x', 'x')`)
+        .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, created_at, updated_at)
+          VALUES (1, @k, @company, @title, @k, @source, @track, @found, 'pipeline', @status, @applied, 'x', 'x')`)
         .run({ k: `k${Math.random()}`, company: 'Example Co', title: 'CTO', source: 'LinkedIn', track: 'fulltime', found: '2026-09-01', status: 'applied', applied: null, ...o }).lastInsertRowid,
     );
-  const history = (id, to, at, by = 'user') => db.prepare('INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, ?, ?)').run(id, to, by, `${at}T10:00:00Z`);
+  const history = (id, to, at, by = 'user') => db.prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, ?, ?, ?)').run(id, to, by, `${at}T10:00:00Z`);
   const email = (id, type, at, review = 'auto') =>
-    db.prepare(`INSERT INTO emails (id, gmail_message_id, thread_id, sender, sender_domain, sent_at, type, posting_id, review_status, created_at, updated_at)
-      VALUES (?, ?, 't', 'x@example.com', 'example.com', ?, ?, ?, ?, 'x', 'x')`).run(randomUUID(), randomUUID(), `${at}T09:00:00Z`, type, id, review);
+    db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, type, posting_id, review_status, created_at, updated_at)
+      VALUES (1, ?, ?, 't', 'x@example.com', 'example.com', ?, ?, ?, ?, 'x', 'x')`).run(randomUUID(), randomUUID(), `${at}T09:00:00Z`, type, id, review);
   return { store, db, job, history, email };
 }
 

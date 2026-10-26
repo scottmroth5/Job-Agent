@@ -26,8 +26,8 @@ const STAGE_LABEL = { discovered: 'Discovered', pipeline: 'Pipeline', archived: 
 export function describeExisting(db, id) {
   const p = db
     .prepare(`SELECT p.id, p.title, p.company, p.source, p.stage, p.status, p.track, p.discovered_on, p.url,
-        (SELECT score FROM scores s WHERE s.posting_id = p.id ORDER BY CASE WHEN s.source LIKE 'v2%' THEN 0 ELSE 1 END, s.id DESC LIMIT 1) AS score
-      FROM postings p WHERE p.id = ?`)
+        (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id ORDER BY CASE WHEN s.source LIKE 'v2%' THEN 0 ELSE 1 END, s.id DESC LIMIT 1) AS score
+      FROM postings p WHERE p.id = ? AND p.user_id = @uid`)
     .get(id);
   const parts = [
     `found by ${p.source === MANUAL_SOURCE ? 'you' : p.source} on ${p.discovered_on}`,
@@ -90,10 +90,10 @@ export async function addPosting(input, ctx) {
 
   // 1. Already known?
   const urlKey = normalizeUrl(url);
-  const byUrl = urlKey ? db.prepare('SELECT id FROM postings WHERE url_key = ?').get(urlKey) : null;
+  const byUrl = urlKey ? db.prepare('SELECT id FROM postings WHERE url_key = ? AND user_id = @uid').get(urlKey) : null;
   // Company + title only identifies a job when the company is real, not a placeholder like "Unknown".
   const ctKey = input.title ? identityKey({ company: input.company, title: input.title }) : null;
-  const existing = byUrl ?? (ctKey ? db.prepare('SELECT id FROM postings WHERE company_title_key = ? ORDER BY id LIMIT 1').get(ctKey) : null);
+  const existing = byUrl ?? (ctKey ? db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(ctKey) : null);
   if (existing) {
     const match = describeExisting(db, existing.id);
     step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
@@ -139,7 +139,7 @@ export async function addPosting(input, ctx) {
   rejectSkipped(item, config);
   // The link may have supplied the company and title: check again for the same job saved from another site.
   const fetchedKey = identityKey(item);
-  const sameJob = fetchedKey ? db.prepare('SELECT id FROM postings WHERE company_title_key = ? ORDER BY id LIMIT 1').get(fetchedKey) : null;
+  const sameJob = fetchedKey ? db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(fetchedKey) : null;
   if (sameJob) {
     const match = describeExisting(db, sameJob.id);
     step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
@@ -158,10 +158,10 @@ export async function addPosting(input, ctx) {
   const nowIso = new Date().toISOString();
   const id = Number(
     db
-      .prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, source, location, workplace, discovered_on,
+      .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, location, workplace, discovered_on,
           stage, status, notes, jd_text, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, location_check,
           track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
-        VALUES (@url, @url_key, @company, @title, @ct, 'manual', @location, @workplace, @today, @stage, @status, @notes,
+        VALUES (@uid, @url, @url_key, @company, @title, @ct, 'manual', @location, @workplace, @today, @stage, @status, @notes,
           @jd_text, @fetched_text, @fetched_at, @fetch_status, @fetch_method, 1, @location_check, @track, @rate_text,
           @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra, @now, @now)`)
       .run({
@@ -193,7 +193,7 @@ export async function addPosting(input, ctx) {
         status: lk.role('status', 'default'),
       }).lastInsertRowid,
   );
-  db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, NULL, ?, 'user', ?)").run(id, lk.role('status', 'default'), nowIso);
+  db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'user', ?)").run(id, lk.role('status', 'default'), nowIso);
   adoptNotesText(db, { postingId: id, source: 'user' });
   step(`Saved as job #${id} (${lk.label('track', track)})`);
 
@@ -201,14 +201,14 @@ export async function addPosting(input, ctx) {
   step('Scoring');
   const scored = await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], concurrency: 1 } });
   if (scored.failures.length) throw new Error(`Saved as job #${id}, but scoring failed: ${scored.failures[0].error}`);
-  const score = db.prepare("SELECT score FROM scores WHERE posting_id = ? AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(id);
+  const score = db.prepare("SELECT score FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(id);
   const promoted = scored.promoted.includes(id);
   step(`Scored ${score} of 10${promoted ? ', moved to your pipeline' : ''}`);
 
   // 6. Materials
   let materials = null;
   if (promoted || input.writeMaterials) {
-    if (!promoted) db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ?').run(lk.role('stage', 'promote'), nowIso, id);
+    if (!promoted) db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), nowIso, id);
     step('Writing resume tweaks and cover letter');
     materials = await generateForPostings({ store, config, claude, knowledge, drive, run, options: { ids: [id] } });
     step(materials.docs ? 'Cover letter saved as a Google Doc' : 'Materials written');

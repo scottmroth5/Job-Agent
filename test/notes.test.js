@@ -8,10 +8,12 @@ import { addNote, adoptNotesText, deleteNote, listNotes, notesForPrompt, updateN
 
 const config = { candidate: { name: 'Pat Example' }, search: { homeLocations: [] }, fractional: {}, coverLetterChecks: [] };
 
+// Used before 013 (no user_id yet) and after it (the owner's job).
 function job(db, notes = null) {
+  const owned = Boolean(db.prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
   return Number(
-    db.prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
-      VALUES (?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'new', ?, 'x', 'x')`).run(`k${Math.random()}`, `example|cto${Math.random()}`, notes).lastInsertRowid,
+    db.prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
+      VALUES (${owned ? '1, ' : ''}?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'new', ?, 'x', 'x')`).run(`k${Math.random()}`, `example|cto${Math.random()}`, notes).lastInsertRowid,
   );
 }
 const cache = (db, id) => db.prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(id);
@@ -26,10 +28,10 @@ test('migration: each job with notes text gets one "earlier" note; jobs without 
   const blank = job(raw, '   ');
   const none = job(raw, null);
   all.find((m) => m.id === '012-posting-notes').up(raw);
-  const [n] = listNotes(raw, withNotes);
-  assert.deepEqual([n.source, n.body], ['earlier', 'Referred by a friend\nRemoved 2026-10-01: duplicate of #3.']);
-  assert.equal(listNotes(raw, blank).length + listNotes(raw, none).length, 0);
-  assert.equal(adoptNotesText(raw), 0, 'adopting again adds nothing');
+  // Read straight from the table: 012 ran before user_id existed, so today's (scoped) notes functions do not apply here.
+  const notesOf = (id) => raw.prepare('SELECT source, body FROM posting_notes WHERE posting_id = ?').all(id);
+  assert.deepEqual(notesOf(withNotes), [{ source: 'earlier', body: 'Referred by a friend\nRemoved 2026-10-01: duplicate of #3.' }]);
+  assert.equal(notesOf(blank).length + notesOf(none).length, 0);
   raw.close();
 });
 

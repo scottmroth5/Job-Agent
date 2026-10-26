@@ -171,8 +171,8 @@ const fakeSource = (SOURCE, items) => ({ SOURCE, search: async () => ({ items: i
 const base = (o) => ({ company: 'Example Co', location: 'Remote', workplace: 'remote', postedOn: '2026-09-28', description: LONG, ...o });
 
 function seedPosting(db, { url, company, title, source = 'LinkedIn', stage = 'discovered' }) {
-  db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, source, discovered_on, stage, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, '2026-09-01', ?, 'x', 'x')`).run(url, url.replace('https://', ''), company, title, `${company.toLowerCase()}|${title.toLowerCase()}`, source, stage);
+  db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage, created_at, updated_at)
+    VALUES (1, ?, ?, ?, ?, ?, ?, '2026-09-01', ?, 'x', 'x')`).run(url, url.replace('https://', ''), company, title, `${company.toLowerCase()}|${title.toLowerCase()}`, source, stage);
 }
 
 test('runDiscovery filters, dedupes by priority, checks location, and stores new postings', async () => {
@@ -246,9 +246,9 @@ test('details: after the first LinkedIn 429 the run waits once and retries', asy
 test('runDiscovery retries recent postings whose text failed earlier, then stops after 3 attempts', async () => {
   const store = openJobStore(':memory:');
   const insertPending = (url, attempts, discoveredOn = '2026-09-29') =>
-    store.db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, source, discovered_on, stage,
+    store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage,
       fetch_status, fetch_attempts, location, location_check, created_at, updated_at)
-      VALUES (?, ?, '(unknown)', 'CTO', ?, 'Google Jobs', ?, 'discovered', 'rate_limited', ?, NULL, 'unknown', 'x', 'x')`)
+      VALUES (1, ?, ?, '(unknown)', 'CTO', ?, 'Google Jobs', ?, 'discovered', 'rate_limited', ?, NULL, 'unknown', 'x', 'x')`)
       .run(url, url, `(unknown)|cto|${url}`, discoveredOn, attempts);
   insertPending('https://jobs.example.com/a', 1);
   insertPending('https://jobs.example.com/b', 3); // out of attempts

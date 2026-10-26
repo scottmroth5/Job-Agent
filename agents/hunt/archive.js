@@ -23,7 +23,7 @@ export function findArchivable(db, { now = new Date(), days = ARCHIVE_AFTER_DAYS
   const keep = lk.neverAutoArchived();
   const cutoffIso = localDaysAgo(now, days);
   return db
-    .prepare(`SELECT id, company, title, status, discovered_on FROM postings WHERE stage IN ${sqlList(lk.ids('stage', 'active'))} ORDER BY id`)
+    .prepare(`SELECT id, company, title, status, discovered_on FROM postings WHERE user_id = @uid AND stage IN ${sqlList(lk.ids('stage', 'active'))} ORDER BY id`)
     .all()
     .map((p) => {
       if (closed.includes(p.status)) return { ...p, reason: `status ${p.status}` };
@@ -43,7 +43,7 @@ export function findListings(db, config) {
   const inProgress = lk.inProgress();
   return db
     .prepare(`SELECT id, company, title, url, stage, status FROM postings
-      WHERE stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR status IN ${sqlList(lk.ids('status', 'evaluate'))} ORDER BY id`)
+      WHERE user_id = @uid AND (stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR status IN ${sqlList(lk.ids('status', 'evaluate'))}) ORDER BY id`)
     .all()
     .map((p) => ({ ...p, reason: skipReason(p, config) }))
     .filter((p) => p.reason && !inProgress.includes(p.status));
@@ -79,8 +79,8 @@ export function findDuplicates(db) {
     .prepare(`SELECT id, company, title, url, stage, status, company_title_key,
         TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != '' AS has_text,
         -- removed by cleanup: the agent changed an existing status (discovery's first status, from nothing, does not count)
-        COALESCE((SELECT h.changed_by = 'agent' AND h.from_status IS NOT NULL FROM status_history h WHERE h.posting_id = p.id ORDER BY h.id DESC LIMIT 1), 0) AS agent_removed
-      FROM postings p`)
+        COALESCE((SELECT h.changed_by = 'agent' AND h.from_status IS NOT NULL FROM status_history h WHERE h.posting_id = p.id AND h.user_id = p.user_id ORDER BY h.id DESC LIMIT 1), 0) AS agent_removed
+      FROM postings p WHERE p.user_id = @uid`)
     .all();
   const groups = new Map();
   for (const p of rows) {
@@ -113,8 +113,8 @@ export function archiveListings(db, { config, now = new Date(), dryRun = false }
   const found = [...skipped, ...findDuplicates(db).filter((p) => !seen.has(p.id))];
   if (!dryRun && found.length) {
     const nowIso = now.toISOString();
-    const update = db.prepare('UPDATE postings SET stage = @stage, status = @status, updated_at = @now WHERE id = @id');
-    const history = db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'agent', ?)");
+    const update = db.prepare('UPDATE postings SET stage = @stage, status = @status, updated_at = @now WHERE id = @id AND user_id = @uid');
+    const history = db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)");
     const stage = lk.role('stage', 'archive');
     db.transaction(() => {
       for (const p of found) {
@@ -136,11 +136,11 @@ export function demoteWithoutText(db, { now = new Date(), dryRun = false } = {})
   const lk = lookups(db);
   const active = sqlList(lk.ids('stage', 'active'));
   const found = db
-    .prepare(`SELECT id, company, title, status FROM postings WHERE stage IN ${active} AND status IN ${sqlList(lk.ids('status', 'evaluate'))}
+    .prepare(`SELECT id, company, title, status FROM postings WHERE user_id = @uid AND stage IN ${active} AND status IN ${sqlList(lk.ids('status', 'evaluate'))}
       AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) = '' ORDER BY id`)
     .all();
   if (!dryRun && found.length) {
-    const update = db.prepare(`UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND stage IN ${active}`);
+    const update = db.prepare(`UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${active}`);
     db.transaction(() => {
       for (const p of found) update.run(lk.role('stage', 'default'), now.toISOString(), p.id);
     })();
@@ -154,12 +154,12 @@ export function archivePostings(db, { now = new Date(), days = ARCHIVE_AFTER_DAY
   const active = sqlList(lk.ids('stage', 'active'));
   const moves = findArchivable(db, { now, days });
   if (!dryRun && moves.length) {
-    const update = db.prepare(`UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND stage IN ${active}`);
+    const update = db.prepare(`UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${active}`);
     const nowIso = now.toISOString();
     db.transaction(() => {
       for (const m of moves) update.run(lk.role('stage', 'archive'), nowIso, m.id);
     })();
   }
-  const total = db.prepare(`SELECT COUNT(*) FROM postings WHERE stage IN ${active}`).pluck().get();
+  const total = db.prepare(`SELECT COUNT(*) FROM postings WHERE user_id = @uid AND stage IN ${active}`).pluck().get();
   return { archived: moves, remaining: total, dryRun };
 }

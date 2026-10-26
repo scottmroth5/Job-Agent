@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.js';
-import { getSetting, setSetting } from '../db/settings.js';
+import { getUserSetting as getSetting, setUserSetting as setSetting } from '../db/settings.js';
 import { createGmail, normalizeMessage, labelName, parseFrom, isQuotaError } from '../agents/inbox/gmail.js';
 import { newMessageIds, backfillMessageIds, saveCursor, CURSOR_KEY } from '../agents/inbox/sync.js';
 import { fakeGmailApi, message } from './fixtures/inbox/fake-gmail.js';

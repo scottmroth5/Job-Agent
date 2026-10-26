@@ -69,13 +69,13 @@ test('runEval scores each case per model with the production code and keeps a v1
 test('buildCases uses pasted descriptions, refetches the rest, and skips cases with no text', async () => {
   const store = openJobStore(':memory:');
   const add = (o) =>
-    store.db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, status, stage, jd_text, discovered_on, created_at, updated_at)
-      VALUES (@url, @url, 'Co', 'CTO', @url, @status, 'archived', @jd, '2026-01-01', 'x', 'x')`).run(o).lastInsertRowid;
+    store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, status, stage, jd_text, discovered_on, created_at, updated_at)
+      VALUES (1, @url, @url, 'Co', 'CTO', @url, @status, 'archived', @jd, '2026-01-01', 'x', 'x')`).run(o).lastInsertRowid;
   const pasted = add({ url: 'https://a.example.com/1', status: 'applied', jd: 'y'.repeat(600) });
   add({ url: 'https://a.example.com/2', status: 'passed', jd: null }); // refetched
   add({ url: 'https://a.example.com/3', status: 'passed', jd: null }); // fetch fails
   add({ url: 'https://a.example.com/4', status: 'new', jd: 'y'.repeat(600) }); // not an outcome
-  store.db.prepare("INSERT INTO scores (posting_id, score, source, created_at) VALUES (?, 7, 'v1-analysis', 'x')").run(pasted);
+  store.db.prepare("INSERT INTO scores (user_id, posting_id, score, source, created_at) VALUES (1, ?, 7, 'v1-analysis', 'x')").run(pasted);
   const http = {
     get: async (url) => {
       if (url.endsWith('/2')) return { status: 200, text: `<p>${'Lead the engineering organization. '.repeat(40)}</p>` };

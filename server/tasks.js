@@ -1,6 +1,9 @@
 // Long-running UI actions (run the pipeline, check the inbox, add a job, score, write materials) run in the
 // background; the UI polls their progress and their output (the Activity tab). Kept in memory: a server
-// restart forgets finished tasks, which is fine.
+// restart forgets finished tasks, which is fine. Each task belongs to the user it runs as (db/scope.js); the routes
+// show a user only their own (get, log, and list with { uid }), while the server's own checks see every task.
+import { currentUserId } from '../db/scope.js';
+import { OWNER_ID } from '../db/users.js';
 
 const KEEP = 100;
 const MAX_LINES = 5000;
@@ -16,7 +19,7 @@ export function createTaskRunner() {
    */
   function start(kind, meta, fn) {
     const id = String(next++);
-    const task = { id, kind, meta, status: 'running', steps: [], log: [], result: null, error: null, startedAt: new Date().toISOString(), finishedAt: null };
+    const task = { id, uid: currentUserId() ?? OWNER_ID, kind, meta, status: 'running', steps: [], log: [], result: null, error: null, startedAt: new Date().toISOString(), finishedAt: null };
     tasks.set(id, task);
     const line = (level, text) => {
       for (const l of String(text).split(/\r?\n/)) {
@@ -46,22 +49,27 @@ export function createTaskRunner() {
     return id;
   }
 
-  const brief = ({ log, ...t }) => ({ ...t, lines: log.length });
+  const brief = ({ log, uid, ...t }) => ({ ...t, lines: log.length });
+  // With a uid, only that user's task; without one (the server's own checks), any.
+  const find = (id, uid) => {
+    const t = tasks.get(String(id));
+    return t && (uid == null || t.uid === uid) ? t : null;
+  };
 
   return {
     start,
     /** A task without its output (polled every second while it runs). */
-    get: (id) => {
-      const t = tasks.get(String(id));
+    get: (id, { uid } = {}) => {
+      const t = find(id, uid);
       return t ? brief(t) : null;
     },
     /** Output lines from index `from` on, so the UI fetches only what is new. */
-    log: (id, from = 0) => {
-      const t = tasks.get(String(id));
+    log: (id, from = 0, { uid } = {}) => {
+      const t = find(id, uid);
       return t ? { lines: t.log.slice(from), next: t.log.length, status: t.status, error: t.error } : null;
     },
     /** Recent tasks, newest first. */
-    list: () => [...tasks.values()].reverse().map(brief),
+    list: ({ uid } = {}) => [...tasks.values()].reverse().filter((t) => uid == null || t.uid === uid).map(brief),
     /** Resolves with the task (done or failed) when it finishes (the scheduler, tests, and scripts). */
     async wait(id, timeoutMs = 10000) {
       const done = finished.get(String(id));

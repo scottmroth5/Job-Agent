@@ -22,9 +22,9 @@ const parse = (s) => {
 };
 
 // The score a posting is judged by: v2 first, then v1's analysis, then v1's quick score.
-const LATEST_SCORE = `(SELECT s.id FROM scores s WHERE s.posting_id = p.id
+const LATEST_SCORE = `(SELECT s.id FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id
   ORDER BY CASE s.source WHEN 'v2' THEN 0 WHEN 'v2-rule' THEN 0 WHEN 'v1-analysis' THEN 1 ELSE 2 END, s.id DESC LIMIT 1)`;
-const LATEST_LETTER = `(SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'cover_letter' ORDER BY a.id DESC LIMIT 1)`;
+const LATEST_LETTER = `(SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' ORDER BY a.id DESC LIMIT 1)`;
 
 // Jobs worth pasting a description for: no text, still new, found in the last 30 days, and judged
 // PROMOTE_AT+ from the title alone (a v1 title score, or a v2 score capped for lack of text, whose
@@ -35,17 +35,18 @@ const awaitingDescription = (lk) => `(${NO_TEXT} AND p.status IN ${sqlList(lk.id
   AND p.discovered_on >= date('now', '-${DESCRIPTION_DAYS} days')
   AND COALESCE(CASE WHEN json_valid(ls.analysis_json) THEN json_extract(ls.analysis_json, '$.uncappedScore') END, ls.score) >= ${PROMOTE_AT})`;
 
-// The row query; db supplies the lists (agents/lookups.js) the status and stage conditions use.
+// The row query; db supplies the lists (agents/lookups.js) the status and stage conditions use. p is the current
+// user's postings only (a subquery SQLite flattens, so callers add their own WHERE and indexes still apply).
 const base = (db, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
     ${awaitingDescription(lk)} AS awaiting_description,
     -- flagged only while this job still waits on the user (new) and another live copy exists
-    p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.company_title_key = p.company_title_key AND q.id != p.id AND ${liveCopySql(db)}) AS shares_key,
+    p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.user_id = p.user_id AND q.company_title_key = p.company_title_key AND q.id != p.id AND ${liveCopySql(db)}) AS shares_key,
     ll.doc_url AS letter_url, ll.doc_name AS letter_name, ll.flags_json AS letter_flags, ll.id AS letter_id,
-    EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.kind = 'resume_tweaks') AS has_tweaks,
-    (SELECT COUNT(*) FROM attachments f WHERE f.posting_id = p.id) AS attachment_count
-  FROM postings p
-  LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE}
-  LEFT JOIN artifacts ll ON ll.id = ${LATEST_LETTER}`;
+    EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks') AS has_tweaks,
+    (SELECT COUNT(*) FROM attachments f WHERE f.posting_id = p.id AND f.user_id = p.user_id) AS attachment_count
+  FROM (SELECT * FROM postings WHERE user_id = @uid) p
+  LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id
+  LEFT JOIN artifacts ll ON ll.id = ${LATEST_LETTER} AND ll.user_id = p.user_id`;
 
 /**
  * The pay to show: the job's own terms (fractional rate, or what the user typed), then the salary the
@@ -141,9 +142,9 @@ export function getPosting(db, id, config = {}) {
   const r = db.prepare(`${base(db)} WHERE p.id = ?`).get(id);
   if (!r) return null;
   const tweaks = db
-    .prepare("SELECT content, model, created_at FROM artifacts WHERE posting_id = ? AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
+    .prepare("SELECT content, model, created_at FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
     .get(id);
-  const letter = r.letter_id ? db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at FROM artifacts WHERE id = ?').get(r.letter_id) : null;
+  const letter = r.letter_id ? db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) : null;
   return {
     ...toRow(r, config),
     copies: findCopies(db, r),
@@ -158,12 +159,12 @@ export function getPosting(db, id, config = {}) {
     tweaks: tweaks ? { content: tweaks.content, model: tweaks.model, createdAt: tweaks.created_at } : null,
     letter: letter ? { url: letter.doc_url, name: letter.doc_name, flags: parse(letter.flags_json) ?? [], content: letter.content, createdAt: letter.created_at } : null,
     scores: db
-      .prepare('SELECT score, source, model, reason, created_at AS createdAt FROM scores WHERE posting_id = ? ORDER BY id DESC')
+      .prepare('SELECT score, source, model, reason, created_at AS createdAt FROM scores WHERE posting_id = ? AND user_id = @uid ORDER BY id DESC')
       .all(id),
     statusHistory: db
-      .prepare('SELECT from_status AS fromStatus, to_status AS toStatus, changed_by AS changedBy, changed_at AS changedAt FROM status_history WHERE posting_id = ? ORDER BY id')
+      .prepare('SELECT from_status AS fromStatus, to_status AS toStatus, changed_by AS changedBy, changed_at AS changedAt FROM status_history WHERE posting_id = ? AND user_id = @uid ORDER BY id')
       .all(id),
-    sightings: db.prepare('SELECT source, url, seen_on AS seenOn FROM posting_sightings WHERE posting_id = ? ORDER BY id').all(id),
+    sightings: db.prepare('SELECT source, url, seen_on AS seenOn FROM posting_sightings WHERE posting_id = ? AND user_id = @uid ORDER BY id').all(id),
   };
 }
 
@@ -177,7 +178,7 @@ export function getPosting(db, id, config = {}) {
  */
 export function updatePosting(db, id, patch, config = {}, now = new Date()) {
   const lk = lookups(db);
-  const current = db.prepare('SELECT * FROM postings WHERE id = ?').get(id);
+  const current = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id);
   if (!current) return null;
   const set = {};
   const nowIso = now.toISOString();
@@ -202,7 +203,7 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
     set.company_title_key = storedKey({ company: set.company ?? current.company, title: set.title ?? current.title });
   }
   if (patch.duplicateOf !== undefined) {
-    const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ?').get(patch.duplicateOf);
+    const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf);
     if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
     const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${localDay(now)}.`;
     set.stage = lk.role('stage', 'archive');
@@ -228,9 +229,9 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
   const keys = Object.keys(set);
   if (keys.length || newNotes.length) {
     db.transaction(() => {
-      if (keys.length) db.prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id`).run({ ...set, updated_at: nowIso, id });
+      if (keys.length) db.prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id AND user_id = @uid`).run({ ...set, updated_at: nowIso, id });
       if (set.status) {
-        db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
+        db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
       }
       for (const n of newNotes) addNote(db, id, n.body, { source: n.source, now });
     })();
@@ -242,19 +243,19 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
 export function summary(db, config = {}, now = new Date()) {
   const lk = lookups(db);
   const since = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
-  const counts = db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings GROUP BY track, stage, status').all();
+  const counts = db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all();
   return {
     counts,
     pipeline: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active').reduce((s, c) => s + c.n, 0),
     // The Home page's counts: pipeline jobs that need action (the Jobs page's default view) and ones in progress.
     needsAction: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.needsAction().includes(c.status)).reduce((s, c) => s + c.n, 0),
     inProgress: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.inProgress().includes(c.status)).reduce((s, c) => s + c.n, 0),
-    needsDescription: db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} WHERE ${awaitingDescription(lk)}`).pluck().get(),
+    needsDescription: db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id WHERE p.user_id = @uid AND ${awaitingDescription(lk)}`).pluck().get(),
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
     spend30Days: db.prepare('SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= ?').pluck().get(since),
     budget: budgetStatus(db, { now }),
-    inboxNeedsReview: db.prepare("SELECT COUNT(*) FROM emails WHERE review_status = 'needs_review'").pluck().get(),
+    inboxNeedsReview: db.prepare("SELECT COUNT(*) FROM emails WHERE user_id = @uid AND review_status = 'needs_review'").pluck().get(),
     lastRun: db.prepare("SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') ORDER BY id DESC LIMIT 1").get() ?? null,
   };
 }

@@ -62,7 +62,7 @@ const clean = (v) => {
  */
 export function importV1(store, { discovered = [], hunt = [] }, { now = new Date().toISOString(), today = localDay(new Date(now)), runId = null } = {}) {
   const { db } = store;
-  if (db.prepare('SELECT COUNT(*) FROM postings').pluck().get() > 0) {
+  if (db.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get() > 0) {
     throw new Error('The database already has postings; the v1 import only runs into an empty database (use --reset).');
   }
   const counts = {
@@ -78,25 +78,25 @@ export function importV1(store, { discovered = [], hunt = [] }, { now = new Date
     artifacts: { analysis: 0, resume_tweaks: 0, cover_letter: 0 },
   };
 
-  const byUrl = db.prepare('SELECT * FROM postings WHERE url_key = ?');
-  const byCompanyTitle = db.prepare('SELECT * FROM postings WHERE company_title_key = ? ORDER BY id LIMIT 1');
+  const byUrl = db.prepare('SELECT * FROM postings WHERE url_key = ? AND user_id = @uid');
+  const byCompanyTitle = db.prepare('SELECT * FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1');
   const insertPosting = db.prepare(`INSERT INTO postings
-    (url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
+    (user_id, url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
      discovered_on, stage, status, applied_on, notes, jd_text, created_at, updated_at)
-    VALUES (@url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on,
+    VALUES (@uid, @url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on,
      @posted_raw, @discovered_on, @stage, @status, @applied_on, @notes, @jd_text, @now, @now)`);
   const updatePosting = db.prepare(`UPDATE postings SET stage = @stage, status = @status,
       applied_on = COALESCE(@applied_on, applied_on), notes = COALESCE(@notes, notes), jd_text = COALESCE(@jd_text, jd_text),
-      updated_at = @now WHERE id = @id`);
-  const insertHistory = db.prepare(`INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at)
-    VALUES (?, ?, ?, 'import', ?)`);
-  const scoreExists = db.prepare('SELECT 1 FROM scores WHERE posting_id = ? AND source = ? AND score = ?');
-  const insertScore = db.prepare(`INSERT INTO scores (posting_id, score, reason, source, run_id, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)`);
-  const artifactExists = db.prepare(`SELECT 1 FROM artifacts WHERE posting_id = ? AND kind = ? AND source = 'v1'
+      updated_at = @now WHERE id = @id AND user_id = @uid`);
+  const insertHistory = db.prepare(`INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at)
+    VALUES (@uid, ?, ?, ?, 'import', ?)`);
+  const scoreExists = db.prepare('SELECT 1 FROM scores WHERE posting_id = ? AND user_id = @uid AND source = ? AND score = ?');
+  const insertScore = db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, source, run_id, created_at)
+    VALUES (@uid, ?, ?, ?, ?, ?, ?)`);
+  const artifactExists = db.prepare(`SELECT 1 FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = ? AND source = 'v1'
     AND IFNULL(content, '') = IFNULL(?, '') AND IFNULL(doc_name, '') = IFNULL(?, '')`);
-  const insertArtifact = db.prepare(`INSERT INTO artifacts (posting_id, kind, content, doc_name, flags_json, source, run_id, created_at)
-    VALUES (?, ?, ?, ?, ?, 'v1', ?, ?)`);
+  const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, doc_name, flags_json, source, run_id, created_at)
+    VALUES (@uid, ?, ?, ?, ?, ?, 'v1', ?, ?)`);
 
   const noteUnknown = (raw) => {
     const k = String(raw).trim();
@@ -240,8 +240,8 @@ export function importV1(store, { discovered = [], hunt = [] }, { now = new Date
   adoptNotesText(db, { source: 'earlier', now: new Date(now) });
 
   counts.byStageStatus = db
-    .prepare('SELECT stage, status, COUNT(*) AS n FROM postings GROUP BY stage, status ORDER BY stage, n DESC')
+    .prepare('SELECT stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY stage, status ORDER BY stage, n DESC')
     .all();
-  counts.bySource = db.prepare('SELECT source, COUNT(*) AS n FROM postings GROUP BY source ORDER BY n DESC').all();
+  counts.bySource = db.prepare('SELECT source, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY source ORDER BY n DESC').all();
   return counts;
 }

@@ -70,9 +70,9 @@ function addPosting(db, o = {}) {
   };
   return Number(
     db
-      .prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, location, location_check, fetch_status,
+      .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, location, location_check, fetch_status,
         fetched_text, stage, status, discovered_on, created_at, updated_at)
-        VALUES (@url, @url, @company, @title, @url, @location, @location_check, @fetch_status, @fetched_text, @stage, @status,
+        VALUES (1, @url, @url, @company, @title, @url, @location, @location_check, @fetch_status, @fetched_text, @stage, @status,
         '2026-09-30', 'x', 'x')`)
       .run(row).lastInsertRowid,
   );

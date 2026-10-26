@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.js';
-import { getSetting } from '../db/settings.js';
+import { getUserSetting as getSetting } from '../db/settings.js';
 import { ensureLetterFolder } from '../tools/google/drive.js';
 import { generateForPostings, selectForHunt, buildLetterRequest, loadHuntPrompts, finishLetter, estimateHuntCost } from '../agents/hunt/generate.js';
 
@@ -49,11 +49,11 @@ function fakeDrive({ failDocs = false } = {}) {
 function addPosting(db, { stage = 'pipeline', status = 'new', score = 8, title = 'VP Engineering' } = {}) {
   const url = `https://jobs.example.com/${Math.random()}`;
   const id = Number(
-    db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-      VALUES (?, ?, 'Example Co', ?, ?, ?, ?, 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url, stage, status).lastInsertRowid,
+    db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+      VALUES (1, ?, ?, 'Example Co', ?, ?, ?, ?, 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url, stage, status).lastInsertRowid,
   );
   if (score != null) {
-    db.prepare("INSERT INTO scores (posting_id, score, analysis_json, source, created_at) VALUES (?, ?, ?, 'v2', 'x')").run(id, score, JSON.stringify({ ...analysis, score }));
+    db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, ?, ?, 'v2', 'x')").run(id, score, JSON.stringify({ ...analysis, score }));
   }
   return id;
 }

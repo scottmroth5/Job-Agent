@@ -8,8 +8,8 @@ import { archivePostings, findArchivable } from '../agents/hunt/archive.js';
 function addPosting(db, { stage = 'pipeline', status = 'new', discovered = '2026-09-29', company = 'Example Co', title = 'VP Engineering' } = {}) {
   const url = `https://jobs.example.com/${Math.random()}`;
   return Number(
-    db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, stage, status, location, discovered_on, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'Remote', ?, 'x', 'x')`).run(url, url, company, title, url, stage, status, discovered).lastInsertRowid,
+    db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, location, discovered_on, created_at, updated_at)
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, 'Remote', ?, 'x', 'x')`).run(url, url, company, title, url, stage, status, discovered).lastInsertRowid,
   );
 }
 
@@ -25,11 +25,11 @@ test('collectReport and renderReport cover new, promoted, pipeline, cost and fai
       JSON.stringify({ distribution: { 8: 1, 5: 11 } }),
     );
   const star = addPosting(db, { company: 'Acme <script>', title: 'CTO & Founder' });
-  db.prepare(`INSERT INTO scores (posting_id, score, reason, analysis_json, source, created_at) VALUES (?, 8, 'Great fit', ?, 'v2', '2026-09-30T06:05:00.000Z')`)
+  db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, created_at) VALUES (1, ?, 8, 'Great fit', ?, 'v2', '2026-09-30T06:05:00.000Z')`)
     .run(star, JSON.stringify({ topTalkingPoint: 'Scaled platform' }));
-  db.prepare(`INSERT INTO artifacts (posting_id, kind, doc_url, flags_json, source, created_at) VALUES (?, 'cover_letter', 'https://docs.example.com/1', '["weak closer"]', 'v2', 'x')`).run(star);
+  db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, doc_url, flags_json, source, created_at) VALUES (1, ?, 'cover_letter', 'https://docs.example.com/1', '["weak closer"]', 'v2', 'x')`).run(star);
   const old = addPosting(db, { status: 'applied', company: 'Older Co' });
-  db.prepare(`INSERT INTO scores (posting_id, score, source, created_at) VALUES (?, 9, 'v2', '2026-09-20T00:00:00.000Z')`).run(old); // promoted earlier
+  db.prepare(`INSERT INTO scores (user_id, posting_id, score, source, created_at) VALUES (1, ?, 9, 'v2', '2026-09-20T00:00:00.000Z')`).run(old); // promoted earlier
   addPosting(db, { stage: 'discovered' });
 
   const data = collectReport(db, { since });

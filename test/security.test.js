@@ -83,7 +83,7 @@ test('security headers on every response; HTTPS adds HSTS; a route with its own 
   assert.equal(res.headers['strict-transport-security'], undefined, 'no HSTS without HTTPS');
   assert.ok(!res.headers['x-powered-by']);
 
-  const job = Number(store.db.prepare("INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at) VALUES ('k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')").run().lastInsertRowid);
+  const job = Number(store.db.prepare("INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at) VALUES (1, 'k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')").run().lastInsertRowid);
   const up = (await app.inject({ method: 'POST', url: `/api/postings/${job}/attachments`, headers: { 'content-type': 'application/octet-stream', 'x-filename': 'a.pdf', 'x-file-type': 'application/pdf' }, payload: Buffer.from('%PDF') })).json();
   const file = await app.inject(`/api/attachments/${up.id}/file`);
   assert.match(file.headers['content-security-policy'], /^sandbox/, 'attachments keep their sandbox policy');

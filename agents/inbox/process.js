@@ -129,7 +129,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
       if (link.postingId) {
         const r = applyActions(db, { email: row, postingId: link.postingId, c, decidedBy, promptVersion: c.promptVersion, now: at });
         learnDomain(db, link.postingId, email.senderDomain, cfg);
-        company = db.prepare('SELECT company FROM postings WHERE id = ?').pluck().get(link.postingId);
+        company = db.prepare('SELECT company FROM postings WHERE id = ? AND user_id = @uid').pluck().get(link.postingId);
         summary.matched += 1;
         if (r.statusChange) summary.statusChanges.push({ postingId: link.postingId, ...r.statusChange });
         summary.notices.push(...r.notices);

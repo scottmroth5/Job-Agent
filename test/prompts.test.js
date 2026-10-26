@@ -54,8 +54,8 @@ test('scoring uses the active edited prompt and records its version', async () =
   const { db } = store;
   const marker = 'EDITED-PROMPT-MARKER';
   const custom = savePrompt(db, 'score', { template: `${getPrompt(db, 'score').template}\n${marker}` });
-  db.prepare(`INSERT INTO postings (url, url_key, company, title, company_title_key, fetch_status, fetched_text, location, location_check, discovered_on, created_at, updated_at)
-    VALUES ('u', 'u', 'Example Co', 'CTO', 'k', 'ok', 'Lead the team.', 'Remote', 'remote', '2026-09-30', 'x', 'x')`).run();
+  db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, fetch_status, fetched_text, location, location_check, discovered_on, created_at, updated_at)
+    VALUES (1, 'u', 'u', 'Example Co', 'CTO', 'k', 'ok', 'Lead the team.', 'Remote', 'remote', '2026-09-30', 'x', 'x')`).run();
   const seen = [];
   const client = {
     messages: {

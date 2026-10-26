@@ -244,5 +244,5 @@ export function setRole(db, list, role, valueId) {
 /** How many jobs use each value of a list. */
 export function usageCounts(db, list) {
   checkList(list);
-  return Object.fromEntries(db.prepare(`SELECT ${list} AS id, COUNT(*) AS n FROM postings GROUP BY ${list}`).all().map((r) => [r.id, r.n]));
+  return Object.fromEntries(db.prepare(`SELECT ${list} AS id, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY ${list}`).all().map((r) => [r.id, r.n]));
 }

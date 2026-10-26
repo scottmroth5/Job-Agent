@@ -19,7 +19,7 @@ export function openSql(db) {
 }
 
 export function listOpenApplications(db) {
-  return db.prepare(`SELECT p.id, p.company, p.title, p.status, p.stage, p.company_domain FROM postings p WHERE ${openSql(db)} ORDER BY p.id`).all();
+  return db.prepare(`SELECT p.id, p.company, p.title, p.status, p.stage, p.company_domain FROM postings p WHERE p.user_id = @uid AND ${openSql(db)} ORDER BY p.id`).all();
 }
 
 const companyPart = (key) => (key ? key.split('|')[0] : null);
@@ -32,10 +32,10 @@ const one = (list) => (list.length === 1 ? list[0] : null);
  * @returns {{ postingId: number, rule: string } | null}
  */
 export function matchEmail(db, email, { atsDomains, open = listOpenApplications(db) }) {
-  const thread = db.prepare('SELECT posting_id FROM email_threads WHERE thread_id = ?').pluck().get(email.threadId);
+  const thread = db.prepare('SELECT posting_id FROM email_threads WHERE thread_id = ? AND user_id = @uid').pluck().get(email.threadId);
   if (thread) return { postingId: thread, rule: 'thread' };
 
-  const contact = db.prepare('SELECT posting_id FROM contacts WHERE email = ? AND posting_id IS NOT NULL').pluck().get(String(email.senderEmail).toLowerCase());
+  const contact = db.prepare('SELECT posting_id FROM contacts WHERE email = ? AND user_id = @uid AND posting_id IS NOT NULL').pluck().get(String(email.senderEmail).toLowerCase());
   if (contact) return { postingId: contact, rule: 'contact' };
 
   const domain = String(email.senderDomain ?? '').toLowerCase();

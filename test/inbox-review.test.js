@@ -19,8 +19,8 @@ function setup() {
   const add = (company, title, status) =>
     Number(
       db
-        .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, '2026-09-01', 'pipeline', ?, 'x', 'x')`)
+        .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
+          VALUES (1, ?, ?, ?, ?, '2026-09-01', 'pipeline', ?, 'x', 'x')`)
         .run(`k${Math.random()}`, company, title, storedKey({ company, title }), status).lastInsertRowid,
     );
   const ids = { guess: add('Example Co', 'VP of Engineering', 'applied'), other: add('Sample Labs', 'CTO', 'applied') };

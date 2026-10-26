@@ -18,7 +18,7 @@ function insertPosting(db, overrides = {}) {
   };
   const cols = Object.keys(row);
   return db
-    .prepare(`INSERT INTO postings (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`)
+    .prepare(`INSERT INTO postings (user_id, ${cols.join(', ')}) VALUES (1, ${cols.map(() => '?').join(', ')})`)
     .run(...Object.values(row)).lastInsertRowid;
 }
 
@@ -43,7 +43,7 @@ test('scores must be 1 to 10 and follow their posting on delete', () => {
   const store = openJobStore(':memory:');
   const id = insertPosting(store.db);
   const addScore = (score) =>
-    store.db.prepare("INSERT INTO scores (posting_id, score, source, created_at) VALUES (?, ?, 'v2', ?)").run(id, score, now);
+    store.db.prepare("INSERT INTO scores (user_id, posting_id, score, source, created_at) VALUES (1, ?, ?, 'v2', ?)").run(id, score, now);
   addScore(8);
   assert.throws(() => addScore(11), /CHECK/);
   store.db.prepare('DELETE FROM postings WHERE id = ?').run(id);
