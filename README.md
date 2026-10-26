@@ -151,6 +151,8 @@ Your `.env` and Google sign-in files are not backed up, because they hold the pa
 
 ## Running in the cloud (optional)
 
+On an iPhone, open the app in Safari, tap Share, then **Add to Home Screen**: it opens full screen like an app, with its own icon. **Arrange tiles** on the Home page puts the screens in the order you use them; the order is saved with your data, so every device shows it.
+
 To reach the app from your phone and run the schedule without this computer on, it can run on one small Linux server (a 2 GB AWS Lightsail instance works) in Docker, with Caddy in front for HTTPS. Google sign-in must be on: the server refuses to start without it.
 
 - **The image** (`Dockerfile`) holds code, the built web page, and Chromium. It never holds `.env` or `data/`.

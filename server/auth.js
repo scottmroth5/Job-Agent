@@ -16,7 +16,9 @@ export const MODES = ['none', 'google', 'demo'];
 export const SESSION_DAYS = 30;
 const LOGIN_MINUTES = 10;
 const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
-const OPEN_PATHS = [/^\/auth\//, /^\/healthz$/];
+// The app icons and manifest are open too: iOS fetches them for Add to Home Screen without the session cookie
+// (static files from web/public, nothing personal).
+const OPEN_PATHS = [/^\/auth\//, /^\/healthz$/, /^\/(manifest\.webmanifest|icon-(180|192|512)\.png)$/];
 const READ_METHODS = ['GET', 'HEAD', 'OPTIONS'];
 // The only non-read request a demo visitor may make: filling a prompt draft with a sample job. It writes nothing
 // and calls no model (server/admin.js), so the Admin screen's preview works in the demo.

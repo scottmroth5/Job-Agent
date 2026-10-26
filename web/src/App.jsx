@@ -142,7 +142,7 @@ export default function App() {
 
       {view === 'home' ? (
         <>
-          <HomePage summary={summary} demo={demo} onAddJob={() => setAdding(true)} onPipelineFinished={refresh} />
+          <HomePage summary={summary} demo={demo} onAddJob={() => setAdding(true)} onPipelineFinished={refresh} onLayoutSaved={refresh} />
           {me?.authMode === 'google' && (
             <p className="muted small signed-in">
               Signed in as {me.email} · <button className="link" onClick={signOut}>Sign out</button>

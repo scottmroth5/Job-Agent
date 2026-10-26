@@ -1,4 +1,7 @@
+import { useState } from 'react';
 import PipelineButton from './PipelineButton.jsx';
+import { api } from '../api.js';
+import { arranged, moved } from '../layout.js';
 
 // Simple line illustrations for the tiles (inline SVG: nothing to download, and they follow the text color).
 const ICONS = {
@@ -49,7 +52,7 @@ function Icon({ name }) {
   );
 }
 
-function Tile({ href, onClick, icon, title, stat, alert }) {
+function Tile({ href, onClick, icon, title, stat, alert, arrange }) {
   const body = (
     <>
       <span className={`tile-art t-${icon}`}>
@@ -59,6 +62,22 @@ function Tile({ href, onClick, icon, title, stat, alert }) {
       {stat && <span className={`tile-stat${alert ? ' alert' : ''}`}>{stat}</span>}
     </>
   );
+  // Arranging: the tile stops being a link and shows arrows to move it earlier or later.
+  if (arrange) {
+    return (
+      <div className="tile arranging">
+        {body}
+        <span className="tile-move">
+          <button type="button" onClick={arrange.earlier} disabled={!arrange.earlier} aria-label={`Move ${title} earlier`}>
+            ‹
+          </button>
+          <button type="button" onClick={arrange.later} disabled={!arrange.later} aria-label={`Move ${title} later`}>
+            ›
+          </button>
+        </span>
+      </div>
+    );
+  }
   return onClick ? (
     <button type="button" className="tile" onClick={onClick}>
       {body}
@@ -72,20 +91,73 @@ function Tile({ href, onClick, icon, title, stat, alert }) {
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
+// The tiles in their default order; the keys match server/layout.js LAYOUT_AREAS.home.
+export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'add'];
+
 /** The start page: a tile for each screen with what needs attention, the pipeline, and this month's Claude budget. */
-export default function HomePage({ summary, demo, onAddJob, onPipelineFinished }) {
+export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, onLayoutSaved }) {
   const s = summary;
   const budget = s?.budget;
+  const [draft, setDraft] = useState(null); // the order being arranged, or null when not arranging
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const tiles = {
+    jobs: { href: '#/jobs', title: 'Jobs', stat: s ? `${plural(s.needsAction ?? 0, 'needs', 'need')} action` : null, alert: s?.needsAction > 0 },
+    inbox: { href: '#/inbox', title: 'Inbox', stat: s ? (s.inboxNeedsReview ? `${plural(s.inboxNeedsReview, 'email')} to review` : 'All caught up') : null, alert: s?.inboxNeedsReview > 0 },
+    funnel: { href: '#/funnel', title: 'Funnel', stat: s ? `${s.inProgress ?? 0} in progress` : null },
+    activity: { href: '#/activity', title: 'Activity', stat: 'Runs and their output' },
+    admin: { href: '#/admin', title: 'Admin', stat: 'Prompts, lists, spending' },
+    add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo },
+  };
+  // The saved order comes with the summary, so it applies as soon as the page has its numbers.
+  const order = (draft ?? arranged(HOME_TILES, s?.layout?.home)).filter((k) => !tiles[k].hidden);
+  const save = async (next) => {
+    setSaving(true);
+    setError(null);
+    try {
+      await api.saveLayout('home', next);
+      await onLayoutSaved?.(); // the new order arrives with the summary before the draft goes away, so nothing jumps
+      setDraft(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
   return (
     <div className="home">
       <div className="tiles">
-        <Tile href="#/jobs" icon="jobs" title="Jobs" stat={s ? `${plural(s.needsAction ?? 0, 'needs', 'need')} action` : null} alert={s?.needsAction > 0} />
-        <Tile href="#/inbox" icon="inbox" title="Inbox" stat={s ? (s.inboxNeedsReview ? `${plural(s.inboxNeedsReview, 'email')} to review` : 'All caught up') : null} alert={s?.inboxNeedsReview > 0} />
-        <Tile href="#/funnel" icon="funnel" title="Funnel" stat={s ? `${s.inProgress ?? 0} in progress` : null} />
-        <Tile href="#/activity" icon="activity" title="Activity" stat="Runs and their output" />
-        <Tile href="#/admin" icon="admin" title="Admin" stat="Prompts, lists, spending" />
-        {!demo && <Tile onClick={onAddJob} icon="add" title="Add a job" stat="Link or description" />}
+        {order.map((k, i) => (
+          <Tile
+            key={k}
+            icon={k}
+            {...tiles[k]}
+            arrange={draft && { earlier: i > 0 ? () => setDraft(moved(order, i, -1)) : null, later: i < order.length - 1 ? () => setDraft(moved(order, i, 1)) : null }}
+          />
+        ))}
       </div>
+      {!demo && (
+        <div className="arrange-bar">
+          {draft ? (
+            <>
+              <button type="button" className="primary" disabled={saving} onClick={() => save(draft)}>
+                Done
+              </button>
+              <button type="button" disabled={saving} onClick={() => save([])}>
+                Reset
+              </button>
+              <button type="button" className="link" disabled={saving} onClick={() => setDraft(null)}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button type="button" className="link" onClick={() => setDraft(order)}>
+              Arrange tiles
+            </button>
+          )}
+          {error && <span className="small error">{error}</span>}
+        </div>
+      )}
 
       {!demo && (
         <section className="home-card">

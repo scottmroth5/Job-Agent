@@ -82,9 +82,12 @@ powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nigh
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
 
 ## UI and API
+The Home page (#/) is a tile per screen; Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
+with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
+icons drawn by node scripts/make-icons.js (test/icons.test.js fails if the committed PNGs are stale).
 AUTH_MODE=none (default) binds to 127.0.0.1 with no login. AUTH_MODE=google (server/auth.js) is "Sign in with Google":
-only AUTH_ALLOWED_EMAILS get in, the session is a signed cookie (server/session.js, SESSION_SECRET), every route but /auth/* and
-/healthz needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
+only AUTH_ALLOWED_EMAILS get in, the session is a signed cookie (server/session.js, SESSION_SECRET), every route but /auth/*,
+/healthz, and the Add to Home Screen files (manifest.webmanifest, icon-180/192/512.png) needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
 server/app.js holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
 The Run pipeline button (server/pipeline-routes.js) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.js) checks

@@ -20,6 +20,7 @@ import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { registerAdminRoutes } from './admin.js';
+import { getLayout, registerLayoutRoutes } from './layout.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
 import { registerInboxRoutes } from './inbox-routes.js';
 import { addPosting } from '../agents/manual.js';
@@ -139,7 +140,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     async (req) => funnel(db, { days: !req.query.days || req.query.days === 'all' ? null : Number(req.query.days), track: req.query.track && req.query.track !== 'all' ? req.query.track : null }),
   );
 
-  app.get('/api/summary', { schema: { summary: 'Counts, fractional target, and spend', response: { 200: anyObject } } }, async () => summary(db, config));
+  app.get('/api/summary', { schema: { summary: 'Counts, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async () => ({ ...summary(db, config), layout: getLayout(db) }));
 
   app.get(
     '/api/postings',
@@ -311,6 +312,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   );
 
   registerAdminRoutes(app, { db, config });
+  registerLayoutRoutes(app, { db });
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });
   registerPrepRoutes(app, { store, config, services, startTask });

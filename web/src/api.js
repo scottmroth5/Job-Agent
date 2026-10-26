@@ -50,6 +50,7 @@ export const api = {
   },
   signOut: () => fetch('/auth/logout', { method: 'POST' }),
   summary: () => request('GET', '/api/summary'),
+  saveLayout: (area, order) => request('PUT', `/api/layout/${area}`, { order }),
   list: (filters) => {
     const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== '' && v != null && v !== false));
     return request('GET', `/api/postings?${q}`);
