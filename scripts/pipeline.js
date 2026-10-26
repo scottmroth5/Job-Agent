@@ -1,8 +1,10 @@
 // The whole job run in order: discover -> score -> hunt -> archive -> one report email.
 // Each step is its own traced run; a failed step is reported in the email and later steps still run.
-// This is what the scheduler (Phase 3) will call.
-//   npm run pipeline                 full run
+// The scheduler and the Run pipeline button call it, once per user (multi-user, phase 3).
+//   npm run pipeline                 full run, as the owner
 //   npm run pipeline -- --no-email   skip the email (prints its subject instead)
+//   node scripts/pipeline.js --user=5  as user 5: their search settings, background, and Claude key. Google results
+//                                    (the owner's paid search), Google Docs, and the report email are the owner's only.
 import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
@@ -13,14 +15,20 @@ import { getGoogleAuth } from '../tools/google/auth.js';
 import { createDriveClient } from '../tools/google/drive.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { openJobStore } from '../db/index.js';
+import { runAsUser } from '../db/scope.js';
+import { OWNER_ID } from '../db/users.js';
+import { configFor, profileForAI } from '../agents/user-config.js';
 import { exitWhenDone } from '../tools/exit.js';
-import { runDiscovery } from '../agents/discovery/discover.js';
+import { runDiscovery, SOURCES } from '../agents/discovery/discover.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { generateForPostings } from '../agents/hunt/generate.js';
 import { archivePostings } from '../agents/hunt/archive.js';
 import { collectReport, renderReport, sendReport } from '../agents/hunt/report.js';
 
 const noEmail = process.argv.includes('--no-email');
+const userArg = process.argv.find((a) => a.startsWith('--user='));
+const uid = userArg ? Number(userArg.slice('--user='.length)) : OWNER_ID;
+const owner = uid === OWNER_ID;
 
 const STEPS = ['discover', 'score', 'hunt', 'archive', 'report'];
 
@@ -41,12 +49,20 @@ async function step(tracer, name, fn, statusOf = () => 'ok') {
 
 async function main() {
   const started = new Date().toISOString();
-  const config = loadConfig();
-  const store = openJobStore();
+  if (!Number.isInteger(uid) || uid < 1) throw new Error(`--user must be a user id, not "${userArg}"`);
+  const store = openJobStore(undefined, { fallbackUid: uid });
+  const config = owner ? loadConfig() : configFor(store.raw, uid, null);
+  if (!owner) {
+    const user = store.raw.prepare('SELECT status FROM users WHERE id = ?').get(uid);
+    if (user?.status !== 'active') throw new Error(`User ${uid} is not an active account.`);
+    if (!config.ready) throw new Error('Set up your search (terms, title keywords, and locations) under Settings first.');
+  }
   for (const name of ['pipeline', 'discover', 'score', 'hunt']) assertNoRunningRun(store.db, name);
   const tracer = createJobTracer({ store });
   const pipelineRun = tracer.startRun('pipeline');
-  const auth = getGoogleAuth();
+  // Google (Docs, Drive, the report email) is the owner's sign-in; others' runs never touch it.
+  const auth = owner ? getGoogleAuth() : null;
+  const { serper, ...freeSources } = SOURCES;
   const browser = await createBrowser();
 
   try {
@@ -54,7 +70,7 @@ async function main() {
       tracer,
       'discover',
       async (run) => {
-        const { insertedIds, ...summary } = await runDiscovery({ store, config, http: createHttp(), browser, options: { log: run.log } });
+        const { insertedIds, ...summary } = await runDiscovery({ store, config, http: createHttp(), browser, sources: owner ? SOURCES : freeSources, options: { log: run.log } });
         return summary;
       },
       (s) => (Object.values(s.bySource).some((x) => x.errors.length || x.rateLimited) ? 'partial' : 'ok'),
@@ -62,7 +78,7 @@ async function main() {
 
     let knowledge = null;
     try {
-      knowledge = await loadKnowledge({ auth });
+      knowledge = owner ? await loadKnowledge({ auth }) : profileForAI(store.raw, uid);
     } catch (err) {
       pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${err.message}`);
     }
@@ -71,7 +87,7 @@ async function main() {
       await step(tracer, 'score', (run) => scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run }), (s) =>
         s.aborted ? 'aborted' : s.failures.length ? 'partial' : 'ok',
       );
-      await step(tracer, 'hunt', (run) => generateForPostings({ store, config, claude, knowledge, drive: createDriveClient(auth), run }), (s) =>
+      await step(tracer, 'hunt', (run) => generateForPostings({ store, config, claude, knowledge, drive: owner ? createDriveClient(auth) : null, run }), (s) =>
         s.aborted ? 'aborted' : s.failures.length || s.docFailures.length ? 'partial' : 'ok',
       );
     }
@@ -82,7 +98,8 @@ async function main() {
     pipelineRun.finish(knowledge ? 'ok' : 'partial');
 
     console.log(`[pipeline] Step ${STEPS.length}/${STEPS.length}: report`);
-    if (noEmail) {
+    // The report goes only to the owner (it is job data; others see their results in the app).
+    if (noEmail || !owner) {
       const r = renderReport(collectReport(store.db, { since: started }));
       console.log(`${r.subject}\n${r.text}`);
     } else {
@@ -100,7 +117,7 @@ async function main() {
   }
 }
 
-main()
+runAsUser(uid, main)
   .catch((err) => {
     console.error(err.message);
     process.exitCode = 1;

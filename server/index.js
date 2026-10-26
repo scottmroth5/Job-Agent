@@ -65,9 +65,9 @@ const realServices = () => ({
   createBrowser: () => createBrowser(),
   // The Run pipeline button and the scheduler: the same scripts as npm run pipeline and npm run backup, each in its
   // own process so a long run never blocks the server.
-  runScript: ({ script, onLine, onError = () => {} }) =>
+  runScript: ({ script, args = [], onLine, onError = () => {} }) =>
     new Promise((resolve) => {
-      const child = spawn(process.execPath, ['--env-file-if-exists=.env', script], { cwd: ROOT, env: process.env, windowsHide: true });
+      const child = spawn(process.execPath, ['--env-file-if-exists=.env', script, ...args], { cwd: ROOT, env: process.env, windowsHide: true });
       let lastError = null;
       createInterface({ input: child.stdout }).on('line', onLine);
       createInterface({ input: child.stderr }).on('line', (l) => {
@@ -77,7 +77,8 @@ const realServices = () => ({
       child.on('error', (err) => resolve({ code: 1, lastError: err.message }));
       child.on('close', (code) => resolve({ code: code ?? 1, lastError }));
     }),
-  runPipeline: (opts) => services.runScript({ ...opts, script: 'scripts/pipeline.js' }),
+  // Each user's own pipeline: the script runs as them (--user), with their settings, background, and Claude key.
+  runPipeline: ({ user, ...opts }) => services.runScript({ ...opts, script: 'scripts/pipeline.js', args: user ? [`--user=${Number(user)}`] : [] }),
   schedules: schedulesFromEnv(process.env),
   inbox: {
     ready: () => Boolean(process.env.GMAIL_REFRESH_TOKEN && process.env.EMAIL_ENC_KEY),

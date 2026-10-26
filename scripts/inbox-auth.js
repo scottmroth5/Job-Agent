@@ -22,6 +22,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error(err.message);
+  // The message can carry text from the sign-in callback's address; one line, no control characters.
+  console.error(String(err.message).replace(/[\u0000-\u001f\u007f]+/g, ' '));
   process.exitCode = 1;
 });

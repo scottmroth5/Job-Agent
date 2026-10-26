@@ -516,3 +516,13 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
 .key-form, .ai-setup { display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-end; justify-content: flex-start; }
 .key-form label { flex: 1 1 260px; }
 .key-form input { width: 100%; font: 14px ui-monospace, Consolas, monospace; }
+
+/* Settings > Your search (multi-user, phase 3). */
+.profile-text, .search-form textarea { width: 100%; font: inherit; }
+.search-form { display: grid; gap: 10px; }
+.search-form label, .grid2 label { display: grid; gap: 4px; font-size: 13px; }
+.search-form input { width: 100%; }
+.grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.check-row { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
+.check-row { justify-content: flex-start; text-align: left; font-size: 14px; }
+.check-row input { width: auto; flex: none; margin: 0; }

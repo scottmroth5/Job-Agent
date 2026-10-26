@@ -4,6 +4,8 @@
 import { budgetStatus } from '../agents/budget.js';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.js';
 import { boxKey, seal } from '../tools/secret-box.js';
+import { MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
+import { validateConfig } from '../tools/config.js';
 
 const anyObject = { type: 'object', additionalProperties: true };
 // Anthropic API keys: "sk-ant-" then letters, digits, dashes, and underscores.
@@ -61,6 +63,70 @@ export function registerAccountRoutes(app, { db, checkKey }) {
       if (!works) throw Object.assign(new Error('Anthropic did not accept this key.'), { statusCode: 400 });
       setClaudeKey(db, uid, seal(apiKey, uid, key));
       return account(db, uid);
+    },
+  );
+
+  // Phase 3: each user's own search settings, background, and schedule. The owner's live in their settings file and
+  // Google Doc, so these answer the owner with where to change them instead.
+  const search = (uid) => {
+    if (uid === OWNER_ID) return { owner: true };
+    const u = getUser(db, uid);
+    const config = userConfig(db, uid, u.name);
+    const profile = userProfile(db, uid);
+    return {
+      owner: false,
+      config,
+      problems: validateConfig(config),
+      profile,
+      profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS },
+      scheduled: scheduledForUser(db, uid),
+    };
+  };
+  app.get('/api/account/search', { schema: { summary: 'Your search settings, background, and schedule choice', response: { 200: anyObject } } }, async (req) => search(req.uid ?? OWNER_ID));
+  app.put(
+    '/api/account/search',
+    {
+      schema: {
+        summary: 'Save your search settings (plain text fields only)',
+        body: { type: 'object', additionalProperties: false, properties: { candidate: anyObject, search: anyObject, fractional: anyObject } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req) => {
+      const uid = req.uid ?? OWNER_ID;
+      saveUserConfig(db, uid, req.body, getUser(db, uid)?.name ?? '');
+      return search(uid);
+    },
+  );
+  app.put(
+    '/api/account/profile',
+    {
+      schema: {
+        summary: 'Save your background: the facts about you that scoring and writing use',
+        body: { type: 'object', required: ['text'], additionalProperties: false, properties: { text: { type: 'string' } } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req) => {
+      const uid = req.uid ?? OWNER_ID;
+      saveUserProfile(db, uid, req.body.text);
+      return search(uid);
+    },
+  );
+  app.put(
+    '/api/account/schedule',
+    {
+      schema: {
+        summary: "Run your pipeline on the app's schedule too",
+        body: { type: 'object', required: ['on'], additionalProperties: false, properties: { on: { type: 'boolean' } } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req) => {
+      const uid = req.uid ?? OWNER_ID;
+      if (uid === OWNER_ID) throw Object.assign(new Error('Your schedule is set in the server settings (SCHEDULE_PIPELINE).'), { statusCode: 400 });
+      setScheduledForUser(db, uid, req.body.on);
+      return search(uid);
     },
   );
 

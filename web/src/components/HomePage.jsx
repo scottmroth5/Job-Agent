@@ -107,19 +107,19 @@ export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'sett
 export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, onLayoutSaved }) {
   const s = summary;
   const budget = s?.budget;
-  // Adding a job and running the pipeline use the owner's own settings and accounts until each user has their own.
+  // The inbox reads the owner's own Gmail, so it is the owner's only; everything else is everyone's.
   const owner = isOwner(useMe());
   const [draft, setDraft] = useState(null); // the order being arranged, or null when not arranging
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const tiles = {
     jobs: { href: '#/jobs', title: 'Jobs', stat: s ? `${plural(s.needsAction ?? 0, 'needs', 'need')} action` : null, alert: s?.needsAction > 0 },
-    inbox: { href: '#/inbox', title: 'Inbox', stat: s ? (s.inboxNeedsReview ? `${plural(s.inboxNeedsReview, 'email')} to review` : 'All caught up') : null, alert: s?.inboxNeedsReview > 0 },
+    inbox: { hidden: !owner && !demo, href: '#/inbox', title: 'Inbox', stat: s ? (s.inboxNeedsReview ? `${plural(s.inboxNeedsReview, 'email')} to review` : 'All caught up') : null, alert: s?.inboxNeedsReview > 0 },
     funnel: { href: '#/funnel', title: 'Funnel', stat: s ? `${s.inProgress ?? 0} in progress` : null },
     activity: { href: '#/activity', title: 'Activity', stat: 'Runs and their output' },
     admin: { href: '#/admin', title: 'Admin', stat: 'Prompts, lists, spending' },
     settings: { href: '#/settings', title: 'Settings', stat: 'Account and AI key' },
-    add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo || !owner },
+    add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo },
   };
   // The saved order comes with the summary, so it applies as soon as the page has its numbers.
   const order = (draft ?? arranged(HOME_TILES, s?.layout?.home)).filter((k) => !tiles[k].hidden);
@@ -171,7 +171,7 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
         </div>
       )}
 
-      {!demo && owner && (
+      {!demo && (
         <section className="home-card">
           <PipelineButton onFinished={onPipelineFinished} />
         </section>

@@ -64,7 +64,8 @@ npm run archive -- --dry-run      preview archiving; without --dry-run it moves 
 npm run cleanup -- --dry-run      after a rule change: rekey duplicates, archive list-of-jobs pages, search.excludedSites jobs, and duplicate copies (the acted-on copy is kept);
                                   move pipeline jobs without a description back to Discovered. Its status changes are changed_by agent, which the eval ignores
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
-npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point)
+npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point);
+                                  node scripts/pipeline.js --user=<id> runs one user's (no Docs, no email, free sources)
 powershell -ExecutionPolicy Bypass -File scripts\register-schedule.ps1   Windows task: scripts/scheduled-run.ps1 runs pipeline then inbox
                                   (Mon/Thu 6:00 by default; -Time, -Days, -Remove); logs in data/logs
 npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)
@@ -84,7 +85,7 @@ powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nigh
                                   scripts\backup-nightly.cmd, logs to data\logs\backup.log)
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
 
-## Users (multi-user, phases 1 and 2)
+## Users (multi-user, phases 1 to 3)
 db/users.js: users table, the owner is user 1 (admin); every row before 013 is theirs. Every user table (USER_TABLES in
 db/migrations/013-users.js) has user_id NOT NULL, and keys that were unique app-wide are unique per user. Every query on a
 user table says "user_id = @uid" (joins and subqueries too: "s.user_id = p.user_id"); inserts give user_id @uid, or copy it
@@ -98,16 +99,25 @@ Accounts (phase 2): any verified Google address signs in (server/auth.js); AUTH_
 post, no script; MAX_PENDING open requests at most), pending to /auth/waiting, rejected to /auth/not-approved; API calls get
 403 with { account }. Paused accounts get in read-only (no writes, no AI). Admin > Users (server/users-routes.js, admin role,
 never in the demo): approve, reject, pause, resume, and AI setup. server/notices.js sends the account emails (see Hard rules).
-Requests run as their user (server/app.js: decided in onRequest, run as them from preHandler). OWNER_ONLY routes use the
-owner's own accounts or shared settings (pipeline, inbox, AI actions, lists, cap): others get 403 until phase 3 gives each user
-their own. Scheduled jobs and child scripts run as the owner; tasks keep their user and the task routes show only that user's.
+Requests run as their user (server/app.js: decided in onRequest, run as them from preHandler). OWNER_ONLY routes: the inbox
+(the owner's own Gmail; another person's needs Google's restricted-scope review) and what everyone shares (lists, the owner's cap).
+Each user's own search (phase 3, agents/user-config.js): the owner's settings file and Google Doc stay theirs; anyone else saves
+search settings (plain text fields only, so no user text becomes a regex: cover letter checks, site search, and private terms
+stay the owner's) and their background text on Settings (user_settings). The server's config is userConfigView and
+services.knowledge and services.drive answer for the current user (others: their background; no Drive, so letters and preps
+stay in the app). scripts/pipeline.js --user=<id> runs as that user: free sources only (Serper is the owner's paid key), no Docs,
+no report email (job data goes to nobody but the owner); it refuses an account that is not active or has no complete search.
+The Run pipeline button runs the presser's pipeline; one pipeline at a time across the app. Users who turn on "Run my pipeline on
+the schedule" run after the owner's scheduled pipeline (and inbox), one by one, each as themselves. Other child scripts run as
+the owner; tasks keep their user and the task routes show only that user's.
 Per-user settings live in user_settings (getUserSetting: inbox cursor, Drive folders, layouts); app_settings is app-wide
 (alerts, the owner's cap, allowance-notice months, demo marker). runs.user_id (014) is stamped by tools/trace.js
 createJobTracer, the only way to start a traced run. App-wide still: lookups (lists) and the pipeline lock.
 test/user-scope.test.js fails on any query on a user table that does not name user_id; test/user-isolation.test.js calls
 every route as a second user against the owner's demo data; test/registration.test.js covers accounts, emails, and keys.
-Later phases: per-user config, knowledge doc, Gmail, Drive, schedules (3); Users screen extras and catalogs (4, 5); account
-export and deletion, help (6).
+test/user-search.test.js covers per-user settings, the config view, the pipeline as its presser, and the script's refusals.
+Later phases: Users screen extras and catalogs (4, 5); account export and deletion, help (6). Each user's own Gmail and Drive
+wait on Google's verification of those scopes.
 
 ## UI and API
 The Home page (#/) is a tile per screen; Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned

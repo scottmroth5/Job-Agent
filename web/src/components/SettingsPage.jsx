@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useDemo } from '../demo.jsx';
+import SearchSettings from './SearchSettings.jsx';
 
 const usd = (n) => `$${Number(n).toFixed(2)}`;
 
@@ -60,7 +61,7 @@ export default function SettingsPage() {
         {ai.paidBy === 'own' && (
           <>
             <p>
-              AI features (scoring, letters, meeting prep, inbox reading) use your own Anthropic API key, and Anthropic bills you for them.
+              AI features (scoring, letters, and meeting prep) use your own Anthropic API key, and Anthropic bills you for them.
               {ai.keySet ? ' Your key is saved.' : ' Add a key to turn them on.'}
             </p>
             {b.spentUsd > 0 && <p className="muted small">Used this month ({b.monthLabel}): {usd(b.spentUsd)}.</p>}
@@ -95,6 +96,8 @@ export default function SettingsPage() {
         {note && <p className="muted small">{note}</p>}
         {error && <div className="error">{error}</div>}
       </section>
+
+      {!demo && <SearchSettings />}
 
       <p className="muted small">
         <a href="/privacy" target="_blank" rel="noreferrer">Privacy policy</a> · <a href="/terms" target="_blank" rel="noreferrer">Terms</a>

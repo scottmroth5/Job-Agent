@@ -19,17 +19,16 @@ import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHea
 import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
-import { runAsUser } from '../db/scope.js';
+import { currentUserId, runAsUser } from '../db/scope.js';
 import { OWNER_ID } from '../db/users.js';
+import { profileForAI, scheduledUsers, userConfigView } from '../agents/user-config.js';
 
-// Routes that act with the owner's own accounts and settings (their knowledge doc, search settings, Gmail, Drive, and
-// Claude budget) or change what every user shares (the lists, the spending cap). Until each account has its own
-// (later phases), only the owner may call them, so nobody else's rows can receive the owner's email or documents.
+// Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
+// of the restricted Gmail scopes), and the lists and the spending cap are shared by everyone. Everything else runs
+// for the signed-in user with their own settings, background, and Claude key (agents/user-config.js, tools/claude.js).
 export const OWNER_ONLY = new Set([
-  'POST /api/postings', 'POST /api/postings/:id/actions/:action', 'POST /api/postings/:id/meeting-prep',
-  'POST /api/pipeline/run', 'POST /api/inbox/check', 'POST /api/inbox/emails/:id/review',
-  'PUT /api/admin/budget', 'POST /api/admin/prompts/:name/preview',
-  'POST /api/admin/lookups/:list', 'PATCH /api/admin/lookups/:list/:id', 'PUT /api/admin/lookups/:list/roles',
+  'POST /api/inbox/check', 'POST /api/inbox/emails/:id/review',
+  'PUT /api/admin/budget', 'POST /api/admin/lookups/:list', 'PATCH /api/admin/lookups/:list/:id', 'PUT /api/admin/lookups/:list/roles',
 ]);
 import { registerAdminRoutes } from './admin.js';
 import { registerAccountRoutes } from './account-routes.js';
@@ -70,6 +69,19 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const app = Fastify({ logger, trustProxy });
   // US-only access (server/geo.js, GEO_ALLOW): refused before anything else runs; the health check always passes.
   const blocked = geoBlocker(geo);
+  // Each user's own settings, background, and documents (agents/user-config.js): routes keep using config and services,
+  // which answer for whoever the request runs as. The owner's are the settings file, the Google Doc, and their Drive.
+  if (config) config = userConfigView(config, store.raw ?? store.db);
+  const asOwner = () => (currentUserId() ?? OWNER_ID) === OWNER_ID;
+  const ownerDrive = services.drive;
+  const ownerKnowledge = services.knowledge;
+  services = {
+    ...services,
+    get drive() {
+      return asOwner() ? ownerDrive : null; // others' letters and preps stay in the app (no access to their Drive yet)
+    },
+    knowledge: async () => (asOwner() ? ownerKnowledge?.() : profileForAI(store.raw ?? store.db, currentUserId())),
+  };
   app.addHook('onRequest', async (req, reply) => {
     if (blocked(req)) return reply.code(403).type('text/html').header('Cache-Control', 'no-store').send(BLOCKED_PAGE);
   });
@@ -384,11 +396,17 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         await finish(pipeline.start({ by: 'schedule' }), 4);
         // Then the inbox, as the Windows scheduled run did; a pipeline failure above skips it.
         if (inboxChecks && services.inbox.ready()) await finish(inboxChecks.startCheck({ by: 'schedule' }), 1);
+        // Then each user who asked to be on the schedule, one at a time, each as themselves; one user's failure never
+        // stops the next or marks the owner's run failed.
+        for (const uid of scheduledUsers(store.raw ?? db)) {
+          await runAsUser(uid, () => finish(pipeline.start({ by: 'schedule' }), 4)).catch((err) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
+        }
       }),
       inbox: inboxChecks && (() => finish(inboxChecks.startCheck({ by: 'schedule' }), 1)),
       backup: services.runScript && (() => finish(startBackup(), 1)),
     };
-    const lastRanAt = (name) => () => db.prepare('SELECT started_at FROM runs WHERE name = ? ORDER BY id DESC LIMIT 1').pluck().get(name) ?? null;
+    // The owner's runs: the schedule is theirs (users' scheduled runs follow it).
+    const lastRanAt = (name) => () => db.prepare('SELECT started_at FROM runs WHERE name = ? AND (user_id IS NULL OR user_id = 1) ORDER BY id DESC LIMIT 1').pluck().get(name) ?? null;
     scheduler = createScheduler({
       // Scheduled jobs are the owner's (phase 1); each user's own schedule comes with per-user feeds.
       jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: () => runAsUser(OWNER_ID, runners[j.name]), lastRanAt: lastRanAt(j.name) })),
