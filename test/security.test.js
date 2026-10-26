@@ -80,7 +80,7 @@ test('security headers on every response; HTTPS adds HSTS; a route with its own 
   assert.equal(res.headers['content-security-policy'], CONTENT_SECURITY_POLICY);
   assert.match(CONTENT_SECURITY_POLICY, /script-src 'self'(;|$)/);
   assert.match(CONTENT_SECURITY_POLICY, /frame-ancestors 'none'/);
-  for (const [h, v] of [['x-content-type-options', 'nosniff'], ['x-frame-options', 'DENY'], ['referrer-policy', 'same-origin'], ['cross-origin-opener-policy', 'same-origin']]) assert.equal(res.headers[h], v, h);
+  for (const [h, v] of [['x-content-type-options', 'nosniff'], ['x-frame-options', 'DENY'], ['referrer-policy', 'same-origin'], ['cross-origin-opener-policy', 'same-origin'], ['cross-origin-embedder-policy', 'require-corp']]) assert.equal(res.headers[h], v, h);
   assert.equal(res.headers['strict-transport-security'], undefined, 'no HSTS without HTTPS');
   assert.ok(!res.headers['x-powered-by']);
 

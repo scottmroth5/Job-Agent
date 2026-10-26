@@ -28,6 +28,8 @@ export function registerSecurityHeaders(app, { https = false } = {}) {
     'x-frame-options': 'DENY',
     'referrer-policy': 'same-origin',
     'cross-origin-opener-policy': 'same-origin',
+    // The page loads only its own files, so it can refuse anything cross-origin that does not opt in.
+    'cross-origin-embedder-policy': 'require-corp',
     'cross-origin-resource-policy': 'same-origin',
     'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
     ...(https ? { 'strict-transport-security': 'max-age=31536000; includeSubDomains' } : {}),
