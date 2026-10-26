@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openJobStore } from '../db/index.js';
-import { USER_TABLES } from '../db/migrations/013-users.js';
+import { USER_TABLES } from '../db/user-tables.js';
 import { addUser, OWNER_ID } from '../db/users.js';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';

@@ -112,9 +112,18 @@ test('the owner approves, pauses, resumes, and rejects; each person is emailed a
 
   // AI access: their own key, or the owner's key with a cap.
   const ai = (body) => app.inject({ method: 'PUT', url: `/api/admin/users/${ids['pat@example.com']}/ai`, headers: { cookie: owner, origin: SITE }, payload: body });
-  assert.deepEqual([(await ai({ source: 'owner', capUsd: 10 })).json().ai_source, getUser(store.raw, ids['pat@example.com']).ai_cap_usd], ['owner', 10]);
+  const unconfirmed = await ai({ source: 'owner', capUsd: 10 });
+  assert.deepEqual([unconfirmed.statusCode, getUser(store.raw, ids['pat@example.com']).ai_source], [400, 'own'], 'paying needs their address typed');
+  assert.equal((await ai({ source: 'owner', capUsd: 10, confirmEmail: 'sam@example.com' })).statusCode, 400, 'the wrong address is refused');
+  const sentBefore = sent.length;
+  assert.deepEqual([(await ai({ source: 'owner', capUsd: 10, confirmEmail: ' Pat@Example.com ' })).json().ai_source, getUser(store.raw, ids['pat@example.com']).ai_cap_usd], ['owner', 10]);
+  assert.deepEqual([sent.at(-1).to, sent.at(-1).subject], ['pat@example.com', 'Job Hunt: your AI is covered']);
+  assert.equal((await ai({ source: 'owner', capUsd: 25 })).json().ai_cap_usd, 25, 'changing the cap needs no retyping');
+  assert.match(sent.at(-1).text, /\$25\.00 a month/);
   assert.equal((await ai({ source: 'owner' })).statusCode, 400, 'a cap is needed');
   assert.equal((await ai({ source: 'own' })).json().ai_cap_usd, null);
+  assert.equal(sent.at(-1).subject, 'Job Hunt: your AI uses your own key again');
+  assert.equal(sent.length, sentBefore + 3);
   await done();
 });
 

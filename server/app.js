@@ -20,7 +20,12 @@ import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { currentUserId, runAsUser } from '../db/scope.js';
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID, touchLastSeen } from '../db/users.js';
+import { registerFeedbackRoutes } from './feedback-routes.js';
+import { adminWaiting } from './admin-queries.js';
+
+// Routes for admins: the Users screen and the feedback users sent (server/app.js refuses anyone else).
+const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback'];
 import { profileForAI, scheduledUsers, userConfigView } from '../agents/user-config.js';
 
 // Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
@@ -133,11 +138,12 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
       return reply.code(403).send({ error: 'Your account is paused: you can look, but not change anything.' });
     }
     if (account.uid !== OWNER_ID && OWNER_ONLY.has(route)) return reply.code(403).send({ error: 'Only the owner can do this for now.' });
-    if (account.role !== 'admin' && String(req.routeOptions.url ?? '').startsWith('/api/admin/users')) {
-      return reply.code(403).send({ error: 'Only an admin can manage users.' });
+    if (account.role !== 'admin' && ADMIN_ONLY.some((p) => String(req.routeOptions.url ?? '').startsWith(p))) {
+      return reply.code(403).send({ error: 'Only an admin can do this.' });
     }
     req.uid = account.uid;
     req.role = account.role;
+    if (authMode === 'google') touchLastSeen(db, account.uid);
   });
   app.addHook('preHandler', (req, reply, done) => (req.uid ? runAsUser(req.uid, done) : done()));
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
@@ -189,7 +195,12 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     async (req) => funnel(db, { days: !req.query.days || req.query.days === 'all' ? null : Number(req.query.days), track: req.query.track && req.query.track !== 'all' ? req.query.track : null }),
   );
 
-  app.get('/api/summary', { schema: { summary: 'Counts, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async () => ({ ...summary(db, config), layout: getLayout(db) }));
+  app.get('/api/summary', { schema: { summary: 'Counts, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async (req) => ({
+    ...summary(db, config),
+    layout: getLayout(db),
+    // What waits for an admin (the Admin tile's count): requests for access and open feedback.
+    ...(req.role === 'admin' && authMode !== 'demo' ? { adminWaiting: adminWaiting(db) } : {}),
+  }));
 
   app.get(
     '/api/postings',
@@ -365,6 +376,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerAccountRoutes(app, { db, checkKey: services.checkClaudeKey ?? claudeKeyWorks });
   // The Users screen never exists in the demo.
   if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {} });
+  registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });
   registerPages(app);
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });

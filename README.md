@@ -136,6 +136,8 @@ app from another device or the cloud. It uses the Google Cloud project you alrea
 
 Each user sets up their own search under **Settings**: the job titles, keywords, and places to look for, and an **About you** text (their resume and notes) that scoring, letters, and meeting prep use, the way your Google Doc does for you. Then they can add jobs, score them, write letters, prepare for meetings, and run their own pipeline from Home, or let it run on the schedule. Their pipeline uses the free job sources; Google results (your paid search), Google Docs, the inbox, and the report email stay yours. Their letters and preps are kept in the app.
 
+**Admin > Users** also shows when each person was last here, their last pipeline run, and how far their setup has got. To pay for someone's AI you type their address to confirm, and they get an email. Users can **Send feedback** from Settings: it is emailed to you (reply to answer them) and listed on Admin > Users, where you mark it done; the Admin tile on Home counts what is waiting.
+
 The scheduled run and the `npm run` commands don't go through the web page, so they are unaffected.
 
 ## Encrypted backups (recommended)

@@ -13,7 +13,7 @@
 export const id = '013-users';
 export const foreignKeys = false;
 
-/** Every table whose rows belong to one user. test/user-scope.test.js checks each query on these names user_id. */
+/** The tables this migration rebuilt (every user table at the time). Later ones are listed in db/user-tables.js. */
 export const USER_TABLES = [
   'postings', 'scores', 'artifacts', 'attachments', 'contacts', 'decision_log', 'email_threads', 'emails',
   'meeting_preps', 'posting_notes', 'posting_sightings', 'prompt_versions', 'reminders', 'status_history', 'user_settings',

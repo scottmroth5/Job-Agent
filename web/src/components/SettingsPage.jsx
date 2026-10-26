@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useDemo } from '../demo.jsx';
 import SearchSettings from './SearchSettings.jsx';
+import FeedbackForm from './FeedbackForm.jsx';
 
 const usd = (n) => `$${Number(n).toFixed(2)}`;
 
@@ -98,6 +99,7 @@ export default function SettingsPage() {
       </section>
 
       {!demo && <SearchSettings />}
+      {!demo && !account.owner && <FeedbackForm />}
 
       <p className="muted small">
         <a href="/privacy" target="_blank" rel="noreferrer">Privacy policy</a> · <a href="/terms" target="_blank" rel="noreferrer">Terms</a>

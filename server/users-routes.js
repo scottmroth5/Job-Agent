@@ -51,14 +51,24 @@ export function registerUserRoutes(app, { db, notices = {} }) {
           type: 'object',
           required: ['source'],
           additionalProperties: false,
-          properties: { source: { type: 'string', enum: ['own', 'owner'] }, capUsd: { type: ['number', 'null'] } },
+          properties: { source: { type: 'string', enum: ['own', 'owner'] }, capUsd: { type: ['number', 'null'] }, confirmEmail: { type: 'string' } },
         },
         response: { 200: anyObject },
       },
     },
     async (req) => {
-      if (!getUser(db, req.params.id)) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
-      return setAiAccess(db, req.params.id, req.body);
+      const before = getUser(db, req.params.id);
+      if (!before) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
+      // Putting someone on the owner's key spends the owner's money: their address must be typed to confirm who.
+      const granting = req.body.source === 'owner' && before.ai_source !== 'owner';
+      if (granting && String(req.body.confirmEmail ?? '').trim().toLowerCase() !== before.email) {
+        throw Object.assign(new Error(`Type ${before.email} to confirm you want to pay for their AI.`), { statusCode: 400 });
+      }
+      const after = setAiAccess(db, req.params.id, req.body);
+      // They hear when the owner starts or stops covering them, or changes the cap.
+      if (after.ai_source === 'owner' && (granting || after.ai_cap_usd !== before.ai_cap_usd)) await notices.aiCovered?.(after, after.ai_cap_usd);
+      if (after.ai_source === 'own' && before.ai_source === 'owner') await notices.aiOwnKey?.(after);
+      return after;
     },
   );
 }

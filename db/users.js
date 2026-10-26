@@ -112,3 +112,15 @@ export function setClaudeKey(db, id, sealed, now = new Date()) {
 
 /** The sealed key, for the one call that opens it (tools/claude.js). */
 export const sealedClaudeKey = (db, id) => db.prepare('SELECT claude_key_enc FROM users WHERE id = ?').pluck().get(id) ?? null;
+
+const SEEN_EVERY_MS = 15 * 60 * 1000;
+const seenByDb = new WeakMap(); // db -> (uid -> when last written), so a busy session writes at most every 15 minutes
+
+/** Records that a user was here (the Users screen's "last seen"); cheap to call on every request. */
+export function touchLastSeen(db, uid, now = new Date()) {
+  if (!seenByDb.has(db)) seenByDb.set(db, new Map());
+  const seen = seenByDb.get(db);
+  if (now.getTime() - (seen.get(uid) ?? 0) < SEEN_EVERY_MS) return;
+  seen.set(uid, now.getTime());
+  db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(now.toISOString(), uid);
+}

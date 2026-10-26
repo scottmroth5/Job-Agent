@@ -109,6 +109,8 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
   const budget = s?.budget;
   // The inbox reads the owner's own Gmail, so it is the owner's only; everything else is everyone's.
   const owner = isOwner(useMe());
+  // An admin's waiting requests and feedback, when there are any.
+  const waiting = s?.adminWaiting && (s.adminWaiting.requests || s.adminWaiting.feedback) ? s.adminWaiting : null;
   const [draft, setDraft] = useState(null); // the order being arranged, or null when not arranging
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -117,7 +119,9 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
     inbox: { hidden: !owner && !demo, href: '#/inbox', title: 'Inbox', stat: s ? (s.inboxNeedsReview ? `${plural(s.inboxNeedsReview, 'email')} to review` : 'All caught up') : null, alert: s?.inboxNeedsReview > 0 },
     funnel: { href: '#/funnel', title: 'Funnel', stat: s ? `${s.inProgress ?? 0} in progress` : null },
     activity: { href: '#/activity', title: 'Activity', stat: 'Runs and their output' },
-    admin: { href: '#/admin', title: 'Admin', stat: 'Prompts, lists, spending' },
+    admin: waiting
+      ? { href: '#/admin/users', title: 'Admin', stat: [waiting.requests && plural(waiting.requests, 'request'), waiting.feedback && `${waiting.feedback} feedback`].filter(Boolean).join(' · '), alert: true }
+      : { href: '#/admin', title: 'Admin', stat: 'Prompts, lists, spending' },
     settings: { href: '#/settings', title: 'Settings', stat: 'Account and AI key' },
     add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo },
   };

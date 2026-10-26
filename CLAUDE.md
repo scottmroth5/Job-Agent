@@ -85,7 +85,7 @@ powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nigh
                                   scripts\backup-nightly.cmd, logs to data\logs\backup.log)
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
 
-## Users (multi-user, phases 1 to 3)
+## Users (multi-user, phases 1 to 4)
 db/users.js: users table, the owner is user 1 (admin); every row before 013 is theirs. Every user table (USER_TABLES in
 db/migrations/013-users.js) has user_id NOT NULL, and keys that were unique app-wide are unique per user. Every query on a
 user table says "user_id = @uid" (joins and subqueries too: "s.user_id = p.user_id"); inserts give user_id @uid, or copy it
@@ -116,7 +116,14 @@ createJobTracer, the only way to start a traced run. App-wide still: lookups (li
 test/user-scope.test.js fails on any query on a user table that does not name user_id; test/user-isolation.test.js calls
 every route as a second user against the owner's demo data; test/registration.test.js covers accounts, emails, and keys.
 test/user-search.test.js covers per-user settings, the config view, the pipeline as its presser, and the script's refusals.
-Later phases: Users screen extras and catalogs (4, 5); account export and deletion, help (6). Each user's own Gmail and Drive
+Phase 4: Admin > Users shows last seen (users.last_seen_at, touchLastSeen at most every 15 minutes), last pipeline run, and
+setup chips (search ready, About you, key, schedule; never the text). Putting a user on the owner's key needs their address
+typed (confirmEmail) and emails them; so does taking them off it or changing the cap. Feedback (server/feedback-routes.js,
+feedback table, db/user-tables.js lists the user tables since 013): any user writes to the owner from Settings, at most
+FEEDBACK_PER_DAY a day; it is emailed to the owner with the sender as Reply-To (buildRawEmail allows one plain address) and
+listed on Users with Mark done. ADMIN_ONLY prefixes in server/app.js: /api/admin/users, /api/admin/feedback. The Home Admin
+tile counts waiting requests and open feedback (summary.adminWaiting, admins only). test/feedback.test.js covers these.
+Later phases: per-user catalogs (5); account export and deletion, help (6). Each user's own Gmail and Drive
 wait on Google's verification of those scopes.
 
 ## UI and API

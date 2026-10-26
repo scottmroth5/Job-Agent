@@ -1,6 +1,8 @@
 // Account emails (multi-user, phase 2). The only emails the app sends besides the owner's report and alerts:
-//   to the owner (EMAIL_ADDRESS): someone asked for access, a user reached their monthly AI allowance;
-//   to a person, about their own account only: approved, not approved, paused, allowance reached.
+//   to the owner (EMAIL_ADDRESS): someone asked for access, a user reached their monthly AI allowance, a user sent feedback
+//     (with the user as reply-to, so answering it is the owner's choice);
+//   to a person, about their own account only: approved, not approved, paused, the owner now covers (or no longer
+//     covers) their AI, allowance reached.
 // Each notice picks its own recipient here, so no caller can address anyone else. They hold names, addresses, and links
 // only, never job data, and a failure to send never fails the action that caused it (the reason is logged, not the email).
 
@@ -12,10 +14,10 @@
  * @param {{ warn?: Function }} [o.log]
  */
 export function createNotices({ send, owner, appUrl, log = console }) {
-  const deliver = async (to, subject, text) => {
+  const deliver = async (to, subject, text, replyTo = null) => {
     if (!send || !to) return false;
     try {
-      await send({ to, subject: `Job Hunt: ${subject}`, text });
+      await send({ to, subject: `Job Hunt: ${subject}`, text, ...(replyTo ? { replyTo } : {}) });
       return true;
     } catch (err) {
       log.warn?.(`[notice] could not send "${subject}": ${err.message}`);
@@ -36,6 +38,20 @@ export function createNotices({ send, owner, appUrl, log = console }) {
     rejected: (user) => deliver(user.email, 'your access request', 'Thanks for your interest in Job Hunt. Your request for access was not approved.\n'),
     /** To the user: their account was paused (they can still sign in and look, but not change anything or use AI). */
     paused: (user) => deliver(user.email, 'your account is paused', `Your Job Hunt account is paused: you can still sign in and look, but changes and AI are off until it is resumed. ${link()}\n`),
+    /** To the user: the owner now pays for their AI, up to a monthly cap. */
+    aiCovered: (user, capUsd) =>
+      deliver(user.email, 'your AI is covered', `The owner of Job Hunt now covers your AI features, up to $${Number(capUsd).toFixed(2)} a month. You don't need your own Claude key for them. ${link('#/settings')}\n`),
+    /** To the user: back on their own key. */
+    aiOwnKey: (user) =>
+      deliver(user.email, 'your AI uses your own key again', `Your AI features now use your own Claude API key again. Add or check it under Settings: ${link('#/settings')}\n`),
+    /** To the owner, with the sender as reply-to: feedback from a user (their words, as they wrote them). */
+    feedback: (user, body, page) =>
+      deliver(
+        owner(),
+        `feedback from ${user.name || user.email}`,
+        `${who(user)} wrote${page ? ` (on ${page})` : ''}:\n\n${body}\n\nReply to this email to answer them. See all feedback on Admin > Users: ${link('#/admin/users')}\n`,
+        user.email,
+      ),
     /** To the user and the owner, once a month: a user on the owner's key reached their allowance. */
     allowanceReached: async (user, status) => {
       const amount = `$${status.limitUsd.toFixed(2)}`;

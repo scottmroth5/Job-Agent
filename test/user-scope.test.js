@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { repoPath } from '../tools/paths.js';
-import { USER_TABLES } from '../db/migrations/013-users.js';
+import { USER_TABLES } from '../db/user-tables.js';
 
 const FOLDERS = ['agents', 'server', 'tools', 'demo', 'scripts', 'db', 'evals'];
 // Migrations shape every user's rows at once; admin queries are the reviewed cross-user reads.

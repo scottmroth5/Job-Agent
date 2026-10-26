@@ -43,7 +43,10 @@ export const api = {
   setAccountSchedule: (on) => request('PUT', '/api/account/schedule', { on }),
   users: () => request('GET', '/api/admin/users'),
   decideUser: (id, decision) => request('POST', `/api/admin/users/${id}/${decision}`),
-  setUserAi: (id, source, capUsd = null) => request('PUT', `/api/admin/users/${id}/ai`, { source, capUsd }),
+  setUserAi: (id, source, capUsd = null, confirmEmail = undefined) => request('PUT', `/api/admin/users/${id}/ai`, { source, capUsd, ...(confirmEmail ? { confirmEmail } : {}) }),
+  sendFeedback: (body, page) => request('POST', '/api/feedback', { body, page }),
+  adminFeedback: () => request('GET', '/api/admin/feedback'),
+  feedbackDone: (id) => request('POST', `/api/admin/feedback/${id}/done`),
   /** Sends the file as the raw body with its name and type in headers (no multipart). */
   uploadAttachment: async (jobId, file) => {
     const res = await send(`/api/postings/${jobId}/attachments`, {

@@ -526,3 +526,8 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
 .check-row { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
 .check-row { justify-content: flex-start; text-align: left; font-size: 14px; }
 .check-row input { width: auto; flex: none; margin: 0; }
+.setup-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
+.feedback-admin { margin-top: 18px; }
+.feedback-admin .request-note { font-style: normal; white-space: pre-wrap; }
+.setup-chips .chip { font: 12px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif; border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; color: var(--muted); }
+.setup-chips .chip.used { color: var(--text); background: var(--accent-soft); border-color: transparent; }
