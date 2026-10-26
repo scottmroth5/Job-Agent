@@ -24,7 +24,7 @@ const LOGIN_MINUTES = 10;
 const GOOGLE_AUTH = 'https://accounts.google.com/o/oauth2/v2/auth';
 // The app icons and manifest are open too: iOS fetches them for Add to Home Screen without the session cookie
 // (static files from web/public, nothing personal).
-const OPEN_PATHS = [/^\/auth\//, /^\/healthz$/, /^\/(manifest\.webmanifest|icon-(180|192|512)\.png)$/, /^\/(privacy|terms)$/];
+const OPEN_PATHS = [/^\/auth\//, /^\/healthz$/, /^\/(manifest\.webmanifest|icon-(180|192|512)\.png|favicon\.ico|favicon-(16x16|32x32)\.png)$/, /^\/(privacy|terms)$/];
 // Open requests for access at most; past this the request page says requests are closed for now.
 export const MAX_PENDING = 50;
 const READ_METHODS = ['GET', 'HEAD', 'OPTIONS'];

@@ -155,7 +155,8 @@ wait on Google's verification of those scopes.
 ## UI and API
 The Home page (#/) is a tile per screen; Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
 with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
-icons drawn by node scripts/make-icons.js (test/icons.test.js fails if the committed PNGs are stale).
+icons in web/public (install icons full-bleed, favicons as drawn) made from assets/app-icon-1024.png (kept out of the image);
+test/icons.test.js checks their sizes and that they load before sign-in.
 AUTH_MODE=none (default) binds to 127.0.0.1 with no login. AUTH_MODE=google (server/auth.js) is "Sign in with Google":
 any verified address gets a session and its account decides the rest (Users above); the session is a signed cookie
 (server/session.js, SESSION_SECRET); every route but /auth/*, /healthz, /privacy and /terms (server/pages.js, from
