@@ -3,7 +3,7 @@
 import { deleteUserSetting, getUserSetting, setUserSetting } from '../db/settings.js';
 
 /** Each area's items in their default order. web/src/components/HomePage.jsx draws a tile for each home key. */
-export const LAYOUT_AREAS = { home: ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'add'] };
+export const LAYOUT_AREAS = { home: ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'] };
 
 const key = (area) => `layout:${area}`;
 

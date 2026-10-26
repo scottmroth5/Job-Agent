@@ -13,9 +13,10 @@ import FunnelPage from './components/FunnelPage.jsx';
 import { DemoBanner, DemoContext } from './demo.jsx';
 import { MeContext } from './me.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
+import HelpPage from './components/HelpPage.jsx';
 
 // #/ is the Home page; each screen has its own address.
-const VIEWS = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin', settings: 'Settings' };
+const VIEWS = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin', settings: 'Settings', help: 'Help' };
 const viewFromHash = () => {
   const name = /^#\/(\w+)/.exec(window.location.hash)?.[1];
   return VIEWS[name] ? name : 'home';
@@ -154,6 +155,8 @@ export default function App() {
         </>
       ) : view === 'settings' ? (
         <SettingsPage />
+      ) : view === 'help' ? (
+        <HelpPage />
       ) : view === 'admin' ? (
         <AdminPage />
       ) : view === 'funnel' ? (

@@ -1,6 +1,8 @@
 // Dates are stored as ISO calendar dates (YYYY-MM-DD). Arithmetic is done in UTC so the
 // machine's time zone never shifts a date.
 
+import { currentTimeZone } from '../db/scope.js';
+
 const pad = (n) => String(n).padStart(2, '0');
 const iso = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 
@@ -8,20 +10,38 @@ const iso = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.ge
 // else the machine's zone. A server runs on UTC, so never take today from toISOString(): in the evening in the Americas that
 // is already tomorrow. Timestamps stay ISO UTC; only calendar days use these.
 
-/** The app's time zone name. */
-export const timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone;
+// Each user may have their own zone (Settings; db/scope.js carries it with the request or job): their calendar days
+// follow it. The owner, scripts, and the schedule use the app's zone.
 
-/** The calendar day (YYYY-MM-DD) of a moment, in the app's time zone. */
+/** The time zone calendar days follow now: the current user's own, else the app's. */
+export const timeZone = () => currentTimeZone() ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+const dayIn = (d, zone) => {
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US', { timeZone: zone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(d).map((x) => [x.type, x.value]));
+  return `${p.year}-${p.month}-${p.day}`;
+};
+
+/** The calendar day (YYYY-MM-DD) of a moment, in the current user's zone (else the app's). */
 export function localDay(at = new Date()) {
   const d = at instanceof Date ? at : new Date(at);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const zone = currentTimeZone();
+  return zone ? dayIn(d, zone) : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 /** The local calendar day N days before a moment. */
 export function localDaysAgo(at, days) {
-  const d = new Date(at);
-  d.setDate(d.getDate() - days);
-  return localDay(d);
+  return shift(localDay(new Date(at)), days);
+}
+
+/** Whether a name is a time zone this server knows (Settings checks it before saving). */
+export function isTimeZone(name) {
+  if (typeof name !== 'string' || !name || name.length > 64) return false;
+  try {
+    new Intl.DateTimeFormat('en-US', { timeZone: name });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /** A stored value as a local calendar day: a YYYY-MM-DD date passes through; an ISO timestamp is converted. */

@@ -534,3 +534,9 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
 button.danger { background: var(--low); border-color: var(--low); color: #fff; }
 button.danger:disabled { opacity: 0.5; }
 button.danger-link { color: var(--low); padding: 0; }
+
+/* Help (phase 6). */
+.help-page { display: grid; gap: 12px; max-width: 760px; }
+.help-title { font-size: 17px; font-weight: 600; padding: 0; text-align: left; }
+.help-answer { white-space: pre-wrap; background: var(--accent-soft); border-radius: 8px; padding: 10px 12px; }
+.help-guide .markdown { margin-top: 8px; }

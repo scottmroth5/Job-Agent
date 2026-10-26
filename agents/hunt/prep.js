@@ -8,6 +8,7 @@ import { fillTemplate } from '../../tools/template.js';
 import { truncate } from '../../tools/text.js';
 import { renderMarkdown } from '../../tools/markdown.js';
 import { ensurePrepFolder } from '../../tools/google/drive.js';
+import { localDay } from '../../tools/dates.js';
 import { getPrompt } from '../prompts.js';
 import { formatAnalysis } from './letters.js';
 import { listNotes, notesForPrompt } from '../notes.js';
@@ -131,7 +132,8 @@ export function prepHtml(markdown) {
   return `<html><body style="font-family:Arial,sans-serif;font-size:11pt">${body}</body></html>`;
 }
 
-const isoLocalDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// The day in the user's zone (tools/dates.js).
+const isoLocalDate = (d) => localDay(d);
 
 /** Lists a job's preps, newest first, without their text. */
 export function listPreps(db, postingId) {

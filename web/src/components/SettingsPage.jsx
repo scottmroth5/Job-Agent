@@ -7,6 +7,44 @@ import AccountControls from './AccountControls.jsx';
 
 const usd = (n) => `$${Number(n).toFixed(2)}`;
 
+// Every zone the browser knows, for the picker.
+const ZONES = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
+
+/** The zone this user's calendar days follow (applied dates, the funnel's weeks, document dates). */
+function TimeZonePicker({ account, onSaved }) {
+  const device = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const [error, setError] = useState(null);
+  const save = async (zone) => {
+    setError(null);
+    try {
+      onSaved(await api.setTimeZone(zone || null));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  return (
+    <div className="row key-form">
+      <label>
+        Time zone
+        <select value={account.timeZone ?? ''} onChange={(e) => save(e.target.value)}>
+          <option value="">The app's ({account.appTimeZone})</option>
+          {ZONES.map((z) => (
+            <option key={z} value={z}>
+              {z.replaceAll('_', ' ')}
+            </option>
+          ))}
+        </select>
+      </label>
+      {device && device !== (account.timeZone ?? account.appTimeZone) && (
+        <button type="button" onClick={() => save(device)}>
+          Use this device's ({device.replaceAll('_', ' ')})
+        </button>
+      )}
+      {error && <span className="error">{error}</span>}
+    </div>
+  );
+}
+
 /** Settings: your account and how your AI is paid for, with your own Claude key (never shown again once saved). */
 export default function SettingsPage() {
   const demo = useDemo();
@@ -49,7 +87,12 @@ export default function SettingsPage() {
           {account.name ? <b>{account.name}</b> : null} {account.email ?? (demo ? 'Demo' : 'This computer')}
           {account.status === 'paused' && <span className="badge warn"> paused</span>}
         </p>
-        {account.status === 'paused' && <p className="warn-box">Your account is paused: you can look around, but changes and AI are off until the owner resumes it.</p>}
+        {account.status === 'paused' && (
+          <p className="warn-box">
+            Your account is paused: you can look around, but changes and AI are off until {account.pausedBySelf ? 'you resume it (below)' : 'the owner resumes it'}.
+          </p>
+        )}
+        {!demo && !account.owner && <TimeZonePicker account={account} onSaved={setAccount} />}
       </section>
 
       <section className="home-card">

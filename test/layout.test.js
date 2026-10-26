@@ -13,8 +13,8 @@ const HOME = LAYOUT_AREAS.home;
 test('the order rule: saved first, new items in their default place, unknown and repeated ones dropped', () => {
   assert.deepEqual(arranged(HOME, null), HOME);
   assert.deepEqual(arranged(HOME, []), HOME);
-  assert.deepEqual(arranged(HOME, ['funnel', 'jobs']), ['funnel', 'jobs', 'inbox', 'activity', 'admin', 'settings', 'add']);
-  assert.deepEqual(arranged(HOME, ['gone', 'admin', 'admin']), ['admin', 'jobs', 'inbox', 'funnel', 'activity', 'settings', 'add']);
+  assert.deepEqual(arranged(HOME, ['funnel', 'jobs']), ['funnel', 'jobs', 'inbox', 'activity', 'admin', 'settings', 'help', 'add']);
+  assert.deepEqual(arranged(HOME, ['gone', 'admin', 'admin']), ['admin', 'jobs', 'inbox', 'funnel', 'activity', 'settings', 'help', 'add']);
   assert.deepEqual(moved(['a', 'b', 'c'], 1, -1), ['b', 'a', 'c']);
   assert.deepEqual(moved(['a', 'b', 'c'], 2, 1), ['a', 'b', 'c'], 'the last stays last');
   assert.deepEqual(moved(['a', 'b', 'c'], 0, -1), ['a', 'b', 'c'], 'the first stays first');
@@ -40,7 +40,7 @@ test('API: the saved order comes back with the summary; an empty list resets it;
   assert.equal(saved.statusCode, 200);
   assert.deepEqual(saved.json().order, ['inbox', 'jobs']);
   assert.deepEqual((await app.inject('/api/summary')).json().layout.home, ['inbox', 'jobs']);
-  for (const bad of [['jobs', 'jobs'], ['<script>'], ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'add', 'jobs'], [3]]) {
+  for (const bad of [['jobs', 'jobs'], ['<script>'], ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add', 'jobs'], [3]]) {
     assert.equal((await put(bad)).statusCode, 400, JSON.stringify(bad));
   }
   // Fastify strips properties the schema does not name (removeAdditional), so they never reach the handler.

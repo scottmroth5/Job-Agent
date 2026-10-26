@@ -129,7 +129,12 @@ user-table row plus the account and runs; never the sealed key or email bodies).
 decided_by = self; PAUSED_MAY in server/app.js lets a paused account resume or delete). Delete my account (typed address):
 every user-table row (db/user-tables.js order), attached file folders, the account; runs on their own key are deleted, runs
 on the owner's key are kept for the owner's cap with meta and summary cleared. The owner deletes an account the same way
-(POST /api/admin/users/:id/delete). Both email the person; a self-delete also tells the owner. test/account-data.test.js. Each user's own Gmail and Drive
+(POST /api/admin/users/:id/delete). Both email the person; a self-delete also tells the owner. test/account-data.test.js.
+Help (#/help, server/help-routes.js): guides in help/*.md (generic, rendered with tools/markdown.js) and Ask, answered from
+the guides only on the asker's own AI (HELP_MODEL, a traced 'help' run, ASKS_PER_DAY; nothing logged or stored). Time zones:
+users.time_zone (016) rides in the request or job context (runAsUser(uid, fn, { timeZone })); tools/dates.js localDay,
+localDaysAgo, dayOf, and timeZone() follow it, else the app's TZ. The owner, scripts, budgets (calendar months), and the
+scheduler use the app's zone. test/help-timezone.test.js. Each user's own Gmail and Drive
 wait on Google's verification of those scopes.
 
 ## UI and API

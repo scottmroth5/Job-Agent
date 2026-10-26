@@ -8,11 +8,17 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 const context = new AsyncLocalStorage();
 
-/** Runs fn (and everything it starts) as user uid; returns what fn returns. */
-export function runAsUser(uid, fn) {
+/**
+ * Runs fn (and everything it starts) as user uid; returns what fn returns. timeZone is that user's own zone (an IANA
+ * name), which tools/dates.js uses for their calendar days; without it, the app's zone.
+ */
+export function runAsUser(uid, fn, { timeZone = null } = {}) {
   if (!Number.isInteger(uid) || uid < 1) throw new TypeError(`runAsUser: "${uid}" is not a user id`);
-  return context.run({ uid }, fn);
+  return context.run({ uid, timeZone }, fn);
 }
+
+/** The current user's own time zone, or null (the app's zone). */
+export const currentTimeZone = () => context.getStore()?.timeZone ?? null;
 
 /** The user the current request or job runs as, or null outside runAsUser. */
 export const currentUserId = () => context.getStore()?.uid ?? null;

@@ -43,6 +43,13 @@ const ICONS = {
       <path d="M24 16v16M16 24h16" />
     </>
   ),
+  help: (
+    <>
+      <circle cx="24" cy="24" r="17" />
+      <path d="M19 19a5 5 0 1 1 7 4.6c-1.3.6-2 1.6-2 3V28" />
+      <path d="M24 34v.5" />
+    </>
+  ),
   settings: (
     <>
       <path d="M10 14h28M10 24h28M10 34h28" />
@@ -101,7 +108,7 @@ function Tile({ href, onClick, icon, title, stat, alert, arrange }) {
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 // The tiles in their default order; the keys match server/layout.js LAYOUT_AREAS.home.
-export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'add'];
+export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'];
 
 /** The start page: a tile for each screen with what needs attention, the pipeline, and this month's Claude budget. */
 export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, onLayoutSaved }) {
@@ -123,6 +130,7 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
       ? { href: '#/admin/users', title: 'Admin', stat: [waiting.requests && plural(waiting.requests, 'request'), waiting.feedback && `${waiting.feedback} feedback`].filter(Boolean).join(' · '), alert: true }
       : { href: '#/admin', title: 'Admin', stat: 'Prompts, lists, spending' },
     settings: { href: '#/settings', title: 'Settings', stat: 'Account and AI key' },
+    help: { href: '#/help', title: 'Help', stat: 'Guides and questions' },
     add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo },
   };
   // The saved order comes with the summary, so it applies as soon as the page has its numbers.

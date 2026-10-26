@@ -22,6 +22,7 @@ import { registerAuth } from './auth.js';
 import { currentUserId, runAsUser } from '../db/scope.js';
 import { OWNER_ID, touchLastSeen } from '../db/users.js';
 import { registerFeedbackRoutes } from './feedback-routes.js';
+import { registerHelpRoutes } from './help-routes.js';
 import { adminWaiting } from './admin-queries.js';
 
 // Routes for admins: the Users screen and the feedback users sent (server/app.js refuses anyone else).
@@ -145,9 +146,11 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     }
     req.uid = account.uid;
     req.role = account.role;
+    // Their own time zone for calendar days (the owner always uses the app's).
+    req.timeZone = account.uid === OWNER_ID ? null : (db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(account.uid) ?? null);
     if (authMode === 'google') touchLastSeen(db, account.uid);
   });
-  app.addHook('preHandler', (req, reply, done) => (req.uid ? runAsUser(req.uid, done) : done()));
+  app.addHook('preHandler', (req, reply, done) => (req.uid ? runAsUser(req.uid, done, { timeZone: req.timeZone }) : done()));
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
 
   app.setErrorHandler((err, req, reply) => {
@@ -379,6 +382,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   // The Users screen never exists in the demo.
   if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });
+  registerHelpRoutes(app, { store, services });
   registerPages(app);
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });
@@ -413,7 +417,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         // Then each user who asked to be on the schedule, one at a time, each as themselves; one user's failure never
         // stops the next or marks the owner's run failed.
         for (const uid of scheduledUsers(store.raw ?? db)) {
-          await runAsUser(uid, () => finish(pipeline.start({ by: 'schedule' }), 4)).catch((err) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
+          const timeZone = db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) ?? null;
+          await runAsUser(uid, () => finish(pipeline.start({ by: 'schedule' }), 4), { timeZone }).catch((err) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
         }
       }),
       inbox: inboxChecks && (() => finish(inboxChecks.startCheck({ by: 'schedule' }), 1)),

@@ -4,6 +4,7 @@
 import { fillTemplate } from '../../tools/template.js';
 import { sanitizeDashes, truncate } from '../../tools/text.js';
 import { ensureLetterFolder } from '../../tools/google/drive.js';
+import { localDay } from '../../tools/dates.js';
 import { getPrompt } from '../prompts.js';
 import { PROMOTE_AT } from '../discovery/score.js';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
@@ -77,7 +78,8 @@ export function finishLetter(text, config) {
 }
 
 const longDate = (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-const isoLocalDate = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+// The day in the user's zone (tools/dates.js).
+const isoLocalDate = (d) => localDay(d);
 
 /**
  * Generates what each selected posting is missing: resume tweaks, a cover letter, or just the

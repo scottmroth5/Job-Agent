@@ -117,7 +117,18 @@ async function main() {
   }
 }
 
-runAsUser(uid, main)
+// The user's own time zone for their calendar days (read before the store is opened in main; none for the owner).
+function timeZoneOf(id) {
+  if (id === OWNER_ID || !Number.isInteger(id)) return null;
+  const store = openJobStore(undefined, { fallbackUid: id, snapshot: false });
+  try {
+    return store.raw.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(id) ?? null;
+  } finally {
+    store.close();
+  }
+}
+
+runAsUser(uid, main, { timeZone: timeZoneOf(uid) })
   .catch((err) => {
     console.error(err.message);
     process.exitCode = 1;
