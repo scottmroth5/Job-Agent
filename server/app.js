@@ -27,6 +27,7 @@ import { registerDraftRoutes } from './draft-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
 import { MIN_PROFILE_CHARS, userConfig, userProfile } from '../agents/user-config.js';
 import { adminWaiting } from './admin-queries.js';
+import { today } from './today.js';
 
 // Routes for admins: the Users screen and the feedback users sent (server/app.js refuses anyone else).
 const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback'];
@@ -208,8 +209,10 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     async (req) => funnel(db, { days: !req.query.days || req.query.days === 'all' ? null : Number(req.query.days), track: req.query.track && req.query.track !== 'all' ? req.query.track : null }),
   );
 
-  app.get('/api/summary', { schema: { summary: 'Counts, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async (req) => ({
+  app.get('/api/summary', { schema: { summary: 'Counts, the Today list, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async (req) => ({
     ...summary(db, config),
+    // Home's Today list: reminders due, offers, and follow-ups (server/today.js).
+    today: today(db).items,
     layout: getLayout(db),
     // A new user's setup (the Home checklist): AI paid for, About you long enough, search complete.
     ...(req.uid && req.uid !== OWNER_ID ? { setup: setupOf(req.uid) } : {}),
@@ -388,7 +391,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
 
   registerAdminRoutes(app, { db, config });
   registerLayoutRoutes(app, { db });
-  registerAccountRoutes(app, { db, checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
+  registerAccountRoutes(app, { db, demo: authMode === 'demo', checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   // The Users screen never exists in the demo.
   if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });

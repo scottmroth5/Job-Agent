@@ -105,7 +105,7 @@ export const JOBS = [
     location: 'Hybrid, Riverton, ST', workplace: 'hybrid', source: 'LinkedIn', salary: '$240,000 - $280,000',
     history: [['interviewing', 14]],
     emails: [['interview_request', 14, 'SVP Technology: first conversation', 'Talent partner scheduled a screen with the CEO.'], ['assessment', 5, 'Case exercise for the SVP Technology role', 'Take home case: a 90 day plan for the site platform, due Friday.']],
-    letter: true, tweaks: true, reminder: ['assessment', -2, 'Send the 90 day plan case'],
+    letter: true, tweaks: true, prep: 'case', reminder: ['assessment', -2, 'Send the 90 day plan case'],
   },
   {
     company: 'Blue Heron Labs', title: 'Director of Software Engineering', status: 'applied', stage: 'pipeline', score: 9, days: 9, applied: 8,
@@ -214,11 +214,11 @@ export const STRENGTHS = [
   'Hands on with TypeScript, Python, and Java; comfortable in any stack',
   'Ran SOC 2 Type II and HIPAA programs as the security lead',
 ];
+// Watch-outs that fit any posting; a location watch-out comes only from the job's own workplace (scripts/demo-seed.js).
 export const WATCH_OUTS = [
   'No direct experience with this company\'s market',
   'Role reports to a CTO, a step down in scope',
   'Posting asks for Go and Kubernetes depth',
-  'Hybrid schedule two days a week',
   'Early stage: compensation is mostly equity',
   'Team is entirely offshore',
 ];
@@ -299,3 +299,33 @@ export const SAMPLE_TASKS = [
     ],
   },
 ];
+
+// The sample candidate's About you, shown read-only on the demo's Settings (server/account-routes.js) in the shape
+// help/about-you.md teaches. Invented, like everything here.
+export const DEMO_ABOUT_YOU = `## Summary
+Engineering leader with 15 years in software and 8 leading teams, mostly in healthcare and other regulated industries. Best at the stage where a product works, customers depend on it, and the platform and team have to grow faster than they were built to.
+
+## Experience highlights
+- VP Engineering, a care coordination company (2020 to now): grew the platform team from 6 engineers to 45 with weekly releases; ran SOC 2 Type II and HIPAA as the security lead.
+- Director of Engineering, a claims processing company (2016 to 2020): rebuilt the rules engine and cut processing time by 60 percent.
+- Engineering Manager, a lab software company (2012 to 2016): led the technology side of an accreditation with no findings; built FHIR integrations with more than 20 health systems.
+- Took a venture backed company through a successful acquisition.
+
+## Strengths
+- Scaling a platform and a team at the same time, without stopping delivery.
+- Turning an executive team's goals into milestones engineers can deliver.
+- Distributed teams across the United States, Poland, and Colombia.
+- Hands on with TypeScript, Python, and Java.
+
+## What I want next
+VP Engineering, Head of Engineering, or CTO at a healthcare or regulated software company of 50 to 500 people. Remote in the US, or hybrid in the Riverton area. Base of $220,000 or more. Open to fractional CTO work at $175 an hour or more for 15 to 25 hours a week.
+
+## Not a fit
+- Onsite every day outside the Riverton area.
+- Roles that are mainly people management with no platform ownership.
+- Crypto and gambling.
+
+## Stories
+1. Team growth: 6 to 45 engineers in three years while releases stayed weekly.
+2. Rules engine rebuild: phased over two quarters to avoid a big bang cutover.
+3. Accreditation: inspection readiness built into the release process.`;

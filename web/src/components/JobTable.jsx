@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
-import { payText, hoursText, annualText, scoreClass, PAY_FROM } from '../format.js';
+import { payText, hoursText, annualText, scoreClass, PAY_FROM, sourceLabel } from '../format.js';
 import { useLookups } from '../lookups.jsx';
 
 const COLUMNS = [
   { key: 'score', label: 'Score', get: (j) => j.score ?? -1 },
   { key: 'title', label: 'Role', get: (j) => j.title.toLowerCase() },
   { key: 'company', label: 'Company', get: (j) => j.company.toLowerCase() },
-  { key: 'source', label: 'Source', get: (j) => j.source ?? '' },
+  { key: 'source', label: 'Source', get: (j) => sourceLabel(j.source) },
   { key: 'location', label: 'Location', get: (j) => j.location ?? '' },
   { key: 'pay', label: 'Pay', get: (j) => j.annualized?.mid ?? j.pay?.min ?? -1 },
   { key: 'discoveredOn', label: 'Discovered', get: (j) => j.discoveredOn ?? '' },
@@ -77,14 +77,14 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
                       {j.attachmentCount > 0 && <span className="badge" title={`${j.attachmentCount} attachment${j.attachmentCount === 1 ? '' : 's'}`}>📎 {j.attachmentCount}</span>}
                       {j.hasCopies && <span className="badge warn" title="Another saved job has the same company and title; open it to compare">possible duplicate</span>}
                       {j.awaitingDescription ? (
-                        <span className="badge warn" title="Scored from the title alone; paste the description, then Re-score">needs description</span>
+                        <span className="badge warn" title="Scored from the title alone, so capped at 5; paste the description, then Re-score">needs description</span>
                       ) : (
                         j.needsDescription && <span className="badge muted">no description</span>
                       )}
                     </>
                   )}
                   {c.key === 'company' && j.company}
-                  {c.key === 'source' && <span className="muted">{j.source}</span>}
+                  {c.key === 'source' && <span className="muted">{sourceLabel(j.source)}</span>}
                   {c.key === 'location' && <span className="muted">{j.location ?? ''}</span>}
                   {c.key === 'pay' && j.pay && (
                     <span className="terms" title={`${PAY_FROM[j.pay.from] ?? ''}${j.pay.text ? `: ${j.pay.text}` : ''}`}>

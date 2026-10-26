@@ -45,3 +45,7 @@ export function scoreClass(score) {
 }
 
 export const moneyShort = money;
+
+// Where a job was found, in the same words on every screen (Jobs, the job panel, Funnel).
+const SOURCE_LABELS = { manual: 'Added by hand', 'v1-manual': 'Added by hand (v1)', 'google jobs': 'Google results', email: 'Recruiter email' };
+export const sourceLabel = (s) => SOURCE_LABELS[s] ?? SOURCE_LABELS[String(s ?? '').toLowerCase()] ?? s ?? '';

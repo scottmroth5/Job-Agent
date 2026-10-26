@@ -153,7 +153,7 @@ export default function App() {
 
       {view === 'home' ? (
         <>
-          <HomePage summary={summary} demo={demo} onAddJob={() => setAdding(true)} onPipelineFinished={refresh} onLayoutSaved={refresh} />
+          <HomePage summary={summary} demo={demo} onAddJob={() => setAdding(true)} onOpenJob={setSelectedId} onPipelineFinished={refresh} onLayoutSaved={refresh} />
           {me?.authMode === 'google' && (
             <p className="muted small signed-in">
               Signed in as {me.email} · <button className="link" onClick={signOut}>Sign out</button>
@@ -175,7 +175,7 @@ export default function App() {
       ) : (
       <>
       <div className="filters">
-        <select value={filters.stage} onChange={set('stage')} aria-label="Stage" disabled={filters.needsDescription}>
+        <select value={filters.needsDescription ? 'all' : filters.stage} onChange={set('stage')} aria-label="Stage" disabled={filters.needsDescription} title={filters.needsDescription ? 'Needs description looks across all stages' : undefined}>
           {lk.options('stage', filters.stage).map((s) => (
             <option key={s.id} value={s.id}>{lk.label('stage', s.id, { markArchived: true })}</option>
           ))}
@@ -212,7 +212,7 @@ export default function App() {
         <button
           className={`needs-desc-toggle${filters.needsDescription ? ' on' : ''}`}
           aria-pressed={filters.needsDescription}
-          title="New jobs that scored 7+ from the title alone: paste the description, then Re-score"
+          title="New jobs in any stage with no description whose title alone scored 7+ (shown capped at 5): paste the description, then Re-score"
           onClick={() => setFilters((f) => ({ ...f, needsDescription: !f.needsDescription }))}
         >
           Needs description{summary ? ` (${summary.needsDescription})` : ''}

@@ -563,3 +563,22 @@ button.danger-link { color: var(--low); padding: 0; }
 .step-mark { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--accent); color: #fff; font-size: 12px; flex: none; }
 .setup-steps li.done .step-mark { background: var(--accent); }
 .setup-steps li.done s { color: var(--muted); }
+
+/* Home's Today list: one row per reminder, offer, or follow-up; the whole row opens the job. */
+.today-card h2 { font-size: 17px; margin: 0 0 8px; }
+.today-list { list-style: none; margin: 0; padding: 0; }
+.today-list li + li { border-top: 1px solid var(--border); }
+.today-item { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 44px; padding: 8px 2px; background: none; border: 0; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.today-item:hover .today-title { text-decoration: underline; }
+.today-item .badge { flex: none; min-width: 84px; text-align: center; margin-top: 1px; }
+.today-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.today-title { font-weight: 600; overflow-wrap: anywhere; }
+.badge.today-offer { background: #e6f4ea; color: #1e7b45; }
+.badge.today-follow_up { background: #fdf0e1; color: #a35a0b; }
+.badge.overdue { background: #fbe9e7; color: #b42318; }
+@media (prefers-color-scheme: dark) {
+  .badge.today-offer { background: #1d3527; color: #86d3a3; }
+  .badge.today-follow_up { background: #3a2c18; color: #f0b86e; }
+  .badge.overdue { background: #3d1f1c; color: #f2a69c; }
+}
+fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }

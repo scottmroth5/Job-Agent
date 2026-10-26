@@ -4,6 +4,14 @@ import { dateTime } from '../format.js';
 import { useLookups } from '../lookups.jsx';
 import TaskProgress from './TaskProgress.jsx';
 
+// How sure the model was of the job match (or that none applies). Emails at 0.85 or above link on their own, so
+// anything here is below that; the number stays for anyone comparing.
+const confidenceText = (c) => {
+  const n = Number(c ?? 0);
+  const level = n >= 0.7 ? 'Fairly sure' : n >= 0.4 ? 'Low confidence' : 'Very low confidence';
+  return `${level} in the job match (${n.toFixed(2)})`;
+};
+
 export const TYPE_LABELS = {
   confirmation: 'Application received',
   rejection: 'Rejection',
@@ -45,7 +53,7 @@ function ReviewCard({ email, applications, onDone, onOpenJob }) {
       <div className="inbox-subject">{email.subject || '(no subject)'}</div>
       {email.summary && <p>{email.summary}</p>}
       <div className="small muted">
-        {email.reason ? `Why: ${email.reason}. ` : ''}Confidence {Number(email.confidence ?? 0).toFixed(2)}
+        {email.reason ? `Why: ${email.reason}. ` : ''}{confidenceText(email.confidence)}
       </div>
       <div className="small">
         Best guess:{' '}
@@ -220,7 +228,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
                     <button className="link" onClick={() => onOpenJob(e.postingId)}>{e.title} at {e.company}</button>
                     <div className="muted small">{e.subject}</div>
                   </td>
-                  <td className="muted small">{lk.label('status', e.status)} · matched by {RULES[e.matchRule] ?? 'review'}</td>
+                  <td className="muted small">Now {lk.label('status', e.status)} · matched by {RULES[e.matchRule] ?? 'review'}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, followTask } from '../api.js';
 import { useLookups } from '../lookups.jsx';
-import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM } from '../format.js';
+import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM, sourceLabel } from '../format.js';
 import TaskProgress from './TaskProgress.jsx';
 import Attachments from './Attachments.jsx';
 import Notes from './Notes.jsx';
@@ -139,7 +139,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                     <h2>{job.title}</h2>
                     <div className="muted">
                       {job.company}
-                      {job.location ? ` · ${job.location}` : ''} · {job.source}
+                      {job.location ? ` · ${job.location}` : ''} · {sourceLabel(job.source)}
                       <button className="link-button demo-hide" onClick={() => setIdent({ title: job.title, company: job.company })} title="Fix the title or company so duplicates are recognized">
                         Edit
                       </button>

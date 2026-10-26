@@ -4,11 +4,12 @@
 import { budgetStatus } from '../agents/budget.js';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.js';
 import { boxKey, seal } from '../tools/secret-box.js';
-import { MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
+import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
 import { validateConfig } from '../tools/config.js';
 import { deleteAccount, exportAccount } from '../agents/account-data.js';
 import { ATTACHMENTS_DIR } from './attachments.js';
 import { isTimeZone, localDay } from '../tools/dates.js';
+import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.js';
 
 const anyObject = { type: 'object', additionalProperties: true };
 // Anthropic API keys: "sk-ant-" then letters, digits, dashes, and underscores.
@@ -37,7 +38,7 @@ function account(db, uid) {
  * @param {object} o
  * @param {(apiKey: string) => Promise<boolean>} [o.checkKey]  tools/claude.js claudeKeyWorks (tests pass a fake)
  */
-export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR }) {
+export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }) {
   // Phase 6: take your data with you, pause yourself, or delete your account. Deleting needs your address typed.
   app.get('/api/account/export', { schema: { summary: 'Download everything that is yours, as JSON', response: { 200: anyObject } } }, async (req, reply) =>
     reply
@@ -135,7 +136,13 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
 
   // Phase 3: each user's own search settings, background, and schedule. The owner's live in their settings file and
   // Google Doc, so these answer the owner with where to change them instead.
+  // The demo shows the sample candidate's About you and search (demo/sample-data.js), read-only, so visitors see what
+  // scoring works from; nothing is read from or saved to the database.
   const search = (uid) => {
+    if (demo) {
+      const config = cleanConfig(DEMO_CONFIG, DEMO_CONFIG.candidate.name);
+      return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, scheduled: false };
+    }
     if (uid === OWNER_ID) return { owner: true };
     const u = getUser(db, uid);
     const config = userConfig(db, uid, u.name);

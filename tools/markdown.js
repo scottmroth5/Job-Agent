@@ -1,6 +1,7 @@
 // A small, safe Markdown renderer shared by the web page (job notes, meeting prep) and the server (meeting prep
 // Google Docs). Everything is HTML-escaped first, and only the tags below are produced, so text from people or
-// from the web can never inject markup. Links open only http, https, and mailto addresses.
+// from the web can never inject markup. Links open only http, https, and mailto addresses (in a new tab), and
+// this site's own pages: a path such as /privacy or a screen such as #/settings (in the same tab).
 // Supported: # headings, - and 1. lists (one nested level), | tables |, > quotes, ---, **bold**, *italic*,
 // `code`, [text](url), and bare URLs. A single line break inside a paragraph is kept.
 
@@ -8,7 +9,9 @@ const escapeHtml = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
 const SAFE_URL = /^(https?:\/\/|mailto:)/i;
+const SAME_SITE = /^(\/(?![/\\])|#\/)/;
 const linkTag = (href, text) => `<a href="${href}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+const siteLink = (href, text) => `<a href="${href}">${text}</a>`;
 
 /** Inline formatting on one already-split piece of text. */
 export function renderInline(raw) {
@@ -16,7 +19,7 @@ export function renderInline(raw) {
   const hold = (html) => `\u0000${held.push(html) - 1}\u0000`;
   let s = escapeHtml(raw);
   s = s.replace(/`([^`]+)`/g, (_, code) => hold(`<code>${code}</code>`));
-  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => (SAFE_URL.test(url) ? hold(linkTag(url, text)) : m));
+  s = s.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, text, url) => (SAFE_URL.test(url) ? hold(linkTag(url, text)) : SAME_SITE.test(url) ? hold(siteLink(url, text)) : m));
   s = s.replace(/\bhttps?:\/\/[^\s<]+[^\s<.,;:!?)\]'"]/g, (url) => hold(linkTag(url, url)));
   s = s.replace(/\*\*(?=\S)([\s\S]*?\S)\*\*|__(?=\S)([\s\S]*?\S)__/g, (_, a, b) => `<strong>${a ?? b}</strong>`);
   s = s.replace(/(^|[^*\w])\*(?=\S)([^*]*?\S)\*(?![*\w])|(^|\W)_(?=\S)([^_]*?\S)_(?!\w)/g, (_, p1, a, p2, b) => `${p1 ?? p2}<em>${a ?? b}</em>`);

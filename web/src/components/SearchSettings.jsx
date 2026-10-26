@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import DraftBuilder from './DraftBuilder.jsx';
+import { useDemo } from '../demo.jsx';
 
 // Lists are edited one item per line.
 const lines = (v) => (v ?? []).join('\n');
@@ -20,6 +21,7 @@ const LIST_FIELDS = [
  * your pipeline runs on the schedule. The owner's live in their settings file and Google Doc instead.
  */
 export default function SearchSettings() {
+  const demo = useDemo(); // the demo shows the sample candidate's, read-only
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
   const [profile, setProfile] = useState('');
@@ -102,10 +104,14 @@ export default function SearchSettings() {
           What scoring, letters, and meeting prep know about you: your experience, strengths, what you want next, and anything to avoid. Paste your
           resume and add notes, or build a draft from your materials. At least {data.profileChars.min} characters. Help has a template and examples.
         </p>
-        <DraftBuilder onUseProfile={useDraftProfile} onUseSearch={useDraftSearch} />
+        {demo ? (
+          <p className="warn-box small">A sample: what Jordan, the demo's made-up candidate, wrote. In your own account you write yours here or build a draft from your resume and LinkedIn profile.</p>
+        ) : (
+          <DraftBuilder onUseProfile={useDraftProfile} onUseSearch={useDraftSearch} />
+        )}
         <form onSubmit={(e) => { e.preventDefault(); run(() => api.saveAccountProfile(profile), 'Saved.'); }}>
-          <textarea className="profile-text" rows={12} maxLength={data.profileChars.max} value={profile} onChange={(e) => setProfile(e.target.value)} />
-          <div className="row">
+          <textarea className="profile-text" rows={12} maxLength={data.profileChars.max} value={profile} readOnly={demo} onChange={(e) => setProfile(e.target.value)} />
+          <div className="row demo-hide">
             <button className="primary" type="submit" disabled={profile === data.profile}>
               Save
             </button>
@@ -117,7 +123,9 @@ export default function SearchSettings() {
       <section className="home-card">
         <h2>Your search</h2>
         {missing.length > 0 && <p className="warn-box">To run your pipeline, fill in: {missing.join('; ')}.</p>}
+        {demo && <p className="muted small">Jordan's search: what the pipeline looks for. Read-only here.</p>}
         <form className="search-form" onSubmit={saveSearch}>
+          <fieldset className="bare" disabled={demo}>
           <div className="grid2">
             <label>Your name<input value={form.name} onChange={set('name')} /></label>
             <label>Sign letters as<input value={form.signoffName} onChange={set('signoffName')} placeholder="Defaults to your name" /></label>
@@ -136,15 +144,16 @@ export default function SearchSettings() {
             <label>Fractional target, low ($ a year)<input type="number" min="0" value={form.targetLow} onChange={set('targetLow')} /></label>
             <label>Fractional target, high ($ a year)<input type="number" min="0" value={form.targetHigh} onChange={set('targetHigh')} /></label>
           </div>
-          <button className="primary" type="submit">
+          <button className="primary demo-hide" type="submit">
             Save search settings
           </button>
+          </fieldset>
         </form>
-        <label className="switch check-row">
+        <label className="switch check-row demo-hide">
           <input type="checkbox" checked={data.scheduled} onChange={(e) => run(() => api.setAccountSchedule(e.target.checked), e.target.checked ? 'Your pipeline will run on the schedule.' : 'Off the schedule.')} />
           Run my pipeline on the app's schedule too (it uses your Claude key)
         </label>
-        <p className="muted small">Your pipeline searches the free job sources; Google results and Google Docs are the owner's only for now. Letters and meeting preps are kept here in the app.</p>
+        <p className="muted small demo-hide">Your pipeline searches the free job sources; Google results and Google Docs are the owner's only for now. Letters and meeting preps are kept here in the app.</p>
       </section>
       {note && <p className="muted small">{note}</p>}
       {error && <div className="error">{error}</div>}

@@ -153,7 +153,8 @@ own only. test/word-docs.test.js. Each user's own Gmail and Drive
 wait on Google's verification of those scopes.
 
 ## UI and API
-The Home page (#/) is a tile per screen; Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
+The Home page (#/) opens with Today and upcoming (server/today.js, summary.today: open reminders due within 14 days or
+past due, jobs at an offer, and applications with no reply after 14 days; each opens its job), then a tile per screen; Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
 with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
 icons in web/public (install icons full-bleed, favicons as drawn) made from assets/app-icon-1024.png (kept out of the image);
 test/icons.test.js checks their sizes and that they load before sign-in.
@@ -231,6 +232,8 @@ AUTH_MODE=demo (server/auth.js): no sign-in; every non-read request gets 403 exc
 which writes nothing; server/index.js starts with demo services (no Google auth, Claude, browser, or schedule) and replays
 demo/sample-data.js SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI hides
 change controls through useDemo() (web/src/demo.jsx) and the demo-hide class; the server's refusal is what protects it.
+Demo Settings shows the sample candidate's About you and search read-only (DEMO_ABOUT_YOU and DEMO_CONFIG, served by
+server/account-routes.js in demo mode; nothing stored). A sample watch-out about location comes only from that job's workplace.
 scripts/demo-seed.js builds the sample database (marked with the demo_database setting; it refuses any other database,
 checked read-only) from demo/sample-data.js; sample prompt edits are the repo defaults plus one line (PROMPT_EDITS) and must
 validate. Sample data is invented and on example.com domains; never copy the user's data, wording, or history into it.

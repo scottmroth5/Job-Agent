@@ -142,7 +142,7 @@ export default function SettingsPage() {
         {error && <div className="error">{error}</div>}
       </section>
 
-      {!demo && <SearchSettings />}
+      <SearchSettings />
       {!demo && !account.owner && <FeedbackForm />}
       {!demo && !account.owner && <AccountControls account={account} onChange={setAccount} />}
 

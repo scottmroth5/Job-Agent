@@ -116,7 +116,48 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'];
 
 /** The start page: a tile for each screen with what needs attention, the pipeline, and this month's Claude budget. */
-export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, onLayoutSaved }) {
+// Home's Today list (server/today.js): reminders due, offers, and follow-ups, each opening its job. The first few
+// show; the rest open on request.
+const TODAY_SHOWN = 5;
+const KIND_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };
+const dueText = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+
+function TodayCard({ items, onOpenJob }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? items : items.slice(0, TODAY_SHOWN);
+  return (
+    <section className="home-card today-card" aria-labelledby="today-heading">
+      <h2 id="today-heading">Today and upcoming</h2>
+      {items.length === 0 ? (
+        <p className="muted small">Nothing due. New matches are on <a href="#/jobs">Jobs</a>.</p>
+      ) : (
+        <ul className="today-list">
+          {shown.map((t, i) => (
+            <li key={`${t.kind}-${t.jobId}-${i}`}>
+              <button type="button" className="today-item" onClick={() => onOpenJob?.(t.jobId)}>
+                <span className={`badge today-${t.kind}${t.overdue ? ' overdue' : ''}`}>{KIND_LABELS[t.kind] ?? t.kind}</span>
+                <span className="today-text">
+                  <span className="today-title">{t.title} at {t.company}</span>
+                  <span className="muted small">
+                    {t.text}
+                    {t.due ? ` · ${t.overdue ? 'was due' : 'due'} ${dueText(t.due)}` : ''}
+                  </span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {items.length > TODAY_SHOWN && (
+        <button type="button" className="link small" onClick={() => setAll((v) => !v)}>
+          {all ? 'Show fewer' : `Show ${items.length - TODAY_SHOWN} more`}
+        </button>
+      )}
+    </section>
+  );
+}
+
+export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelineFinished, onLayoutSaved }) {
   const s = summary;
   const budget = s?.budget;
   // The inbox reads the owner's own Gmail, so it is the owner's only; everything else is everyone's.
@@ -180,6 +221,7 @@ export default function HomePage({ summary, demo, onAddJob, onPipelineFinished, 
           </p>
         </section>
       )}
+      {s?.today && <TodayCard items={s.today} onOpenJob={onOpenJob} />}
       <div className="tiles">
         {order.map((k, i) => (
           <Tile

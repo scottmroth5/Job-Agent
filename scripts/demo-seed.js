@@ -265,7 +265,9 @@ Location: ${job.location}.${pay}`;
 function analysisFor(job, i, text) {
   const pick = (list, n) => Array.from({ length: n }, (_, k) => list[(i + k * 3) % list.length]);
   const strengths = pick(STRENGTHS, 3);
-  const watchOuts = pick(WATCH_OUTS, job.score >= 8 ? 1 : 2);
+  // A location watch-out only where the job's own location says so, so no sample contradicts its posting.
+  const place = { hybrid: 'Hybrid schedule two days a week in the office', onsite: 'Onsite every day' }[job.workplace];
+  const watchOuts = [...(place ? [place] : []), ...pick(WATCH_OUTS, job.score >= 8 ? 1 : 2)].slice(0, 2);
   const capped = !text && job.score > 5;
   const score = capped ? 5 : job.score;
   const reason =
@@ -317,7 +319,45 @@ function tweaks(job, i) {
 4. Cut the 2012 to 2014 role to one line to make room.`;
 }
 
+// A case discussion (Arbor's 90 day plan): the CEO, with what the plan should cover and what is still unknown.
+function insertCasePrep(db, postingId, job, createdAt, runId) {
+  const attendees = [{ name: 'Avery Brooks', role: 'CEO', firm: job.company, link: null, notes: 'Ran the first conversation; former site operations lead' }];
+  const content = `# Meeting prep: ${job.company}, ${job.title}
+
+## The meeting
+A 60 minute video session with Avery Brooks (CEO) to walk through your 90 day plan for the site platform. It is the take home case from the second round, so expect follow-up questions on each phase.
+
+## What they care about
+- ${companyBlurb(job.company)[0].toUpperCase()}${companyBlurb(job.company).slice(1)}; enrollment is growing faster than the platform.
+- Sites report slow onboarding and duplicate data entry between trial systems.
+- Every change has to keep the audit trail regulators expect.
+
+## A shape for the plan
+1. **Days 1 to 30, listen:** meet the site leads and the engineering managers, map the trial systems and where data is typed twice, and set a release and incident baseline.
+2. **Days 31 to 60, choose:** agree on two bets with the CEO, most likely site onboarding and one shared patient record, with the cost of each.
+3. **Days 61 to 90, deliver:** ship the first onboarding improvement to two pilot sites and report the before and after numbers.
+
+## Stories to tell
+1. **Accreditation:** the technology side of an inspection with no findings, as proof you can change systems without losing the audit trail.
+2. **Team growth:** 6 to 45 engineers with weekly releases, for how you would grow this team.
+
+## Questions to ask
+- Which sites would volunteer for a pilot?
+- What has the board been promised for the next two quarters?
+
+## Not known yet
+- The size of the current engineering team and its split between product and site support; ask before committing to dates.
+- Whether the plan should assume the current vendor contracts stay in place.`;
+  db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
+      doc_name, model, prompt_version, cost_usd, web_searches, run_id, created_at)
+    VALUES (@uid, ?, ?, ?, ?, 'Executive, owner, or investor', 'video', ?, 1, ?, ?, 'claude-opus-5-5', 'default', 1.18, 7, ?, ?)`).run(
+    randomUUID(), postingId, JSON.stringify(attendees), null, 'Walk through the take home case: a 90 day plan for the site platform.', content,
+    `Meeting prep: ${job.company}`, runId, createdAt,
+  );
+}
+
 function insertPrep(db, postingId, job, createdAt, runId) {
+  if (job.prep === 'case') return insertCasePrep(db, postingId, job, createdAt, runId);
   const attendees = [
     { name: 'Morgan Lee', role: 'CTO', firm: job.company, link: null, notes: 'Hiring manager; ex consulting' },
     { name: 'Riley Chen', role: 'VP Product', firm: job.company, link: null, notes: '' },

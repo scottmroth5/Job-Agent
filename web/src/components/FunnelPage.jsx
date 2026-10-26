@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useLookups } from '../lookups.jsx';
+import { sourceLabel } from '../format.js';
 
 const WINDOWS = [
   ['30', 'Last 30 days'],
   ['90', 'Last 90 days'],
   ['all', 'All time'],
 ];
-const SOURCE_LABELS = { manual: 'Added by hand', 'v1-manual': 'Added by hand (v1)', 'Google Jobs': 'Google results', email: 'Recruiter email' };
-const sourceLabel = (s) => SOURCE_LABELS[s] ?? SOURCE_LABELS[s?.toLowerCase()] ?? s;
 const pct = (x) => (x == null ? '–' : `${Math.round(x * 100)}%`);
 const days = (x) => (x == null ? '–' : `${Math.round(x * 10) / 10} days`);
 
@@ -67,7 +66,7 @@ export default function FunnelPage({ onOpenJob }) {
           ))}
         </div>
         <span className="muted small">
-          {t.found.toLocaleString()} jobs found{range === 'all' ? '' : ' in this window'}, {t.scored7.toLocaleString()} scored 7+.
+          {range === 'all' ? 'All applications. ' : 'Applications made in this window. '}{t.found.toLocaleString()} jobs found{range === 'all' ? '' : ' in it'}, {t.scored7.toLocaleString()} scored 7+.
         </span>
       </div>
 
@@ -102,13 +101,13 @@ export default function FunnelPage({ onOpenJob }) {
           </div>
         )}
         <p className="muted small">
-          {t.noReply} with no reply after 21 days. An automatic "application received" email does not count as a response.
+          Overdue: {t.noReply} with no reply after 21 days. An automatic "application received" email does not count as a response.
         </p>
       </section>
 
       <div className="stats">
-        <Stat label="Response rate" value={pct(data.rates.response)} />
-        <Stat label="Interview rate" value={pct(data.rates.interview)} />
+        <Stat label="Response rate" value={pct(data.rates.response)} note={`of ${t.applied} applications`} />
+        <Stat label="Interview rate" value={pct(data.rates.interview)} note={`of ${t.applied} applications`} />
         <Stat label="Days to first response" value={days(data.medians.daysToResponse)} note={`median of ${data.medians.responseSamples} dated`} />
         <Stat label="Days to first interview" value={days(data.medians.daysToInterview)} note={`median of ${data.medians.interviewSamples} dated`} />
       </div>
@@ -159,8 +158,8 @@ export default function FunnelPage({ onOpenJob }) {
       </section>
 
       <section className="funnel-card">
-        <h3>Waiting for a reply ({data.followUps.length})</h3>
-        <p className="muted small">Applications with no response after 14 days. A short follow-up note often helps.</p>
+        <h3>Time to follow up ({data.followUps.length})</h3>
+        <p className="muted small">Applications with no reply after 14 days, oldest first. A short follow-up note often helps; after 21 days they count as overdue above.</p>
         {data.followUps.length === 0 ? (
           <p className="muted">Nothing waiting.</p>
         ) : (

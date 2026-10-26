@@ -61,7 +61,13 @@ test('the seed builds a full sample search: jobs in every stage, scores, letters
   assert.equal(one('SELECT COUNT(*) FROM postings p WHERE NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id)'), 0);
   assert.ok(one("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'") >= 10);
   assert.equal(one("SELECT COUNT(*) FROM emails WHERE review_status = 'needs_review'"), 1);
-  assert.equal(one('SELECT COUNT(*) FROM meeting_preps'), 2);
+  assert.equal(one('SELECT COUNT(*) FROM meeting_preps'), 3, 'two interviews and the Arbor case');
+  // No watch-out contradicts its job's location (the review's Yarrow finding): a location watch-out only on a job that has it.
+  for (const r of store.db.prepare("SELECT p.workplace, s.analysis_json FROM scores s JOIN postings p ON p.id = s.posting_id WHERE s.user_id = @uid").all()) {
+    const watch = JSON.parse(r.analysis_json).watchOuts ?? [];
+    if (r.workplace !== 'hybrid') assert.ok(!watch.some((w) => /hybrid/i.test(w)), 'no hybrid watch-out on a ' + r.workplace + ' job');
+    if (r.workplace !== 'onsite') assert.ok(!watch.some((w) => /onsite/i.test(w)), 'no onsite watch-out on a ' + r.workplace + ' job');
+  }
   assert.equal(one('SELECT COUNT(*) FROM prompt_versions WHERE active = 1'), 2, 'the two sample prompt edits');
   // Every address and link is on a reserved example domain.
   for (const url of store.db.prepare('SELECT url FROM postings').pluck().all()) assert.match(url, /^https:\/\/jobs\.example\.com\//);
@@ -117,6 +123,12 @@ test('demo mode serves every screen without sign-in and says it is the demo', as
   }
   const tasks = (await app.inject('/api/tasks')).json();
   assert.deepEqual(tasks.map((t) => t.kind).sort(), ['inbox', 'pipeline', 'score']);
+  // Settings shows the sample candidate's About you and search, complete, so visitors see what scoring works from.
+  const search = (await app.inject('/api/account/search')).json();
+  assert.equal(search.demo, true);
+  assert.ok(search.profile.length >= search.profileChars.min, 'a full About you');
+  assert.deepEqual(search.problems, [], 'a complete search');
+  assert.ok((await app.inject('/api/summary')).json().today.length > 0, 'Home has a Today list');
   await app.close();
   store.close();
 });

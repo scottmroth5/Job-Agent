@@ -67,3 +67,11 @@ test('fenced blocks: shown exactly as written and escaped, and they end a paragr
   );
   assert.equal(renderMarkdown('```\nunclosed'), '<pre><code>unclosed</code></pre>', 'an unclosed fence runs to the end');
 });
+
+test("links to this site's own pages open in the same tab; other-site and script links still never do", () => {
+  assert.equal(renderInline('See the [privacy policy](/privacy).'), 'See the <a href="/privacy">privacy policy</a>.');
+  assert.equal(renderInline('[Settings](#/settings)'), '<a href="#/settings">Settings</a>');
+  for (const bad of ['[x](//evil.example)', '[x](/\\evil.example)', '[x](javascript:alert(1))', '[x](data:text/html,hi)', '[x](#top)']) {
+    assert.ok(!renderInline(bad).includes('<a'), bad);
+  }
+});
