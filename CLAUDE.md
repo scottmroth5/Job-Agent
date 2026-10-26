@@ -270,6 +270,8 @@ Health-Review): an online SQLite snapshot that must pass its integrity check, pa
 gzipped, then AES-256-GCM with a scrypt key from JOB_BACKUP_PASSPHRASE (.env only, never uploaded or logged) and a fresh
 salt and nonce per file, verified by decrypting before upload with the drive.file scope. Plaintext snapshots live only in
 the OS temp folder. Never back up .env or data/google. Kept: 7 nightly, 3 weekly, 1 monthly.
+SUPPORT_EMAIL (tools/support.js) is the published help address: Settings, Help ({{supportContact}} in help/*.md, PRIVACY.md,
+TERMS.md), the sign-in pages, the demo banner, /api/me. It is configuration, never written in the repo.
 Email goes only to the owner (the run report, failure alerts, access requests) and to a person about their own account
 (approved, not approved, paused, allowance reached), through server/notices.js, which picks each recipient itself: names,
 addresses, and links only, never job data. Never send anything else, or to anyone else.

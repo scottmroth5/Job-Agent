@@ -13,6 +13,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { escapeHtml } from '../tools/html.js';
+import { supportEmail } from '../tools/support.js';
 import { accountFor, getUser, MAX_NAME, MAX_NOTE, requestAccess } from '../db/users.js';
 import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, cookie } from './session.js';
 
@@ -105,7 +106,12 @@ export const page = (title, body) =>
   `*{box-sizing:border-box}input,textarea,button{font:inherit}input,textarea{border:1px solid #c9ced8;border-radius:8px}` +
   `button{padding:8px 16px;border-radius:8px;border:1px solid #c9ced8;background:#fff;color:inherit;cursor:pointer}button.primary{background:#1a5276;border-color:#1a5276;color:#fff}form{margin:12px 0}` +
   `@media (prefers-color-scheme: dark){body{background:#12151b;color:#e6e9ef}a{color:#7fb3d9}input,textarea,button{background:#1b2029;color:#e6e9ef;border-color:#2c3340}}main{max-width:420px;width:100%;padding:24px 16px}</style></head>` +
-  `<body><main><h1 style="font-size:20px">${escapeHtml(title)}</h1>${body}</main></body></html>`;
+  `<body><main><h1 style="font-size:20px">${escapeHtml(title)}</h1>${body}${supportLine()}</main></body></html>`;
+// The sign-in pages say where to ask for help, when SUPPORT_EMAIL is set.
+const supportLine = () => {
+  const email = supportEmail();
+  return email ? `<p style="font-size:14px;opacity:.75">Questions? Email <a href="mailto:${escapeHtml(email)}">${escapeHtml(email)}</a>.</p>` : '';
+};
 /**
  * Only same-site paths are allowed as the place to return to after signing in. Browsers read a backslash as a slash,
  * so "/\evil.example" would mean "//evil.example" (another site): backslashes, control characters, and anything that
@@ -133,6 +139,7 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
     return {
       authMode: mode,
       email: req.user ?? null,
+      supportEmail: supportEmail(),
       ...(req.account ? { role: req.account.role, status: req.account.status, owner: req.account.uid === 1, name: user?.name ?? null } : { owner: mode === 'none', role: mode === 'none' ? 'admin' : null }),
       ...(mode === 'demo' ? { demo: true, requestAccessUrl: settings.requestAccessUrl || null } : {}),
     };

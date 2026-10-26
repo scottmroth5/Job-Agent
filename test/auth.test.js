@@ -75,7 +75,7 @@ test('an allowed, verified account gets a session and reaches the API; sign out 
   assert.ok(session);
   assert.equal(seen[0].redirectUri, `${SITE}/auth/google/callback`);
   assert.ok(seen[0].codeVerifier.length >= 43, 'the PKCE verifier is sent with the code');
-  assert.deepEqual((await app.inject({ url: '/api/me', headers: { cookie: session } })).json(), { authMode: 'google', email: 'pat@example.com', role: 'admin', status: 'active', owner: true, name: null });
+  assert.deepEqual((await app.inject({ url: '/api/me', headers: { cookie: session } })).json(), { authMode: 'google', email: 'pat@example.com', supportEmail: null, role: 'admin', status: 'active', owner: true, name: null });
   assert.equal((await app.inject({ url: '/api/postings', headers: { cookie: session } })).statusCode, 200);
 
   // Writes need this site's Origin.
@@ -160,7 +160,7 @@ test('binding rules: none stays on localhost; google needs complete settings and
 test('open mode: /api/me reports no login', async () => {
   const store = openJobStore(':memory:');
   const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
-  assert.deepEqual((await app.inject('/api/me')).json(), { authMode: 'none', email: null, owner: true, role: 'admin' });
+  assert.deepEqual((await app.inject('/api/me')).json(), { authMode: 'none', email: null, supportEmail: null, owner: true, role: 'admin' });
   assert.equal((await app.inject('/api/postings')).statusCode, 200);
   await app.close();
   store.close();

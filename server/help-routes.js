@@ -7,6 +7,7 @@ import { repoPath } from '../tools/paths.js';
 import { createJobTracer } from '../tools/trace.js';
 import { currentUserId } from '../db/scope.js';
 import { OWNER_ID } from '../db/users.js';
+import { withSupport } from '../tools/support.js';
 
 export const HELP_MODEL = 'claude-haiku-4-5';
 export const MAX_QUESTION_CHARS = 500;
@@ -19,7 +20,7 @@ export function loadGuides(dir = repoPath('help')) {
   return readdirSync(dir)
     .filter((f) => f.endsWith('.md'))
     .map((f) => {
-      const markdown = readFileSync(join(dir, f), 'utf8');
+      const markdown = withSupport(readFileSync(join(dir, f), 'utf8'), undefined, 'use Send feedback in Settings');
       return { id: f.replace(/\.md$/, ''), title: /^#\s+(.+)$/m.exec(markdown)?.[1]?.trim() ?? f, markdown };
     })
     .sort((a, b) => (ORDER.indexOf(a.id) + 1 || 99) - (ORDER.indexOf(b.id) + 1 || 99));

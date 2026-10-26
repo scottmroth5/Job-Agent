@@ -8,4 +8,6 @@ Everything is under **Settings**.
 - **Time zone:** the zone your "today" follows (applied dates, the funnel's weeks, document dates).
 - **Send feedback:** something broken, confusing, or missing? It goes to the owner, who can reply by email.
 
+**Questions, problems, or requests:** use Send feedback, or {{supportContact}}.
+
 Each account sees only its own jobs, notes, and files. The owner can see your email address, status, and AI spending, but not your jobs, notes, About you, or key. See the [privacy policy](/privacy) and [terms](/terms).

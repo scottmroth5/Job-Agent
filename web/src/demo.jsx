@@ -6,7 +6,7 @@ export const DemoContext = createContext(false);
 export const useDemo = () => useContext(DemoContext);
 
 /** requestAccessUrl (REQUEST_ACCESS_URL): the real app, where someone can sign in and ask for access. */
-export function DemoBanner({ requestAccessUrl = null }) {
+export function DemoBanner({ requestAccessUrl = null, supportEmail = null }) {
   return (
     <div className="demo-banner" role="note">
       <strong>Demo</strong> · A fictional candidate&apos;s job search with made-up companies and sample data. Look around freely;
@@ -15,6 +15,11 @@ export function DemoBanner({ requestAccessUrl = null }) {
         <>
           {' '}
           <a href={requestAccessUrl}>Request access</a> to use it for your own search.
+        </>
+      )}
+      {supportEmail && (
+        <>
+          {' '}Questions: <a href={`mailto:${supportEmail}`}>{supportEmail}</a>.
         </>
       )}
     </div>

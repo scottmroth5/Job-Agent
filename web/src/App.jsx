@@ -118,7 +118,7 @@ export default function App() {
     <DemoContext.Provider value={demo}>
     <MeContext.Provider value={me}>
     <div className={demo ? 'app demo' : 'app'}>
-      {demo && <DemoBanner requestAccessUrl={me?.requestAccessUrl} />}
+      {demo && <DemoBanner requestAccessUrl={me?.requestAccessUrl} supportEmail={me?.supportEmail} />}
       <header className="topbar">
         {view !== 'home' && (
           <a href="#/" className="home-link" aria-label="Home">

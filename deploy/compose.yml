@@ -55,6 +55,8 @@ services:
       TZ: ${TZ:-UTC}
       # The banner's "Request access" link: the real app, where someone signs in with Google and asks.
       REQUEST_ACCESS_URL: https://${SITE_ADDRESS:?set SITE_ADDRESS in .env}
+      # Where to ask for help (shown on the banner); the same SUPPORT_EMAIL as the app's .env, or nothing.
+      SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
     # Builds the sample database, then serves it. A restart resets the demo.
     command: ["sh", "-c", "node scripts/demo-seed.js --force && exec node server/index.js"]
     # Nothing on disk survives or is shared: the code is read-only and the sample data lives in memory.

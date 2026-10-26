@@ -41,4 +41,4 @@ You can also revoke the app's Google access at [myaccount.google.com/permissions
 
 ## Contact
 
-Questions about this policy can be raised as an issue on this repository.
+Questions about this policy, your data, or the app: {{supportContact}}.

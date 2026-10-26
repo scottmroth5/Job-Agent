@@ -20,3 +20,7 @@ The app is provided as it is, without any warranty. It may be unavailable, lose 
 ## Changes
 
 These terms can change. Using the app after a change means you accept the new terms.
+
+## Contact
+
+Questions, problems, or requests: {{supportContact}}.
