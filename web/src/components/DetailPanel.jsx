@@ -7,6 +7,7 @@ import Attachments from './Attachments.jsx';
 import Notes from './Notes.jsx';
 import MeetingPrep from './MeetingPrep.jsx';
 import { useDemo } from '../demo.jsx';
+import { isOwner, useMe } from '../me.jsx';
 
 
 function List({ items }) {
@@ -23,12 +24,16 @@ function List({ items }) {
 export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const lk = useLookups();
   const demo = useDemo();
+  const me = useMe();
   const [job, setJob] = useState(null);
   const [error, setError] = useState(null);
   const [terms, setTerms] = useState({ rateText: '', hoursText: '' });
   const [paste, setPaste] = useState('');
   const [task, setTask] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [letterCopied, setLetterCopied] = useState(false);
+  // With a Google Doc, the letter's text is shown on request; without one (other users), always.
+  const [showLetter, setShowLetter] = useState(false);
   const [showText, setShowText] = useState(false);
   const [ident, setIdent] = useState(null); // { title, company } while editing
 
@@ -77,6 +82,12 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const copyLetter = async () => {
+    await navigator.clipboard.writeText(job.letter.content);
+    setLetterCopied(true);
+    setTimeout(() => setLetterCopied(false), 1500);
   };
 
   const copyTweaks = async () => {
@@ -167,7 +178,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               </div>
             )}
             {job.letter?.flags?.length > 0 && <div className="warn-box">Cover letter needs review: {job.letter.flags.join('; ')}</div>}
-            {job.letter && !job.letter.url && !demo && <div className="warn-box">The cover letter was written but not saved as a Doc yet; the next run retries it.</div>}
+            {job.letter && !job.letter.url && !demo && isOwner(me) && <div className="warn-box">The cover letter was written but not saved as a Doc yet; the next run retries it.</div>}
 
             <fieldset className="grid2 plain" disabled={demo}>
               <label>
@@ -288,11 +299,26 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             </section>
             )}
 
-            {demo && job.letter?.content && (
+            {job.letter?.content && (demo || !job.letter.url || showLetter) && (
               <section>
                 <h3>Cover letter</h3>
+                <div className="row">
+                  <button type="button" onClick={copyLetter}>{letterCopied ? 'Copied!' : 'Copy letter'}</button>
+                  {!demo && (
+                    <a className="button" href={`/api/postings/${job.id}/letter.docx`} download>
+                      Download Word
+                    </a>
+                  )}
+                </div>
                 <pre className="tweaks">{job.letter.content}</pre>
               </section>
+            )}
+            {job.letter?.content && job.letter.url && !demo && !showLetter && (
+              <p>
+                <button type="button" className="link" onClick={() => setShowLetter(true)}>
+                  Show the letter here (copy or download Word)
+                </button>
+              </p>
             )}
 
             {job.tweaks && (

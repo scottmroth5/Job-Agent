@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, followTask } from '../api.js';
 import { Markdown } from './Notes.jsx';
 import TaskProgress from './TaskProgress.jsx';
+import { useDemo } from '../demo.jsx';
 
 const KINDS = ['Recruiter or search firm', 'Hiring manager', 'Executive, owner, or investor', 'Panel or team', 'Technical', 'Networking or introduction', 'Other'];
 const FORMATS = ['Video', 'Phone', 'In person'];
@@ -149,8 +150,9 @@ function PrepDialog({ job, onClose, onDone }) {
   );
 }
 
-/** A finished prep, formatted, with its Google Doc and a copy button. */
+/** A finished prep, formatted, with its Google Doc (when there is one), a copy button, and a Word download. */
 function PrepReader({ prepId, onClose }) {
+  const demo = useDemo();
   const [prep, setPrep] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
@@ -175,6 +177,11 @@ function PrepReader({ prepId, onClose }) {
             <div className="links">
               {prep.docUrl && <a className="button" href={prep.docUrl} target="_blank" rel="noreferrer">Open Google Doc</a>}
               <button onClick={copy}>{copied ? 'Copied' : 'Copy text'}</button>
+              {!demo && (
+                <a className="button" href={`/api/meeting-preps/${prep.id}/docx`} download>
+                  Download Word
+                </a>
+              )}
               <button onClick={() => window.print()}>Print</button>
             </div>
             <Markdown text={prep.content} className="md prep" />

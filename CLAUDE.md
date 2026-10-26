@@ -141,7 +141,11 @@ LinkedIn profile as PDFs (documents), text files and pasted text, and notes go t
 DRAFT_SCHEMA; it returns a draft About you and starting search with [add: ...] gaps and questions. Nothing is saved (the
 forms are filled for review), files are never kept, the materials are untrusted data (system prompt), DRAFTS_PER_DAY.
 The owner gets it too, to copy into their Google Doc. Guides with a template and made-up examples: help/about-you.md,
-help/search-settings.md, help/prompts.md. tools/markdown.js renders fenced blocks (escaped). test/onboarding.test.js. Each user's own Gmail and Drive
+help/search-settings.md, help/prompts.md. tools/markdown.js renders fenced blocks (escaped). test/onboarding.test.js.
+Letters and preps in the app: the job panel shows a letter's text (always without a Google Doc, on request with one) with
+Copy and Download Word; the prep reader has Download Word too. server/word-docs.js builds the .docx (the letter in the
+Google Doc's layout from the current user's settings; the prep from its Markdown), server/document-routes.js serves your
+own only. test/word-docs.test.js. Each user's own Gmail and Drive
 wait on Google's verification of those scopes.
 
 ## UI and API
