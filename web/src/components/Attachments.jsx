@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api.js';
+import { DashIcon } from './DashIcon.jsx';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const size = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} bytes`);
@@ -40,7 +41,7 @@ export default function Attachments({ jobId, items, onChanged }) {
 
   return (
     <section>
-      <h3>Attachments</h3>
+      <h3 className="with-icon"><DashIcon name="attachments" />Attachments</h3>
       {items.length > 0 && (
         <ul className="attachments">
           {items.map((a) => (

@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { api } from '../api.js';
 import { renderMarkdown } from '../../../tools/markdown.js';
+import { DashIcon } from './DashIcon.jsx';
 
 /** Formatted Markdown, rendered safely (tools/markdown.js escapes everything first). */
 export function Markdown({ text, className = 'md' }) {
@@ -129,7 +130,8 @@ export default function Notes({ jobId, entries, onChanged }) {
 
   return (
     <section>
-      <h3>
+      <h3 className="with-icon">
+        <DashIcon name="notes" />
         Notes {!adding && <button className="link small demo-hide" onClick={() => { setAdding(true); setEditing(null); }}>+ Add a note</button>}
       </h3>
       {adding && (

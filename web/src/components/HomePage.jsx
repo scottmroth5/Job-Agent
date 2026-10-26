@@ -3,6 +3,7 @@ import PipelineButton from './PipelineButton.jsx';
 import { api } from '../api.js';
 import { arranged, moved } from '../layout.js';
 import { isOwner, useMe } from '../me.jsx';
+import { DashIcon, DASH } from './DashIcon.jsx';
 
 // Simple line illustrations for the tiles (inline SVG: nothing to download, and they follow the text color).
 const ICONS = {
@@ -71,9 +72,13 @@ function Icon({ name }) {
 function Tile({ href, onClick, icon, title, stat, alert, arrange }) {
   const body = (
     <>
-      <span className={`tile-art t-${icon}`}>
-        <Icon name={icon} />
-      </span>
+      {DASH[icon] ? (
+        <DashIcon name={icon} className="tile-img" />
+      ) : (
+        <span className={`tile-art t-${icon}`}>
+          <Icon name={icon} />
+        </span>
+      )}
       <span className="tile-title">{title}</span>
       {stat && <span className={`tile-stat${alert ? ' alert' : ''}`}>{stat}</span>}
     </>

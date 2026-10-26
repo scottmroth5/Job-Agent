@@ -14,6 +14,7 @@ import { DemoBanner, DemoContext } from './demo.jsx';
 import { MeContext } from './me.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import HelpPage from './components/HelpPage.jsx';
+import { DashIcon } from './components/DashIcon.jsx';
 
 // #/ is the Home page; each screen has its own address.
 const VIEWS = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin', settings: 'Settings', help: 'Help' };
@@ -125,6 +126,7 @@ export default function App() {
             <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M15 18l-6-6 6-6" />
             </svg>
+            <DashIcon name="home" className="home-img" />
             <span>Home</span>
           </a>
         )}

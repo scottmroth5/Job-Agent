@@ -8,6 +8,7 @@ import Notes from './Notes.jsx';
 import MeetingPrep from './MeetingPrep.jsx';
 import { useDemo } from '../demo.jsx';
 import { isOwner, useMe } from '../me.jsx';
+import { DashIcon } from './DashIcon.jsx';
 
 
 function List({ items }) {
@@ -233,7 +234,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             )}
 
             <section>
-              <h3>Why it fits</h3>
+              <h3 className="with-icon"><DashIcon name="score" />Why it fits</h3>
               {a.whyItFits || job.reason ? <p>{a.whyItFits ?? job.reason}</p> : null}
               {job.scoreSource?.startsWith('v1') && (
                 <p className="muted small">
@@ -301,7 +302,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
 
             {job.letter?.content && (demo || !job.letter.url || showLetter) && (
               <section>
-                <h3>Cover letter</h3>
+                <h3 className="with-icon"><DashIcon name="letter" />Cover letter</h3>
                 <div className="row">
                   <button type="button" onClick={copyLetter}>{letterCopied ? 'Copied!' : 'Copy letter'}</button>
                   {!demo && (
@@ -323,7 +324,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
 
             {job.tweaks && (
               <section>
-                <h3>Resume tweaks</h3>
+                <h3 className="with-icon"><DashIcon name="resume" />Resume tweaks</h3>
                 <pre className="tweaks">{job.tweaks.content}</pre>
               </section>
             )}

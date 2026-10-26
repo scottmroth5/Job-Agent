@@ -386,6 +386,10 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
 .tile:active { transform: scale(0.98); }
 .tile-art { display: inline-flex; align-items: center; justify-content: center; width: 52px; height: 52px; border-radius: 14px; margin-bottom: 4px; }
 .tile-icon { width: 32px; height: 32px; }
+.tile-img { width: 60px; height: 60px; border-radius: 14px; margin-bottom: 2px; }
+.dash-icon { width: 26px; height: 26px; border-radius: 7px; flex: none; }
+h3.with-icon { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.home-img { width: 24px; height: 24px; border-radius: 6px; margin-right: 4px; }
 .tile-title { font-size: 17px; font-weight: 600; }
 .tile-stat { font-size: 13px; color: var(--muted); }
 .tile-stat.alert { color: var(--mid); font-weight: 600; }
@@ -394,7 +398,7 @@ p.signed-in { display: block; text-align: center; margin-top: 18px; }
 .t-funnel { background: #f3e8fb; color: #6c3a9a; }
 .t-activity { background: #fdf0e1; color: #a35a0b; }
 .t-admin { background: #eceff3; color: #475467; }
-.t-add { background: var(--accent); color: #fff; }
+.t-add { background: var(--accent); color: #fff; width: 60px; height: 60px; margin-bottom: 2px; }
 .t-settings { background: #e8f1f1; color: #1f6f6a; }
 .t-help { background: #fbeef2; color: #a33a5b; }
 @media (prefers-color-scheme: dark) {

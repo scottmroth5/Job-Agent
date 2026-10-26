@@ -38,7 +38,7 @@ Job specific logic stays in this repo; never add it to agent-core.
                     placeholder companies ("See posting") are read from the Google title. Rule changes need npm run cleanup to rekey
 /web                React (Vite) UI: Home (#/, a tile per screen with its count, Run pipeline, the Claude budget), Jobs (#/jobs: stage,
                     status, and search; track, needs description, discovered since, and score under Advanced filters), detail panel,
-                    add-job dialog, fractional stacking bar. Phones get a back link to Home and the screen name instead of tabs
+                    add-job dialog, fractional stacking bar. Pictures: web/public/dash (160 px PNGs) through DashIcon.jsx's map (Home tiles, the Home link, panel headings) Phones get a back link to Home and the screen name instead of tabs
 /evals              eval runner and rubric code; real eval cases live in data/evals; evals/inbox/cases.json is synthetic. Results: EVALS.md
 /test               node:test suites with synthetic fixtures only
 /data               gitignored: job-agent.db, config/, google/ (OAuth client and token), attachments/, v1-export/

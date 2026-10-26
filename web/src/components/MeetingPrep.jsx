@@ -3,6 +3,7 @@ import { api, followTask } from '../api.js';
 import { Markdown } from './Notes.jsx';
 import TaskProgress from './TaskProgress.jsx';
 import { useDemo } from '../demo.jsx';
+import { DashIcon } from './DashIcon.jsx';
 
 const KINDS = ['Recruiter or search firm', 'Hiring manager', 'Executive, owner, or investor', 'Panel or team', 'Technical', 'Networking or introduction', 'Other'];
 const FORMATS = ['Video', 'Phone', 'In person'];
@@ -216,7 +217,8 @@ export default function MeetingPrep({ job, onChanged }) {
 
   return (
     <section>
-      <h3>
+      <h3 className="with-icon">
+        <DashIcon name="prep" />
         Meeting prep <button className="link small demo-hide" onClick={() => setAsking(true)}>Prepare for a meeting</button>
       </h3>
       {preps.length ? (
