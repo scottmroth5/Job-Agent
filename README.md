@@ -186,6 +186,19 @@ Everything personal stays on your machine: your settings (`data/config`), Google
 
 Job sites have their own terms of use. The agent reads public listings at a polite pace, backs off when rate limited, and does not try to get around sites that block automated access; for those, paste the description through the web page instead.
 
+## Future plans
+
+Job Hunt is an evolving personal project. Potential areas for continued development include:
+
+- **Guided onboarding:** Help users set up their profile, career goals, and job preferences.
+- **Job discovery and fit:** Continue improving how opportunities are found and evaluated against a user’s experience and goals.
+- **Application workflow:** Make it easier to move from evaluating a role to tailoring materials and tracking an application.
+- **Interview preparation:** Explore more personalized preparation based on the role, company, and user’s background.
+- **Search insights:** Provide clearer visibility into job search activity, progress, and opportunities for follow-up.
+- **Mobile experience:** Improve access to key job search and tracking workflows on smaller screens.
+
+These ideas are under consideration and may change as the application evolves.
+
 ## Project layout
 
 | Path | Contents |
