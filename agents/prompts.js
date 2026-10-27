@@ -151,6 +151,21 @@ export function restorePrompt(db, name, versionId) {
   return getPrompt(db, name);
 }
 
+/** The version hash a template has (what scores and artifacts record), for a template not yet saved. */
+export const versionOf = (name, template) => hash(template, defaultPrompt(name).schemaText);
+
+/**
+ * What a recorded prompt version was, for the job panel's score details: the repo default, one of the user's saved
+ * edits (with its note and date), or one no longer known (the default text has changed since); and whether it is the
+ * prompt in use now. null when nothing was recorded ('default' rows from before versions were hashed).
+ */
+export function describeVersion(db, name, version) {
+  if (!version || version === 'default') return null;
+  const saved = listVersions(db, name).find((v) => v.version === version);
+  const kind = version === versionOf(name, defaultPrompt(name).template) ? 'default' : saved ? 'edit' : 'earlier';
+  return { name, version, kind, note: saved?.note ?? null, editedAt: saved?.createdAt ?? null, current: getPrompt(db, name).version === version };
+}
+
 /** Saved versions, newest first, with a hash matching what scores and artifacts record. */
 export function listVersions(db, name) {
   const base = defaultPrompt(name);

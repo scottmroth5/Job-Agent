@@ -19,7 +19,7 @@ import { addNote } from '../agents/notes.js';
 import { companyTitleKey } from '../tools/urls.js';
 import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { CANDIDATE, DEMO_CONFIG, JOBS, PROMPT_EDITS, REVIEW_EMAIL, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
-import { defaultPrompt, validateTemplate } from '../agents/prompts.js';
+import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.js';
 
 const MARKER = 'demo_database';
 const LETTER_MODEL = 'claude-sonnet-5-5';
@@ -49,7 +49,13 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
       @text, @fetchedAt, @fetchStatus, @fetchMethod, @workplace, @locationCheck, @track, @rateText, @rateMin, @rateMax, @rateUnit,
       @hoursMin, @hoursMax, @createdAt, @updatedAt)`);
   const insertScore = db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
-    VALUES (@uid, ?, ?, ?, ?, 'v2', ?, 'default', ?, ?)`);
+    VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?)`);
+  // Each sample score records the version of the scoring prompt in effect (the sample edit where there is one), as a
+  // real score does, so the job panel's score details show it.
+  const scoreVersion = (job) => {
+    const name = job.track === 'fractional' ? 'score-fractional' : 'score';
+    return versionOf(name, prompts.find((p) => p.name === name)?.template ?? defaultPrompt(name).template);
+  };
   const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, doc_name, flags_json, source, model, prompt_version, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, ?, 'v2', ?, 'default', ?, ?)`);
   const insertHistory = db.prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, ?, ?)');
@@ -132,7 +138,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
 
     const run = runFor(job.days);
     const analysis = analysisFor(job, i, text);
-    insertScore.run(id, analysis.score, analysis.reason, JSON.stringify(analysis), DEFAULT_SCORE_MODEL, run, discoveredAt);
+    insertScore.run(id, analysis.score, analysis.reason, JSON.stringify(analysis), DEFAULT_SCORE_MODEL, scoreVersion(job), run, discoveredAt);
 
     if (job.letter) {
       const flags = i % 5 === 2 ? ['over the word limit'] : [];

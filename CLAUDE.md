@@ -208,6 +208,8 @@ Default model and promotion threshold live in agents/discovery/score.js with the
 Change the prompt, schema, model, or threshold only after rerunning the scoring eval and comparing pairwise accuracy.
 Never kept (tools/listings.js): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
 Without posting text a score is capped at 5 (analysis.uncappedScore keeps the original) and the job is never promoted; the UI flags 7+ ones.
+The job panel's score details (server/queries.js scoreDetails) say when, by which model, from text or title, and with
+which prompt (agents/prompts.js describeVersion matches the stored version hash: default, a saved edit, or earlier).
 Sonnet 5.5 and Opus 5.5 always think: keep effort low and maxTokens generous for scoring (MODEL_SETTINGS).
 Scripts that need secrets load .env through node --env-file.
 

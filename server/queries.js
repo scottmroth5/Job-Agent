@@ -8,6 +8,7 @@ import { listAttachments } from './attachments.js';
 import { listPreps } from '../agents/hunt/prep.js';
 import { addNote, listNotes } from '../agents/notes.js';
 import { localDay } from '../tools/dates.js';
+import { describeVersion } from '../agents/prompts.js';
 import { budgetStatus } from '../agents/budget.js';
 import { currentUserId } from '../db/scope.js';
 import { OWNER_ID } from '../db/users.js';
@@ -40,6 +41,7 @@ const awaitingDescription = (lk) => `(${NO_TEXT} AND p.status IN ${sqlList(lk.id
 // The row query; db supplies the lists (agents/lookups.js) the status and stage conditions use. p is the current
 // user's postings only (a subquery SQLite flattens, so callers add their own WHERE and indexes still apply).
 const base = (db, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
+    ls.model AS score_model, ls.prompt_version AS score_prompt_version, ls.created_at AS scored_at,
     ${awaitingDescription(lk)} AS awaiting_description,
     -- flagged only while this job still waits on the user (new) and another live copy exists
     p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.user_id = p.user_id AND q.company_title_key = p.company_title_key AND q.id != p.id AND ${liveCopySql(db)}) AS shares_key,
@@ -154,6 +156,7 @@ export function getPosting(db, id, config = {}) {
     meetingPreps: listPreps(db, r.id),
     noteEntries: listNotes(db, r.id),
     analysis: parse(r.analysis_json),
+    scoreDetails: scoreDetails(db, r),
     notes: r.notes,
     text: r.jd_text ?? r.fetched_text ?? null,
     textSource: r.jd_text ? 'pasted' : r.fetched_text ? 'fetched' : null,
@@ -167,6 +170,26 @@ export function getPosting(db, id, config = {}) {
       .prepare('SELECT from_status AS fromStatus, to_status AS toStatus, changed_by AS changedBy, changed_at AS changedAt FROM status_history WHERE posting_id = ? AND user_id = @uid ORDER BY id')
       .all(id),
     sightings: db.prepare('SELECT source, url, seen_on AS seenOn FROM posting_sightings WHERE posting_id = ? AND user_id = @uid ORDER BY id').all(id),
+  };
+}
+
+/**
+ * How the current score was made, for the job panel: when, by which model, from the posting text or the title alone
+ * (capped), with which prompt (agents/prompts.js describeVersion), and whether text has arrived since a capped score.
+ */
+function scoreDetails(db, r) {
+  if (r.score == null) return null;
+  const analysis = parse(r.analysis_json) ?? {};
+  const capped = analysis.uncappedScore != null;
+  const hasText = Boolean((r.jd_text || r.fetched_text || '').trim());
+  return {
+    at: r.scored_at,
+    model: r.score_model ?? null,
+    source: r.score_source,
+    from: r.score_source === 'v1-quick' || capped ? 'title' : String(r.score_source).startsWith('v1') ? 'v1' : r.score_source === 'v2-rule' ? 'rule' : 'text',
+    uncappedScore: capped ? analysis.uncappedScore : null,
+    textSinceScore: capped && hasText,
+    prompt: r.score_source === 'v2' ? describeVersion(db, lookups(db).scorePrompt(r.track), r.score_prompt_version) : null,
   };
 }
 

@@ -22,6 +22,35 @@ function List({ items }) {
   );
 }
 
+// How the current score was made (server/queries.js scoreDetails): when, by which model, from the posting text or the
+// title alone, and with which prompt, so a reader can judge it and knows when a re-score would change it.
+const modelName = (id) => {
+  const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/.exec(id ?? '');
+  return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? `.${m[3]}` : ''}` : id;
+};
+const dayText = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+
+function ScoreDetails({ d }) {
+  if (!d || d.from === 'v1' || String(d.source).startsWith('v1')) return null; // v1 imports have their own line below
+  const parts = [];
+  if (d.from === 'rule') parts.push(`Scored ${dayText(d.at)} by a rule, not AI (a list of jobs or a site you skip)`);
+  else parts.push(`Scored ${dayText(d.at)}${d.model ? ` by ${modelName(d.model)}` : ''}`);
+  if (d.from === 'text') parts.push('from the posting text');
+  if (d.from === 'title') parts.push(`from the title only, so capped at 5${d.uncappedScore ? ` (it would be ${d.uncappedScore})` : ''}`);
+  const p = d.prompt;
+  if (p) {
+    const which = p.kind === 'default' ? 'the default prompt' : p.kind === 'edit' ? `your prompt edit of ${dayText(p.editedAt)}${p.note ? ` (${p.note})` : ''}` : 'an earlier version of the prompt';
+    parts.push(`with ${which}${p.current ? '' : ', since changed'}`);
+  }
+  const stale = d.textSinceScore || (p && !p.current);
+  return (
+    <p className="score-details muted small">
+      {parts.join(' · ')}.
+      {stale && <span className="budget warn"> {d.textSinceScore ? 'A description was added since: Re-score to use it.' : 'Re-score to use the current prompt.'}</span>}
+    </p>
+  );
+}
+
 // The job's next steps (server/today.js, the same rules as Home's Today list): open reminders with their due dates, an
 // offer to answer, or a follow-up due. Opening a job from Today or the Inbox lands here, on the task.
 const STEP_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };
@@ -282,6 +311,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             <section>
               <h3 className="with-icon"><DashIcon name="score" />Why it fits</h3>
               {a.whyItFits || job.reason ? <p>{a.whyItFits ?? job.reason}</p> : null}
+              <ScoreDetails d={job.scoreDetails} />
               {job.scoreSource?.startsWith('v1') && (
                 <p className="muted small">
                   Scored by v1{job.scoreSource === 'v1-quick' ? ' from the title only' : ''}. Use Re-score for a full analysis
