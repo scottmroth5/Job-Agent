@@ -591,3 +591,11 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 .next-step .badge { flex: none; min-width: 84px; text-align: center; }
 .next-step-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0; }
 .next-step .row { margin-left: auto; }
+
+/* Keyboard and screen readers (UX review step 5). */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.jobs th .sort-button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 2px; font: inherit; color: inherit; }
+.jobs .role-link { all: unset; cursor: pointer; font-weight: 600; color: var(--text); overflow-wrap: anywhere; margin-right: 6px; }
+.jobs .role-link:hover { text-decoration: underline; }
+.jobs th .sort-button:focus-visible, .jobs .role-link:focus-visible, .today-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.panel:focus { outline: none; }

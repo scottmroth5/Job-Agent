@@ -146,7 +146,25 @@ export default function FunnelPage({ onOpenJob }) {
 
       <section className="funnel-card">
         <h3>Applications per week</h3>
-        <div className="weeks" role="img" aria-label={`Applications per week for the last ${data.weeks.length} weeks`}>
+        {/* The bars are for the eye; screen readers get the same numbers as a table. */}
+        <table className="sr-only">
+          <caption>Applications per week, the last {data.weeks.length} weeks</caption>
+          <thead>
+            <tr>
+              <th scope="col">Week of</th>
+              <th scope="col">Applications</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.weeks.map((w) => (
+              <tr key={w.weekStart}>
+                <td>{w.weekStart}</td>
+                <td>{w.applied}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <div className="weeks" aria-hidden="true">
           {data.weeks.map((w) => (
             <div key={w.weekStart} className="week" title={`Week of ${w.weekStart}: ${w.applied}`}>
               <span className="week-count">{w.applied || ''}</span>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api, followTask } from '../api.js';
 import { useLookups } from '../lookups.jsx';
 import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM, sourceLabel } from '../format.js';
@@ -125,6 +125,33 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [id]);
 
+  // A dialog for the keyboard and screen readers: focus moves into the panel when it opens, Tab stays inside it, and
+  // closing it puts focus back on whatever opened it (a job's title, a Today row, an Inbox link).
+  const panelRef = useRef(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    panelRef.current?.focus();
+    return () => {
+      if (opener && document.contains(opener)) opener.focus();
+    };
+  }, []);
+  const trapTab = (e) => {
+    if (e.key !== 'Tab' || !panelRef.current) return;
+    const items = [...panelRef.current.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')].filter(
+      (el) => !el.disabled && el.offsetParent !== null,
+    );
+    if (!items.length) return;
+    const first = items[0];
+    const last = items[items.length - 1];
+    if (e.shiftKey && (document.activeElement === first || document.activeElement === panelRef.current)) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  };
+
   const save = async (patch) => {
     try {
       const j = await api.update(id, patch);
@@ -168,7 +195,17 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
 
   return (
     <div className="panel-backdrop" onClick={onClose}>
-      <aside className="panel" onClick={(e) => e.stopPropagation()} aria-label="Job details">
+      <aside
+        className="panel"
+        ref={panelRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={job ? 'panel-title' : undefined}
+        aria-label={job ? undefined : 'Job details'}
+        onKeyDown={trapTab}
+        onClick={(e) => e.stopPropagation()}
+      >
         <button className="close" onClick={onClose} aria-label="Close">×</button>
         {!job && !error && <p className="muted">Loading…</p>}
         {error && <div className="error">{error}</div>}
@@ -201,7 +238,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                   </form>
                 ) : (
                   <>
-                    <h2>{job.title}</h2>
+                    <h2 id="panel-title">{job.title}</h2>
                     <div className="muted">
                       {job.company}
                       {job.location ? ` · ${job.location}` : ''} · {sourceLabel(job.source)}

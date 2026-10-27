@@ -47,16 +47,19 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
           <tr>
             {stackable && <th aria-label="Add to stack" />}
             {columns.map((c) => (
-              <th key={c.key} onClick={() => toggleSort(c.key)} className="sortable" aria-sort={sort.key === c.key ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}>
-                {c.label}
-                {sort.key === c.key ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}
+              <th key={c.key} scope="col" className="sortable" aria-sort={sort.key === c.key ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none'}>
+                {/* A real button, so the sort works from the keyboard and screen readers announce it with aria-sort. */}
+                <button type="button" className="sort-button" onClick={() => toggleSort(c.key)}>
+                  {c.label}
+                  <span aria-hidden="true">{sort.key === c.key ? (sort.dir > 0 ? ' ▲' : ' ▼') : ''}</span>
+                </button>
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
           {sorted.map((j) => (
-            <tr key={j.id} className={[j.id === selectedId && 'selected', j.awaitingDescription && 'needs-desc'].filter(Boolean).join(' ')} onClick={() => onOpen(j.id)} tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onOpen(j.id)}>
+            <tr key={j.id} className={[j.id === selectedId && 'selected', j.awaitingDescription && 'needs-desc'].filter(Boolean).join(' ')} onClick={() => onOpen(j.id)}>
               {stackable && (
                 <td className="stack-cell" onClick={(e) => e.stopPropagation()}>
                   <input type="checkbox" aria-label="Include in stack" checked={stack.includes(j.id)} onChange={() => onToggleStack(j.id)} />
@@ -72,7 +75,17 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
                   )}
                   {c.key === 'title' && (
                     <>
-                      <span className="role">{j.title}</span>
+                      {/* The row opens on a click anywhere; the title is the real control for the keyboard and screen readers. */}
+                      <button
+                        type="button"
+                        className="role role-link"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpen(j.id);
+                        }}
+                      >
+                        {j.title}
+                      </button>
                       {j.track !== lk.roles.track.default && <span className="badge frac">{lk.label('track', j.track).toLowerCase()}</span>}
                       {j.attachmentCount > 0 && <span className="badge" title={`${j.attachmentCount} attachment${j.attachmentCount === 1 ? '' : 's'}`}>📎 {j.attachmentCount}</span>}
                       {j.hasCopies && <span className="badge warn" title="Another saved job has the same company and title; open it to compare">possible duplicate</span>}

@@ -179,6 +179,9 @@ The in-app scheduler (server/scheduler.js) runs SCHEDULE_PIPELINE (then the inbo
 while the server runs, through the same task starters as the buttons (pipeline-routes start, inbox-routes startCheck); it
 catches up a run missed in the last 12 hours. GET /api/schedule lists the jobs. It replaces the Windows tasks in the cloud;
 never enable both. Child scripts run through services.runScript.
+Keyboard and screen readers: job titles and column headers in the Jobs table are real buttons (aria-sort on the header);
+the job panel is a dialog that takes focus, keeps Tab inside, and returns focus to its opener; charts carry a table
+for screen readers (.sr-only). Keep new controls as buttons or links, not clickable divs or rows.
 Attachments (server/attachments.js): the raw file is the POST body with its name in X-Filename, stored as
 data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images open inline, and downloads carry nosniff and a sandbox CSP.
 
@@ -236,6 +239,7 @@ AUTH_MODE=demo (server/auth.js): no sign-in; every non-read request gets 403 exc
 which writes nothing; server/index.js starts with demo services (no Google auth, Claude, browser, or schedule) and replays
 demo/sample-data.js SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI hides
 change controls through useDemo() (web/src/demo.jsx) and the demo-hide class; the server's refusal is what protects it.
+The demo's /api/me names the sample candidate (DEMO_EMAIL, an example.com address) so the header reads like production's.
 Demo Settings shows the sample candidate's About you and search read-only (DEMO_ABOUT_YOU and DEMO_CONFIG, served by
 server/account-routes.js in demo mode; nothing stored). A sample watch-out about location comes only from that job's workplace.
 scripts/demo-seed.js builds the sample database (marked with the demo_database setting; it refuses any other database,
