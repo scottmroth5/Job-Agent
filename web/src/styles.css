@@ -582,3 +582,12 @@ button.danger-link { color: var(--low); padding: 0; }
   .badge.overdue { background: #3d1f1c; color: #f2a69c; }
 }
 fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
+
+/* The job panel's Next step box: the job's open reminders, offer, or follow-up, above everything else. */
+.next-steps { border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 10px; padding: 10px 12px; margin: 10px 0 12px; background: var(--card); }
+.next-steps h3 { margin: 0 0 6px; font-size: 15px; }
+.next-step { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 6px 0; }
+.next-step + .next-step { border-top: 1px solid var(--border); }
+.next-step .badge { flex: none; min-width: 84px; text-align: center; }
+.next-step-text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 200px; min-width: 0; }
+.next-step .row { margin-left: auto; }

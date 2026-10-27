@@ -22,6 +22,41 @@ function List({ items }) {
   );
 }
 
+// The job's next steps (server/today.js, the same rules as Home's Today list): open reminders with their due dates, an
+// offer to answer, or a follow-up due. Opening a job from Today or the Inbox lands here, on the task.
+const STEP_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };
+const dueText = (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+function NextSteps({ steps, onPrepare, onDone }) {
+  if (!steps?.length) return null;
+  return (
+    <section className="next-steps" aria-label="Next step">
+      <h3>Next step</h3>
+      {steps.map((t, i) => (
+        <div key={t.id ?? `${t.kind}-${i}`} className="next-step">
+          <span className={`badge today-${t.kind}${t.overdue ? ' overdue' : ''}`}>{STEP_LABELS[t.kind] ?? t.kind}</span>
+          <span className="next-step-text">
+            <b>{t.text}</b>
+            {t.due && <span className="muted small">{t.overdue ? 'Was due' : 'Due'} {dueText(t.due)}</span>}
+          </span>
+          <span className="row">
+            {t.kind === 'interview' && (
+              <button type="button" className="demo-hide" onClick={onPrepare}>
+                Prepare for a meeting
+              </button>
+            )}
+            {t.id && (
+              <button type="button" className="demo-hide" onClick={() => onDone(t.id)}>
+                Done
+              </button>
+            )}
+          </span>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const lk = useLookups();
   const demo = useDemo();
@@ -32,6 +67,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const [paste, setPaste] = useState('');
   const [task, setTask] = useState(null);
   const [copied, setCopied] = useState(false);
+  const [askPrep, setAskPrep] = useState(0); // the Next step box's Prepare for a meeting opens the prep form
   const [letterCopied, setLetterCopied] = useState(false);
   // With a Google Doc, the letter's text is shown on request; without one (other users), always.
   const [showLetter, setShowLetter] = useState(false);
@@ -156,6 +192,16 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               </div>
             </div>
 
+            <NextSteps
+              steps={job.nextSteps}
+              onPrepare={() => setAskPrep((n) => n + 1)}
+              onDone={async (id) => {
+                await api.closeReminder(id, 'done').catch((err) => setError(err.message));
+                await load();
+                onChanged();
+              }}
+            />
+
             <div className="links">
               {job.url && !demo && <a className="button primary" href={job.url} target="_blank" rel="noreferrer">Open posting / apply ↗</a>}
               {job.letter?.url && <a className="button" href={job.letter.url} target="_blank" rel="noreferrer">Cover letter (Google Doc) ↗</a>}
@@ -271,7 +317,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
 
             <Notes key={job.id} jobId={job.id} entries={job.noteEntries ?? []} onChanged={async () => { await load(); onChanged(); }} />
 
-            <MeetingPrep job={job} onChanged={async () => { await load(); onChanged(); }} />
+            <MeetingPrep job={job} askSignal={askPrep} onChanged={async () => { await load(); onChanged(); }} />
 
             {!demo && <Attachments jobId={job.id} items={job.attachments ?? []} onChanged={async () => { await load(); onChanged(); }} />}
 

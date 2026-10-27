@@ -119,6 +119,11 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
     },
   );
 
+  return { startCheck };
+}
+
+/** Closing a reminder: registered whether or not Gmail is set up, since the job panel's Next step box closes them too. */
+export function registerReminderRoutes(app, { db }) {
   app.patch(
     '/api/inbox/reminders/:id',
     {
@@ -135,7 +140,6 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
       return { id: req.params.id, status: req.body.status };
     },
   );
-
-  return { startCheck };
 }
+
 

@@ -154,7 +154,9 @@ wait on Google's verification of those scopes.
 
 ## UI and API
 The Home page (#/) opens with Today and upcoming (server/today.js, summary.today: open reminders due within 14 days or
-past due, jobs at an offer, and applications with no reply after 14 days; each opens its job), then a tile per screen; Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
+past due, jobs at an offer, and applications with no reply after 14 days; each opens its job), then a tile per screen.
+The job panel's Next step box is the same list for one job (GET /api/postings/:id nextSteps; every open reminder, however
+far out), with Prepare for a meeting and Done (registerReminderRoutes, registered with or without Gmail). Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
 with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
 icons in web/public (install icons full-bleed, favicons as drawn) made from assets/app-icon-1024.png (kept out of the image);
 test/icons.test.js checks their sizes and that they load before sign-in.

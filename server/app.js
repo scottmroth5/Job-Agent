@@ -49,7 +49,7 @@ import { registerUserRoutes } from './users-routes.js';
 import { claudeKeyWorks } from '../tools/claude.js';
 import { getLayout, registerLayoutRoutes } from './layout.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
-import { registerInboxRoutes } from './inbox-routes.js';
+import { registerInboxRoutes, registerReminderRoutes } from './inbox-routes.js';
 import { addPosting } from '../agents/manual.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { generateForPostings } from '../agents/hunt/generate.js';
@@ -253,7 +253,9 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   );
 
   app.get('/api/postings/:id', { schema: { summary: 'Job detail', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
-    return getPosting(db, req.params.id, config) ?? notFound(reply);
+    const job = getPosting(db, req.params.id, config);
+    // Its next steps (open reminders, an offer, a follow-up due): the panel's Next step box (server/today.js).
+    return job ? { ...job, nextSteps: today(db, { jobId: job.id }).items } : notFound(reply);
   });
 
   app.patch(
@@ -407,6 +409,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const scheduled = (name) => scheduler?.status().find((j) => j.name === name) ?? null;
   const pipeline = services.runPipeline ? registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline, schedule: () => scheduled('pipeline') }) : null;
   const inboxChecks = services.inbox ? registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox }) : null;
+  registerReminderRoutes(app, { db });
 
   // The encrypted backup as a task (scheduled), the same script as npm run backup, in its own process.
   const startBackup = () =>

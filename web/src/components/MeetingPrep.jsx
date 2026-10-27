@@ -199,8 +199,12 @@ function PrepReader({ prepId, onClose }) {
 }
 
 /** The job's meeting preps and the button that starts a new one. */
-export default function MeetingPrep({ job, onChanged }) {
+export default function MeetingPrep({ job, onChanged, askSignal = 0 }) {
   const [asking, setAsking] = useState(false);
+  // The Next step box's Prepare for a meeting (DetailPanel) opens the same form.
+  useEffect(() => {
+    if (askSignal) setAsking(true);
+  }, [askSignal]);
   const [reading, setReading] = useState(null);
   const [error, setError] = useState(null);
   const preps = job.meetingPreps ?? [];

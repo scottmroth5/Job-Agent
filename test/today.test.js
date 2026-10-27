@@ -75,3 +75,27 @@ test('the summary carries the list, and another user sees only their own', async
   await app.close();
   store.close();
 });
+
+test("one job's next steps: every open reminder however far out, its offer or follow-up, and nothing from other jobs", async () => {
+  const { store, db, job, reminder } = setup();
+  const target = job({ company: 'Target Co', status: 'interviewing', applied: daysAgo(30) });
+  reminder(target, 'interview', inDays(REMINDER_DAYS + 20), { note: 'Final round' }); // past Home's horizon, still shown here
+  reminder(target, 'assessment', inDays(1), { status: 'done' });
+  const other = job({ company: 'Other Co', status: 'interviewing', applied: daysAgo(30) });
+  reminder(other, 'interview', inDays(1));
+  const offer = job({ company: 'Offer Co', status: 'offer', applied: daysAgo(40) });
+  const waiting = job({ company: 'Waiting Co', applied: daysAgo(FOLLOW_UP_DAYS + 2) });
+
+  const steps = today(db, { now, jobId: target }).items;
+  assert.deepEqual(steps.map((t) => [t.kind, t.text]), [['interview', 'Final round']]);
+  assert.ok(steps[0].id, 'a reminder carries its id, for Done');
+  assert.deepEqual(today(db, { now, jobId: offer }).items.map((t) => t.kind), ['offer']);
+  assert.deepEqual(today(db, { now, jobId: waiting }).items.map((t) => t.kind), ['follow_up']);
+  assert.equal(today(db, { now }).items.some((t) => t.text === 'Final round'), false, "Home's list keeps its 14-day horizon");
+
+  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  const detail = (await app.inject(`/api/postings/${target}`)).json();
+  assert.deepEqual(detail.nextSteps.map((t) => t.text), ['Final round'], 'the job panel gets them with the job');
+  await app.close();
+  store.close();
+});
