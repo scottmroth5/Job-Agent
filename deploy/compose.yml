@@ -50,8 +50,9 @@ services:
       HOST: 0.0.0.0
       PORT: "5178"
       TRUST_PROXY: loopback,linklocal,uniquelocal
-      # US-only access (server/geo.js); the health check always passes.
-      GEO_ALLOW: US
+      # Open from any country: the demo holds only made-up data and changes nothing, so reviewers abroad can use it.
+      # The app stays US-only (its GEO_ALLOW above).
+      GEO_ALLOW: ""
       TZ: ${TZ:-UTC}
       # The banner's "Request access" link: the real app, where someone signs in with Google and asks.
       REQUEST_ACCESS_URL: https://${SITE_ADDRESS:?set SITE_ADDRESS in .env}

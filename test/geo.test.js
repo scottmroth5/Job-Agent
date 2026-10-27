@@ -22,7 +22,10 @@ test('settings and private addresses', () => {
   for (const ip of ['8.8.8.8', '172.32.0.1', '81.2.69.142', '2001:4860::8888']) assert.equal(isPrivateAddress(ip), false, ip);
   assert.equal(geoBlocker({ allow: [], lookup })({ ip: '81.2.69.142', url: '/' }), false, 'no allow list: off');
   assert.equal(geoBlocker({ allow: ['US'], lookup: null })({ ip: '81.2.69.142', url: '/' }), false, 'no database: fails open');
-  assert.equal([...compose.matchAll(/GEO_ALLOW: US/g)].length, 2, 'the app and the demo are US-only in production');
+  // Production: the app is US-only; the demo (made-up data, read-only) is open from any country.
+  const block = (service) => compose.split(/^  (?=[a-z]+:)/m).find((b) => b.startsWith(`${service}:`)) ?? '';
+  assert.match(block('app'), /GEO_ALLOW: US\b/, 'the app is US-only');
+  assert.match(block('demo'), /GEO_ALLOW: ""/, 'the demo is open from any country');
 });
 
 test('refusals are logged with the country and half the address, at most hourly per address', () => {
