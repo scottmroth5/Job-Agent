@@ -133,7 +133,7 @@ export default function App() {
         <h1>
           <a href="#/">Job Hunt</a>
           {shortName && (
-            <span className="who" title={`Signed in with Google as ${me.email}`}>
+            <span className="who" title={me.demo ? `The demo's sample candidate, ${me.name ?? me.email}` : `Signed in with Google as ${me.email}`}>
               {' '}({shortName})
             </span>
           )}

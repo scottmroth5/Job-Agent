@@ -118,6 +118,9 @@ test('demo mode serves every screen without sign-in and says it is the demo', as
   const { app, store } = await demoApp(dbPath);
   const me = (await app.inject('/api/me')).json();
   assert.deepEqual({ authMode: me.authMode, demo: me.demo }, { authMode: 'demo', demo: true });
+  // The header names the sample candidate the way production names a signed-in person; an invented example.com address.
+  assert.match(me.email, /^[a-z.]+@example\.com$/);
+  assert.equal(me.name, 'Jordan Avery');
   for (const url of ['/api/summary', '/api/postings?stage=pipeline&status=all', '/api/postings/1', '/api/funnel', '/api/inbox', '/api/admin/prompts', '/api/admin/budget', '/api/lookups', '/api/pipeline', '/api/tasks', '/']) {
     assert.equal((await app.inject(url)).statusCode, 200, `${url} is open in the demo`);
   }

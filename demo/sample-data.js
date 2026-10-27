@@ -9,6 +9,9 @@ export const CANDIDATE = {
   linkedin: 'linkedin.com/in/example-jordan-avery',
 };
 
+// Who the demo is "signed in" as: the header shows it as production shows a signed-in address (the part before the @).
+export const DEMO_EMAIL = 'jordan.avery@example.com';
+
 export const DEMO_CONFIG = {
   candidate: CANDIDATE,
   search: {

@@ -16,6 +16,7 @@ import { escapeHtml } from '../tools/html.js';
 import { supportEmail } from '../tools/support.js';
 import { accountFor, getUser, MAX_NAME, MAX_NOTE, requestAccess } from '../db/users.js';
 import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, cookie } from './session.js';
+import { DEMO_CONFIG, DEMO_EMAIL } from '../demo/sample-data.js';
 
 export const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
 export const MODES = ['none', 'google', 'demo'];
@@ -138,10 +139,10 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
     const user = req.account ? getUser(db, req.account.uid) : null;
     return {
       authMode: mode,
-      email: req.user ?? null,
+      email: req.user ?? (mode === 'demo' ? DEMO_EMAIL : null),
       supportEmail: supportEmail(),
       ...(req.account ? { role: req.account.role, status: req.account.status, owner: req.account.uid === 1, name: user?.name ?? null } : { owner: mode === 'none', role: mode === 'none' ? 'admin' : null }),
-      ...(mode === 'demo' ? { demo: true, requestAccessUrl: settings.requestAccessUrl || null } : {}),
+      ...(mode === 'demo' ? { demo: true, name: DEMO_CONFIG.candidate.name, requestAccessUrl: settings.requestAccessUrl || null } : {}),
     };
   });
   if (mode === 'none') return;
