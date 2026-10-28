@@ -39,9 +39,9 @@ export function getResume(db, id) {
   return row(db.prepare(`SELECT ${COLUMNS} FROM resumes WHERE id = ? AND user_id = @uid`).get(id)) ?? null;
 }
 
-/** The file for a download: { filename, kind, file } or null. */
+/** The file for a download: { filename, kind, file, text } or null. */
 export function resumeFile(db, id) {
-  return db.prepare('SELECT filename, kind, file FROM resumes WHERE id = ? AND user_id = @uid').get(id) ?? null;
+  return db.prepare('SELECT filename, kind, file, text FROM resumes WHERE id = ? AND user_id = @uid').get(id) ?? null;
 }
 
 const clearDefault = (db) => db.prepare('UPDATE resumes SET is_default = 0 WHERE user_id = @uid AND is_default = 1').run();

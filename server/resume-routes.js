@@ -5,6 +5,7 @@ import { addResume, deleteResume, listResumes, replaceResumeFile, resumeFile, up
 import { MAX_DOC_BYTES } from '../tools/doc-text.js';
 import { uploadName } from './account-routes.js';
 import { disposition } from './attachments.js';
+import { resumeDocx, resumePdf } from '../tools/resume-format.js';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
@@ -60,15 +61,33 @@ export function registerResumeRoutes(app, { db }) {
     return reply.code(204).send();
   });
 
-  app.get('/api/resumes/:id/file', { schema: { summary: 'Download your resume file', params: uuidParams } }, async (req, reply) => {
+  // format: original (the file as uploaded), text, docx, or pdf (both laid out from its text by tools/resume-format.js).
+  app.get(
+    '/api/resumes/:id/file',
+    {
+      schema: {
+        summary: 'Download your resume: the original file, or its text as plain text, Word, or PDF',
+        params: uuidParams,
+        querystring: { type: 'object', properties: { format: { type: 'string', enum: ['original', 'text', 'docx', 'pdf'] } } },
+      },
+    },
+    async (req, reply) => {
     const r = resumeFile(db, req.params.id);
     if (!r) return reply.code(404).send({ error: 'Resume not found.' });
+    const format = req.query.format ?? 'original';
+    const base = r.filename.replace(/\.[A-Za-z0-9]{1,5}$/, '') || 'resume';
+    const out =
+      format === 'text' ? { kind: 'text', name: `${base}.txt`, body: Buffer.from(r.text, 'utf8') }
+      : format === 'docx' ? { kind: 'docx', name: `${base}.docx`, body: await resumeDocx(r.text) }
+      : format === 'pdf' ? { kind: 'pdf', name: `${base}.pdf`, body: resumePdf(r.text) }
+      : { kind: r.kind, name: r.filename, body: r.file };
     return reply
-      .type(TYPES[r.kind] ?? 'application/octet-stream')
-      .header('Content-Disposition', disposition('attachment', r.filename))
+      .type(TYPES[out.kind] ?? 'application/octet-stream')
+      .header('Content-Disposition', disposition('attachment', out.name))
       .header('X-Content-Type-Options', 'nosniff')
       .header('Content-Security-Policy', "sandbox; default-src 'none'")
       .header('Cache-Control', 'private, no-store')
-      .send(r.file);
-  });
+      .send(out.body);
+    },
+  );
 }

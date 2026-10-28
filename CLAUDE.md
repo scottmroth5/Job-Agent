@@ -157,7 +157,8 @@ Fill from a document (POST /api/account/profile/from-file) returns a file's text
 PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.js, server/resume-routes.js,
 Settings > Resumes): file and text in the resumes table (so backups, export, and deletion cover them; export omits the
 blob), a label, plain title words, one default. pickResume chooses per job title; withResume adds its text to the
-background for letters, tweaks, and meeting prep (never scoring), and artifacts/meeting_preps record resume_id. Guides with a template and made-up examples: help/about-you.md,
+background for letters, tweaks, and meeting prep (never scoring), and artifacts/meeting_preps record resume_id. Downloads: GET /api/resumes/:id/file?format=original|text|docx|pdf;
+tools/resume-format.js lays the text out as Word (docx) and as a PDF it writes itself (Helvetica, WinAnsi; no library). Guides with a template and made-up examples: help/about-you.md,
 help/search-settings.md, help/prompts.md. tools/markdown.js renders fenced blocks (escaped). test/onboarding.test.js.
 Letters and preps in the app: the job panel shows a letter's text (always without a Google Doc, on request with one) with
 Copy and Download Word; the prep reader has Download Word too. server/word-docs.js builds the .docx (the letter in the

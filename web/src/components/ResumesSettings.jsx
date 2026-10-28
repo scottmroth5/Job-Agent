@@ -5,6 +5,36 @@ import { useDemo } from '../demo.jsx';
 const ACCEPT = '.pdf,.docx,.txt,.md';
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
+const KIND_NAMES = { pdf: 'PDF', docx: 'Word', text: 'text' };
+
+/**
+ * Download as the user prefers: the file as uploaded, or its text laid out as PDF or Word, or plain text. The PDF and Word
+ * versions use a clean one-column layout (tools/resume-format.js); the original keeps the user's own design.
+ */
+function DownloadMenu({ r }) {
+  const href = (format) => `/api/resumes/${r.id}/file?format=${format}`;
+  return (
+    <details className="download-menu">
+      <summary className="button">Download</summary>
+      <div className="download-options" role="menu" aria-label={`Download ${r.label}`}>
+        <a role="menuitem" href={href('original')} download>
+          Original file ({KIND_NAMES[r.kind] ?? r.kind})
+        </a>
+        <a role="menuitem" href={href('pdf')} download>
+          PDF
+        </a>
+        <a role="menuitem" href={href('docx')} download>
+          Word (.docx)
+        </a>
+        <a role="menuitem" href={href('text')} download>
+          Plain text
+        </a>
+        <span className="muted small">PDF and Word are laid out from the resume's text; the original keeps your design.</span>
+      </div>
+    </details>
+  );
+}
+
 /** One resume: its label and the job titles it is for (edited in place), default, replace, download, delete. */
 function ResumeRow({ r, demo, onChanged, onError }) {
   const [label, setLabel] = useState(r.label);
@@ -38,9 +68,7 @@ function ResumeRow({ r, demo, onChanged, onError }) {
         <span className="muted small">
           {r.filename} · {r.chars.toLocaleString()} characters · updated {day(r.updatedAt)}
         </span>
-        <a className="button small-button" href={`/api/resumes/${r.id}/file`} download>
-          Download
-        </a>
+        <DownloadMenu r={r} />
         <span className="row demo-hide">
           {dirty && (
             <button type="button" className="primary" onClick={() => act(() => api.updateResume(r.id, { label, titles }))}>

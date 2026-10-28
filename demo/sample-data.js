@@ -363,43 +363,90 @@ export const DEMO_RESUMES = [
     titles: 'VP, Vice President, Head of, CTO, Chief, Director',
     filename: 'Jordan Avery - Executive.txt',
     text: `Jordan Avery
-Riverton, ST | jordan.avery@example.com | linkedin.com/in/example-jordan-avery
+Riverton, ST | jordan.avery@example.com | 555-0142 | linkedin.com/in/example-jordan-avery
 
-Engineering executive who scales regulated healthcare platforms and the teams that build them.
+ENGINEERING EXECUTIVE
+Engineering leader with 15 years in software and 8 leading teams in healthcare and other regulated industries. I scale platforms and the teams that build them through fast growth, keep releases steady while doing it, and build compliance into how engineering works instead of bolting it on. Comfortable reporting to a CEO and board, and hands on when it counts.
+
+CORE STRENGTHS
+- Scaling organizations: 6 to 45 engineers, managers hired and grown from within
+- Regulated software: HIPAA, SOC 2 Type II, lab accreditation, FHIR interoperability
+- Platform modernization without big bang cutovers
+- Distributed teams across the United States, Poland, and Colombia
+- Executive communication: board updates, budgets, and roadmap tradeoffs
 
 EXPERIENCE
-VP Engineering, a care coordination company (2020 to now)
-- Grew the platform team from 6 engineers to 45 across the United States, Poland, and Colombia; releases stayed weekly.
-- Security lead for SOC 2 Type II and HIPAA; two audits with no exceptions.
-- Took the company through a successful acquisition and integration.
+VP of Engineering, a care coordination company, Riverton, ST (2020 to present)
+Series B to acquisition; 180 employees; platform used by 300 clinics.
+- Grew the engineering organization from 6 engineers to 45 in three years across five product teams while keeping weekly releases.
+- Hired and coached six engineering managers, four of them first-time managers promoted from within; engineering attrition under 8% a year.
+- Security lead for SOC 2 Type II and HIPAA: built the controls into the deployment pipeline and passed two audits with no exceptions.
+- Led engineering through the company's acquisition: technical due diligence, the integration plan, and a team retention plan; no regretted departures in the first year.
+- Own a $9M budget and report to the CEO; present engineering plans and risks to the board each quarter.
+- Moved hosting to a managed cloud setup with infrastructure as code; cloud cost per active clinic down 35%.
 
-Director of Engineering, a claims processing company (2016 to 2020)
-- Rebuilt the claims rules engine in phases; processing time down 60 percent.
-- Built FHIR integrations with more than 20 health systems.
+Director of Engineering, a claims processing company, Lakeside, ST (2016 to 2020)
+Processed 40 million health insurance claims a year for regional payers.
+- Rebuilt the claims rules engine in phases over two quarters, running the old and new engines side by side; processing time down 60% with no outage.
+- Built FHIR integrations with more than 20 health systems, cutting onboarding for a new partner from 4 months to 6 weeks.
+- Grew the team from 12 to 28 engineers across two countries and introduced on-call and incident reviews; major incidents down 70%.
+- Partnered with product and compliance to ship a prior authorization product that reached $6M in annual revenue in its second year.
 
-Engineering Manager, a lab software company (2012 to 2016)
-- Led the technology side of a lab accreditation that closed with no findings.
+Engineering Manager, a lab software company, Millbrook, ST (2012 to 2016)
+- Managed a team of eight building the lab information system used by 60 clinical labs.
+- Led the technology side of a CAP lab accreditation: audit trails, validation, and traceability; closed with no findings.
+- Introduced automated testing and continuous integration; release cycle from quarterly to every two weeks.
 
-EDUCATION
-BS Computer Science, Example State University`,
+Senior Software Engineer, a health analytics startup, Riverton, ST (2009 to 2012)
+- Built the data pipeline and reporting product for the company's first ten hospital customers.
+
+EDUCATION AND CERTIFICATIONS
+BS Computer Science, Example State University
+Certified Scrum Professional
+
+ADDITIONAL
+- Mentor for first-time engineering managers through a local technology meetup
+- Conversational Spanish`,
   },
   {
     label: 'Engineering manager',
     titles: 'Engineering Manager, Manager, Team Lead',
     filename: 'Jordan Avery - Engineering Manager.txt',
     text: `Jordan Avery
-Riverton, ST | jordan.avery@example.com
+Riverton, ST | jordan.avery@example.com | 555-0142 | linkedin.com/in/example-jordan-avery
 
-Hands-on engineering manager: TypeScript, Python, and Java; comfortable in any stack.
+SENIOR ENGINEERING MANAGER
+Hands-on engineering manager who builds healthy, high-output teams in regulated software. I hire well, coach managers and senior engineers, keep delivery predictable, and still read the code: TypeScript, Python, and Java, comfortable in any stack.
+
+SKILLS
+- People: hiring loops, career ladders, coaching, performance reviews, growing first-time managers
+- Delivery: roadmap planning, estimation, weekly releases, on-call and incident reviews
+- Technical: TypeScript, Python, Java, PostgreSQL, event-driven services, AWS, Terraform, CI/CD
+- Domain: HIPAA, SOC 2, FHIR and HL7 integrations, lab systems, claims processing
 
 EXPERIENCE
-VP Engineering, a care coordination company (2020 to now)
-- Managed managers and senior engineers across three time zones; coached four first-time managers.
+VP of Engineering, a care coordination company, Riverton, ST (2020 to present)
+- Managed managers and senior engineers across three time zones; coached four first-time managers into the role.
+- Wrote the hiring loop and engineering career ladder used to grow the team from 6 to 45 engineers.
+- Kept weekly releases through three years of growth by investing in automated tests, feature flags, and small changes.
+- Ran incident reviews personally for the first year; turned them into a blameless practice the managers now own.
+- Built the SOC 2 and HIPAA controls into the deployment pipeline with the security engineers; two clean audits.
 
-Director of Engineering, a claims processing company (2016 to 2020)
-- Ran the rules engine rebuild day to day: design reviews, phased rollout, on-call health.
+Director of Engineering, a claims processing company, Lakeside, ST (2016 to 2020)
+- Ran the rules engine rebuild day to day: design reviews, a side-by-side rollout one claim type at a time, and on-call health; processing time down 60%.
+- Led two teams building FHIR integrations with more than 20 health systems; partner onboarding from 4 months to 6 weeks.
+- Introduced on-call rotations, runbooks, and incident reviews; major incidents down 70%.
 
-Engineering Manager, a lab software company (2012 to 2016)
-- Managed a team of eight; owned releases, hiring, and the accreditation work.`,
+Engineering Manager, a lab software company, Millbrook, ST (2012 to 2016)
+- Managed a team of eight; owned releases, hiring, and the accreditation work.
+- Moved the team from quarterly releases to every two weeks with continuous integration and automated testing.
+- Led the technology side of a lab accreditation with no findings.
+
+Senior Software Engineer, a health analytics startup, Riverton, ST (2009 to 2012)
+- Designed and built the data pipeline and the first reporting product; on-call for production.
+
+EDUCATION
+BS Computer Science, Example State University
+Certified Scrum Professional`,
   },
 ];

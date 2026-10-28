@@ -611,3 +611,11 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 .section-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }
 /* Settings > Prompts needs the room the editor had on Admin. */
 .settings.wide { max-width: none; }
+/* A resume's Download menu (Settings > Resumes). */
+.download-menu { position: relative; display: inline-block; }
+.download-menu > summary { list-style: none; cursor: pointer; }
+.download-menu > summary::-webkit-details-marker { display: none; }
+.download-options { position: absolute; z-index: 5; top: calc(100% + 4px); left: 0; display: grid; gap: 2px; min-width: 220px; padding: 6px; background: var(--card); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12); }
+.download-options a { display: block; padding: 8px 10px; border-radius: 6px; color: var(--text); text-decoration: none; }
+.download-options a:hover, .download-options a:focus-visible { background: var(--border); }
+.download-options .small { padding: 4px 10px 2px; max-width: 240px; }

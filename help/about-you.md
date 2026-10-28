@@ -206,4 +206,6 @@ When something changes (a new role, a result, what you want next), edit and **Sa
 
 **Settings > Resumes** keeps the resumes you actually send (PDF, Word .docx, or text). Give each a label and the job title words it is for, for example *VP, Head of, CTO* for an executive version. Each job's cover letter, resume tweaks, and meeting prep are written from the resume whose words match the job title, or else your default, and the job panel says which one. Resume tweaks then suggest changes to that resume. Scoring reads your knowledge doc only.
 
+**Download** gives you the file as you uploaded it, or the resume as a PDF, a Word document, or plain text. The PDF and Word versions use a clean one-column layout from the resume's text; your own design stays in the original.
+
 When you update a resume, use **Replace file**: the label and job titles stay. Letters already written are not changed; use **Regenerate** on a job to write them again from the new version.
