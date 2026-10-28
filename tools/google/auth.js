@@ -2,9 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { OAuth2Client } from 'google-auth-library';
 import { dataPath } from '../paths.js';
 
-/** Read the knowledge doc, manage only files this app creates, send email. Nothing broader. */
+/** Manage only files this app creates (letter and prep Docs, backups), and send email. Nothing broader. */
 export const SCOPES = [
-  'https://www.googleapis.com/auth/documents.readonly',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/gmail.send',
 ];

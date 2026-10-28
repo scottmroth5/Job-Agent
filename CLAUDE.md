@@ -149,9 +149,10 @@ The knowledge doc (About you in code, "Your knowledge doc" in the UI) has seven 
 the default prompts name "Section 5: Job Targets" and "Section 6 (Cover Letter Rules)", so numbers and titles change only with
 the prompts. The draft builder writes them, Settings shows a checklist and Start from the template / Add the missing
 sections, and test/knowledge-sections.test.js checks the template, the demo's DEMO_ABOUT_YOU, and every example in help/about-you.md.
-The owner's About you lives in the app too: agents/user-config.js backgroundFor reads About you (>= 500 characters) and,
-for the owner only, falls back to the Google Doc (YOUR_KNOWLEDGE_DOC_ID) until Settings' one-time "Copy my Google Doc here"
-(POST /api/account/profile/from-google-doc); the server and every script (tools/knowledge.js ownerBackground) use it.
+Everyone's knowledge doc, the owner's included, lives only in the app (user_settings): agents/user-config.js backgroundFor
+(>= 500 characters, else a message saying to write it under Settings) for the server and tools/knowledge.js ownerBackground
+for scripts. There is no Google Doc any more (no YOUR_KNOWLEDGE_DOC_ID, no documents.readonly scope); services.knowledge is
+only a test stand-in for the owner's.
 Fill from a document (POST /api/account/profile/from-file) returns a file's text without saving; tools/doc-text.js reads
 PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.js, server/resume-routes.js,
 Settings > Resumes): file and text in the resumes table (so backups, export, and deletion cover them; export omits the

@@ -149,14 +149,6 @@ export default function SearchSettings() {
           <p className="warn-box small">A sample: the knowledge doc of Jordan, the demo's made-up candidate. In your own account you start from the template, fill it from a document, or build a draft from your resume and LinkedIn profile.</p>
         ) : (
           <>
-            {owner && data.aboutYouFrom === 'google' && (
-              <div className="warn-box small">
-                Scoring and writing still read your Google Doc. Copy its text here once, then edit your knowledge doc here from now on.{' '}
-                <button type="button" onClick={() => run(() => api.profileFromGoogleDoc(), 'Copied from your Google Doc and saved. Edit it here from now on.')}>
-                  Copy my Google Doc here
-                </button>
-              </div>
-            )}
             <div className="row">
               <label className="button file-button">
                 Fill from a document

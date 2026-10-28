@@ -8,8 +8,7 @@ import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
-import { readDoc } from '../tools/google/docs.js';
+import { ownerBackground } from '../tools/knowledge.js';
 import { dataPath } from '../tools/paths.js';
 import { openJobStore } from '../db/index.js';
 import { exitWhenDone } from '../tools/exit.js';
@@ -66,10 +65,9 @@ async function evaluate(argv) {
   if (limit) cases = cases.slice(0, limit);
 
   const config = loadConfig();
-  const { text: knowledge } = await readDoc(getGoogleAuth(), process.env.YOUR_KNOWLEDGE_DOC_ID);
-  if (knowledge.length < MIN_KNOWLEDGE_CHARS) throw new Error('Candidate Knowledge doc is too short.');
-
   const store = openJobStore();
+  const knowledge = await ownerBackground(store); // the owner's knowledge doc from Settings
+  if (knowledge.length < MIN_KNOWLEDGE_CHARS) throw new Error('The knowledge doc is too short.');
   const estimate = estimateEval(cases, models, knowledge.length, store.db);
   const total = Object.values(estimate).reduce((a, b) => a + b, 0);
   console.log(`${cases.length} cases x ${models.length} models. Estimated cost: ${Object.entries(estimate).map(([m, u]) => `${m} ~$${u.toFixed(2)}`).join(', ')} (total ~$${total.toFixed(2)}).`);

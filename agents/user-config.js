@@ -1,6 +1,5 @@
-// Each user's own job search (multi-user, phase 3). The owner's settings stay in data/config/job-search.json and their
-// background in the Google Doc (YOUR_KNOWLEDGE_DOC_ID); everyone else keeps both here, in their user_settings rows,
-// edited on Settings. What a user may set is a fixed list of plain text fields: their own cover letter checks (which are
+// Each user's own job search (multi-user, phase 3) and everyone's knowledge doc, in user_settings rows edited on
+// Settings. The owner's search settings stay in data/config/job-search.json; everyone else keeps theirs here too. What a user may set is a fixed list of plain text fields: their own cover letter checks (which are
 // regular expressions), Google site search, and private terms stay the owner's, so no user text ever becomes a pattern.
 // Code that runs for a user reads the right settings without knowing whose they are: userConfigView (the server) and
 // configFor (scripts) pick by the user the request or job runs as (db/scope.js).
@@ -93,7 +92,7 @@ export function saveUserConfig(db, uid, input, name = '') {
   return { config, problems: validateConfig(config) };
 }
 
-/** A user's background text (About you on Settings), or ''. The owner's too, once they move it in from their Google Doc. */
+/** A user's knowledge doc (Settings), or ''. Everyone's, the owner's included. */
 export const userProfile = (db, uid) => readSetting(db, uid, PROFILE_KEY) ?? '';
 
 export function saveUserProfile(db, uid, value) {
@@ -107,19 +106,19 @@ export function saveUserProfile(db, uid, value) {
 export function profileForAI(db, uid) {
   const body = userProfile(db, uid);
   if (body.length < MIN_PROFILE_CHARS) {
-    throw Object.assign(new Error(`Add your background (at least ${MIN_PROFILE_CHARS} characters) under Settings before using AI.`), { statusCode: 400 });
+    throw Object.assign(new Error(`Write your knowledge doc (at least ${MIN_PROFILE_CHARS} characters) under Settings before using AI.`), { statusCode: 400 });
   }
   return body;
 }
 
 /**
- * The background scoring and writing read for a user: their About you text when it is long enough; for the owner,
- * until they have moved theirs into the app, their Google Doc (googleDoc loads it). Otherwise profileForAI's message.
+ * The background scoring and writing read for a user: their knowledge doc (Settings) when it is long enough, else
+ * profileForAI's message saying how to fix it. fallback is for tests only: a stand-in for the owner's knowledge doc.
  */
-export async function backgroundFor(db, uid, { googleDoc = null } = {}) {
+export async function backgroundFor(db, uid, { fallback = null } = {}) {
   const body = userProfile(db, uid);
   if (body.length >= MIN_PROFILE_CHARS) return body;
-  if (uid === OWNER_ID && googleDoc) return googleDoc();
+  if (uid === OWNER_ID && fallback) return fallback();
   return profileForAI(db, uid);
 }
 

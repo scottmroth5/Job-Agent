@@ -40,7 +40,7 @@ async function main() {
 
     assertNoRunningRun(store.db, 'hunt');
     const auth = getGoogleAuth();
-    const knowledge = await ownerBackground(store, { auth });
+    const knowledge = await ownerBackground(store);
     const claude = createJobClaude(store.db);
     const tracer = createJobTracer({ store });
 

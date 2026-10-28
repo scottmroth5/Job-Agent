@@ -53,7 +53,7 @@ function account(db, uid) {
  * @param {object} o
  * @param {(apiKey: string) => Promise<boolean>} [o.checkKey]  tools/claude.js claudeKeyWorks (tests pass a fake)
  */
-export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false, googleDoc = null }) {
+export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }) {
   // Phase 6: take your data with you, pause yourself, or delete your account. Deleting needs your address typed.
   app.get('/api/account/export', { schema: { summary: 'Download everything that is yours, as JSON', response: { 200: anyObject } } }, async (req, reply) =>
     reply
@@ -159,16 +159,8 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE, scheduled: false };
     }
     if (uid === OWNER_ID) {
-      // The owner's search settings stay in their settings file; their About you can live here (Settings) and, until
-      // it does, scoring and writing read their Google Doc.
-      const profile = userProfile(db, uid);
-      return {
-        owner: true,
-        profile,
-        profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE,
-        aboutYouFrom: profile.length >= MIN_PROFILE_CHARS ? 'app' : googleDoc && process.env.YOUR_KNOWLEDGE_DOC_ID ? 'google' : 'none',
-        googleDoc: Boolean(googleDoc && process.env.YOUR_KNOWLEDGE_DOC_ID),
-      };
+      // The owner's search settings stay in their settings file; their knowledge doc lives here, like everyone's.
+      return { owner: true, profile: userProfile(db, uid), profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE };
     }
     const u = getUser(db, uid);
     const config = userConfig(db, uid, u.name);
@@ -213,24 +205,6 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       return search(uid);
     },
   );
-  // One time, for the owner: copy the Google Doc's current text into About you, so it can be edited here from then on.
-  app.post(
-    '/api/account/profile/from-google-doc',
-    { schema: { summary: 'Owner: copy your Google Doc into About you (nothing else changes; save edits here afterwards)', response: { 200: anyObject } } },
-    async (req, reply) => {
-      const uid = req.uid ?? OWNER_ID;
-      if (uid !== OWNER_ID || !googleDoc || !process.env.YOUR_KNOWLEDGE_DOC_ID) return reply.code(400).send({ error: 'There is no Google Doc to copy from.' });
-      let text;
-      try {
-        text = await googleDoc();
-      } catch {
-        return reply.code(502).send({ error: 'Could not read your Google Doc. Check that the app can still reach Google, then try again.' });
-      }
-      saveUserProfile(db, uid, text);
-      return search(uid);
-    },
-  );
-
   // A document's text for About you: it fills the box for review and is not saved (Save does that). PDF, .docx, or text.
   app.post(
     '/api/account/profile/from-file',

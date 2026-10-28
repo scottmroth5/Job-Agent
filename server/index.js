@@ -1,11 +1,10 @@
 // Starts the Job Hunt UI server: npm run ui, then open http://localhost:5178
-// Local only (AUTH_MODE=none binds to 127.0.0.1). Google, Claude and the knowledge doc load on first use.
+// Local only (AUTH_MODE=none binds to 127.0.0.1). Google and Claude load on first use; knowledge docs are in the database.
 // AUTH_MODE=demo serves the sample database read-only with every outside service off (npm run demo).
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
-import { loadKnowledge } from '../tools/knowledge.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
 import { getGoogleAuth, getInboxAuth } from '../tools/google/auth.js';
@@ -41,8 +40,6 @@ const store = openJobStore(undefined, { fallbackUid: null });
 const demo = authMode === 'demo';
 const auth = demo ? null : getGoogleAuth();
 
-// The knowledge doc is re-read at most every 10 minutes, so edits to it show up without a restart.
-let knowledgeCache = { text: null, at: 0 };
 // Account emails (server/notices.js): to the owner, or to a person about their own account; never anyone else.
 const notices = demo
   ? {}
@@ -86,12 +83,6 @@ const realServices = () => ({
     key: () => loadKey(),
     cfg: loadInboxConfig(),
   },
-  knowledge: async () => {
-    if (!knowledgeCache.text || Date.now() - knowledgeCache.at > 10 * 60 * 1000) {
-      knowledgeCache = { text: await loadKnowledge({ auth }), at: Date.now() };
-    }
-    return knowledgeCache.text;
-  },
   // Failure emails (server/alerts.js), only ever to the owner's own address, like the run report.
   alerts: createAlerts({
     db: store.db,
@@ -113,7 +104,6 @@ const demoServices = () => ({
   runPipeline: async () => ({ code: 1, lastError: 'Turned off in the demo.' }),
   schedules: [],
   inbox: { ready: () => false, gmail: demoOff, key: demoOff, cfg: loadInboxConfig() },
-  knowledge: async () => '',
   sampleTasks: SAMPLE_TASKS,
 });
 

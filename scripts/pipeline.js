@@ -78,7 +78,7 @@ async function main() {
 
     let knowledge = null;
     try {
-      knowledge = owner ? await ownerBackground(store, { auth }) : profileForAI(store.raw, uid);
+      knowledge = owner ? await ownerBackground(store) : profileForAI(store.raw, uid);
     } catch (err) {
       pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${err.message}`);
     }

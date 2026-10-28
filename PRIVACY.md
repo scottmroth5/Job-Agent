@@ -22,7 +22,7 @@ You sign in with Google. The app asks Google only for your email address and tha
 
 ## The owner's Google access
 
-The owner's own Google sign-in lets the app read the owner's reference document (`documents.readonly`), create its own documents in the owner's Drive (`drive.file`), send the owner's report and account emails (`gmail.send`), and, for the owner's inbox feature, read and label job-related mail in the owner's own Gmail (`gmail.readonly`, `gmail.modify`). Nothing from the owner's mailbox is shown to other accounts. Use of information received from Google APIs adheres to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including its Limited Use requirements.
+The owner's own Google sign-in lets the app create its own documents in the owner's Drive (`drive.file`), send the owner's report and account emails (`gmail.send`), and, for the owner's inbox feature, read and label job-related mail in the owner's own Gmail (`gmail.readonly`, `gmail.modify`). Nothing from the owner's mailbox is shown to other accounts. Use of information received from Google APIs adheres to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including its Limited Use requirements.
 
 ## Where data lives
 

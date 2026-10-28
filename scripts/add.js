@@ -50,7 +50,7 @@ async function main() {
       http: createHttp(),
       browser,
       claude: createJobClaude(store.db),
-      knowledge: await ownerBackground(store, { auth }),
+      knowledge: await ownerBackground(store),
       drive: createDriveClient(auth),
       run,
       onStep: () => {}, // steps are already logged by the run

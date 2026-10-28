@@ -89,9 +89,9 @@ async function setup() {
 test('Settings: a user saves their search, background, and schedule; the owner is pointed at their file', async () => {
   const { store, app, b, asA, asB, done } = await setup();
   const get = (headers) => app.inject({ url: '/api/account/search', headers });
-  // The owner: search settings stay in their file; About you can live here, and until it does their Google Doc is read.
+  // The owner: search settings stay in their file; their knowledge doc lives here, like everyone's.
   const own = (await get(asA)).json();
-  assert.deepEqual({ owner: own.owner, profile: own.profile, from: own.aboutYouFrom }, { owner: true, profile: '', from: process.env.YOUR_KNOWLEDGE_DOC_ID ? 'google' : 'none' });
+  assert.deepEqual({ owner: own.owner, profile: own.profile }, { owner: true, profile: '' });
   assert.equal(own.config, undefined, "the owner's settings file is not sent");
   const empty = (await get(asB)).json();
   assert.equal(empty.config.ready, false);

@@ -3,26 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { docText } from '../tools/google/docs.js';
 import { buildRawEmail } from '../tools/google/gmail.js';
 import { getGoogleAuth, loadClientCredentials } from '../tools/google/auth.js';
-
-test('docText joins paragraphs and table cells in order', () => {
-  const para = (s) => ({ paragraph: { elements: [{ textRun: { content: s } }] } });
-  const document = {
-    body: {
-      content: [
-        {},
-        para('Section 1\n'),
-        { table: { tableRows: [{ tableCells: [{ content: [para('A\n')] }, { content: [para('B\n')] }] }] } },
-        para('\n\n\n'),
-        para('End\n'),
-      ],
-    },
-  };
-  assert.equal(docText(document), 'Section 1\nA\nB\n\nEnd');
-  assert.equal(docText({}), '');
-});
 
 test('buildRawEmail produces a decodable base64url message', () => {
   const raw = buildRawEmail({ to: 'someone@example.com', subject: 'Résumé update', text: 'Hello $200k' });

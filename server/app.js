@@ -92,14 +92,14 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     return { ai: u.ai_source === 'owner' || Boolean(u.has_key), aboutYou: userProfile(raw, uid).length >= MIN_PROFILE_CHARS, search: userConfig(raw, uid, u.name).ready };
   };
   const ownerDrive = services.drive;
-  const ownerKnowledge = services.knowledge;
+  const testKnowledge = services.knowledge; // tests only: a stand-in for the owner's knowledge doc
   services = {
     ...services,
     get drive() {
       return asOwner() ? ownerDrive : null; // others' letters and preps stay in the app (no access to their Drive yet)
     },
-    // About you from Settings; the owner's Google Doc only until they have moved theirs into the app.
-    knowledge: async () => backgroundFor(store.raw ?? store.db, asOwner() ? OWNER_ID : currentUserId(), { googleDoc: ownerKnowledge ?? null }),
+    // The knowledge doc from Settings, the current user's.
+    knowledge: async () => backgroundFor(store.raw ?? store.db, asOwner() ? OWNER_ID : currentUserId(), { fallback: testKnowledge ?? null }),
   };
   app.addHook('onRequest', async (req, reply) => {
     if (blocked(req)) return reply.code(403).type('text/html').header('Cache-Control', 'no-store').send(BLOCKED_PAGE);
@@ -395,7 +395,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
 
   registerAdminRoutes(app, { db, config });
   registerLayoutRoutes(app, { db });
-  registerAccountRoutes(app, { db, demo: authMode === 'demo', googleDoc: ownerKnowledge ?? null, checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
+  registerAccountRoutes(app, { db, demo: authMode === 'demo', checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   // The Users screen never exists in the demo.
   if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });
