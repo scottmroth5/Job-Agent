@@ -16,7 +16,7 @@ It has seven sections, numbered, because the AI's instructions refer to them by 
 | 6. Cover Letter Rules | Letters and resume tweaks follow every rule here |
 | 7. Other | Anything that helps: education, certifications, languages |
 
-Settings shows a check mark on each section it finds (a heading such as `## 5. Job Targets`). A missing **5. Job Targets** or **6. Cover Letter Rules** makes the biggest difference.
+Settings shows a check mark on each section it finds (a heading such as `## 5. Job Targets`). Your own titles are fine as long as the headings are numbered, such as `SECTION 5: TARGET ROLES`: the AI reads section 5 as your job targets and section 6 as your letter rules, whatever you call them. A missing **5. Job Targets** or **6. Cover Letter Rules** makes the biggest difference.
 
 ## Four ways to start
 

@@ -17,17 +17,21 @@ const LIST_FIELDS = [
 ];
 
 // Which of the knowledge doc's seven sections the text has, by heading (agents/knowledge-sections.js sectionCheck does the
-// same on the server). The prompts refer to 5. Job Targets and 6. Cover Letter Rules, so missing ones are flagged.
+// same on the server). A numbered heading counts by its number whatever its title ("SECTION 5: TARGET ROLES"), since the
+// prompts name sections by number; an unnumbered one by the standard title. Plain "1. ..." list items do not count.
 const norm = (t) => String(t).toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+const headingNumber = (l) => {
+  const m = /^section\s+(\d+)\b/i.exec(l) ?? /^#+\s*(?:section\s+)?(\d+)\s*[.:)\-]/i.exec(l);
+  return m ? Number(m[1]) : null;
+};
 function sectionsIn(text, sections) {
-  const headings = new Set(
-    String(text ?? '')
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l && l.length <= 60)
-      .map((l) => norm(l.replace(/^#+\s*/, '').replace(/^section\s*/i, '').replace(/^\d+\s*[.:)\-]?\s*/, ''))),
-  );
-  return sections.map((sec) => ({ ...sec, found: headings.has(norm(sec.title)) }));
+  const lines = String(text ?? '')
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && l.length <= 80);
+  const numbers = new Set(lines.map(headingNumber).filter((n) => n != null));
+  const titles = new Set(lines.filter((l) => l.length <= 60).map((l) => norm(l.replace(/^#+\s*/, '').replace(/^section\s*/i, '').replace(/^\d+\s*[.:)\-]?\s*/, ''))));
+  return sections.map((sec) => ({ ...sec, found: numbers.has(sec.n) || titles.has(norm(sec.title)) }));
 }
 
 /** The seven sections as chips (present or missing), and a button that starts from the template or adds what is missing. */

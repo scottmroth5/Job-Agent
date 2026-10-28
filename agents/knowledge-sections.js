@@ -27,17 +27,25 @@ export function knowledgeTemplate() {
 
 const norm = (s) => String(s).toLowerCase().replace(/[^a-z]+/g, ' ').trim();
 
+/** A numbered section heading's number: "SECTION 5: ..." or "## 5. ...", else null. Plain "5. ..." list items are not. */
+export function headingNumber(line) {
+  const m = /^section\s+(\d+)\b/i.exec(line) ?? /^#+\s*(?:section\s+)?(\d+)\s*[.:)\-]/i.exec(line);
+  return m ? Number(m[1]) : null;
+}
+
 /**
- * Which sections a knowledge doc has, by heading: "## 5. Job Targets", "Section 5: Job Targets", or just "Job Targets"
- * on a line of its own. Returns [{ n, title, found }]; found is false for a section whose title never heads a line.
+ * Which sections a knowledge doc has, by heading. A numbered heading counts by its number, whatever its title
+ * ("SECTION 5: TARGET ROLES" is section 5, as the prompts read it); an unnumbered heading counts by the standard
+ * title ("## Job Targets", or "Job Targets" on a line of its own). Returns [{ n, title, found }].
  */
 export function sectionCheck(text) {
-  const headings = String(text ?? '')
+  const lines = String(text ?? '')
     .split(/\r?\n/)
     .map((l) => l.trim())
-    .filter((l) => l && l.length <= 60)
-    .map((l) => norm(l.replace(/^#+\s*/, '').replace(/^section\s*/i, '').replace(/^\d+\s*[.:)\-]?\s*/, '')));
-  return KNOWLEDGE_SECTIONS.map((s) => ({ n: s.n, title: s.title, found: headings.includes(norm(s.title)) }));
+    .filter((l) => l && l.length <= 80);
+  const numbers = new Set(lines.map(headingNumber).filter((n) => n != null));
+  const titles = new Set(lines.filter((l) => l.length <= 60).map((l) => norm(l.replace(/^#+\s*/, '').replace(/^section\s*/i, '').replace(/^\d+\s*[.:)\-]?\s*/, ''))));
+  return KNOWLEDGE_SECTIONS.map((s) => ({ n: s.n, title: s.title, found: numbers.has(s.n) || titles.has(norm(s.title)) }));
 }
 
 /** The sections, as the draft builder's instructions list them. */

@@ -27,6 +27,12 @@ test('sectionCheck finds headings written several ways, and only headings', () =
   assert.deepEqual(found('# Summary\nText\n**Strengths**'), [1, 3], 'a bold line on its own counts as a heading');
   assert.deepEqual(found('### 2) Experience'), [2]);
   assert.deepEqual(found('I list my job targets and strengths in this sentence.'), [], 'words inside a sentence do not count');
+  // Numbered headings count by number whatever their titles, as the prompts read them; plain list items do not.
+  const ownTitles = ['=====', 'SECTION 1: IDENTITY AND MOST RECENT ROLE', '=====', 'Name: Pat', 'SECTION 5: TARGET ROLES AND POSITIONING', 'SECTION 6: COVER LETTER AND WRITING RULES'].join('\n');
+  assert.deepEqual(found(ownTitles), [1, 5, 6]);
+  assert.deepEqual(found('## 7) Anything else'), [7]);
+  assert.deepEqual(found('1. Grew the team\n2. Cut costs\n5. Shipped it'), [], 'a numbered list is not a set of sections');
+  assert.deepEqual(found('Section 12: Extra notes'), [], 'numbers beyond the seven are ignored');
 });
 
 test('the template, the draft builder, the demo, and every example in Help have all seven sections', () => {
