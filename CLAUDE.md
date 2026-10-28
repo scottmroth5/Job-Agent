@@ -202,7 +202,7 @@ data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images op
 agents/prompts.js is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active
 (prompt_versions table, with history), else the repo file, which stays the default. Settings > Prompts (#/settings/prompts, web/src/components/PromptsSettings.jsx, routes /api/prompts in server/admin.js)
 edits every template in PROMPTS for the current user only (prompt_versions is a user table); Admin keeps Lists, Spending,
-and Users (all app-wide: the shared lists, the cap on the owner's key, accounts) and is shown to admins only; each
+and Users (all app-wide: the shared lists, the cap on the owner's key, accounts) and is shown to admins only, never in the demo; each
 user's own spend by feature is on Settings (GET /api/spending; setting the cap stays PUT /api/admin/budget, owner only); placeholders are validated on save, and output schemas stay read-only in the repo because code reads
 their fields. Personal wording belongs in edits or the knowledge doc, never in the repo defaults.
 

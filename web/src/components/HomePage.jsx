@@ -175,7 +175,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
     activity: { href: '#/activity', title: 'Activity', stat: 'Runs and their output' },
     admin: waiting
       ? { href: '#/admin/users', title: 'Admin', stat: [waiting.requests && plural(waiting.requests, 'request'), waiting.feedback && `${waiting.feedback} feedback`].filter(Boolean).join(' · '), alert: true }
-      : { href: '#/admin', title: 'Admin', stat: 'Lists, spending, users', hidden: !demo && !isAdmin(me) },
+      : { href: '#/admin', title: 'Admin', stat: 'Lists, spending, users', hidden: demo || !isAdmin(me) },
     settings: { href: '#/settings', title: 'Settings', stat: 'Account and AI key' },
     help: { href: '#/help', title: 'Help', stat: 'Guides and questions' },
     add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo },
@@ -263,7 +263,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
       )}
 
       {budget && (
-        <a className="home-card budget-card" href={demo || isAdmin(me) ? '#/admin/spending' : '#/settings'}>
+        <a className="home-card budget-card" href={!demo && isAdmin(me) ? '#/admin/spending' : '#/settings'}>
           <span className="budget-line">
             <span>Claude this month</span>
             <span className={`budget ${budget.level}`}>

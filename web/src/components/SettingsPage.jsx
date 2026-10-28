@@ -183,7 +183,7 @@ function AccountSettings({ tabs }) {
       <SearchSettings />
       <ResumesSettings />
       {/* Your own spend; the owner's (everything on their key) and the monthly cap are on Admin > Spending. */}
-      {!account.owner && (
+      {(!account.owner || demo) && (
         <section className="home-card">
           <SpendingAdmin embedded />
         </section>

@@ -8,8 +8,8 @@ import { isAdmin, isOwner, useMe } from '../me.jsx';
 // [key, label, who sees it]: the lists are shared by everyone, so only the owner edits them; Users is for admins.
 // Prompts moved to Settings (each user's own); an old #/admin/prompts link is sent there.
 const SECTIONS = [
-  ['lists', 'Lists', (me, demo) => isOwner(me) || demo],
-  ['spending', 'Spending', () => true],
+  ['lists', 'Lists', (me, demo) => isOwner(me) && !demo],
+  ['spending', 'Spending', (me, demo) => isAdmin(me) && !demo],
   ['users', 'Users', (me, demo) => isAdmin(me) && !demo],
 ];
 const sectionFromHash = () => {
@@ -34,6 +34,11 @@ export default function AdminPage() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
+
+  // Admin holds only app-wide controls (accounts, the shared lists, the cap on the owner's key): not in the demo.
+  if (!sections.length) {
+    return <p className="muted">Admin is where the app's owner manages accounts, the shared lists, and the monthly AI budget. Your own settings are under Settings.</p>;
+  }
 
   return (
     <>
