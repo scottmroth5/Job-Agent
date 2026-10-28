@@ -212,3 +212,13 @@ test('estimateCost skips rule-scored postings and knows only listed models', () 
   assert.ok(usd > 0.004 && usd < 0.01, String(usd));
   assert.equal(estimateCost(postings, { model: 'other', knowledgeChars: 1, templateChars: 1 }), null);
 });
+
+test('sanitizeDashes runs in linear time on long runs of spaces (letter text can come from a request)', () => {
+  for (const input of [' '.repeat(100000) + 'x', ' '.repeat(100000) + ',', `a${' '.repeat(100000)}—`, ', '.repeat(50000)]) {
+    const start = Date.now();
+    sanitizeDashes(input);
+    assert.ok(Date.now() - start < 1000, `${input.length} characters`);
+  }
+  assert.equal(sanitizeDashes('x, — y'), 'x, y');
+  assert.equal(sanitizeDashes('— start and end —'), 'start and end');
+});

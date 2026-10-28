@@ -23,9 +23,12 @@ export function docKind(filename, bytes) {
 
 /** Tidy text: one blank line at most between paragraphs, no trailing spaces, at most MAX_DOC_CHARS. */
 export function tidy(text) {
+  // Line by line, so no pattern backtracks over long runs of spaces in an uploaded file.
   return String(text ?? '')
     .replace(/\r\n?/g, '\n')
-    .replace(/[ \t]+\n/g, '\n')
+    .split('\n')
+    .map((l) => l.trimEnd())
+    .join('\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim()
     .slice(0, MAX_DOC_CHARS);
