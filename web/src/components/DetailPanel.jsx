@@ -6,6 +6,7 @@ import TaskProgress from './TaskProgress.jsx';
 import Attachments from './Attachments.jsx';
 import Notes from './Notes.jsx';
 import MeetingPrep from './MeetingPrep.jsx';
+import LetterSection from './LetterSection.jsx';
 import { useDemo } from '../demo.jsx';
 import { isOwner, useMe } from '../me.jsx';
 import { DashIcon } from './DashIcon.jsx';
@@ -97,9 +98,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const [task, setTask] = useState(null);
   const [copied, setCopied] = useState(false);
   const [askPrep, setAskPrep] = useState(0); // the Next step box's Prepare for a meeting opens the prep form
-  const [letterCopied, setLetterCopied] = useState(false);
   // With a Google Doc, the letter's text is shown on request; without one (other users), always.
-  const [showLetter, setShowLetter] = useState(false);
   const [showText, setShowText] = useState(false);
   const [ident, setIdent] = useState(null); // { title, company } while editing
 
@@ -175,12 +174,6 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
     } catch (err) {
       setError(err.message);
     }
-  };
-
-  const copyLetter = async () => {
-    await navigator.clipboard.writeText(job.letter.content);
-    setLetterCopied(true);
-    setTimeout(() => setLetterCopied(false), 1500);
   };
 
   const copyTweaks = async () => {
@@ -413,28 +406,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             </section>
             )}
 
-            {job.letter?.content && (demo || !job.letter.url || showLetter) && (
-              <section>
-                <h3 className="with-icon"><DashIcon name="letter" />Cover letter</h3>
-                {job.letter.resume && <p className="muted small">Written from your resume: {job.letter.resume}</p>}
-                <div className="row">
-                  <button type="button" onClick={copyLetter}>{letterCopied ? 'Copied!' : 'Copy letter'}</button>
-                  {!demo && (
-                    <a className="button" href={`/api/postings/${job.id}/letter.docx`} download>
-                      Download Word
-                    </a>
-                  )}
-                </div>
-                <pre className="tweaks">{job.letter.content}</pre>
-              </section>
-            )}
-            {job.letter?.content && job.letter.url && !demo && !showLetter && (
-              <p>
-                <button type="button" className="link" onClick={() => setShowLetter(true)}>
-                  Show the letter here (copy or download Word)
-                </button>
-              </p>
-            )}
+            <LetterSection job={job} onChanged={async () => { await load(); onChanged(); }} />
 
             {job.tweaks && (
               <section>

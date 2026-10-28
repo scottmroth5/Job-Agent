@@ -215,7 +215,12 @@ Go Fractional is bot-protected: it is never scraped, and search.siteSearch stays
 ## Hunt
 Letters: Sonnet 5.5 at medium effort; v1's cleanup (strip greeting/sign-off, no dashes) and config.coverLetterChecks run in code,
 plus a word-limit flag. Letter Docs go to the app's own "Job Agent Cover Letters" Drive folder (drive.file scope).
-Nothing is overwritten: --regenerate creates new artifacts and Docs. Report HTML escapes every value.
+Nothing is overwritten: --regenerate creates new artifacts and Docs.
+The job panel's Cover letter (web/src/components/LetterSection.jsx, server/letter-routes.js): Revise with Claude
+(agents/hunt/revise-letter.js, Sonnet at medium effort, the knowledge doc plus the job's resume as system, REVISE_SCHEMA,
+REVISIONS_PER_DAY; saves nothing), saving a kept revision (source v2-revision) or the user's own text (source user; only a
+greeting or sign-off is stripped) as a new current version (with a Google Doc for the owner), restoring an older version as
+a new one, and Word or PDF downloads of any version (letter.docx / letter.pdf ?version=; tools/pdf-writer.js letterPdf). Report HTML escapes every value.
 Meeting prep (agents/hunt/prep.js, server/prep-routes.js, Prepare for a meeting in the job panel): Opus 5.5 at high effort,
 streamed, with server-side refusal fallbacks; with research on it uses web_search_20260209 (max 15) and web_fetch (max 5).
 Input is the people (name, role, firm, link, what the user knows), meeting kind, format, time, and free context, plus the

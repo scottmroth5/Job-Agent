@@ -1,31 +1,14 @@
-// Word downloads of a job's cover letter and of a meeting prep (server/word-docs.js), for whoever's job it is. Users
-// without Google Docs send their letters from these; the owner can download them too.
-import { letterDocx, prepDocx, docxName } from './word-docs.js';
-import { letterDocName } from '../agents/hunt/letters.js';
+// Word downloads of a meeting prep (server/word-docs.js), for whoever's job it is. A cover letter's Word and PDF
+// downloads are in server/letter-routes.js, with its versions.
+import { prepDocx, docxName } from './word-docs.js';
 import { prepDocName } from '../agents/hunt/prep.js';
 import { localDay } from '../tools/dates.js';
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-const longDate = (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
 export function registerDocumentRoutes(app, { db, config }) {
   const send = (reply, name, buffer) =>
     reply.header('Content-Type', DOCX).header('Content-Disposition', `attachment; filename="${docxName(name)}"`).header('Cache-Control', 'no-store').send(buffer);
-
-  app.get(
-    '/api/postings/:id/letter.docx',
-    { schema: { summary: "The job's latest cover letter as a Word document", params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } } } },
-    async (req, reply) => {
-      const posting = db.prepare('SELECT id, company, title FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id);
-      const letter = posting
-        ? db.prepare("SELECT content, created_at FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").get(posting.id)
-        : null;
-      if (!letter?.content) return reply.code(404).send({ error: 'No cover letter for this job yet.' });
-      const written = new Date(letter.created_at);
-      const buffer = await letterDocx({ candidate: config.candidate, company: posting.company, title: posting.title, date: longDate(written), body: letter.content });
-      return send(reply, letterDocName(posting.company, posting.title, localDay(written)), buffer);
-    },
-  );
 
   app.get(
     '/api/meeting-preps/:id/docx',

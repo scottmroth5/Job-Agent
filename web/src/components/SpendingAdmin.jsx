@@ -8,6 +8,7 @@ const LABELS = {
   'resume-tweaks': 'Resume tweaks',
   'cover-letter': 'Cover letters',
   'meeting-prep': 'Meeting prep',
+  'cover-letter-revise': 'Revising cover letters',
   'inbox-classify': 'Reading job email',
   other: 'Other',
 };

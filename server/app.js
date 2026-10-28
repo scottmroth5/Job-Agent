@@ -25,6 +25,7 @@ import { registerFeedbackRoutes } from './feedback-routes.js';
 import { registerHelpRoutes } from './help-routes.js';
 import { registerDraftRoutes } from './draft-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
+import { registerLetterRoutes } from './letter-routes.js';
 import { MIN_PROFILE_CHARS, userConfig, userProfile } from '../agents/user-config.js';
 import { adminWaiting } from './admin-queries.js';
 import { today } from './today.js';
@@ -402,6 +403,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerHelpRoutes(app, { store, services });
   registerDraftRoutes(app, { store, services });
   registerDocumentRoutes(app, { db, config });
+  registerLetterRoutes(app, { store, config, services });
   registerPages(app);
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });

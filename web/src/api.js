@@ -58,6 +58,12 @@ export const api = {
   saveAccountProfile: (text) => request('PUT', '/api/account/profile', { text }),
   // The knowledge doc from a document: its text, not saved.
   profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
+  // A job's cover letter versions, revising with Claude, and saving or restoring a version (server/letter-routes.js).
+  letters: (id) => request('GET', `/api/postings/${id}/letters`),
+  reviseLetter: (id, body) => request('POST', `/api/postings/${id}/letter/revise`, body),
+  saveLetter: (id, content, source) => request('POST', `/api/postings/${id}/letter`, { content, source }),
+  restoreLetter: (id, versionId) => request('POST', `/api/postings/${id}/letter/restore`, { versionId }),
+  letterFromFile: (id, file) => uploadFile(`/api/postings/${id}/letter/from-file`, file, '5 MB'),
   // Settings > Resumes (server/resume-routes.js).
   resumes: () => request('GET', '/api/resumes'),
   uploadResume: (file) => uploadFile('/api/resumes', file, '5 MB'),
