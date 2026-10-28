@@ -1,6 +1,7 @@
 // Cover letter and resume tweak helpers ported from v1 (legacy/job_hunt_agent.js):
 // role type, analysis text for prompts, salutation/sign-off stripping, rule checks, and the Doc layout.
 import { escapeHtml } from '../../tools/html.js';
+import { paragraphsOf } from '../../tools/text.js';
 import { keywordMatcher } from '../../tools/titles.js';
 
 const executive = keywordMatcher(['cto', 'vp', 'vice president', 'chief', 'director', 'head of']);
@@ -67,10 +68,7 @@ export function letterDocName(company, title, isoDate) {
 /** The cover letter as HTML for conversion to a Google Doc (v1's layout). Everything is escaped. */
 export function letterHtml({ candidate, company, title, date, body }) {
   const p = (s, style = '') => `<p${style ? ` style="${style}"` : ''}>${escapeHtml(s)}</p>`;
-  const paragraphs = String(body ?? '')
-    .split(/\n\s*\n/)
-    .map((para) => para.replace(/\s*\n\s*/g, ' ').trim())
-    .filter(Boolean)
+  const paragraphs = paragraphsOf(body)
     .map((para) => p(para))
     .join('\n');
   return [

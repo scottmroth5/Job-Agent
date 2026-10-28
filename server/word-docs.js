@@ -2,6 +2,7 @@
 // letters from these, and the owner can use them too. The letter follows the Google Doc's layout (agents/hunt/letters.js
 // letterHtml); the prep is its Markdown with headings, bullets, and bold kept. Text is set as text, never as markup.
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
+import { paragraphsOf } from '../tools/text.js';
 
 const FONT = { font: 'Calibri', size: 22 }; // 11 pt
 
@@ -16,10 +17,7 @@ function runs(text) {
 /** The cover letter: name and contact lines, date, the role, greeting, body paragraphs, and sign-off. */
 export async function letterDocx({ candidate, company, title, date, body }) {
   const para = (text, opts = {}) => new Paragraph({ children: [new TextRun({ text, ...opts })], spacing: { after: 160 } });
-  const paragraphs = String(body ?? '')
-    .split(/\n\s*\n/)
-    .map((p) => p.replace(/\s*\n\s*/g, ' ').trim())
-    .filter(Boolean);
+  const paragraphs = paragraphsOf(body);
   const doc = new Document({
     styles: { default: { document: { run: FONT } } },
     sections: [

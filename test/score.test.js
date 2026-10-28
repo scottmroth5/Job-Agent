@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.js';
-import { sanitizeDashes, truncate } from '../tools/text.js';
+import { paragraphsOf, sanitizeDashes, truncate } from '../tools/text.js';
 import {
   buildScoreRequest,
   interpretResult,
@@ -221,4 +221,15 @@ test('sanitizeDashes runs in linear time on long runs of spaces (letter text can
   }
   assert.equal(sanitizeDashes('x, — y'), 'x, y');
   assert.equal(sanitizeDashes('— start and end —'), 'start and end');
+});
+
+test('paragraphsOf splits on blank lines, joins wrapped lines, and runs in linear time', () => {
+  assert.deepEqual(paragraphsOf('  One line\nwrapped here.  \n \n\n\tTwo.\n'), ['One line wrapped here.', 'Two.']);
+  assert.deepEqual(paragraphsOf('\r\nA\r\n\r\nB'), ['A', 'B']);
+  assert.deepEqual(paragraphsOf(null), []);
+  for (const input of [' '.repeat(100000) + 'x', '\n'.repeat(100000), `a${' \n'.repeat(50000)}b`]) {
+    const start = Date.now();
+    paragraphsOf(input);
+    assert.ok(Date.now() - start < 1000, `${input.length} characters`);
+  }
 });

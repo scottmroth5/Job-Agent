@@ -5,6 +5,7 @@
 // writePdf(lines) takes blocks: { text, size?, bold?, gray?, bullet?, before?, after?, rule?, keep? } where before and
 // after are extra points of space, rule draws a line under the block, and keep starts a new page unless that many points
 // fit below (to keep a heading with what follows).
+import { paragraphsOf } from './text.js';
 
 // Helvetica advance widths (1/1000 em) for ASCII 32 to 126, from the standard font metrics; bold is a little wider.
 const HELV = [
@@ -106,10 +107,7 @@ export function writePdf(blocks) {
 
 /** A cover letter in the Google Doc's layout: name, contact lines, date, the role, greeting, paragraphs, and sign-off. */
 export function letterPdf({ candidate, company, title, date, body }) {
-  const paragraphs = String(body ?? '')
-    .split(/\n\s*\n/)
-    .map((p) => p.replace(/\s*\n\s*/g, ' ').trim())
-    .filter(Boolean);
+  const paragraphs = paragraphsOf(body);
   return writePdf([
     { text: candidate.name ?? '', size: 18, bold: true, after: 2 },
     ...(candidate.contactLine ? [{ text: candidate.contactLine, size: 9.5, gray: true }] : []),

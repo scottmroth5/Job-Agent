@@ -1,4 +1,23 @@
 /**
+ * A letter body's paragraphs: blank lines separate them, and the lines of one paragraph join with a space. Line by
+ * line with no pattern, so text straight from a request (a user's own letter) cannot make it backtrack.
+ */
+export function paragraphsOf(text) {
+  const out = [];
+  let current = [];
+  for (const raw of String(text ?? '').split('\n')) {
+    const line = raw.trim();
+    if (line) current.push(line);
+    else if (current.length) {
+      out.push(current.join(' '));
+      current = [];
+    }
+  }
+  if (current.length) out.push(current.join(' '));
+  return out;
+}
+
+/**
  * Replaces em dashes, en dashes, and double hyphens used as dashes with commas (v1's rule:
  * generated text never contains dashes of any kind). Hyphens inside words are left alone.
  */
