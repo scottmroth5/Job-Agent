@@ -6,6 +6,7 @@ import FeedbackForm from './FeedbackForm.jsx';
 import AccountControls from './AccountControls.jsx';
 import ResumesSettings from './ResumesSettings.jsx';
 import PromptsSettings from './PromptsSettings.jsx';
+import SpendingAdmin from './SpendingAdmin.jsx';
 
 const usd = (n) => `$${Number(n).toFixed(2)}`;
 
@@ -181,6 +182,12 @@ function AccountSettings({ tabs }) {
 
       <SearchSettings />
       <ResumesSettings />
+      {/* Your own spend; the owner's (everything on their key) and the monthly cap are on Admin > Spending. */}
+      {!account.owner && (
+        <section className="home-card">
+          <SpendingAdmin embedded />
+        </section>
+      )}
       {!demo && !account.owner && <FeedbackForm />}
       {!demo && !account.owner && <AccountControls account={account} onChange={setAccount} />}
 

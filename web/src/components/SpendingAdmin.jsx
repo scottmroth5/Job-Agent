@@ -14,10 +14,11 @@ const LABELS = {
 const usd = (n) => `$${n.toFixed(2)}`;
 
 /**
- * Admin > Spending: this month's Claude spend, by feature. The owner sees everything on their key against the cap and
- * sets it; a user on the owner's key sees their allowance; a user with their own key sees their spend, with no cap.
+ * This month's Claude spend, by feature. On Admin > Spending the owner sees everything on their key against the cap and
+ * sets it; on Settings (embedded) a user on the owner's key sees their allowance, and a user with their own key their
+ * spend, with no cap.
  */
-export default function SpendingAdmin() {
+export default function SpendingAdmin({ embedded = false }) {
   const me = useMe();
   const [b, setB] = useState(null);
   const [draft, setDraft] = useState('');
@@ -49,7 +50,7 @@ export default function SpendingAdmin() {
   const pct = capped ? Math.min(100, Math.round((b.spentUsd / b.limitUsd) * 100)) : 0;
   return (
     <div className="spending">
-      <h2>Claude spending, {b.monthLabel}</h2>
+      <h2>{embedded ? 'Your AI spending' : 'Claude spending'}, {b.monthLabel}</h2>
       {capped ? (
         <>
           <p>

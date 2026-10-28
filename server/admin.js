@@ -72,7 +72,9 @@ export function registerAdminRoutes(app, { db, config }) {
   // The signed-in user's spend: the owner sees everything on their key; anyone else, their own.
   const spending = (uid = OWNER_ID) => ({ ...budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: spendByLabel(db, { uid }) });
 
-  app.get('/api/admin/budget', { schema: { summary: "This month's Claude spend against the monthly cap, by feature", response: { 200: anyObject } } }, async (req) => spending(req.uid));
+  // Your own spend (everyone: Settings, and Admin > Spending for the owner, where it is everything on their key). Setting
+  // the cap below stays the owner's.
+  app.get('/api/spending', { schema: { summary: "Your Claude spend this month, by feature, against your cap or allowance if you have one", response: { 200: anyObject } } }, async (req) => spending(req.uid));
 
   app.put(
     '/api/admin/budget',

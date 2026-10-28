@@ -132,7 +132,7 @@ export const api = {
   closeReminder: (id, status) => request('PATCH', `/api/inbox/reminders/${id}`, { status }),
   funnel: (days, track) => request('GET', `/api/funnel?days=${days}${track && track !== 'all' ? `&track=${track}` : ''}`),
   lookups: () => request('GET', '/api/lookups'),
-  budget: () => request('GET', '/api/admin/budget'),
+  budget: () => request('GET', '/api/spending'),
   setBudget: (limitUsd) => request('PUT', '/api/admin/budget', { limitUsd }),
   adminLookups: () => request('GET', '/api/admin/lookups'),
   addLookup: (list, value) => request('POST', `/api/admin/lookups/${list}`, value),

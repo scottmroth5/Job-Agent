@@ -121,7 +121,7 @@ test('demo mode serves every screen without sign-in and says it is the demo', as
   // The header names the sample candidate the way production names a signed-in person; an invented example.com address.
   assert.match(me.email, /^[a-z.]+@example\.com$/);
   assert.equal(me.name, 'Jordan Avery');
-  for (const url of ['/api/summary', '/api/postings?stage=pipeline&status=all', '/api/postings/1', '/api/funnel', '/api/inbox', '/api/prompts', '/api/admin/budget', '/api/lookups', '/api/pipeline', '/api/tasks', '/']) {
+  for (const url of ['/api/summary', '/api/postings?stage=pipeline&status=all', '/api/postings/1', '/api/funnel', '/api/inbox', '/api/prompts', '/api/spending', '/api/lookups', '/api/pipeline', '/api/tasks', '/']) {
     assert.equal((await app.inject(url)).statusCode, 200, `${url} is open in the demo`);
   }
   const tasks = (await app.inject('/api/tasks')).json();

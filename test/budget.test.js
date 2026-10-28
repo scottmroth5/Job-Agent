@@ -137,7 +137,7 @@ test('API: header summary and Admin > Spending show and change the cap', async (
   assert.equal(set.statusCode, 200);
   assert.deepEqual([set.json().limitUsd, set.json().level, set.json().byLabel[0].label], [5, 'warn', 'score']);
   assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/budget', payload: { limitUsd: 0 } })).statusCode, 400);
-  assert.equal((await app.inject('/api/admin/budget')).json().limitUsd, 5);
+  assert.equal((await app.inject('/api/spending')).json().limitUsd, 5);
   await app.close();
   store.close();
 });
