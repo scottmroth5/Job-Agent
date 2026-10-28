@@ -303,35 +303,57 @@ export const SAMPLE_TASKS = [
   },
 ];
 
-// The sample candidate's About you, shown read-only on the demo's Settings (server/account-routes.js) in the shape
-// help/about-you.md teaches. Invented, like everything here.
-export const DEMO_ABOUT_YOU = `## Summary
-Engineering leader with 15 years in software and 8 leading teams, mostly in healthcare and other regulated industries. Best at the stage where a product works, customers depend on it, and the platform and team have to grow faster than they were built to.
+// The sample candidate's knowledge doc, shown read-only on the demo's Settings (server/account-routes.js): a full worked
+// example of the seven sections (agents/knowledge-sections.js) that Help teaches. Invented, like everything here.
+export const DEMO_ABOUT_YOU = `## 1. Summary
+Engineering leader with 15 years in software and 8 leading teams, mostly in healthcare and other regulated industries. I am at my best when a product works, customers depend on it, and the platform and the team now have to grow faster than they were built to. Known for scaling teams without slowing releases, and for passing audits on the first try.
 
-## Experience highlights
-- VP Engineering, a care coordination company (2020 to now): grew the platform team from 6 engineers to 45 with weekly releases; ran SOC 2 Type II and HIPAA as the security lead.
-- Director of Engineering, a claims processing company (2016 to 2020): rebuilt the rules engine and cut processing time by 60 percent.
-- Engineering Manager, a lab software company (2012 to 2016): led the technology side of an accreditation with no findings; built FHIR integrations with more than 20 health systems.
-- Took a venture backed company through a successful acquisition.
+## 2. Experience
+**VP Engineering, a care coordination company (2020 to now)**
+- Grew the platform team from 6 engineers to 45 across the United States, Poland, and Colombia; releases stayed weekly.
+- Security lead for SOC 2 Type II and HIPAA: two audits, no exceptions.
+- Led engineering through a successful acquisition, including the integration plan and keeping the team together.
+- Budget of $9M; report to the CEO.
 
-## Strengths
-- Scaling a platform and a team at the same time, without stopping delivery.
-- Turning an executive team's goals into milestones engineers can deliver.
-- Distributed teams across the United States, Poland, and Colombia.
-- Hands on with TypeScript, Python, and Java.
+**Director of Engineering, a claims processing company (2016 to 2020)**
+- Rebuilt the claims rules engine in phases over two quarters; processing time down 60 percent, no big bang cutover.
+- Built FHIR integrations with more than 20 health systems.
 
-## What I want next
-VP Engineering, Head of Engineering, or CTO at a healthcare or regulated software company of 50 to 500 people. Remote in the US, or hybrid in the Riverton area. Base of $220,000 or more. Open to fractional CTO work at $175 an hour or more for 15 to 25 hours a week.
+**Engineering Manager, a lab software company (2012 to 2016)**
+- Managed a team of eight; led the technology side of a lab accreditation that closed with no findings.
 
-## Not a fit
-- Onsite every day outside the Riverton area.
-- Roles that are mainly people management with no platform ownership.
-- Crypto and gambling.
+## 3. Strengths
+- Scaling a platform and a team at the same time: 6 to 45 engineers with weekly releases.
+- Regulated software: HIPAA, SOC 2, lab accreditation; I build compliance into the release process instead of bolting it on.
+- Turning an executive team's goals into milestones engineers can deliver, and saying no clearly.
+- Distributed teams across three countries and time zones.
+- Hands on when it counts: TypeScript, Python, and Java.
 
-## Stories
-1. Team growth: 6 to 45 engineers in three years while releases stayed weekly.
-2. Rules engine rebuild: phased over two quarters to avoid a big bang cutover.
-3. Accreditation: inspection readiness built into the release process.`;
+## 4. Stories
+1. **Team growth:** joined with 6 engineers and a platform that fell over on Mondays. Hired managers first, split the team by customer journey, and kept weekly releases throughout; 45 engineers three years later.
+2. **Rules engine rebuild:** claims took days. Ran the old and new engines side by side, moved one claim type at a time, and cut processing time 60 percent with no outage.
+3. **Accreditation:** inspection in six weeks with gaps in traceability. Built audit trails into the deployment pipeline; closed with no findings.
+
+## 5. Job Targets
+- **Roles:** VP Engineering, Head of Engineering, or CTO; Director of Engineering at a larger company.
+- **Industries:** healthcare and other regulated software first; fintech and edtech are fine.
+- **Company:** 50 to 500 people, Series B or later, or a private company with a working product.
+- **Place:** remote in the US, or hybrid in the Riverton area (Riverton, Lakeside, Millbrook). No relocation.
+- **Pay:** base of $220,000 or more for full time. Fractional CTO work at $175 an hour or more, 15 to 25 hours a week.
+- **Not a fit:** onsite every day outside the Riverton area; pure people management with no platform ownership; crypto and gambling; seed-stage companies before product-market fit.
+- **Positioning:** for executive roles (CTO, VP, Head of, Director), lead with scaling the team and platform, the acquisition, and audits passed. For hands-on manager roles, lead with the rules engine rebuild and hiring and coaching managers.
+
+## 6. Cover Letter Rules
+- Plain, specific, and warm; under 300 words. Open with what the company does and why its stage fits my experience.
+- One measurable result in the first paragraph.
+- Never use "I am confident", "passionate", "rockstar", or "synergy". No dashes; use commas or periods.
+- Never claim experience not listed here, and never name past employers; describe them by what they do.
+- Mention distributed teams only when the posting does.
+
+## 7. Other
+- BS Computer Science, Example State University.
+- Certified Scrum Professional. Conversational Spanish.
+- Mentor for first-time engineering managers in a local meetup.`;
 
 // The sample candidate's resumes (Settings > Resumes), stored as text files. Letters and tweaks for VP, Head, CTO, and
 // Director titles were "written from" the executive one; the rest from the default. Invented, like everything here.

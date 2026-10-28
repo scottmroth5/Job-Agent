@@ -28,5 +28,5 @@ Words in double braces, such as `{{candidateName}}`, `{{company}}`, or `{{roleTi
 ## Edits to avoid
 
 - Removing placeholders, or the parts of the scoring prompt that describe the score and its reasons: the app reads those.
-- Putting facts about yourself in a prompt. They belong in About you, where every task can use them.
+- Putting facts about yourself in a prompt. They belong in your knowledge doc, where every task can use them.
 - Very long prompts. A few clear sentences of guidance beat a page of rules.

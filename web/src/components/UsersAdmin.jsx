@@ -22,7 +22,7 @@ const ACTIONS = {
 function Setup({ u }) {
   const items = [
     [u.setup.searchReady, 'search'],
-    [u.setup.profileReady, 'About you'],
+    [u.setup.profileReady, 'Knowledge doc'],
     [u.aiSource === 'owner' || u.hasKey, u.aiSource === 'owner' ? 'on your key' : 'own key'],
     [u.setup.scheduled, 'on the schedule'],
   ];

@@ -16,9 +16,53 @@ const LIST_FIELDS = [
   ['excludedSites', 'Job sites to skip (optional)', 'Domains, e.g. example-jobs.com'],
 ];
 
+// Which of the knowledge doc's seven sections the text has, by heading (agents/knowledge-sections.js sectionCheck does the
+// same on the server). The prompts refer to 5. Job Targets and 6. Cover Letter Rules, so missing ones are flagged.
+const norm = (t) => String(t).toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+function sectionsIn(text, sections) {
+  const headings = new Set(
+    String(text ?? '')
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l && l.length <= 60)
+      .map((l) => norm(l.replace(/^#+\s*/, '').replace(/^section\s*/i, '').replace(/^\d+\s*[.:)\-]?\s*/, ''))),
+  );
+  return sections.map((sec) => ({ ...sec, found: headings.has(norm(sec.title)) }));
+}
+
+/** The seven sections as chips (present or missing), and a button that starts from the template or adds what is missing. */
+function SectionChecklist({ sections, text, template, readOnly, onChange }) {
+  if (!sections.length) return null;
+  const check = sectionsIn(text, sections);
+  const missing = check.filter((c) => !c.found);
+  const empty = !String(text ?? '').trim();
+  const addMissing = () => {
+    const blocks = template.split('\n\n').filter((b) => missing.some((m) => b.startsWith(`## ${m.n}. `)));
+    onChange(empty ? template : `${String(text).trimEnd()}\n\n${blocks.join('\n\n')}`);
+  };
+  return (
+    <div className="section-check">
+      <ul className="section-chips" aria-label="Sections in your knowledge doc">
+        {check.map((c) => (
+          <li key={c.n} className={`badge ${c.found ? 'ok' : 'muted'}`} title={c.hint}>
+            <span aria-hidden="true">{c.found ? '✓ ' : ''}</span>
+            {c.n}. {c.title}
+            <span className="sr-only">{c.found ? ' (present)' : ' (missing)'}</span>
+          </li>
+        ))}
+      </ul>
+      {!readOnly && missing.length > 0 && (
+        <button type="button" onClick={addMissing}>
+          {empty ? 'Start from the template' : `Add the ${missing.length === 1 ? 'missing section' : `${missing.length} missing sections`}`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /**
- * Settings > Your search: what the pipeline looks for, the facts about you that scoring and letters use, and whether
- * your pipeline runs on the schedule. The owner's live in their settings file and Google Doc instead.
+ * Settings: the knowledge doc (everyone's, the owner's too) and, for everyone but the owner, the search and schedule.
+ * The owner's search settings live in their settings file.
  */
 export default function SearchSettings() {
   const demo = useDemo(); // the demo shows the sample candidate's, read-only
@@ -31,7 +75,7 @@ export default function SearchSettings() {
   const show = (d) => {
     setData(d);
     if (d.owner) {
-      setProfile(d.profile ?? ''); // the owner's search settings stay in their settings file; About you lives here
+      setProfile(d.profile ?? ''); // the owner's search settings stay in their settings file; the knowledge doc lives here
       return;
     }
     const c = d.config;
@@ -74,7 +118,7 @@ export default function SearchSettings() {
   };
   const useDraftProfile = (text) => {
     setProfile(text);
-    setNote('The draft is in About you: edit it, then Save.');
+    setNote('The draft is in your knowledge doc: edit it, then Save.');
   };
   const saveSearch = (e) => {
     e.preventDefault();
@@ -94,18 +138,20 @@ export default function SearchSettings() {
   return (
     <>
       <section className="home-card">
-        <h2>About you</h2>
+        <h2>Your knowledge doc</h2>
         <p className="muted small">
-          What scoring, letters, and meeting prep know about you: your experience, strengths, what you want next, and anything to avoid. Paste your
-          resume and add notes, or build a draft from your materials. At least {data.profileChars.min} characters. Help has a template and examples.
+          Everything the AI knows about you: every score, cover letter, resume tweak, and meeting prep is written from it. It has seven sections; scoring
+          weighs <b>5. Job Targets</b> most, and letters follow <b>6. Cover Letter Rules</b>. Start from the template, fill it from a document, or build a
+          draft from your resume and LinkedIn profile. At least {data.profileChars.min} characters. <a href="#/help">Help</a>, <i>Writing your knowledge
+          doc</i>, explains each section with full examples.
         </p>
         {demo ? (
-          <p className="warn-box small">A sample: what Jordan, the demo's made-up candidate, wrote. In your own account you write yours here or build a draft from your resume and LinkedIn profile.</p>
+          <p className="warn-box small">A sample: the knowledge doc of Jordan, the demo's made-up candidate. In your own account you start from the template, fill it from a document, or build a draft from your resume and LinkedIn profile.</p>
         ) : (
           <>
             {owner && data.aboutYouFrom === 'google' && (
               <div className="warn-box small">
-                Scoring and writing still read your Google Doc. Copy its text here once, then edit About you here from now on.{' '}
+                Scoring and writing still read your Google Doc. Copy its text here once, then edit your knowledge doc here from now on.{' '}
                 <button type="button" onClick={() => run(() => api.profileFromGoogleDoc(), 'Copied from your Google Doc and saved. Edit it here from now on.')}>
                   Copy my Google Doc here
                 </button>
@@ -127,7 +173,7 @@ export default function SearchSettings() {
                     try {
                       const { text } = await api.profileFromFile(file);
                       setProfile(text);
-                      setNote(`About you now holds the text of ${file.name}: check it, then Save.`);
+                      setNote(`Your knowledge doc now holds the text of ${file.name}: check it against the sections, then Save.`);
                     } catch (err) {
                       setError(err.message);
                     }
@@ -139,6 +185,7 @@ export default function SearchSettings() {
             <DraftBuilder onUseProfile={useDraftProfile} onUseSearch={owner ? null : useDraftSearch} />
           </>
         )}
+        <SectionChecklist sections={data.knowledgeSections ?? []} text={profile} template={data.knowledgeTemplate} readOnly={demo} onChange={setProfile} />
         <form onSubmit={(e) => { e.preventDefault(); run(() => api.saveAccountProfile(profile), 'Saved.'); }}>
           <textarea className="profile-text" rows={12} maxLength={data.profileChars.max} value={profile} readOnly={demo} onChange={(e) => setProfile(e.target.value)} />
           <div className="row demo-hide">

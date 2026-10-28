@@ -109,10 +109,10 @@ export default function ResumesSettings() {
       <h2>Resumes</h2>
       <p className="muted small">
         Letters, resume tweaks, and meeting prep are written from the resume that fits each job: the one whose job titles match the posting's title, else
-        the default. Scoring reads About you, not resumes. PDF, Word .docx, or text, up to 5 MB.
+        the default. Scoring reads your knowledge doc, not resumes. PDF, Word .docx, or text, up to 5 MB.
       </p>
       {list === null ? null : list.length === 0 ? (
-        <p className="muted">{demo ? 'No sample resumes.' : 'No resumes yet. Until you add one, writing works from About you alone.'}</p>
+        <p className="muted">{demo ? 'No sample resumes.' : 'No resumes yet. Until you add one, writing works from your knowledge doc alone.'}</p>
       ) : (
         <ul className="resume-list">
           {list.map((r) => (

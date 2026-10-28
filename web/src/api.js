@@ -56,7 +56,7 @@ export const api = {
   accountSearch: () => request('GET', '/api/account/search'),
   saveAccountSearch: (body) => request('PUT', '/api/account/search', body),
   saveAccountProfile: (text) => request('PUT', '/api/account/profile', { text }),
-  // About you from a document (its text, not saved) or, for the owner, from their Google Doc (saved).
+  // The knowledge doc from a document (its text, not saved) or, for the owner, from their Google Doc (saved).
   profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
   profileFromGoogleDoc: () => request('POST', '/api/account/profile/from-google-doc'),
   // Settings > Resumes (server/resume-routes.js).

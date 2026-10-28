@@ -204,7 +204,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
           <ol className="setup-steps">
             {[
               [setup.ai, 'Add your Claude API key', 'so scoring, letters, and meeting prep can run'],
-              [setup.aboutYou, 'Write About you', 'or build a draft from your resume and LinkedIn profile'],
+              [setup.aboutYou, 'Write your knowledge doc', 'start from the template, or build a draft from your resume and LinkedIn profile'],
               [setup.search, 'Set up your search', 'the job titles and places to look for'],
             ].map(([done, title, why]) => (
               <li key={title} className={done ? 'done' : ''}>

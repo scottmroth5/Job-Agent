@@ -1,6 +1,6 @@
 # Setting up your search
 
-**Settings > Your search** tells the pipeline what to look for. **Build a draft** (under About you) fills it in from your resume; check it before you save.
+**Settings > Your search** tells the pipeline what to look for. **Build a draft** (under Your knowledge doc) fills it in from your resume; check it before you save.
 
 ## The fields
 

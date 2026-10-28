@@ -8,7 +8,7 @@
 
 ## A job's panel
 
-- **Score** (1 to 10) and the reasons for it, from your About you and the posting. Without the posting's full text a score is capped at 5; paste the description to score it properly.
+- **Score** (1 to 10) and the reasons for it, from your knowledge doc and the posting. Without the posting's full text a score is capped at 5; paste the description to score it properly.
 - **Cover letter** and **resume tweaks**, written for jobs that score well. **Regenerate** makes a fresh version; nothing is overwritten.
 - **Prepare for a meeting** writes a briefing for an interview or call: who you are meeting, what to ask, and what to stress. It can research the company on the web first.
 - **Notes** (dated, kept separately) and **files** (PDFs and images open in the browser).

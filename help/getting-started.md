@@ -7,9 +7,9 @@ Job Hunt finds job postings for you, scores how well each fits, writes tailored 
 Open **Settings** from the Home page:
 
 1. **AI.** Add your Anthropic API key (from console.anthropic.com), unless the owner covers your AI. Scoring, letters, and meeting prep need it.
-2. **About you.** What you have done, what you are good at, what you want next, and anything to avoid. Everything the AI writes about you comes from here (at least 500 characters). **Build a draft** writes a first version from your resume and LinkedIn profile; see *Writing About you*.
+2. **Your knowledge doc.** Seven short sections: what you have done, what you are good at, the jobs you want, and how your letters should sound. Everything the AI writes about you comes from here (at least 500 characters). **Start from the template**, or **Build a draft** from your resume and LinkedIn profile; see *Writing your knowledge doc* for the sections and full examples.
 3. **Your search.** The job titles to search for, words a relevant title contains, and the places you can work in person (remote jobs are always included). The draft fills this in too; see *Setting up your search*.
-4. **Resumes (recommended).** Upload the resume or resumes you send. Letters, resume tweaks, and meeting prep are written from the one that fits each job; see *Writing About you*.
+4. **Resumes (recommended).** Upload the resume or resumes you send. Letters, resume tweaks, and meeting prep are written from the one that fits each job; see *Writing your knowledge doc*.
 
 ## Find jobs
 

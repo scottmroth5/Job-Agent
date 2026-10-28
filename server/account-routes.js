@@ -11,6 +11,10 @@ import { ATTACHMENTS_DIR } from './attachments.js';
 import { isTimeZone, localDay } from '../tools/dates.js';
 import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.js';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.js';
+import { KNOWLEDGE_SECTIONS, knowledgeTemplate } from '../agents/knowledge-sections.js';
+
+// What Settings needs to guide a knowledge doc: the sections (for its checklist) and a blank template.
+const KNOWLEDGE_GUIDE = { knowledgeSections: KNOWLEDGE_SECTIONS, knowledgeTemplate: knowledgeTemplate() };
 
 /** An upload's file name from X-Filename (URI-encoded by the page), for its type check only; never used as a path. */
 export function uploadName(req) {
@@ -152,7 +156,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
   const search = (uid) => {
     if (demo) {
       const config = cleanConfig(DEMO_CONFIG, DEMO_CONFIG.candidate.name);
-      return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, scheduled: false };
+      return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE, scheduled: false };
     }
     if (uid === OWNER_ID) {
       // The owner's search settings stay in their settings file; their About you can live here (Settings) and, until
@@ -161,7 +165,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       return {
         owner: true,
         profile,
-        profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS },
+        profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE,
         aboutYouFrom: profile.length >= MIN_PROFILE_CHARS ? 'app' : googleDoc && process.env.YOUR_KNOWLEDGE_DOC_ID ? 'google' : 'none',
         googleDoc: Boolean(googleDoc && process.env.YOUR_KNOWLEDGE_DOC_ID),
       };
@@ -174,7 +178,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       config,
       problems: validateConfig(config),
       profile,
-      profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS },
+      profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE,
       scheduled: scheduledForUser(db, uid),
     };
   };

@@ -17,9 +17,9 @@ const readBase64 = (file) =>
   });
 
 /**
- * Build a draft: share your resume and LinkedIn profile (as PDFs) and anything else, and your AI drafts About you and a
+ * Build a draft: share your resume and LinkedIn profile (as PDFs) and anything else, and your AI drafts your knowledge doc and a
  * starting search. Nothing is saved: onUseProfile and onUseSearch put the draft in the forms for you to review and save.
- * The owner's search settings live in their settings file, so they get the About you only (no onUseSearch).
+ * The owner's search settings live in their settings file, so they get the knowledge doc only (no onUseSearch).
  */
 export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
   const [open, setOpen] = useState(false);
@@ -70,8 +70,8 @@ export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
     <div className="draft-builder">
       <h3>Build a draft</h3>
       <p className="muted small">
-        Share what you have; your AI writes a first draft of About you and your search (usually under 10 cents). Nothing is saved until you choose to,
-        and your files are not kept. See Help, <i>Writing About you</i>, for how to save your LinkedIn profile as a PDF.
+        Share what you have; your AI writes a first draft of your knowledge doc and your search (usually under 10 cents). Nothing is saved until you choose to,
+        and your files are not kept. See Help, <i>Writing your knowledge doc</i>, for how to save your LinkedIn profile as a PDF.
       </p>
       <form onSubmit={build} className="search-form">
         <label>
@@ -111,7 +111,7 @@ export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
           <h3>Your draft</h3>
           {draft.questions.length > 0 && (
             <div className="warn-box">
-              <b>To make it better, answer these in About you:</b>
+              <b>To make it better, answer these in your knowledge doc:</b>
               <ul>
                 {draft.questions.map((q) => (
                   <li key={q}>{q}</li>
@@ -126,7 +126,7 @@ export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
           </p>
           <div className="row">
             <button type="button" className="primary" onClick={() => onUseProfile(draft.aboutYou)}>
-              Use this About you
+              Use this knowledge doc
             </button>
             {onUseSearch && (
               <button type="button" onClick={() => onUseSearch(draft)}>
@@ -134,7 +134,7 @@ export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
               </button>
             )}
           </div>
-          <p className="muted small">{onUseSearch ? 'Both fill the forms below' : 'It fills About you below'} for you to edit; remember to Save.</p>
+          <p className="muted small">{onUseSearch ? 'Both fill the forms below' : 'It fills your knowledge doc below'} for you to edit; remember to Save.</p>
         </div>
       )}
     </div>

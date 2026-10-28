@@ -10,4 +10,4 @@ Everything is under **Settings**.
 
 **Questions, problems, or requests:** use Send feedback, or {{supportContact}}.
 
-Each account sees only its own jobs, notes, and files. The owner can see your email address, status, and AI spending, but not your jobs, notes, About you, or key. See the [privacy policy](/privacy) and [terms](/terms).
+Each account sees only its own jobs, notes, and files. The owner can see your email address, status, and AI spending, but not your jobs, notes, knowledge doc, resumes, or key. See the [privacy policy](/privacy) and [terms](/terms).

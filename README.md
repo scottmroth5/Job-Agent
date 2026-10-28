@@ -6,7 +6,7 @@ An AI job-search assistant that finds postings, scores them against your backgro
 
 - **Finds jobs** from Himalayas, RemoteOK, Fractional Jobs, LinkedIn (remote and near you), and Google results; skips ones it has already seen; fetches the full posting text.
 - **Checks location** against where you can work, before any AI call, so an on-site role in the wrong city never scores high.
-- **Scores every job 1 to 10** with Claude against a Google Doc you write about yourself. Fractional roles also get a High / Medium / Stretch fit, pay, hours, and an annualized estimate.
+- **Scores every job 1 to 10** with Claude against the knowledge doc you write about yourself in Settings (a guided template, a draft builder that reads your resume and LinkedIn profile, and examples in Help). Fractional roles also get a High / Medium / Stretch fit, pay, hours, and an annualized estimate.
 - **Writes materials** for jobs scoring 7 or higher: resume tweaks, and a cover letter saved as a Google Doc, with rule checks that flag letters for review.
 - **Preps you for meetings**: from a job's panel, **Prepare for a meeting** asks who the meeting is with (one person or a group) and anything else to know, researches the people and company online, and writes a prep document (who they are, company snapshot, your opening, fit table, stories, likely questions, gaps, questions to ask, and close). It appears in the app and as a Google Doc. Claude Opus 5.5, about $1 to $2 each.
 - **Emails a summary** of each run, including its cost.
@@ -34,7 +34,7 @@ In short, you need:
 - An [Anthropic API](https://console.anthropic.com) key (typically a few dollars a week)
 - A [Serper.dev](https://serper.dev) key (the free tier is enough)
 - A Google account, with a small Google Cloud app for Docs, Drive, and Gmail access
-- A Google Doc describing your background and job targets
+- Your knowledge doc (written in the app after setup, under Settings; Help has a template and examples)
 
 ```bash
 git clone https://github.com/scottmroth5/Job-Agent.git
@@ -135,7 +135,7 @@ app from another device or the cloud. It uses the Google Cloud project you alrea
 
 **Other people** sign in with Google and fill in a short request (their name, a note, and accepting the [terms](TERMS.md) and [privacy policy](PRIVACY.md)). You get an email; approve or reject them on **Admin > Users**, and they get an email back. For each user you choose who pays for their AI: **their own key**, which they add under **Settings** (encrypted, never shown again, not even to you), or **your key**, with a monthly cap you set. You can pause and resume accounts there too.
 
-Each user sets up their own search under **Settings**: the job titles, keywords, and places to look for, and an **About you** text (their resume and notes) that scoring, letters, and meeting prep use, the way your Google Doc does for you. Then they can add jobs, score them, write letters, prepare for meetings, and run their own pipeline from Home, or let it run on the schedule. Their pipeline uses the free job sources; Google results (your paid search), Google Docs, the inbox, and the report email stay yours. Their letters and preps are kept in the app.
+Each user sets up their own search under **Settings**: the job titles, keywords, and places to look for, their **knowledge doc** (seven sections about them, with a template, a draft builder, and examples in Help) that scoring, letters, and meeting prep use, and their **resumes**. You keep yours there too. Then they can add jobs, score them, write letters, prepare for meetings, and run their own pipeline from Home, or let it run on the schedule. Their pipeline uses the free job sources; Google results (your paid search), Google Docs, the inbox, and the report email stay yours. Their letters and preps are kept in the app.
 
 **Admin > Users** also shows when each person was last here, their last pipeline run, and how far their setup has got. To pay for someone's AI you type their address to confirm, and they get an email. Users can **Send feedback** from Settings: it is emailed to you (reply to answer them) and listed on Admin > Users, where you mark it done; the Admin tile on Home counts what is waiting.
 
@@ -182,7 +182,7 @@ To reach the app from your phone and run the schedule without this computer on, 
 
 Country data for US-only access: IP to Country Lite by DB-IP (https://db-ip.com), CC BY 4.0.
 
-Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The only copy that leaves your machine is the optional encrypted backup to your own Google Drive (and, if you run it in the cloud, the server that then holds these files instead). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your Google Doc.
+Everything personal stays on your machine: your settings (`data/config`), Google sign-in (`data/google`), the job database (`data/job-agent.db`), files attached to jobs (`data/attachments`), and API keys (`.env`). The only copy that leaves your machine is the optional encrypted backup to your own Google Drive (and, if you run it in the cloud, the server that then holds these files instead). The `data` folder and `.env` are excluded from Git, and a pre-commit guard (`npm run hooks:install`) blocks commits that contain any of your private terms, API key values, or files from those locations. Prompts in the repo are generic; personal facts belong in your knowledge doc (stored in the database).
 
 Job sites have their own terms of use. The agent reads public listings at a polite pace, backs off when rate limited, and does not try to get around sites that block automated access; for those, paste the description through the web page instead.
 

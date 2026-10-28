@@ -606,3 +606,6 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 .resume-row + .resume-row { border-top: 1px solid var(--border); }
 .resume-meta { flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
 .file-button.disabled { opacity: 0.6; pointer-events: none; }
+/* The knowledge doc's section checklist (Settings). */
+.section-check { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+.section-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 0; padding: 0; }

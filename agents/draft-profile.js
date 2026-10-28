@@ -1,3 +1,4 @@
+import { sectionsForInstructions } from './knowledge-sections.js';
 // Build a draft (Settings > About you): from the materials a user shares (their resume and LinkedIn profile saved as
 // PDFs, pasted text such as their LinkedIn About section or a job ad they liked, and notes), Claude drafts their About you
 // text and a starting search, for them to review, edit, and save. Nothing is saved here, the files are never kept, and
@@ -38,14 +39,9 @@ export const DRAFT_SCHEMA = {
 export const DRAFT_SYSTEM = `You help a job seeker set up Job Hunt, an app that scores job postings against what it knows about them and writes cover letters and interview prep from it.
 
 From the materials they share, write:
-1. aboutYou: the facts the app should know about them, in Markdown, in the first person, with these headings:
-   ## Summary (three or four sentences: level, field, years, what they are known for)
-   ## Experience highlights (role by role, newest first: title, company, years, and two to four results with numbers where the materials give them)
-   ## Strengths (what they do best, with proof)
-   ## What I want next (roles, level, industries, company stage and size, remote or on site, pay if stated)
-   ## Not a fit (roles, industries, or situations to avoid, if the materials say)
-   ## Stories (two or three short accomplishments worth telling in an interview)
-   ## Other (education, certifications, languages, anything else useful)
+1. aboutYou: their knowledge doc, the facts the app should know about them, in Markdown, in the first person, with exactly these numbered headings in this order (the app's instructions refer to them by number):
+${sectionsForInstructions()}
+   In 5. Job Targets, also say what is not a fit, and how to position them for each kind of role they want (for example: for executive roles, lead with...; for hands-on roles, lead with...). In 6. Cover Letter Rules, start from: plain and specific, no cliches, no claims beyond these facts; add any preferences the materials show.
    Use only facts in the materials. Never invent employers, dates, numbers, or titles. Where something useful is missing, write [add: what is missing] in place, and ask about it in questions.
 2. candidate: their name, the name to sign letters with, a one-line contact line (city, email, phone, as far as the materials give them), and their LinkedIn address. Empty strings for anything not given.
 3. search: a starting search. terms: five to ten job titles to search for, matching their level and the roles they want. relevantTitleKeywords: words a relevant title contains. noiseTitleKeywords: words that rule a title out. homeLocations: places they can work in person ("City, ST"), empty if only remote. fractionalTerms: fractional or part-time titles only if they show interest in that kind of work.
