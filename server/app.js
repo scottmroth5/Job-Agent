@@ -33,7 +33,7 @@ import { today } from './today.js';
 const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback'];
 // What a paused account may still change: resume itself (when it paused itself) or delete itself.
 const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
-import { profileForAI, scheduledUsers, userConfigView } from '../agents/user-config.js';
+import { backgroundFor, scheduledUsers, userConfigView } from '../agents/user-config.js';
 
 // Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
 // of the restricted Gmail scopes), and the lists and the spending cap are shared by everyone. Everything else runs
@@ -97,7 +97,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     get drive() {
       return asOwner() ? ownerDrive : null; // others' letters and preps stay in the app (no access to their Drive yet)
     },
-    knowledge: async () => (asOwner() ? ownerKnowledge?.() : profileForAI(store.raw ?? store.db, currentUserId())),
+    // About you from Settings; the owner's Google Doc only until they have moved theirs into the app.
+    knowledge: async () => backgroundFor(store.raw ?? store.db, asOwner() ? OWNER_ID : currentUserId(), { googleDoc: ownerKnowledge ?? null }),
   };
   app.addHook('onRequest', async (req, reply) => {
     if (blocked(req)) return reply.code(403).type('text/html').header('Cache-Control', 'no-store').send(BLOCKED_PAGE);
@@ -393,7 +394,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
 
   registerAdminRoutes(app, { db, config });
   registerLayoutRoutes(app, { db });
-  registerAccountRoutes(app, { db, demo: authMode === 'demo', checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
+  registerAccountRoutes(app, { db, demo: authMode === 'demo', googleDoc: ownerKnowledge ?? null, checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   // The Users screen never exists in the demo.
   if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });

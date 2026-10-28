@@ -10,6 +10,17 @@ import { deleteAccount, exportAccount } from '../agents/account-data.js';
 import { ATTACHMENTS_DIR } from './attachments.js';
 import { isTimeZone, localDay } from '../tools/dates.js';
 import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.js';
+import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.js';
+
+/** An upload's file name from X-Filename (URI-encoded by the page), for its type check only; never used as a path. */
+export function uploadName(req) {
+  const raw = String(req.headers['x-filename'] ?? '');
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
 
 const anyObject = { type: 'object', additionalProperties: true };
 // Anthropic API keys: "sk-ant-" then letters, digits, dashes, and underscores.
@@ -38,7 +49,7 @@ function account(db, uid) {
  * @param {object} o
  * @param {(apiKey: string) => Promise<boolean>} [o.checkKey]  tools/claude.js claudeKeyWorks (tests pass a fake)
  */
-export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }) {
+export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false, googleDoc = null }) {
   // Phase 6: take your data with you, pause yourself, or delete your account. Deleting needs your address typed.
   app.get('/api/account/export', { schema: { summary: 'Download everything that is yours, as JSON', response: { 200: anyObject } } }, async (req, reply) =>
     reply
@@ -143,7 +154,18 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       const config = cleanConfig(DEMO_CONFIG, DEMO_CONFIG.candidate.name);
       return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, scheduled: false };
     }
-    if (uid === OWNER_ID) return { owner: true };
+    if (uid === OWNER_ID) {
+      // The owner's search settings stay in their settings file; their About you can live here (Settings) and, until
+      // it does, scoring and writing read their Google Doc.
+      const profile = userProfile(db, uid);
+      return {
+        owner: true,
+        profile,
+        profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS },
+        aboutYouFrom: profile.length >= MIN_PROFILE_CHARS ? 'app' : googleDoc && process.env.YOUR_KNOWLEDGE_DOC_ID ? 'google' : 'none',
+        googleDoc: Boolean(googleDoc && process.env.YOUR_KNOWLEDGE_DOC_ID),
+      };
+    }
     const u = getUser(db, uid);
     const config = userConfig(db, uid, u.name);
     const profile = userProfile(db, uid);
@@ -187,6 +209,41 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       return search(uid);
     },
   );
+  // One time, for the owner: copy the Google Doc's current text into About you, so it can be edited here from then on.
+  app.post(
+    '/api/account/profile/from-google-doc',
+    { schema: { summary: 'Owner: copy your Google Doc into About you (nothing else changes; save edits here afterwards)', response: { 200: anyObject } } },
+    async (req, reply) => {
+      const uid = req.uid ?? OWNER_ID;
+      if (uid !== OWNER_ID || !googleDoc || !process.env.YOUR_KNOWLEDGE_DOC_ID) return reply.code(400).send({ error: 'There is no Google Doc to copy from.' });
+      let text;
+      try {
+        text = await googleDoc();
+      } catch {
+        return reply.code(502).send({ error: 'Could not read your Google Doc. Check that the app can still reach Google, then try again.' });
+      }
+      saveUserProfile(db, uid, text);
+      return search(uid);
+    },
+  );
+
+  // A document's text for About you: it fills the box for review and is not saved (Save does that). PDF, .docx, or text.
+  app.post(
+    '/api/account/profile/from-file',
+    {
+      bodyLimit: MAX_DOC_BYTES,
+      schema: {
+        summary: 'Read a document (the raw file as the body, its name in X-Filename) and return its text for About you; nothing is saved',
+        response: { 200: anyObject },
+      },
+    },
+    async (req, reply) => {
+      if (!Buffer.isBuffer(req.body)) return reply.code(400).send({ error: 'Send the file as the request body (application/octet-stream).' });
+      const { kind, text } = await documentText(req.body, uploadName(req));
+      return { kind, text: text.slice(0, MAX_PROFILE_CHARS) };
+    },
+  );
+
   app.put(
     '/api/account/schedule',
     {

@@ -19,9 +19,9 @@ const readBase64 = (file) =>
 /**
  * Build a draft: share your resume and LinkedIn profile (as PDFs) and anything else, and your AI drafts About you and a
  * starting search. Nothing is saved: onUseProfile and onUseSearch put the draft in the forms for you to review and save.
- * For the owner (whose About you is their Google Doc), the draft can be copied instead.
+ * The owner's search settings live in their settings file, so they get the About you only (no onUseSearch).
  */
-export default function DraftBuilder({ onUseProfile, onUseSearch, owner = false }) {
+export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
   const [open, setOpen] = useState(false);
   const [files, setFiles] = useState([]);
   const [pasted, setPasted] = useState('');
@@ -29,7 +29,6 @@ export default function DraftBuilder({ onUseProfile, onUseSearch, owner = false 
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState(null);
   const [error, setError] = useState(null);
-  const [copied, setCopied] = useState(false);
 
   if (!open) {
     return (
@@ -126,26 +125,16 @@ export default function DraftBuilder({ onUseProfile, onUseSearch, owner = false 
             {draft.search.homeLocations.length ? ` · in person: ${draft.search.homeLocations.join(', ')}` : ' · remote'}
           </p>
           <div className="row">
-            {owner ? (
-              <button
-                type="button"
-                className="primary"
-                onClick={() => navigator.clipboard.writeText(draft.aboutYou).then(() => setCopied(true))}
-              >
-                {copied ? 'Copied: paste it into your Google Doc' : 'Copy for my Google Doc'}
+            <button type="button" className="primary" onClick={() => onUseProfile(draft.aboutYou)}>
+              Use this About you
+            </button>
+            {onUseSearch && (
+              <button type="button" onClick={() => onUseSearch(draft)}>
+                Use these search settings
               </button>
-            ) : (
-              <>
-                <button type="button" className="primary" onClick={() => onUseProfile(draft.aboutYou)}>
-                  Use this About you
-                </button>
-                <button type="button" onClick={() => onUseSearch(draft)}>
-                  Use these search settings
-                </button>
-              </>
             )}
           </div>
-          {!owner && <p className="muted small">Both fill the forms below for you to edit; remember to Save each one.</p>}
+          <p className="muted small">{onUseSearch ? 'Both fill the forms below' : 'It fills About you below'} for you to edit; remember to Save.</p>
         </div>
       )}
     </div>

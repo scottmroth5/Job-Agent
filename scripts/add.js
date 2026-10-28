@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
-import { loadKnowledge } from '../tools/knowledge.js';
+import { ownerBackground } from '../tools/knowledge.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
 import { getGoogleAuth } from '../tools/google/auth.js';
@@ -50,7 +50,7 @@ async function main() {
       http: createHttp(),
       browser,
       claude: createJobClaude(store.db),
-      knowledge: await loadKnowledge({ auth }),
+      knowledge: await ownerBackground(store, { auth }),
       drive: createDriveClient(auth),
       run,
       onStep: () => {}, // steps are already logged by the run

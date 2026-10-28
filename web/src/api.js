@@ -32,6 +32,22 @@ async function request(method, path, body) {
   return data;
 }
 
+/** Sends a file as the raw request body with its name in X-Filename (the server reads its type from the bytes). */
+async function uploadFile(path, file, limit, method = 'POST') {
+  const res = await send(path, {
+    method,
+    headers: { 'Content-Type': 'application/octet-stream', 'X-Filename': encodeURIComponent(file.name) },
+    body: file,
+  });
+  if (res.status === 401) {
+    window.location.href = `/auth/login?next=${encodeURIComponent(`/${window.location.hash}`)}`;
+    throw new Error('Sign in required.');
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(res.status === 413 ? `${file.name} is over the ${limit} limit.` : data.error ?? `Upload failed (${res.status})`);
+  return data;
+}
+
 export const api = {
   me: () => request('GET', '/api/me'),
   account: () => request('GET', '/api/account'),
@@ -40,6 +56,9 @@ export const api = {
   accountSearch: () => request('GET', '/api/account/search'),
   saveAccountSearch: (body) => request('PUT', '/api/account/search', body),
   saveAccountProfile: (text) => request('PUT', '/api/account/profile', { text }),
+  // About you from a document (its text, not saved) or, for the owner, from their Google Doc (saved).
+  profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
+  profileFromGoogleDoc: () => request('POST', '/api/account/profile/from-google-doc'),
   setAccountSchedule: (on) => request('PUT', '/api/account/schedule', { on }),
   users: () => request('GET', '/api/admin/users'),
   decideUser: (id, decision) => request('POST', `/api/admin/users/${id}/${decision}`),

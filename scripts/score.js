@@ -5,7 +5,7 @@
 import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
-import { loadKnowledge } from '../tools/knowledge.js';
+import { ownerBackground } from '../tools/knowledge.js';
 import { assertNoRunningRun } from '../tools/runs.js';
 import { openJobStore } from '../db/index.js';
 import { exitWhenDone } from '../tools/exit.js';
@@ -50,7 +50,7 @@ async function main() {
     }
 
     assertNoRunningRun(store.db, 'score');
-    const knowledge = await loadKnowledge();
+    const knowledge = await ownerBackground(store);
     console.log(`Candidate Knowledge loaded: ${knowledge.length.toLocaleString()} characters.`);
     const run = createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });
     try {

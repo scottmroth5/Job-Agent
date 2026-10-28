@@ -6,7 +6,7 @@
 import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
-import { loadKnowledge } from '../tools/knowledge.js';
+import { ownerBackground } from '../tools/knowledge.js';
 import { getGoogleAuth } from '../tools/google/auth.js';
 import { createDriveClient } from '../tools/google/drive.js';
 import { assertNoRunningRun } from '../tools/runs.js';
@@ -40,7 +40,7 @@ async function main() {
 
     assertNoRunningRun(store.db, 'hunt');
     const auth = getGoogleAuth();
-    const knowledge = await loadKnowledge({ auth });
+    const knowledge = await ownerBackground(store, { auth });
     const claude = createJobClaude(store.db);
     const tracer = createJobTracer({ store });
 

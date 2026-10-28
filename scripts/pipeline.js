@@ -8,7 +8,7 @@
 import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
-import { loadKnowledge } from '../tools/knowledge.js';
+import { ownerBackground } from '../tools/knowledge.js';
 import { createHttp } from '../tools/http.js';
 import { createBrowser } from '../tools/browser.js';
 import { getGoogleAuth } from '../tools/google/auth.js';
@@ -78,7 +78,7 @@ async function main() {
 
     let knowledge = null;
     try {
-      knowledge = owner ? await loadKnowledge({ auth }) : profileForAI(store.raw, uid);
+      knowledge = owner ? await ownerBackground(store, { auth }) : profileForAI(store.raw, uid);
     } catch (err) {
       pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${err.message}`);
     }

@@ -30,7 +30,10 @@ export default function SearchSettings() {
 
   const show = (d) => {
     setData(d);
-    if (d.owner) return;
+    if (d.owner) {
+      setProfile(d.profile ?? ''); // the owner's search settings stay in their settings file; About you lives here
+      return;
+    }
     const c = d.config;
     setForm({
       name: c.candidate.name, signoffName: c.candidate.signoffName, contactLine: c.candidate.contactLine, linkedin: c.candidate.linkedin,
@@ -56,15 +59,7 @@ export default function SearchSettings() {
   };
 
   if (!data) return error ? <div className="error">{error}</div> : null;
-  if (data.owner) {
-    return (
-      <section className="home-card">
-        <h2>Your search</h2>
-        <p className="muted">Your search settings come from data/config/job-search.json, and the facts about you from your Google Doc.</p>
-        <DraftBuilder owner />
-      </section>
-    );
-  }
+  const owner = data.owner;
   const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
   // A draft fills the forms (never saves): the user reviews it and saves each part.
   const useDraftSearch = (d) => {
@@ -95,7 +90,7 @@ export default function SearchSettings() {
   };
   const chars = profile.trim().length;
   // The required fields still empty, by their labels here.
-  const missing = LIST_FIELDS.filter(([k]) => data.problems.some((p) => p.startsWith(`search.${k} `))).map(([, label]) => label);
+  const missing = LIST_FIELDS.filter(([k]) => (data.problems ?? []).some((p) => p.startsWith(`search.${k} `))).map(([, label]) => label);
   return (
     <>
       <section className="home-card">
@@ -107,7 +102,42 @@ export default function SearchSettings() {
         {demo ? (
           <p className="warn-box small">A sample: what Jordan, the demo's made-up candidate, wrote. In your own account you write yours here or build a draft from your resume and LinkedIn profile.</p>
         ) : (
-          <DraftBuilder onUseProfile={useDraftProfile} onUseSearch={useDraftSearch} />
+          <>
+            {owner && data.aboutYouFrom === 'google' && (
+              <div className="warn-box small">
+                Scoring and writing still read your Google Doc. Copy its text here once, then edit About you here from now on.{' '}
+                <button type="button" onClick={() => run(() => api.profileFromGoogleDoc(), 'Copied from your Google Doc and saved. Edit it here from now on.')}>
+                  Copy my Google Doc here
+                </button>
+              </div>
+            )}
+            <div className="row">
+              <label className="button file-button">
+                Fill from a document
+                <input
+                  type="file"
+                  accept=".pdf,.docx,.txt,.md"
+                  className="sr-only"
+                  onChange={async (ev) => {
+                    const file = ev.target.files?.[0];
+                    ev.target.value = '';
+                    if (!file) return;
+                    setError(null);
+                    setNote(null);
+                    try {
+                      const { text } = await api.profileFromFile(file);
+                      setProfile(text);
+                      setNote(`About you now holds the text of ${file.name}: check it, then Save.`);
+                    } catch (err) {
+                      setError(err.message);
+                    }
+                  }}
+                />
+              </label>
+              <span className="muted small">PDF, Word .docx, or text: its text replaces the box below for you to review.</span>
+            </div>
+            <DraftBuilder onUseProfile={useDraftProfile} onUseSearch={owner ? null : useDraftSearch} />
+          </>
         )}
         <form onSubmit={(e) => { e.preventDefault(); run(() => api.saveAccountProfile(profile), 'Saved.'); }}>
           <textarea className="profile-text" rows={12} maxLength={data.profileChars.max} value={profile} readOnly={demo} onChange={(e) => setProfile(e.target.value)} />
@@ -120,6 +150,12 @@ export default function SearchSettings() {
         </form>
       </section>
 
+      {owner ? (
+        <section className="home-card">
+          <h2>Your search</h2>
+          <p className="muted">Your search settings come from data/config/job-search.json on the server.</p>
+        </section>
+      ) : (
       <section className="home-card">
         <h2>Your search</h2>
         {missing.length > 0 && <p className="warn-box">To run your pipeline, fill in: {missing.join('; ')}.</p>}
@@ -155,6 +191,7 @@ export default function SearchSettings() {
         </label>
         <p className="muted small demo-hide">Your pipeline searches the free job sources; Google results and Google Docs are the owner's only for now. Letters and meeting preps are kept here in the app.</p>
       </section>
+      )}
       {note && <p className="muted small">{note}</p>}
       {error && <div className="error">{error}</div>}
     </>

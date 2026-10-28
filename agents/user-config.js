@@ -93,11 +93,10 @@ export function saveUserConfig(db, uid, input, name = '') {
   return { config, problems: validateConfig(config) };
 }
 
-/** A user's background text (their stand-in for the owner's Google Doc), or ''. */
+/** A user's background text (About you on Settings), or ''. The owner's too, once they move it in from their Google Doc. */
 export const userProfile = (db, uid) => readSetting(db, uid, PROFILE_KEY) ?? '';
 
 export function saveUserProfile(db, uid, value) {
-  if (uid === OWNER_ID) throw Object.assign(new Error('Your background comes from your Google Doc.'), { statusCode: 400 });
   const body = String(value ?? '').trim();
   if (body.length > MAX_PROFILE_CHARS) throw Object.assign(new Error(`Keep it under ${MAX_PROFILE_CHARS} characters.`), { statusCode: 400 });
   writeSetting(db, uid, PROFILE_KEY, body);
@@ -111,6 +110,17 @@ export function profileForAI(db, uid) {
     throw Object.assign(new Error(`Add your background (at least ${MIN_PROFILE_CHARS} characters) under Settings before using AI.`), { statusCode: 400 });
   }
   return body;
+}
+
+/**
+ * The background scoring and writing read for a user: their About you text when it is long enough; for the owner,
+ * until they have moved theirs into the app, their Google Doc (googleDoc loads it). Otherwise profileForAI's message.
+ */
+export async function backgroundFor(db, uid, { googleDoc = null } = {}) {
+  const body = userProfile(db, uid);
+  if (body.length >= MIN_PROFILE_CHARS) return body;
+  if (uid === OWNER_ID && googleDoc) return googleDoc();
+  return profileForAI(db, uid);
 }
 
 /** Whether a user's pipeline runs on the owner's schedule too. */

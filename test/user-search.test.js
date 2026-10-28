@@ -44,7 +44,7 @@ test('a user sets plain text only: no patterns, no site search, no private terms
 
   const { raw } = openJobStore(':memory:');
   assert.throws(() => saveUserConfig(raw, OWNER_ID, B_SEARCH), /job-search\.json/);
-  assert.throws(() => saveUserProfile(raw, OWNER_ID, 'x'), /Google Doc/);
+  assert.equal(saveUserProfile(raw, OWNER_ID, ' Owner background. '), 'Owner background.', 'the owner can keep About you in the app too');
 });
 
 test('the server config reads as whoever the request runs as', () => {
@@ -89,7 +89,10 @@ async function setup() {
 test('Settings: a user saves their search, background, and schedule; the owner is pointed at their file', async () => {
   const { store, app, b, asA, asB, done } = await setup();
   const get = (headers) => app.inject({ url: '/api/account/search', headers });
-  assert.deepEqual((await get(asA)).json(), { owner: true });
+  // The owner: search settings stay in their file; About you can live here, and until it does their Google Doc is read.
+  const own = (await get(asA)).json();
+  assert.deepEqual({ owner: own.owner, profile: own.profile, from: own.aboutYouFrom }, { owner: true, profile: '', from: process.env.YOUR_KNOWLEDGE_DOC_ID ? 'google' : 'none' });
+  assert.equal(own.config, undefined, "the owner's settings file is not sent");
   const empty = (await get(asB)).json();
   assert.equal(empty.config.ready, false);
   assert.ok(empty.problems.length > 0);
