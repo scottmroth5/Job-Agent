@@ -9,6 +9,7 @@ import { getPrompt } from '../prompts.js';
 import { PROMOTE_AT } from '../discovery/score.js';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
 import { lookups, sqlList } from '../lookups.js';
+import { pickResume, withResume } from '../resumes.js';
 
 export const HUNT_MODEL = 'claude-sonnet-5-5';
 // Writing quality matters more here than in scoring, so medium effort; thinking counts toward maxTokens.
@@ -99,8 +100,8 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
   const prompts = loadHuntPrompts(db);
   const postings = selectForHunt(db, { ids, promoteAt });
 
-  const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at)
-    VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?)`);
+  const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at, resume_id)
+    VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?, ?)`);
   const setDoc = db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid');
   const letterById = db.prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid');
 
@@ -140,11 +141,14 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
     const analysis = JSON.parse(p.analysis_json);
     const nowIso = new Date().toISOString();
     const tag = `#${p.id} (${i + 1}/${postings.length})`;
+    // The user's resume for this job (agents/resumes.js), read with the background; none uploaded means the background alone.
+    const resume = pickResume(db, p.title);
+    const background = withResume(knowledge, resume);
     try {
       if (!p.has_tweaks || regenerate) {
         log(`${tag}: writing resume tweaks`);
-        const tweaks = sanitizeDashes(await call(buildTweaksRequest(p, analysis, { config, knowledge, prompts })));
-        insertArtifact.run(p.id, 'resume_tweaks', tweaks, null, HUNT_MODEL, prompts.tweaks.version, run?.id ?? null, nowIso);
+        const tweaks = sanitizeDashes(await call(buildTweaksRequest(p, analysis, { config, knowledge: background, prompts })));
+        insertArtifact.run(p.id, 'resume_tweaks', tweaks, null, HUNT_MODEL, prompts.tweaks.version, run?.id ?? null, nowIso, resume?.id ?? null);
         summary.tweaks += 1;
       }
       if (p.letter_missing_doc && !regenerate) {
@@ -152,9 +156,9 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
         await saveDoc(p, p.letter_missing_doc, letterById.get(p.letter_missing_doc).content);
       } else if (!p.has_letter || regenerate) {
         log(`${tag}: writing cover letter`);
-        const { body, flags } = finishLetter(await call(buildLetterRequest(p, analysis, { config, knowledge, prompts })), config);
+        const { body, flags } = finishLetter(await call(buildLetterRequest(p, analysis, { config, knowledge: background, prompts })), config);
         const artifactId = Number(
-          insertArtifact.run(p.id, 'cover_letter', body, flags.length ? JSON.stringify(flags) : null, HUNT_MODEL, prompts.letter.version, run?.id ?? null, nowIso).lastInsertRowid,
+          insertArtifact.run(p.id, 'cover_letter', body, flags.length ? JSON.stringify(flags) : null, HUNT_MODEL, prompts.letter.version, run?.id ?? null, nowIso, resume?.id ?? null).lastInsertRowid,
         );
         summary.letters += 1;
         if (flags.length) summary.flagged.push({ id: p.id, flags });

@@ -12,6 +12,14 @@ In **Settings > About you**, choose **Build a draft** and share what you already
 
 It writes a draft About you and a starting search for you to read, correct, and save. Nothing is saved until you do, and your files are not kept. Fill in anything marked **[add: …]** and answer the questions it lists; those answers make the biggest difference.
 
+Already have About you written down? **Fill from a document** puts the text of a PDF, Word .docx, or text file in the box for you to check and save.
+
+## Your resumes
+
+**Settings > Resumes** keeps the resumes you actually send (PDF, Word .docx, or text). Give each a label and the job title words it is for, for example *VP, Head of, CTO* for an executive version. Each job's cover letter, resume tweaks, and meeting prep are written from the resume whose words match the job title, or else your default, and the job panel says which one. Resume tweaks then suggest changes to that resume. Scoring reads About you only.
+
+When you update a resume, use **Replace file**: the label and job titles stay. Letters already written are not changed; use **Regenerate** on a job to write them again from the new version.
+
 ## What to include
 
 1. **Summary:** your level, field, and years, and what you are known for.

@@ -33,7 +33,7 @@ export function listAttachments(db, postingId) {
 }
 
 /** Content-Disposition with an ASCII fallback and the full name in UTF-8 (RFC 6266 / 5987). */
-function disposition(kind, filename) {
+export function disposition(kind, filename) {
   const ascii = filename.replace(/[^\x20-\x7e]/g, '_').replace(/[\\"]/g, '_');
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }

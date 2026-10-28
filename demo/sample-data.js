@@ -332,3 +332,52 @@ VP Engineering, Head of Engineering, or CTO at a healthcare or regulated softwar
 1. Team growth: 6 to 45 engineers in three years while releases stayed weekly.
 2. Rules engine rebuild: phased over two quarters to avoid a big bang cutover.
 3. Accreditation: inspection readiness built into the release process.`;
+
+// The sample candidate's resumes (Settings > Resumes), stored as text files. Letters and tweaks for VP, Head, CTO, and
+// Director titles were "written from" the executive one; the rest from the default. Invented, like everything here.
+export const DEMO_RESUMES = [
+  {
+    label: 'Executive',
+    titles: 'VP, Vice President, Head of, CTO, Chief, Director',
+    filename: 'Jordan Avery - Executive.txt',
+    text: `Jordan Avery
+Riverton, ST | jordan.avery@example.com | linkedin.com/in/example-jordan-avery
+
+Engineering executive who scales regulated healthcare platforms and the teams that build them.
+
+EXPERIENCE
+VP Engineering, a care coordination company (2020 to now)
+- Grew the platform team from 6 engineers to 45 across the United States, Poland, and Colombia; releases stayed weekly.
+- Security lead for SOC 2 Type II and HIPAA; two audits with no exceptions.
+- Took the company through a successful acquisition and integration.
+
+Director of Engineering, a claims processing company (2016 to 2020)
+- Rebuilt the claims rules engine in phases; processing time down 60 percent.
+- Built FHIR integrations with more than 20 health systems.
+
+Engineering Manager, a lab software company (2012 to 2016)
+- Led the technology side of a lab accreditation that closed with no findings.
+
+EDUCATION
+BS Computer Science, Example State University`,
+  },
+  {
+    label: 'Engineering manager',
+    titles: 'Engineering Manager, Manager, Team Lead',
+    filename: 'Jordan Avery - Engineering Manager.txt',
+    text: `Jordan Avery
+Riverton, ST | jordan.avery@example.com
+
+Hands-on engineering manager: TypeScript, Python, and Java; comfortable in any stack.
+
+EXPERIENCE
+VP Engineering, a care coordination company (2020 to now)
+- Managed managers and senior engineers across three time zones; coached four first-time managers.
+
+Director of Engineering, a claims processing company (2016 to 2020)
+- Ran the rules engine rebuild day to day: design reviews, phased rollout, on-call health.
+
+Engineering Manager, a lab software company (2012 to 2016)
+- Managed a team of eight; owned releases, hiring, and the accreditation work.`,
+  },
+];

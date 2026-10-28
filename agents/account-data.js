@@ -11,7 +11,7 @@ import { USER_TABLES } from '../db/user-tables.js';
 import { OWNER_ID } from '../db/users.js';
 
 // Columns never exported: encrypted with keys the user does not hold.
-const HIDDEN = { emails: ['body_enc'] };
+const HIDDEN = { emails: ['body_enc'], resumes: ['file'] }; // a resume's text is exported; the file itself downloads from Settings
 // Deleted first: rows that point at other user rows (postings last; its children also cascade).
 const DELETE_ORDER = ['decision_log', 'reminders', 'emails', 'email_threads', 'contacts', 'attachments', 'meeting_preps', 'posting_notes', 'posting_sightings', 'scores', 'artifacts', 'status_history', 'prompt_versions', 'user_settings', 'feedback', 'postings'];
 

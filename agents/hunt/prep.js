@@ -12,6 +12,7 @@ import { localDay } from '../../tools/dates.js';
 import { getPrompt } from '../prompts.js';
 import { formatAnalysis } from './letters.js';
 import { listNotes, notesForPrompt } from '../notes.js';
+import { pickResume, withResume } from '../resumes.js';
 
 export const PREP_MODEL = 'claude-opus-5-5';
 // Research plus a long document: high effort, room for thinking, streamed so a long answer never times out.
@@ -167,12 +168,13 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
   const letter = db.prepare("SELECT content FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").pluck().get(postingId);
   const prompt = getPrompt(db, 'meeting-prep');
   const notes = notesForPrompt(listNotes(db, postingId));
+  const resume = pickResume(db, posting.title); // the user's resume for this job (agents/resumes.js), if any
 
   const people = prepInput.attendees.length;
   onStep(prepInput.research ? `Researching ${people === 1 ? 'the person' : `${people} people`} and the company, then writing the prep (a few minutes)` : 'Writing the prep');
   run?.log?.('info', `#${postingId}: meeting prep for ${people} ${people === 1 ? 'person' : 'people'}${prepInput.research ? ' with research' : ''}`);
   const res = await claude.send({
-    ...buildPrepRequest(posting, prepInput, { config, knowledge, prompt, analysis: analysisJson ? JSON.parse(analysisJson) : null, letter, notes, now }),
+    ...buildPrepRequest(posting, prepInput, { config, knowledge: withResume(knowledge, resume), prompt, analysis: analysisJson ? JSON.parse(analysisJson) : null, letter, notes, now }),
     trace: run,
   });
   const content = extractDocument(res.content ?? [{ type: 'text', text: res.text }]);
@@ -180,9 +182,10 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
 
   const id = randomUUID();
   db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
-      model, prompt_version, cost_usd, web_searches, run_id, created_at)
-    VALUES (@uid, @id, @postingId, @attendees, @meetingAt, @kind, @format, @context, @research, @content, @model, @version, @cost, @searches, @runId, @createdAt)`).run({
+      model, prompt_version, cost_usd, web_searches, run_id, created_at, resume_id)
+    VALUES (@uid, @id, @postingId, @attendees, @meetingAt, @kind, @format, @context, @research, @content, @model, @version, @cost, @searches, @runId, @createdAt, @resumeId)`).run({
     id,
+    resumeId: resume?.id ?? null,
     postingId,
     attendees: JSON.stringify(prepInput.attendees),
     meetingAt: prepInput.meetingAt,

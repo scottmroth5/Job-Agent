@@ -146,9 +146,11 @@ export function getPosting(db, id, config = {}) {
   const r = db.prepare(`${base(db)} WHERE p.id = ?`).get(id);
   if (!r) return null;
   const tweaks = db
-    .prepare("SELECT content, model, created_at FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
+    .prepare("SELECT content, model, created_at, resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
     .get(id);
-  const letter = r.letter_id ? db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) : null;
+  const letter = r.letter_id ? db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at, resume_id FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) : null;
+  // Which of the user's resumes a letter or tweaks were written from (null: none, or since deleted).
+  const resumeLabel = (rid) => (rid ? (db.prepare('SELECT label FROM resumes WHERE id = ? AND user_id = @uid').pluck().get(rid) ?? null) : null);
   return {
     ...toRow(r, config),
     copies: findCopies(db, r),
@@ -161,8 +163,8 @@ export function getPosting(db, id, config = {}) {
     text: r.jd_text ?? r.fetched_text ?? null,
     textSource: r.jd_text ? 'pasted' : r.fetched_text ? 'fetched' : null,
     extra: parse(r.extra_json),
-    tweaks: tweaks ? { content: tweaks.content, model: tweaks.model, createdAt: tweaks.created_at } : null,
-    letter: letter ? { url: letter.doc_url, name: letter.doc_name, flags: parse(letter.flags_json) ?? [], content: letter.content, createdAt: letter.created_at } : null,
+    tweaks: tweaks ? { content: tweaks.content, model: tweaks.model, createdAt: tweaks.created_at, resume: resumeLabel(tweaks.resume_id) } : null,
+    letter: letter ? { url: letter.doc_url, name: letter.doc_name, flags: parse(letter.flags_json) ?? [], content: letter.content, createdAt: letter.created_at, resume: resumeLabel(letter.resume_id) } : null,
     scores: db
       .prepare('SELECT score, source, model, reason, created_at AS createdAt FROM scores WHERE posting_id = ? AND user_id = @uid ORDER BY id DESC')
       .all(id),

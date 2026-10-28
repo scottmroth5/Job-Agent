@@ -44,6 +44,7 @@ export const OWNER_ONLY = new Set([
 ]);
 import { registerAdminRoutes } from './admin.js';
 import { registerAccountRoutes } from './account-routes.js';
+import { registerResumeRoutes } from './resume-routes.js';
 import { registerPages } from './pages.js';
 import { registerUserRoutes } from './users-routes.js';
 import { claudeKeyWorks } from '../tools/claude.js';
@@ -404,6 +405,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerPages(app);
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });
+  registerResumeRoutes(app, { db }); // after attachments, which registers the raw-file body parser
   registerPrepRoutes(app, { store, config, services, startTask });
   registerNoteRoutes(app, { db });
   let scheduler = null;

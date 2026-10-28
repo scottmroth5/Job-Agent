@@ -144,7 +144,15 @@ are done. Build a draft (agents/draft-profile.js, POST /api/account/draft, Setti
 LinkedIn profile as PDFs (documents), text files and pasted text, and notes go to DRAFT_MODEL on their own AI with
 DRAFT_SCHEMA; it returns a draft About you and starting search with [add: ...] gaps and questions. Nothing is saved (the
 forms are filled for review), files are never kept, the materials are untrusted data (system prompt), DRAFTS_PER_DAY.
-The owner gets it too, to copy into their Google Doc. Guides with a template and made-up examples: help/about-you.md,
+The owner gets it too.
+The owner's About you lives in the app too: agents/user-config.js backgroundFor reads About you (>= 500 characters) and,
+for the owner only, falls back to the Google Doc (YOUR_KNOWLEDGE_DOC_ID) until Settings' one-time "Copy my Google Doc here"
+(POST /api/account/profile/from-google-doc); the server and every script (tools/knowledge.js ownerBackground) use it.
+Fill from a document (POST /api/account/profile/from-file) returns a file's text without saving; tools/doc-text.js reads
+PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.js, server/resume-routes.js,
+Settings > Resumes): file and text in the resumes table (so backups, export, and deletion cover them; export omits the
+blob), a label, plain title words, one default. pickResume chooses per job title; withResume adds its text to the
+background for letters, tweaks, and meeting prep (never scoring), and artifacts/meeting_preps record resume_id. Guides with a template and made-up examples: help/about-you.md,
 help/search-settings.md, help/prompts.md. tools/markdown.js renders fenced blocks (escaped). test/onboarding.test.js.
 Letters and preps in the app: the job panel shows a letter's text (always without a Google Doc, on request with one) with
 Copy and Download Word; the prep reader has Download Word too. server/word-docs.js builds the .docx (the letter in the

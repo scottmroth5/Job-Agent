@@ -18,7 +18,8 @@ import { setSetting } from '../db/settings.js';
 import { addNote } from '../agents/notes.js';
 import { companyTitleKey } from '../tools/urls.js';
 import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
-import { CANDIDATE, DEMO_CONFIG, JOBS, PROMPT_EDITS, REVIEW_EMAIL, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
+import { pickResume } from '../agents/resumes.js';
+import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.js';
 
 const MARKER = 'demo_database';
@@ -213,6 +214,18 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
   // Prompt edits shown on the Admin screen, each a saved version on top of the repo default.
   const savePrompt = db.prepare('INSERT INTO prompt_versions (user_id, name, template, note, active, created_at) VALUES (@uid, ?, ?, ?, 1, ?)');
   for (const [i, p] of prompts.entries()) savePrompt.run(p.name, p.template, p.note ?? 'Tuned for this search', iso(20 - i, 16, 0));
+
+  // Sample resumes (Settings > Resumes), the first the default, and which one each sample letter and tweak came from.
+  const insertResume = db.prepare(`INSERT INTO resumes (id, user_id, label, titles, is_default, filename, kind, size_bytes, file, text, created_at, updated_at)
+    VALUES (?, @uid, ?, ?, ?, ?, 'text', ?, ?, ?, ?, ?)`);
+  DEMO_RESUMES.forEach((r, i) => {
+    const bytes = Buffer.from(r.text);
+    insertResume.run(randomUUID(), r.label, r.titles, i === 0 ? 1 : 0, r.filename, bytes.length, bytes, r.text, iso(40 - i, 10, 0), iso(12 - i, 10, 0));
+  });
+  const setResume = db.prepare('UPDATE artifacts SET resume_id = ? WHERE id = ? AND user_id = @uid');
+  for (const a of db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all()) {
+    setResume.run(pickResume(db, a.title)?.id ?? null, a.id);
+  }
 
   store.close();
   return { postings, emails, runs: runIds.length, prompts: prompts.length };

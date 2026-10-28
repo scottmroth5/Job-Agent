@@ -600,3 +600,9 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 .jobs th .sort-button:focus-visible, .jobs .role-link:focus-visible, .today-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .panel:focus { outline: none; }
 .file-button { cursor: pointer; }
+/* Settings > Resumes */
+.resume-list { list-style: none; margin: 0 0 10px; padding: 0; }
+.resume-row { padding: 10px 0; }
+.resume-row + .resume-row { border-top: 1px solid var(--border); }
+.resume-meta { flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 6px; }
+.file-button.disabled { opacity: 0.6; pointer-events: none; }

@@ -59,6 +59,12 @@ export const api = {
   // About you from a document (its text, not saved) or, for the owner, from their Google Doc (saved).
   profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
   profileFromGoogleDoc: () => request('POST', '/api/account/profile/from-google-doc'),
+  // Settings > Resumes (server/resume-routes.js).
+  resumes: () => request('GET', '/api/resumes'),
+  uploadResume: (file) => uploadFile('/api/resumes', file, '5 MB'),
+  replaceResume: (id, file) => uploadFile(`/api/resumes/${id}/file`, file, '5 MB'),
+  updateResume: (id, patch) => request('PATCH', `/api/resumes/${id}`, patch),
+  deleteResume: (id) => request('DELETE', `/api/resumes/${id}`),
   setAccountSchedule: (on) => request('PUT', '/api/account/schedule', { on }),
   users: () => request('GET', '/api/admin/users'),
   decideUser: (id, decision) => request('POST', `/api/admin/users/${id}/${decision}`),

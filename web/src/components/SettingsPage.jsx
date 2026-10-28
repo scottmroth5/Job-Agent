@@ -4,6 +4,7 @@ import { useDemo } from '../demo.jsx';
 import SearchSettings from './SearchSettings.jsx';
 import FeedbackForm from './FeedbackForm.jsx';
 import AccountControls from './AccountControls.jsx';
+import ResumesSettings from './ResumesSettings.jsx';
 
 const usd = (n) => `$${Number(n).toFixed(2)}`;
 
@@ -143,6 +144,7 @@ export default function SettingsPage() {
       </section>
 
       <SearchSettings />
+      <ResumesSettings />
       {!demo && !account.owner && <FeedbackForm />}
       {!demo && !account.owner && <AccountControls account={account} onChange={setAccount} />}
 

@@ -3,4 +3,4 @@
 // are listed here.
 import { USER_TABLES as REBUILT_IN_013 } from './migrations/013-users.js';
 
-export const USER_TABLES = [...REBUILT_IN_013, 'feedback'];
+export const USER_TABLES = [...REBUILT_IN_013, 'feedback', 'resumes'];

@@ -416,6 +416,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             {job.letter?.content && (demo || !job.letter.url || showLetter) && (
               <section>
                 <h3 className="with-icon"><DashIcon name="letter" />Cover letter</h3>
+                {job.letter.resume && <p className="muted small">Written from your resume: {job.letter.resume}</p>}
                 <div className="row">
                   <button type="button" onClick={copyLetter}>{letterCopied ? 'Copied!' : 'Copy letter'}</button>
                   {!demo && (
@@ -438,6 +439,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             {job.tweaks && (
               <section>
                 <h3 className="with-icon"><DashIcon name="resume" />Resume tweaks</h3>
+                {job.tweaks.resume && <p className="muted small">For your resume: {job.tweaks.resume}</p>}
                 <pre className="tweaks">{job.tweaks.content}</pre>
               </section>
             )}
