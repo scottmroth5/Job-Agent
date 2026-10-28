@@ -105,7 +105,7 @@ test('demo mode refuses every request that would change data, without sign-in, e
       writes.push(`${method} ${r.url}`);
     }
   }
-  for (const must of ['PATCH /api/postings/:id', 'POST /api/postings', 'POST /api/pipeline/run', 'POST /api/inbox/check', 'PUT /api/admin/prompts/:name', 'PUT /api/admin/budget', 'DELETE /api/notes/:id', 'POST /api/postings/:id/meeting-prep']) {
+  for (const must of ['PATCH /api/postings/:id', 'POST /api/postings', 'POST /api/pipeline/run', 'POST /api/inbox/check', 'PUT /api/prompts/:name', 'PUT /api/admin/budget', 'DELETE /api/notes/:id', 'POST /api/postings/:id/meeting-prep']) {
     assert.ok(writes.includes(must), `${must} was checked`);
   }
   assert.equal(store.db.prepare('SELECT COUNT(*) FROM postings').pluck().get(), before);
@@ -121,7 +121,7 @@ test('demo mode serves every screen without sign-in and says it is the demo', as
   // The header names the sample candidate the way production names a signed-in person; an invented example.com address.
   assert.match(me.email, /^[a-z.]+@example\.com$/);
   assert.equal(me.name, 'Jordan Avery');
-  for (const url of ['/api/summary', '/api/postings?stage=pipeline&status=all', '/api/postings/1', '/api/funnel', '/api/inbox', '/api/admin/prompts', '/api/admin/budget', '/api/lookups', '/api/pipeline', '/api/tasks', '/']) {
+  for (const url of ['/api/summary', '/api/postings?stage=pipeline&status=all', '/api/postings/1', '/api/funnel', '/api/inbox', '/api/prompts', '/api/admin/budget', '/api/lookups', '/api/pipeline', '/api/tasks', '/']) {
     assert.equal((await app.inject(url)).statusCode, 200, `${url} is open in the demo`);
   }
   const tasks = (await app.inject('/api/tasks')).json();

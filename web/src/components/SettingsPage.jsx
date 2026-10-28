@@ -5,6 +5,7 @@ import SearchSettings from './SearchSettings.jsx';
 import FeedbackForm from './FeedbackForm.jsx';
 import AccountControls from './AccountControls.jsx';
 import ResumesSettings from './ResumesSettings.jsx';
+import PromptsSettings from './PromptsSettings.jsx';
 
 const usd = (n) => `$${Number(n).toFixed(2)}`;
 
@@ -47,7 +48,41 @@ function TimeZonePicker({ account, onSaved }) {
 }
 
 /** Settings: your account and how your AI is paid for, with your own Claude key (never shown again once saved). */
+const tabFromHash = () => (/^#\/settings\/prompts/.test(window.location.hash) ? 'prompts' : 'account');
+
+/** Settings: Account (who you are, AI, knowledge doc, search, resumes, your data) and Prompts (your own prompt edits). */
 export default function SettingsPage() {
+  const [tab, setTabState] = useState(tabFromHash);
+  useEffect(() => {
+    const onHash = () => setTabState(tabFromHash());
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
+  }, []);
+  const setTab = (t) => {
+    setTabState(t);
+    window.history.replaceState(null, '', t === 'prompts' ? '#/settings/prompts' : '#/settings');
+  };
+  const tabs = (
+    <div className="segmented admin-sections" role="tablist" aria-label="Settings">
+      {[['account', 'Account'], ['prompts', 'Prompts']].map(([k, l]) => (
+        <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+  if (tab === 'prompts') {
+    return (
+      <div className="settings wide">
+        {tabs}
+        <PromptsSettings />
+      </div>
+    );
+  }
+  return <AccountSettings tabs={tabs} />;
+}
+
+function AccountSettings({ tabs }) {
   const demo = useDemo();
   const [account, setAccount] = useState(null);
   const [key, setKey] = useState('');
@@ -82,6 +117,7 @@ export default function SettingsPage() {
   const b = ai.budget;
   return (
     <div className="settings">
+      {tabs}
       <section className="home-card">
         <h2>Your account</h2>
         <p>

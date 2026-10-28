@@ -200,8 +200,9 @@ data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images op
 
 ## Prompts
 agents/prompts.js is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active
-(prompt_versions table, with history), else the repo file, which stays the default. The UI's Admin screen (#/admin) edits
-every template in PROMPTS; placeholders are validated on save, and output schemas stay read-only in the repo because code reads
+(prompt_versions table, with history), else the repo file, which stays the default. Settings > Prompts (#/settings/prompts, web/src/components/PromptsSettings.jsx, routes /api/prompts in server/admin.js)
+edits every template in PROMPTS for the current user only (prompt_versions is a user table); Admin keeps Lists, Spending,
+and Users and is shown to admins only; placeholders are validated on save, and output schemas stay read-only in the repo because code reads
 their fields. Personal wording belongs in edits or the knowledge doc, never in the repo defaults.
 
 ## Tracks
@@ -248,7 +249,7 @@ host, user, key, and known_hosts; app secrets live in the server's .env. A new r
 deploy/cloud.env.example.
 
 ## Demo
-AUTH_MODE=demo (server/auth.js): no sign-in; every non-read request gets 403 except POST /api/admin/prompts/:name/preview,
+AUTH_MODE=demo (server/auth.js): no sign-in; every non-read request gets 403 except POST /api/prompts/:name/preview,
 which writes nothing; server/index.js starts with demo services (no Google auth, Claude, browser, or schedule) and replays
 demo/sample-data.js SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI hides
 change controls through useDemo() (web/src/demo.jsx) and the demo-hide class; the server's refusal is what protects it.

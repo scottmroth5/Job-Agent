@@ -4,7 +4,7 @@ The prompts are the instructions the AI follows for each task. They work well as
 
 ## Where
 
-**Admin > Prompts** lists them:
+**Settings > Prompts** lists them:
 
 - **Full-time scoring** and **Fractional scoring:** how a job is judged and scored from 1 to 10.
 - **Resume tweaks:** the changes suggested to your resume for a job.

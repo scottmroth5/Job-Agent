@@ -2,7 +2,7 @@ import { useState } from 'react';
 import PipelineButton from './PipelineButton.jsx';
 import { api } from '../api.js';
 import { arranged, moved } from '../layout.js';
-import { isOwner, useMe } from '../me.jsx';
+import { isAdmin, isOwner, useMe } from '../me.jsx';
 import { DashIcon, DASH } from './DashIcon.jsx';
 
 // Simple line illustrations for the tiles (inline SVG: nothing to download, and they follow the text color).
@@ -161,7 +161,8 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
   const s = summary;
   const budget = s?.budget;
   // The inbox reads the owner's own Gmail, so it is the owner's only; everything else is everyone's.
-  const owner = isOwner(useMe());
+  const me = useMe();
+  const owner = isOwner(me);
   // An admin's waiting requests and feedback, when there are any.
   const waiting = s?.adminWaiting && (s.adminWaiting.requests || s.adminWaiting.feedback) ? s.adminWaiting : null;
   const [draft, setDraft] = useState(null); // the order being arranged, or null when not arranging
@@ -174,7 +175,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
     activity: { href: '#/activity', title: 'Activity', stat: 'Runs and their output' },
     admin: waiting
       ? { href: '#/admin/users', title: 'Admin', stat: [waiting.requests && plural(waiting.requests, 'request'), waiting.feedback && `${waiting.feedback} feedback`].filter(Boolean).join(' · '), alert: true }
-      : { href: '#/admin', title: 'Admin', stat: 'Prompts, lists, spending' },
+      : { href: '#/admin', title: 'Admin', stat: 'Lists, spending, users', hidden: !demo && !isAdmin(me) },
     settings: { href: '#/settings', title: 'Settings', stat: 'Account and AI key' },
     help: { href: '#/help', title: 'Help', stat: 'Guides and questions' },
     add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo },
@@ -262,7 +263,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
       )}
 
       {budget && (
-        <a className="home-card budget-card" href="#/admin/spending">
+        <a className="home-card budget-card" href={demo || isAdmin(me) ? '#/admin/spending' : '#/settings'}>
           <span className="budget-line">
             <span>Claude this month</span>
             <span className={`budget ${budget.level}`}>

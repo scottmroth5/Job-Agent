@@ -30,8 +30,8 @@ const OPEN_PATHS = [/^\/auth\//, /^\/healthz$/, /^\/(manifest\.webmanifest|icon-
 export const MAX_PENDING = 50;
 const READ_METHODS = ['GET', 'HEAD', 'OPTIONS'];
 // The only non-read request a demo visitor may make: filling a prompt draft with a sample job. It writes nothing
-// and calls no model (server/admin.js), so the Admin screen's preview works in the demo.
-const DEMO_WRITES = [/^\/api\/admin\/prompts\/[a-z-]+\/preview$/];
+// and calls no model (server/admin.js), so Settings > Prompts' preview works in the demo.
+const DEMO_WRITES = [/^\/api\/prompts\/[a-z-]+\/preview$/];
 export const DEMO_REFUSAL = 'This is a read-only demo with sample data, so changes are turned off.';
 
 /** Sign-in settings from the environment (.env). */

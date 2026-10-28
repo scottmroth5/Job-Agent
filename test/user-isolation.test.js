@@ -92,7 +92,7 @@ test('isolation: no write route sent by B changes any of A\'s rows', async () =>
     'PATCH /api/postings/:id': { status: 'passed', notes: 'Changed by B', title: 'Changed by B' },
     'POST /api/postings/:id/notes': { body: 'Changed by B' },
     'PUT /api/notes/:id': { body: 'Changed by B' },
-    'PUT /api/admin/prompts/:name': { template: 'Changed by B {{candidateName}}' },
+    'PUT /api/prompts/:name': { template: 'Changed by B {{candidateName}}' },
     'POST /api/inbox/reminders/:id/close': { status: 'done' },
   };
   for (const r of writes) {

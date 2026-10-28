@@ -133,29 +133,29 @@ test('actions are refused while a pipeline run is in progress', async () => {
 
 test('admin: list, view, preview, save (validated), and restore prompts', async () => {
   const { app, store, ids } = await setup();
-  const list = (await app.inject('/api/admin/prompts')).json();
+  const list = (await app.inject('/api/prompts')).json();
   assert.deepEqual(list.map((p) => [p.name, p.source]), [['score', 'default'], ['score-fractional', 'default'], ['resume-tweaks', 'default'], ['cover-letter', 'default'], ['meeting-prep', 'default'], ['inbox-classify', 'default']]);
 
-  const score = (await app.inject('/api/admin/prompts/score')).json();
+  const score = (await app.inject('/api/prompts/score')).json();
   assert.ok(score.template.includes('{{company}}') && score.schema.includes('"score"') && score.required.includes('jobContentBlock'));
-  assert.equal((await app.inject('/api/admin/prompts/unknown')).statusCode, 400);
+  assert.equal((await app.inject('/api/prompts/unknown')).statusCode, 400);
 
   const draft = `${score.template}\nPREVIEW-MARKER`;
-  const preview = (await app.inject({ method: 'POST', url: '/api/admin/prompts/score/preview', payload: { template: draft, postingId: ids.full } })).json();
+  const preview = (await app.inject({ method: 'POST', url: '/api/prompts/score/preview', payload: { template: draft, postingId: ids.full } })).json();
   assert.deepEqual(preview.problems, []);
   assert.ok(preview.text.includes('PREVIEW-MARKER') && preview.text.includes('Full Co') && !preview.text.includes('{{'));
-  const badPreview = (await app.inject({ method: 'POST', url: '/api/admin/prompts/score/preview', payload: { template: 'nothing' } })).json();
+  const badPreview = (await app.inject({ method: 'POST', url: '/api/prompts/score/preview', payload: { template: 'nothing' } })).json();
   assert.ok(badPreview.problems.length > 0);
 
-  const bad = await app.inject({ method: 'PUT', url: '/api/admin/prompts/score', payload: { template: 'no placeholders here' } });
+  const bad = await app.inject({ method: 'PUT', url: '/api/prompts/score', payload: { template: 'no placeholders here' } });
   assert.equal(bad.statusCode, 400);
   assert.match(bad.json().error, /Required placeholders/);
 
-  const saved = (await app.inject({ method: 'PUT', url: '/api/admin/prompts/score', payload: { template: draft, note: 'try a marker' } })).json();
+  const saved = (await app.inject({ method: 'PUT', url: '/api/prompts/score', payload: { template: draft, note: 'try a marker' } })).json();
   assert.deepEqual([saved.source, saved.note, saved.versions.length], ['custom', 'try a marker', 1]);
-  const restored = (await app.inject({ method: 'POST', url: '/api/admin/prompts/score/restore', payload: { versionId: null } })).json();
+  const restored = (await app.inject({ method: 'POST', url: '/api/prompts/score/restore', payload: { versionId: null } })).json();
   assert.equal(restored.source, 'default');
-  const again = (await app.inject({ method: 'POST', url: '/api/admin/prompts/score/restore', payload: { versionId: saved.versionId } })).json();
+  const again = (await app.inject({ method: 'POST', url: '/api/prompts/score/restore', payload: { versionId: saved.versionId } })).json();
   assert.equal(again.template, draft);
   await app.close();
   store.close();

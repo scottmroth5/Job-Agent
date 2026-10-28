@@ -89,19 +89,19 @@ export function registerAdminRoutes(app, { db, config }) {
     },
   );
 
-  app.get('/api/admin/prompts', { schema: { summary: 'The editable prompts', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
+  app.get('/api/prompts', { schema: { summary: 'The editable prompts', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
     NAMES.map((name) => {
       const p = getPrompt(db, name);
       return { name, label: PROMPTS[name].label, usedBy: PROMPTS[name].usedBy, source: p.source, version: p.version, updatedAt: p.updatedAt, versions: listVersions(db, name).length };
     }),
   );
 
-  app.get('/api/admin/prompts/:name', { schema: { summary: 'A prompt with its default, placeholders, schema and history', params: nameParams, response: { 200: anyObject } } }, async (req) =>
+  app.get('/api/prompts/:name', { schema: { summary: 'A prompt with its default, placeholders, schema and history', params: nameParams, response: { 200: anyObject } } }, async (req) =>
     detail(db, req.params.name),
   );
 
   app.put(
-    '/api/admin/prompts/:name',
+    '/api/prompts/:name',
     {
       schema: {
         summary: 'Save a new version of a prompt (validated; becomes active)',
@@ -117,7 +117,7 @@ export function registerAdminRoutes(app, { db, config }) {
   );
 
   app.post(
-    '/api/admin/prompts/:name/restore',
+    '/api/prompts/:name/restore',
     {
       schema: {
         summary: 'Make an earlier version active, or return to the repo default (versionId null)',
@@ -133,7 +133,7 @@ export function registerAdminRoutes(app, { db, config }) {
   );
 
   app.post(
-    '/api/admin/prompts/:name/preview',
+    '/api/prompts/:name/preview',
     {
       schema: {
         summary: 'Fill a draft prompt with a real job (no Claude call)',

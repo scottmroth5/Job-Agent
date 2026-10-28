@@ -142,7 +142,7 @@ export default function App() {
         {/* Wide screens keep the screen links; phones use the Home page tiles and the back link. */}
         <nav className="views" aria-label="Screens">
           <a href="#/" className={view === 'home' ? 'on' : ''}>Home</a>
-          {Object.entries(VIEWS).filter(([k]) => k !== 'inbox' || demo || me?.owner).map(([k, label]) => (
+          {Object.entries(VIEWS).filter(([k]) => (k !== 'inbox' || demo || me?.owner) && (k !== 'admin' || demo || me?.role === 'admin')).map(([k, label]) => (
             <a key={k} href={`#/${k}`} className={view === k ? 'on' : ''}>
               {label}
               {k === 'inbox' && summary?.inboxNeedsReview ? <span className="count-badge" title="Emails to review">{summary.inboxNeedsReview}</span> : null}

@@ -138,12 +138,12 @@ export const api = {
   addLookup: (list, value) => request('POST', `/api/admin/lookups/${list}`, value),
   updateLookup: (list, id, patch) => request('PATCH', `/api/admin/lookups/${list}/${id}`, patch),
   setLookupRole: (list, role, valueId) => request('PUT', `/api/admin/lookups/${list}/roles`, { role, valueId }),
-  prompts: () => request('GET', '/api/admin/prompts'),
-  prompt: (name) => request('GET', `/api/admin/prompts/${name}`),
-  savePrompt: (name, template, note) => request('PUT', `/api/admin/prompts/${name}`, { template, ...(note ? { note } : {}) }),
-  restorePrompt: (name, versionId) => request('POST', `/api/admin/prompts/${name}/restore`, { versionId }),
+  prompts: () => request('GET', '/api/prompts'),
+  prompt: (name) => request('GET', `/api/prompts/${name}`),
+  savePrompt: (name, template, note) => request('PUT', `/api/prompts/${name}`, { template, ...(note ? { note } : {}) }),
+  restorePrompt: (name, versionId) => request('POST', `/api/prompts/${name}/restore`, { versionId }),
   previewPrompt: (name, template, postingId) =>
-    request('POST', `/api/admin/prompts/${name}/preview`, { template, ...(postingId ? { postingId: Number(postingId) } : {}) }),
+    request('POST', `/api/prompts/${name}/preview`, { template, ...(postingId ? { postingId: Number(postingId) } : {}) }),
 };
 
 /** Polls a background task, reporting each update, until it finishes. Resolves with the final task. */
