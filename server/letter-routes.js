@@ -11,6 +11,7 @@ import { pickResume, withResume } from '../agents/resumes.js';
 import { ensureLetterFolder } from '../tools/google/drive.js';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.js';
 import { letterPdf } from '../tools/pdf-writer.js';
+import { letterHeader, saveLetterHeader, MAX_LINKS } from '../agents/letter-header.js';
 import { localDay } from '../tools/dates.js';
 import { uploadName } from './account-routes.js';
 import { letterDocx, docxName } from './word-docs.js';
@@ -65,7 +66,7 @@ export function registerLetterRoutes(app, { store, config, services }) {
       try {
         const folderId = await ensureLetterFolder(drive, db);
         const name = letterDocName(posting.company, posting.title, localDay(now));
-        const doc = await drive.createDocFromHtml({ name, folderId, html: letterHtml({ candidate: config.candidate, company: posting.company, title: posting.title, date: longDate(now), body: content }) });
+        const doc = await drive.createDocFromHtml({ name, folderId, html: letterHtml({ candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body: content }) });
         db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
       } catch {
         docError = 'Saved here; the Google Doc could not be made.';
@@ -73,6 +74,25 @@ export function registerLetterRoutes(app, { store, config, services }) {
     }
     return { id, docError };
   };
+
+  // The cover letter header (Settings): the user's own, or until saved, one from their settings.
+  const headerBody = {
+    type: 'object',
+    required: ['name'],
+    additionalProperties: false,
+    properties: {
+      name: { type: 'string', maxLength: 120 },
+      signoffName: { type: 'string', maxLength: 120 },
+      email: { type: 'string', maxLength: 200 },
+      phone: { type: 'string', maxLength: 40 },
+      location: { type: 'string', maxLength: 120 },
+      links: { type: 'array', maxItems: MAX_LINKS, items: { type: 'string', maxLength: 300 } },
+    },
+  };
+  app.get('/api/letter-header', { schema: { summary: 'Your cover letter header (name, email, phone, location, sign-off, links); saved is false until you save one', response: { 200: anyObject } } }, async () =>
+    letterHeader(db, config),
+  );
+  app.put('/api/letter-header', { schema: { summary: 'Save your cover letter header', body: headerBody, response: { 200: anyObject } } }, async (req) => saveLetterHeader(db, req.body));
 
   app.get('/api/postings/:id/letters', { schema: { summary: "A job's cover letter versions, newest (current) first", params: idParams, response: { 200: { type: 'array', items: anyObject } } } }, async (req, reply) =>
     job(req.params.id) ? versions(req.params.id) : reply.code(404).send({ error: 'Job not found' }),
@@ -183,7 +203,7 @@ export function registerLetterRoutes(app, { store, config, services }) {
       : posting && db.prepare("SELECT content, created_at FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").get(posting.id);
     if (!version?.content) return reply.code(404).send({ error: 'No cover letter for this job yet.' });
     const written = new Date(version.created_at);
-    const letter = { candidate: config.candidate, company: posting.company, title: posting.title, date: longDate(written), body: version.content };
+    const letter = { candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(written), body: version.content };
     const name = letterDocName(posting.company, posting.title, localDay(written));
     const [type, body, file] =
       format === 'pdf'

@@ -205,12 +205,8 @@ export default function SearchSettings() {
           <fieldset className="bare">
           <div className="grid2">
             <label>Your name<input value={form.name} onChange={set('name')} /></label>
-            <label>Sign letters as<input value={form.signoffName} onChange={set('signoffName')} placeholder="Defaults to your name" /></label>
-            <label>Contact line on letters<input value={form.contactLine} onChange={set('contactLine')} placeholder="City, ST | email | phone" /></label>
-            <label>LinkedIn<input value={form.linkedin} onChange={set('linkedin')} placeholder="linkedin.com/in/…" /></label>
-            <label>Website (optional)<input value={form.website} onChange={set('website')} placeholder="yourname.com" /></label>
-            <label>GitHub (optional)<input value={form.github} onChange={set('github')} placeholder="github.com/…" /></label>
           </div>
+          <p className="muted small">Your letter's name, contact details, links, and sign-off are under Cover letter header, below.</p>
           {LIST_FIELDS.map(([k, label, hint]) => (
             <label key={k}>
               {label}

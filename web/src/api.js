@@ -86,6 +86,8 @@ export const api = {
   profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
   // A job's cover letter versions, revising with Claude, and saving or restoring a version (server/letter-routes.js).
   letters: (id) => request('GET', `/api/postings/${id}/letters`),
+  letterHeader: () => request('GET', '/api/letter-header'),
+  saveLetterHeader: (header) => request('PUT', '/api/letter-header', header),
   followUps: () => request('GET', '/api/follow-ups'),
   setStaleDays: (staleDays) => request('PUT', '/api/follow-ups/settings', { staleDays }),
   staleApplications: () => request('GET', '/api/follow-ups/stale'),

@@ -3,6 +3,7 @@
 // saved as Google Docs. Nothing existing is ever overwritten.
 import { fillTemplate } from '../../tools/template.js';
 import { sanitizeDashes, truncate } from '../../tools/text.js';
+import { letterHeader } from '../letter-header.js';
 import { ensureLetterFolder } from '../../tools/google/drive.js';
 import { localDay } from '../../tools/dates.js';
 import { getPrompt } from '../prompts.js';
@@ -114,7 +115,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
     try {
       folderId ??= await ensureLetterFolder(drive, db);
       const name = letterDocName(posting.company, posting.title, isoLocalDate(now));
-      const html = letterHtml({ candidate: config.candidate, company: posting.company, title: posting.title, date: longDate(now), body });
+      const html = letterHtml({ candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body });
       const doc = await drive.createDocFromHtml({ name, html, folderId });
       setDoc.run(doc.id, doc.url, name, artifactId);
       summary.docs += 1;

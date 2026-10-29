@@ -6,6 +6,7 @@ import FeedbackForm from './FeedbackForm.jsx';
 import AccountControls from './AccountControls.jsx';
 import ResumesSettings from './ResumesSettings.jsx';
 import ExcludedSitesSettings from './ExcludedSitesSettings.jsx';
+import LetterHeaderSettings from './LetterHeaderSettings.jsx';
 import FollowUpSettings from './FollowUpSettings.jsx';
 import PromptsSettings from './PromptsSettings.jsx';
 import SpendingAdmin from './SpendingAdmin.jsx';
@@ -181,6 +182,7 @@ function AccountSettings({ tabs }) {
       </section>
 
       <SearchSettings />
+      <LetterHeaderSettings />
       <ExcludedSitesSettings />
       <FollowUpSettings />
       <ResumesSettings />
