@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { openJobStore } from '../db/index.js';
 import { storedKey } from '../agents/identity.js';
 import { insertEmail } from '../agents/inbox/store.js';
-import { loadKey, newKey, decrypt } from '../agents/inbox/crypto.js';
-import { listNeedsReview, resolveReview } from '../agents/inbox/review.js';
+import { loadKey, newKey, decrypt, encrypt } from '../agents/inbox/crypto.js';
+import { listNeedsReview, resolveReview, sealCaseLines } from '../agents/inbox/review.js';
 
 // Synthetic data only.
 const key = loadKey({ EMAIL_ENC_KEY: newKey() });
@@ -68,6 +68,9 @@ test('confirm links the guess, runs the actions as the user, stores the body, an
   assert.equal(db.prepare("SELECT decided_by FROM decision_log WHERE action = 'status_change'").pluck().get(), 'user');
   const [c] = cases(casesPath);
   assert.deepEqual(c.label, { applicationId: ids.guess, relevant: true, type: 'interview_request', opportunity: false });
+  assert.ok(!readFileSync(casesPath, 'utf8').includes('Oct 8'), 'the case file never holds the email text in the clear');
+  assert.equal(c.body, undefined);
+  assert.equal(decrypt(c.bodyEnc, key), 'Can you talk on Oct 8?');
   assert.equal(listNeedsReview(db).length, 0);
   store.close();
 });
@@ -86,11 +89,30 @@ test('reassign links a different application', () => {
 test('not job related clears the link and labels the case irrelevant', () => {
   const { store, db, email, casesPath } = setup();
   email();
-  resolveReview(db, listNeedsReview(db)[0], 'not_job', { now, casesPath });
+  resolveReview(db, listNeedsReview(db)[0], 'not_job', { body: 'A newsletter', key, now, casesPath });
   const row = db.prepare('SELECT review_status, posting_id, body_enc FROM emails').get();
   assert.deepEqual(row, { review_status: 'not_job', posting_id: null, body_enc: null });
   assert.deepEqual(cases(casesPath)[0].label, { applicationId: null, relevant: false, type: 'other', opportunity: false });
+  assert.equal(cases(casesPath)[0].bodyEnc, null, 'no text is kept for other mail, sealed or not');
   store.close();
+});
+
+test('sealing old cases: plain bodies become bodyEnc, not-job ones are dropped, sealed ones are left alone', () => {
+  const sealed = encrypt('Already sealed', key);
+  const old = [
+    { gmailMessageId: 'a', subject: 'Next steps', body: 'Can we talk Friday?', label: { relevant: true } },
+    { gmailMessageId: 'b', subject: 'Deals', body: 'Big sale today', label: { relevant: false } },
+    { gmailMessageId: 'c', subject: 'Hi', body: null, label: { relevant: true } },
+    { gmailMessageId: 'd', subject: 'Re: role', bodyEnc: sealed, label: { relevant: true } },
+  ];
+  const { text, counts } = sealCaseLines(`${old.map((r) => JSON.stringify(r)).join('\n')}\n`, key);
+  assert.deepEqual(counts, { cases: 4, sealed: 1, dropped: 1 });
+  assert.ok(!text.includes('Friday') && !text.includes('sale'), 'no email text left in the clear');
+  const out = text.trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(decrypt(out[0].bodyEnc, key), 'Can we talk Friday?');
+  assert.deepEqual([out[1].bodyEnc, out[2].bodyEnc, out[3].bodyEnc], [null, null, sealed]);
+  assert.ok(out.every((r) => !Object.hasOwn(r, 'body')));
+  assert.equal(sealCaseLines(text, key).counts.sealed, 0, 'running it again changes nothing');
 });
 
 test('opportunity creates a discovered job from the email', () => {
