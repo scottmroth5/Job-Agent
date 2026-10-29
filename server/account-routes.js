@@ -4,7 +4,8 @@
 import { budgetStatus } from '../agents/budget.js';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.js';
 import { boxKey, seal } from '../tools/secret-box.js';
-import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
+import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, PROFILE_SOURCES, profileVersions, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
+import { prepDocx } from './word-docs.js';
 import { validateConfig } from '../tools/config.js';
 import { deleteAccount, exportAccount } from '../agents/account-data.js';
 import { ATTACHMENTS_DIR } from './attachments.js';
@@ -195,14 +196,53 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
     {
       schema: {
         summary: 'Save your background: the facts about you that scoring and writing use',
-        body: { type: 'object', required: ['text'], additionalProperties: false, properties: { text: { type: 'string' } } },
+        body: { type: 'object', required: ['text'], additionalProperties: false, properties: { text: { type: 'string' }, source: { type: 'string', enum: PROFILE_SOURCES } } },
         response: { 200: anyObject },
       },
     },
     async (req) => {
       const uid = req.uid ?? OWNER_ID;
-      saveUserProfile(db, uid, req.body.text);
+      saveUserProfile(db, uid, req.body.text, { source: req.body.source });
       return search(uid);
+    },
+  );
+
+  // Knowledge doc versions (every save keeps the one before) and Word downloads of the current one or any version.
+  // The demo has no saved versions; its download is the sample candidate's knowledge doc.
+  const versionsOf = (uid) => (demo ? [{ text: DEMO_ABOUT_YOU, savedAt: null, source: 'sample' }] : profileVersions(db, uid));
+  const versionParams = { type: 'object', required: ['n'], properties: { n: { type: 'integer', minimum: 1 } } };
+  app.get('/api/account/profile/versions', { schema: { summary: 'Your knowledge doc versions, newest (current) first, without their text', response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
+    versionsOf(req.uid ?? OWNER_ID).map((v, i, all) => ({ n: all.length - i, current: i === 0, savedAt: v.savedAt, source: v.source, chars: v.text.length })),
+  );
+  const versionAt = (uid, n) => {
+    const all = versionsOf(uid);
+    return all.at(all.length - n) ?? null;
+  };
+  app.get('/api/account/profile/versions/:n', { schema: { summary: 'One knowledge doc version with its text', params: versionParams, response: { 200: anyObject } } }, async (req, reply) => {
+    const v = versionAt(req.uid ?? OWNER_ID, req.params.n);
+    return v ? { n: req.params.n, ...v } : reply.code(404).send({ error: 'Version not found' });
+  });
+  app.post('/api/account/profile/versions/:n/restore', { schema: { summary: 'Make an earlier knowledge doc version current again (saved as a new version)', params: versionParams, response: { 200: anyObject } } }, async (req, reply) => {
+    const uid = req.uid ?? OWNER_ID;
+    const v = versionAt(uid, req.params.n);
+    if (!v) return reply.code(404).send({ error: 'Version not found' });
+    saveUserProfile(db, uid, v.text, { source: 'restore' });
+    return search(uid);
+  });
+  app.get(
+    '/api/account/profile.docx',
+    { schema: { summary: 'Your knowledge doc (current, or ?version=) as a Word document', querystring: { type: 'object', properties: { version: { type: 'integer', minimum: 1 } } } } },
+    async (req, reply) => {
+      const uid = req.uid ?? OWNER_ID;
+      const text = req.query.version ? versionAt(uid, req.query.version)?.text : demo ? DEMO_ABOUT_YOU : userProfile(db, uid);
+      if (!text) return reply.code(404).send({ error: 'No knowledge doc yet.' });
+      const file = `Knowledge doc ${localDay(new Date())}${req.query.version ? ` v${req.query.version}` : ''}.docx`;
+      return reply
+        .header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+        .header('Content-Disposition', `attachment; filename="${file}"`)
+        .header('X-Content-Type-Options', 'nosniff')
+        .header('Cache-Control', 'no-store')
+        .send(await prepDocx(text));
     },
   );
   // A document's text for About you: it fills the box for review and is not saved (Save does that). PDF, .docx, or text.

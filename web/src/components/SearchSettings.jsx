@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import DraftBuilder from './DraftBuilder.jsx';
+import KnowledgeVersions from './KnowledgeVersions.jsx';
 import { useDemo } from '../demo.jsx';
 
 // Lists are edited one item per line.
@@ -72,6 +73,8 @@ export default function SearchSettings() {
   const [data, setData] = useState(null);
   const [form, setForm] = useState(null);
   const [profile, setProfile] = useState('');
+  const [profileSource, setProfileSource] = useState('typed'); // how the text in the box came: typed, file, or draft
+  const [versionsKey, setVersionsKey] = useState(0); // reloads the versions after a save or restore
   const [error, setError] = useState(null);
   const [note, setNote] = useState(null);
 
@@ -121,6 +124,7 @@ export default function SearchSettings() {
   };
   const useDraftProfile = (text) => {
     setProfile(text);
+    setProfileSource('draft');
     setNote('The draft is in your knowledge doc: edit it, then Save.');
   };
   const saveSearch = (e) => {
@@ -168,6 +172,7 @@ export default function SearchSettings() {
                     try {
                       const { text } = await api.profileFromFile(file);
                       setProfile(text);
+                      setProfileSource('file');
                       setNote(`Your knowledge doc now holds the text of ${file.name}: check it against the sections, then Save.`);
                     } catch (err) {
                       setError(err.message);
@@ -180,15 +185,34 @@ export default function SearchSettings() {
             <DraftBuilder onUseProfile={useDraftProfile} onUseSearch={owner ? null : useDraftSearch} />
           </>
         <SectionChecklist sections={data.knowledgeSections ?? []} text={profile} template={data.knowledgeTemplate} onChange={setProfile} />
-        <form onSubmit={(e) => { e.preventDefault(); run(() => api.saveAccountProfile(profile), 'Saved.'); }}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => api.saveAccountProfile(profile, profileSource), 'Saved. The earlier version is kept under Versions.').then(() => {
+              setProfileSource('typed');
+              setVersionsKey((k) => k + 1);
+            });
+          }}
+        >
           <textarea className="profile-text" rows={12} maxLength={data.profileChars.max} value={profile} onChange={(e) => setProfile(e.target.value)} />
           <div className="row demo-hide">
             <button className="primary" type="submit" disabled={profile === data.profile}>
               Save
             </button>
             <span className={`small ${chars < data.profileChars.min ? 'budget warn' : 'muted'}`}>{chars} characters</span>
+            <a className="button" href="/api/account/profile.docx" download>
+              Download Word
+            </a>
           </div>
         </form>
+        <KnowledgeVersions
+          key={versionsKey}
+          onRestored={(d) => {
+            show(d);
+            setVersionsKey((k) => k + 1);
+            setNote('That version is your knowledge doc again (saved as a new version).');
+          }}
+        />
       </section>
 
       {owner ? (

@@ -155,6 +155,10 @@ Everyone's knowledge doc, the owner's included, lives only in the app (user_sett
 (>= 500 characters, else a message saying to write it under Settings) for the server and tools/knowledge.js ownerBackground
 for scripts. There is no Google Doc any more (no YOUR_KNOWLEDGE_DOC_ID, no documents.readonly scope); services.knowledge is
 only a test stand-in for the owner's.
+Knowledge doc versions: every save (PUT /api/account/profile with source typed, file, draft, or restore) keeps the one
+before in user_settings profile.versions (newest first, 20 at most; a doc saved before versions starts the list as earlier);
+GET /api/account/profile/versions, /versions/:n, POST /versions/:n/restore, and GET /api/account/profile.docx?version=
+(prepDocx). test/knowledge-versions.test.js.
 Fill from a document (POST /api/account/profile/from-file) returns a file's text without saving; tools/doc-text.js reads
 PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.js, server/resume-routes.js,
 Settings > Resumes): file and text in the resumes table (so backups, export, and deletion cover them; export omits the

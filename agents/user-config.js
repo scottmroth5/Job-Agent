@@ -96,11 +96,44 @@ export function saveUserConfig(db, uid, input, name = '') {
 /** A user's knowledge doc (Settings), or ''. Everyone's, the owner's included. */
 export const userProfile = (db, uid) => readSetting(db, uid, PROFILE_KEY) ?? '';
 
-export function saveUserProfile(db, uid, value) {
+/**
+ * Saves a user's knowledge doc as a new version; the earlier ones are kept (profileVersions, newest first, at most
+ * MAX_PROFILE_VERSIONS). source says how it came: typed, file (filled from a document), draft, or restore.
+ */
+export function saveUserProfile(db, uid, value, { source = 'typed', now = new Date() } = {}) {
   const body = String(value ?? '').trim();
   if (body.length > MAX_PROFILE_CHARS) throw Object.assign(new Error(`Keep it under ${MAX_PROFILE_CHARS} characters.`), { statusCode: 400 });
+  const versions = profileVersions(db, uid);
+  if (body && body !== versions[0]?.text) {
+    const next = [{ text: body, savedAt: now.toISOString(), source: PROFILE_SOURCES.includes(source) ? source : 'typed' }, ...versions];
+    writeSetting(db, uid, VERSIONS_KEY, JSON.stringify(next.slice(0, MAX_PROFILE_VERSIONS)));
+  }
   writeSetting(db, uid, PROFILE_KEY, body);
   return body;
+}
+
+export const MAX_PROFILE_VERSIONS = 20;
+export const PROFILE_SOURCES = ['typed', 'file', 'draft', 'restore'];
+const VERSIONS_KEY = 'profile.versions';
+
+/**
+ * A user's saved knowledge doc versions, newest first: { text, savedAt, source }. A doc saved before versions were kept
+ * starts the list as its one earlier version (source earlier), so the first new save never loses it.
+ */
+export function profileVersions(db, uid) {
+  let list = [];
+  try {
+    list = JSON.parse(readSetting(db, uid, VERSIONS_KEY) ?? '[]');
+  } catch {
+    list = [];
+  }
+  list = Array.isArray(list) ? list.filter((v) => typeof v?.text === 'string') : [];
+  const current = userProfile(db, uid);
+  if (!list.length && current) {
+    const at = db.prepare('SELECT updated_at FROM user_settings WHERE user_id = ? AND key = ?').pluck().get(uid, PROFILE_KEY);
+    list = [{ text: current, savedAt: at ?? null, source: 'earlier' }];
+  }
+  return list;
 }
 
 /** The background for scoring and writing; throws a message that says how to fix it when it is too short. */

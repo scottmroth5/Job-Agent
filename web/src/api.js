@@ -81,7 +81,10 @@ export const api = {
   removeClaudeKey: () => request('DELETE', '/api/account/claude-key'),
   accountSearch: () => request('GET', '/api/account/search'),
   saveAccountSearch: (body) => request('PUT', '/api/account/search', body),
-  saveAccountProfile: (text) => request('PUT', '/api/account/profile', { text }),
+  saveAccountProfile: (text, source = 'typed') => request('PUT', '/api/account/profile', { text, source }),
+  profileVersions: () => request('GET', '/api/account/profile/versions'),
+  profileVersion: (n) => request('GET', `/api/account/profile/versions/${n}`),
+  restoreProfileVersion: (n) => request('POST', `/api/account/profile/versions/${n}/restore`),
   // The knowledge doc from a document: its text, not saved.
   profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
   // A job's cover letter versions, revising with Claude, and saving or restoring a version (server/letter-routes.js).

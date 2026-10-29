@@ -200,7 +200,7 @@ These examples are made up: write your own facts. The demo shows another full on
 
 ## Keeping it current
 
-When something changes (a new role, a result, what you want next), edit and **Save**. New scores and letters use it right away. For jobs already scored or written, use **Re-score** or **Regenerate** on the job.
+When something changes (a new role, a result, what you want next), edit and **Save**, or fill it from an updated file and save. New scores and letters use it right away. Every save keeps the one before: **Versions** lists them with when and how each was saved, and any one can be viewed, downloaded, or made current again. **Download Word** gives you the current one as a .docx to edit elsewhere and upload again. For jobs already scored or written, use **Re-score** or **Regenerate** on the job.
 
 ## Your resumes
 
