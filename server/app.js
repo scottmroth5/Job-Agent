@@ -52,6 +52,8 @@ import { claudeKeyWorks } from '../tools/claude.js';
 import { getLayout, registerLayoutRoutes } from './layout.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
 import { registerExcludedSiteRoutes } from './excluded-sites-routes.js';
+import { registerFollowUpRoutes } from './follow-up-routes.js';
+import { staleDays } from '../agents/follow-ups.js';
 import { registerInboxRoutes, registerReminderRoutes } from './inbox-routes.js';
 import { addPosting } from '../agents/manual.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
@@ -211,7 +213,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         response: { 200: anyObject },
       },
     },
-    async (req) => funnel(db, { days: !req.query.days || req.query.days === 'all' ? null : Number(req.query.days), track: req.query.track && req.query.track !== 'all' ? req.query.track : null }),
+    async (req) => funnel(db, { days: !req.query.days || req.query.days === 'all' ? null : Number(req.query.days), track: req.query.track && req.query.track !== 'all' ? req.query.track : null, staleDays: staleDays(db) }),
   );
 
   app.get('/api/summary', { schema: { summary: 'Counts, the Today list, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async (req) => ({
@@ -413,6 +415,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerPrepRoutes(app, { store, config, services, startTask });
   registerNoteRoutes(app, { db });
   registerExcludedSiteRoutes(app, { db, ownerConfig });
+  registerFollowUpRoutes(app, { store, config, services, startTask });
   let scheduler = null;
   const scheduled = (name) => scheduler?.status().find((j) => j.name === name) ?? null;
   const pipeline = services.runPipeline ? registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline, schedule: () => scheduled('pipeline') }) : null;

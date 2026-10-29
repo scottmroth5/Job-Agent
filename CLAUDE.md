@@ -170,9 +170,16 @@ wait on Google's verification of those scopes.
 
 ## UI and API
 The Home page (#/) opens with Today and upcoming (server/today.js, summary.today: open reminders due within 14 days or
-past due, jobs at an offer, and applications with no reply after 14 days; each opens its job), then a tile per screen.
+past due, jobs at an offer, applications worth a follow-up, and one item for all stale ones; each opens its job), then a tile per screen.
 The job panel's Next step box is the same list for one job (GET /api/postings/:id nextSteps; every open reminder, however
-far out), with Prepare for a meeting and Done (registerReminderRoutes, registered with or without Gmail). Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
+far out), with Prepare for a meeting and Done (registerReminderRoutes, registered with or without Gmail).
+Follow-ups (agents/follow-ups.js, server/follow-up-routes.js): no reply from FOLLOW_UP_DAYS (7, server/funnel.js) until
+the user's stale days (Settings > Follow-ups, user_settings followUp.staleDays, default 45; never archived jobs) is a
+follow-up with Find someone to contact (agents/hunt/find-contact.js: Sonnet with web search on the user's AI, prompt
+find-contact, the result saved as an agent note) and Close: no response; from the stale days on it is stale, closed one at
+a time or all at once (Home: Review via GET /api/follow-ups/stale, then POST close-stale) to the status list's noResponse
+role (018: "No response", closed group) with a note and changed_by user history. The Funnel's list uses the same window.
+test/follow-ups.test.js. Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
 with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
 icons in web/public (install icons full-bleed, favicons as drawn) made from assets/app-icon-1024.png (kept out of the image);
 test/icons.test.js checks their sizes and that they load before sign-in.

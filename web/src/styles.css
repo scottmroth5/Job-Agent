@@ -638,3 +638,13 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 .skip-site input { flex: 1 1 220px; min-width: 0; }
 .skip-form { align-items: flex-end; }
 .skip-form label { flex: 1 1 200px; display: grid; gap: 4px; min-width: 0; }
+/* Stale applications on Home: one item, its list, and the close buttons. */
+.today-item.as-text { cursor: default; }
+.today-item.as-text:hover .today-title { text-decoration: none; }
+.today-actions { padding: 0 2px 8px; gap: 8px 12px; }
+.stale-list { margin: 0 0 8px; padding-left: 18px; display: grid; gap: 2px; }
+.today-list .stale-list li { border-top: 0; }
+.badge.today-stale { background: #eef0f3; color: #4b5563; }
+@media (prefers-color-scheme: dark) {
+  .badge.today-stale { background: #2a2f36; color: #c3c9d2; }
+}

@@ -6,6 +6,7 @@ import FeedbackForm from './FeedbackForm.jsx';
 import AccountControls from './AccountControls.jsx';
 import ResumesSettings from './ResumesSettings.jsx';
 import ExcludedSitesSettings from './ExcludedSitesSettings.jsx';
+import FollowUpSettings from './FollowUpSettings.jsx';
 import PromptsSettings from './PromptsSettings.jsx';
 import SpendingAdmin from './SpendingAdmin.jsx';
 
@@ -183,6 +184,7 @@ function AccountSettings({ tabs }) {
 
       <SearchSettings />
       <ExcludedSitesSettings />
+      <FollowUpSettings />
       <ResumesSettings />
       {/* Your own spend; the owner's (everything on their key) and the monthly cap are on Admin > Spending. */}
       {(!account.owner || demo) && (

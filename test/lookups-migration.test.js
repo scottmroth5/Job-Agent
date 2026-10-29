@@ -12,17 +12,17 @@ const insert = (db, o = {}) =>
       VALUES (${hasUser(db) ? '1, ' : ''}@k, 'Example Co', 'CTO', 'example|cto', '2026-10-01', @stage, @status, @track, 'x', 'x')`)
     .run({ k: `k${Math.random()}`, stage: 'discovered', status: 'new', track: 'fulltime', ...o });
 
-test('009 seeds the built-in values in order, with groups, settings, and roles', () => {
+test('009 and 018 seed the built-in values in order, with groups, settings, and roles', () => {
   const store = openJobStore(':memory:');
   const { db } = store;
   const ids = (list) => db.prepare('SELECT id FROM lookup_values WHERE list = ? ORDER BY sort_order').pluck().all(list);
-  assert.deepEqual(ids('status'), ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'duplicate']);
+  assert.deepEqual(ids('status'), ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'no_response', 'duplicate']);
   assert.deepEqual(ids('stage'), ['discovered', 'pipeline', 'archived']);
   assert.deepEqual(ids('track'), ['fulltime', 'fractional']);
   assert.equal(db.prepare("SELECT group_key FROM lookup_values WHERE list = 'status' AND id = 'offer'").pluck().get(), 'decision');
   assert.deepEqual(JSON.parse(db.prepare("SELECT settings_json FROM lookup_values WHERE id = 'fractional'").pluck().get()), { scorePrompt: 'score-fractional', terms: true });
   assert.deepEqual(db.prepare('SELECT list, role, value_id FROM lookup_roles ORDER BY list, role').all().map((r) => `${r.list}.${r.role}=${r.value_id}`), [
-    'stage.archive=archived', 'stage.default=discovered', 'stage.promote=pipeline', 'status.default=new', 'track.default=fulltime',
+    'stage.archive=archived', 'stage.default=discovered', 'stage.promote=pipeline', 'status.default=new', 'status.noResponse=no_response', 'track.default=fulltime',
   ]);
   store.close();
 });

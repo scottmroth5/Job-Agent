@@ -4,6 +4,7 @@ import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersi
 import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.js';
 import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.js';
+import { buildContactRequest } from '../agents/hunt/find-contact.js';
 import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.js';
 import { buildClassifyRequest } from '../agents/inbox/classify.js';
 import { listOpenApplications } from '../agents/inbox/match.js';
@@ -163,6 +164,9 @@ export function registerAdminRoutes(app, { db, config }) {
         const analysis = posting.analysis_json ? JSON.parse(posting.analysis_json) : null;
         text = buildPrepRequest(posting, SAMPLE_MEETING, { config, knowledge: '', prompt: draft, analysis }).prompt;
         return { problems: [], text, posting: { id: posting.id, title: posting.title, company: posting.company }, message: 'Previewed with a made-up person and meeting.' };
+      } else if (name === 'find-contact') {
+        const analysis = posting.analysis_json ? JSON.parse(posting.analysis_json) : null;
+        text = buildContactRequest(posting, { config, knowledge: '', prompt: draft, analysis, notes: posting.notes ?? '' }).prompt;
       } else {
         const analysis = JSON.parse(posting.analysis_json);
         const current = { tweaks: getPrompt(db, 'resume-tweaks'), letter: getPrompt(db, 'cover-letter') };

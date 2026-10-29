@@ -1,10 +1,12 @@
 // Home's Today list: the work waiting on the user, soonest first. Open reminders (assessments and interviews, from
 // the inbox) due in the next REMINDER_DAYS or already past; jobs at an offer (the status group "decision", not
-// archived); and applications with no reply after FOLLOW_UP_DAYS (the same rule as the Funnel's follow-up list).
+// archived); applications with no reply worth a follow-up (agents/follow-ups.js: from FOLLOW_UP_DAYS until the user's
+// stale days, not archived; the same rule as the Funnel's list); and stale ones to close as no response: on Home one
+// item for all of them, in a job's Next step box that job.
 // Each item opens its job. Built from status groups, so statuses added later count automatically.
 // With jobId it is one job's next steps (the job panel's Next step box): every open reminder, however far out.
 import { lookups, sqlList } from '../agents/lookups.js';
-import { applications, FOLLOW_UP_DAYS } from './funnel.js';
+import { waitingApplications } from '../agents/follow-ups.js';
 
 export const REMINDER_DAYS = 14;
 const DAY = 24 * 3600 * 1000;
@@ -44,10 +46,19 @@ export function today(db, { now = new Date(), jobId = null } = {}) {
         .all(params)
         .map((p) => ({ kind: 'offer', jobId: p.jobId, company: p.company, title: p.title, text: `${lk.label('status', p.status)}: decide and reply` }))
     : [];
-  const followUps = applications(db, { now })
-    .filter((a) => (jobId == null || a.id === Number(jobId)) && !a.responded.reached && !a.closed && a.waitingDays >= FOLLOW_UP_DAYS)
-    .sort((a, b) => b.waitingDays - a.waitingDays)
-    .map((a) => ({ kind: 'follow_up', jobId: a.id, company: a.company, title: a.title, text: `No reply in ${a.waitingDays} days: send a follow-up`, days: a.waitingDays }));
-  // Past-due reminders first, then offers, then the rest of the reminders by date, then follow-ups, oldest first.
-  return { items: [...reminders.filter((r) => r.overdue), ...offers, ...reminders.filter((r) => !r.overdue), ...followUps] };
+  const waiting = waitingApplications(db, { now });
+  const mine = (a) => jobId == null || a.id === Number(jobId);
+  const followUps = waiting.followUp
+    .filter(mine)
+    .map((a) => ({ kind: 'follow_up', jobId: a.id, company: a.company, title: a.title, text: `No reply in ${a.waitingDays} days: reach a person there`, days: a.waitingDays }));
+  const staleOnes = waiting.stale.filter(mine);
+  const stale =
+    jobId != null
+      ? staleOnes.map((a) => ({ kind: 'stale', jobId: a.id, company: a.company, title: a.title, text: `No reply in ${a.waitingDays} days: close it as no response`, days: a.waitingDays }))
+      : staleOnes.length
+        ? [{ kind: 'stale', count: staleOnes.length, staleDays: waiting.staleDays, text: `${staleOnes.length === 1 ? '1 application' : `${staleOnes.length} applications`} with no reply after ${waiting.staleDays} days or more` }]
+        : [];
+  // Past-due reminders first, then offers, then the rest of the reminders by date, then follow-ups, oldest first, then
+  // the stale ones.
+  return { items: [...reminders.filter((r) => r.overdue), ...offers, ...reminders.filter((r) => !r.overdue), ...followUps, ...stale] };
 }

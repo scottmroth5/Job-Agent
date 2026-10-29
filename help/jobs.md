@@ -15,6 +15,15 @@
 - **Notes** (dated, kept separately) and **files** (PDFs and images open in the browser).
 - **Status** changes are kept as history, which the Funnel uses.
 
+## Following up on applications
+
+Most applications go through a careers site or a job board, with nobody to write back to. Following up through that system does nothing; reaching a person does.
+
+- **Worth a follow-up:** an application with no reply shows on Home and in the job's **Next step** from 7 days after you applied, until it is stale. Archived jobs never show.
+- **Find someone to contact** (in Next step) searches the web on your AI for the likely hiring manager (who the role reports to) and a recruiter, and drafts a LinkedIn connection note and a short email from your knowledge doc. It costs about 10 to 30 cents and is saved under the job's **Notes**. It never contacts anyone: check each person on LinkedIn before you write. Send one note, at most one short nudge a week later, then let it go. A referral from someone you know at the company beats any of this, so look for one first.
+- **Stale:** after **Settings > Follow-ups** days with no reply (45 unless you change it), an application is stale. After that long the answer is almost always no. Home shows one item for all of them: **Review** lists them, and **Close all as no response** closes them with a note on each. **Close: no response** in a job's Next step closes just that one.
+- **No response** is a closed status; closed applications still count in the Funnel.
+
 ## Tracks
 
 Jobs are **full-time** or **fractional** (part-time leadership roles). Fractional jobs also show fit, pay, and hours, and an annual estimate when the pay is known.

@@ -21,7 +21,7 @@ const call = (app, method, url, payload) => app.inject({ method, url, ...(payloa
 test('GET /api/lookups lists values in order with groups and roles', async () => {
   const { app, store } = await setup();
   const l = (await call(app, 'GET', '/api/lookups')).json();
-  assert.deepEqual(l.lists.status.map((v) => v.id), ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'duplicate']);
+  assert.deepEqual(l.lists.status.map((v) => v.id), ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'no_response', 'duplicate']);
   assert.deepEqual(l.lists.track.find((v) => v.id === 'fractional').settings, { scorePrompt: 'score-fractional', terms: true });
   assert.equal(l.roles.stage.promote, 'pipeline');
   assert.ok(l.groups.status.some((g) => g.key === 'conversation'));

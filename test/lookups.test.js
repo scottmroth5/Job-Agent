@@ -8,7 +8,7 @@ test('the built-in lists reproduce the original behavior', () => {
   const lk = lookups(store.db);
   assert.deepEqual(lk.needsAction(), ['new', 'offer']);
   assert.deepEqual(lk.inProgress(), ['applied', 'interviewing', 'offer']);
-  assert.deepEqual(lk.closed(), ['passed', 'closed', 'rejected', 'duplicate']);
+  assert.deepEqual(lk.closed(), ['passed', 'closed', 'rejected', 'no_response', 'duplicate']);
   assert.deepEqual(lk.neverAutoArchived(), ['interviewing', 'offer']);
   assert.deepEqual([lk.rank('new'), lk.rank('applied'), lk.rank('interviewing'), lk.rank('offer'), lk.rank('rejected')], [0, 1, 2, 3, null]);
   assert.deepEqual([lk.role('status', 'default'), lk.role('stage', 'promote'), lk.role('stage', 'archive'), lk.role('track', 'default')], ['new', 'pipeline', 'archived', 'fulltime']);

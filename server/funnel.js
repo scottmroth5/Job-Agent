@@ -8,7 +8,9 @@ import { dayOf, localDay, localDaysAgo } from '../tools/dates.js';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 
 export const NO_REPLY_DAYS = 21;
-export const FOLLOW_UP_DAYS = 14;
+// Applications with no reply are worth a follow-up from FOLLOW_UP_DAYS until the stale days (agents/follow-ups.js).
+export const FOLLOW_UP_DAYS = 7;
+export const DEFAULT_STALE_DAYS = 45;
 export const WEEKS = 12;
 
 const RESPONSE_EMAILS = ['follow_up', 'interview_request', 'assessment', 'rejection', 'offer'];
@@ -78,6 +80,7 @@ export function applications(db, { now = new Date() } = {}) {
       source: p.source ?? 'unknown',
       track: p.track,
       status: p.status,
+      stage: p.stage,
       appliedOn,
       responded,
       interview,
@@ -95,7 +98,7 @@ export function applications(db, { now = new Date() } = {}) {
  * The funnel for applications in the window.
  * @param {{ days?: number | null, track?: string | null, now?: Date }} opts  days: applied within the last N days (null: all)
  */
-export function funnel(db, { days = null, track = null, now = new Date() } = {}) {
+export function funnel(db, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS } = {}) {
   const since = days ? localDaysAgo(now, days) : null;
   const inWindow = (a) => (!since || a.appliedOn >= since) && (!track || a.track === track);
   const apps = applications(db, { now }).filter(inWindow);
@@ -152,8 +155,10 @@ export function funnel(db, { days = null, track = null, now = new Date() } = {})
     medians: { daysToResponse: median(toResponse), daysToInterview: median(toInterview), responseSamples: toResponse.length, interviewSamples: toInterview.length },
     bySource: [...bySource.values()].map((s) => ({ ...s, responseRate: rate(s.responded, s.applied) })).sort((a, b) => b.applied - a.applied || a.source.localeCompare(b.source)),
     weeks,
+    staleDays,
+    stale: apps.filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= staleDays).length,
     followUps: apps
-      .filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= FOLLOW_UP_DAYS)
+      .filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= FOLLOW_UP_DAYS && a.waitingDays < staleDays && lookups(db).groupOf('stage', a.stage) !== 'archived')
       .sort((a, b) => b.waitingDays - a.waitingDays)
       .map(({ id, company, title, appliedOn, waitingDays, status }) => ({ id, company, title, appliedOn, days: waitingDays, status })),
   };

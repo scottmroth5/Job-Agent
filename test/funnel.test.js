@@ -86,8 +86,11 @@ test('filters, by-source results, weekly counts, and the follow-up list', () => 
   assert.equal(f.weeks.length, 12);
   assert.equal(f.weeks.at(-1).weekStart, '2026-10-05');
   assert.equal(f.weeks.find((w) => w.weekStart === '2026-09-28').applied, 3);
-  assert.deepEqual(f.followUps.map((x) => [x.id, x.days]), [[old, 126], [stale, 20]]);
-  assert.ok(f.followUps.every((x) => x.days >= 14));
+  // From 7 days until the stale days (45 by default): the 126-day one is stale, the 6-day ones too new.
+  assert.deepEqual(f.followUps.map((x) => [x.id, x.days]), [[stale, 20]]);
+  assert.deepEqual([f.stale, f.staleDays], [1, 45]);
+  assert.equal(old > 0, true);
+  assert.deepEqual(funnel(db, { now, staleDays: 200 }).followUps.map((x) => x.id), [old, stale], "a longer stale setting keeps it a follow-up");
   assert.equal(applications(db, { now }).find((a) => a.id === stale).noReply, 20 >= NO_REPLY_DAYS);
   store.close();
 });

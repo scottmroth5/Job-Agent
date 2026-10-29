@@ -60,6 +60,12 @@ export const api = {
   profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
   // A job's cover letter versions, revising with Claude, and saving or restoring a version (server/letter-routes.js).
   letters: (id) => request('GET', `/api/postings/${id}/letters`),
+  followUps: () => request('GET', '/api/follow-ups'),
+  setStaleDays: (staleDays) => request('PUT', '/api/follow-ups/settings', { staleDays }),
+  staleApplications: () => request('GET', '/api/follow-ups/stale'),
+  closeStale: () => request('POST', '/api/follow-ups/close-stale'),
+  closeNoResponse: (id) => request('POST', `/api/postings/${id}/close-no-response`),
+  findContact: (id) => request('POST', `/api/postings/${id}/find-contact`),
   excludedSites: () => request('GET', '/api/excluded-sites'),
   skipSite: (site, note = '') => request('POST', '/api/excluded-sites', { site, note }),
   setSiteNote: (site, note) => request('PATCH', `/api/excluded-sites/${encodeURIComponent(site)}`, { note }),

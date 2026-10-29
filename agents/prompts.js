@@ -47,6 +47,13 @@ export const PROMPTS = {
     allowed: ['candidateName', 'company', 'roleTitle', 'today', 'meetingBlock', 'attendeesBlock', 'contextBlock', 'notesBlock', 'analysisBlock', 'letterBlock', 'jobContentBlock', 'researchBlock'],
     required: ['company', 'attendeesBlock'],
   },
+  'find-contact': {
+    label: 'Find someone to contact',
+    usedBy: 'Finding the hiring manager or recruiter for an application with no reply, and drafting a short note (the job panel)',
+    file: ['agents', 'hunt', 'prompts', 'find-contact.md'],
+    allowed: ['candidateName', 'company', 'roleTitle', 'today', 'appliedBlock', 'notesBlock', 'analysisBlock', 'jobContentBlock'],
+    required: ['company', 'roleTitle'],
+  },
   'inbox-classify': {
     label: 'Inbox email classification',
     usedBy: 'Classifying job emails from Gmail (npm run inbox); the untrusted-email rules are fixed in code',

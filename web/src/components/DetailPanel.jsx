@@ -54,7 +54,7 @@ function ScoreDetails({ d }) {
 
 // The job's next steps (server/today.js, the same rules as Home's Today list): open reminders with their due dates, an
 // offer to answer, or a follow-up due. Opening a job from Today or the Inbox lands here, on the task.
-const STEP_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };
+const STEP_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up', stale: 'Stale' };
 const dueText = (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 // The link without its scheme and "www.", shortened for the header: "execthread.com/jobs/1234".
@@ -133,7 +133,7 @@ function PostingLink({ url, demo, onChanged }) {
   );
 }
 
-function NextSteps({ steps, onPrepare, onDone }) {
+function NextSteps({ steps, busy, onPrepare, onDone, onFindContact, onCloseNoResponse }) {
   if (!steps?.length) return null;
   return (
     <section className="next-steps" aria-label="Next step">
@@ -154,6 +154,16 @@ function NextSteps({ steps, onPrepare, onDone }) {
             {t.id && (
               <button type="button" className="demo-hide" onClick={() => onDone(t.id)}>
                 Done
+              </button>
+            )}
+            {(t.kind === 'follow_up' || t.kind === 'stale') && (
+              <button type="button" className="demo-hide" disabled={busy} onClick={onFindContact} title="Web search on your AI for the hiring manager or a recruiter, and a short note to send (saved in Notes)">
+                Find someone to contact
+              </button>
+            )}
+            {(t.kind === 'follow_up' || t.kind === 'stale') && (
+              <button type="button" className={`demo-hide${t.kind === 'stale' ? ' primary' : ''}`} disabled={busy} onClick={onCloseNoResponse}>
+                Close: no response
               </button>
             )}
           </span>
@@ -336,7 +346,33 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                 await load();
                 onChanged();
               }}
+              busy={busy}
+              onFindContact={async () => {
+                setError(null);
+                try {
+                  const final = await followTask((await api.findContact(job.id)).taskId, setTask);
+                  if (final.status === 'done') {
+                    await load();
+                    onChanged();
+                  }
+                } catch (err) {
+                  setError(err.message);
+                }
+              }}
+              onCloseNoResponse={async () => {
+                setError(null);
+                try {
+                  await api.closeNoResponse(job.id);
+                  await load();
+                  onChanged();
+                } catch (err) {
+                  setError(err.message);
+                }
+              }}
             />
+            {/* The search's progress right under the step that started it; the result lands in Notes. */}
+            {task?.kind === 'find-contact' && <TaskProgress task={task} />}
+            {task?.kind === 'find-contact' && task.status === 'done' && <p className="muted small">Saved under Notes below. Check each person on LinkedIn before you write.</p>}
 
             <div className="links">
               {job.url && !demo && <a className="button primary" href={job.url} target="_blank" rel="noreferrer">Open posting / apply ↗</a>}
@@ -479,7 +515,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                 <button disabled={busy} onClick={() => run('score')}>Re-score</button>
                 {job.url && <button disabled={busy} onClick={() => run('refetch')}>Refetch posting</button>}
               </div>
-              <TaskProgress task={task} />
+              {task?.kind !== 'find-contact' && <TaskProgress task={task} />}
             </section>
             )}
 

@@ -116,23 +116,115 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'];
 
 /** The start page: a tile for each screen with what needs attention, the pipeline, and this month's Claude budget. */
-// Home's Today list (server/today.js): reminders due, offers, and follow-ups, each opening its job. The first few
+// Home's Today list (server/today.js): reminders due, offers, follow-ups, and stale applications; each opens its job. The first few
 // show; the rest open on request.
 const TODAY_SHOWN = 5;
 const KIND_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };
 const dueText = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 
-function TodayCard({ items, onOpenJob }) {
+/**
+ * Stale applications (no reply after the stale days, Settings > Follow-ups): one item for all of them, with Review
+ * (the list, each opening its job) and Close them as no response, which asks once more before it changes anything.
+ */
+function StaleItem({ t, demo, onOpenJob, onClosed }) {
+  const [jobs, setJobs] = useState(null);
+  const [done, setDone] = useState(null);
+  const [error, setError] = useState(null);
+  const act = async (fn) => {
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  return (
+    <li className="today-stale">
+      <div className="today-item as-text">
+        <span className="badge today-stale">Stale</span>
+        <span className="today-text">
+          <span className="today-title">{done ? `Closed ${plural(done, 'application')} as no response` : t.text}</span>
+          {!done && <span className="muted small">After that long, the answer is almost always no. Close them so they stop asking for a follow-up.</span>}
+        </span>
+      </div>
+      {!done && (
+        <div className="row today-actions">
+          {!jobs ? (
+            <button type="button" onClick={() => act(async () => setJobs((await api.staleApplications()).jobs))}>
+              Review {t.count === 1 ? 'it' : `the ${t.count}`}
+            </button>
+          ) : (
+            <>
+              {!demo && (
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() =>
+                    act(async () => {
+                      const n = (await api.closeStale()).closed;
+                      setDone(n);
+                      await onClosed?.(n);
+                    })
+                  }
+                >
+                  Close {jobs.length === 1 ? 'it' : `all ${jobs.length}`} as no response
+                </button>
+              )}
+              <button type="button" className="link" onClick={() => setJobs(null)}>
+                Hide
+              </button>
+            </>
+          )}
+          <a className="small" href="#/settings">
+            Change the {t.staleDays} days
+          </a>
+        </div>
+      )}
+      {jobs && !done && (
+        <ul className="stale-list small">
+          {jobs.map((j) => (
+            <li key={j.id}>
+              <button type="button" className="link" onClick={() => onOpenJob?.(j.id)}>
+                {j.title} at {j.company}
+              </button>{' '}
+              <span className="muted">· {j.days} days</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <div className="error small">{error}</div>}
+    </li>
+  );
+}
+
+function TodayCard({ items: everything, demo, onOpenJob, onChanged }) {
   const [all, setAll] = useState(false);
-  const shown = all ? items : items.slice(0, TODAY_SHOWN);
+  const [closed, setClosed] = useState(null); // how many were just closed as no response (the item then goes away)
+  // The stale item always shows (last); the cut to the first few applies to the rest.
+  const stale = everything.find((t) => t.kind === 'stale');
+  const items = everything.filter((t) => t.kind !== 'stale');
+  const shown = [...(all ? items : items.slice(0, TODAY_SHOWN)), ...(stale ? [stale] : [])];
   return (
     <section className="home-card today-card" aria-labelledby="today-heading">
       <h2 id="today-heading">Today and upcoming</h2>
-      {items.length === 0 ? (
+      {closed != null && <p className="muted small">Closed {plural(closed, 'application')} as no response. They still count in the Funnel.</p>}
+      {shown.length === 0 ? (
         <p className="muted small">Nothing due. New matches are on <a href="#/jobs">Jobs</a>.</p>
       ) : (
         <ul className="today-list">
-          {shown.map((t, i) => (
+          {shown.map((t, i) =>
+            t.kind === 'stale' ? (
+              <StaleItem
+                key="stale"
+                t={t}
+                demo={demo}
+                onOpenJob={onOpenJob}
+                onClosed={async (n) => {
+                  setClosed(n);
+                  await onChanged?.();
+                }}
+              />
+            ) : (
             <li key={`${t.kind}-${t.jobId}-${i}`}>
               <button type="button" className="today-item" onClick={() => onOpenJob?.(t.jobId)}>
                 <span className={`badge today-${t.kind}${t.overdue ? ' overdue' : ''}`}>{KIND_LABELS[t.kind] ?? t.kind}</span>
@@ -145,7 +237,8 @@ function TodayCard({ items, onOpenJob }) {
                 </span>
               </button>
             </li>
-          ))}
+            ),
+          )}
         </ul>
       )}
       {items.length > TODAY_SHOWN && (
@@ -157,7 +250,7 @@ function TodayCard({ items, onOpenJob }) {
   );
 }
 
-export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelineFinished, onLayoutSaved }) {
+export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelineFinished, onLayoutSaved, onChanged }) {
   const s = summary;
   const budget = s?.budget;
   // The inbox reads the owner's own Gmail, so it is the owner's only; everything else is everyone's.
@@ -222,7 +315,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
           </p>
         </section>
       )}
-      {s?.today && <TodayCard items={s.today} onOpenJob={onOpenJob} />}
+      {s?.today && <TodayCard items={s.today} demo={demo} onOpenJob={onOpenJob} onChanged={onChanged} />}
       <div className="tiles">
         {order.map((k, i) => (
           <Tile

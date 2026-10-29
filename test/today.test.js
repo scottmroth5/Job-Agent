@@ -45,6 +45,9 @@ test('order: past-due reminders, offers, upcoming reminders by date, then follow
   job({ company: 'Waiting Co', applied: daysAgo(FOLLOW_UP_DAYS + 10) });
   job({ company: 'Newer Co', applied: daysAgo(FOLLOW_UP_DAYS) });
   job({ company: 'Fresh Co', applied: daysAgo(3) }); // too soon to follow up
+  job({ company: 'Parked Co', stage: 'archived', applied: daysAgo(20) }); // archived: no follow-up
+  job({ company: 'Ghost Co', applied: daysAgo(60) }); // stale: one Close item for all of them
+  job({ company: 'Ghost Archived Co', stage: 'archived', applied: daysAgo(90) }); // stale too
   job({ company: 'Closed Co', status: 'rejected', applied: daysAgo(30) });
 
   const items = today(db, { now }).items;
@@ -55,11 +58,14 @@ test('order: past-due reminders, offers, upcoming reminders by date, then follow
     'interview:Later Co',
     'follow_up:Waiting Co',
     'follow_up:Newer Co',
+    'stale:undefined',
   ]);
+  assert.deepEqual([items.at(-1).count, items.at(-1).staleDays], [2, 45]);
+  assert.match(items.at(-1).text, /2 applications with no reply after 45 days/);
   assert.equal(items[0].overdue, true);
   assert.equal(items[0].text, 'Send the 90 day plan');
   assert.equal(items[2].text, 'Assessment', 'no note: the kind');
-  assert.match(items[4].text, /No reply in 24 days/);
+  assert.match(items[4].text, new RegExp(`No reply in ${FOLLOW_UP_DAYS + 10} days`));
   store.close();
 });
 

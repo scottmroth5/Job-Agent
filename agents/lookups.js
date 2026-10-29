@@ -35,11 +35,11 @@ const STATUS_GROUP = {
 
 /** Roles a list has, and which group the value holding each role must be in (null: any). */
 export const ROLES = {
-  status: { default: ['evaluate'] },
+  status: { default: ['evaluate'], noResponse: ['closed'] },
   stage: { default: ['found', 'active'], promote: ['active'], archive: ['archived'] },
   track: { default: null },
 };
-export const ROLE_LABELS = { default: 'Default for new jobs', promote: 'Where 7+ jobs are promoted', archive: 'Where archived jobs go' };
+export const ROLE_LABELS = { default: 'Default for new jobs', promote: 'Where 7+ jobs are promoted', archive: 'Where archived jobs go', noResponse: 'Where stale applications are closed (no reply)' };
 
 export const SCORE_PROMPTS = ['score', 'score-fractional'];
 const ID = /^[a-z][a-z0-9_]{0,39}$/;
