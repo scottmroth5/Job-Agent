@@ -9,12 +9,14 @@
 import { createJobTracer } from '../tools/trace.js';
 import { openJobStore } from '../db/index.js';
 import { loadConfig } from '../tools/config.js';
+import { configFor } from '../agents/user-config.js';
+import { OWNER_ID } from '../db/users.js';
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';
 import { rekeyPostings } from '../agents/identity.js';
 
 const dryRun = process.argv.includes('--dry-run');
-const config = loadConfig();
 const store = openJobStore();
+const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
 try {
   const run = dryRun ? null : createJobTracer({ store }).startRun('cleanup');
   // Keys are derived data, so they are recomputed even in a dry run; the preview then reflects the current rules.

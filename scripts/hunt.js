@@ -6,6 +6,8 @@
 import { createJobTracer } from '../tools/trace.js';
 import { createJobClaude } from '../tools/claude.js';
 import { loadConfig } from '../tools/config.js';
+import { configFor } from '../agents/user-config.js';
+import { OWNER_ID } from '../db/users.js';
 import { ownerBackground } from '../tools/knowledge.js';
 import { getGoogleAuth } from '../tools/google/auth.js';
 import { createDriveClient } from '../tools/google/drive.js';
@@ -24,8 +26,8 @@ function parseArgs(argv) {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  const config = loadConfig();
   const store = openJobStore();
+  const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   try {
     if (args.dryRun) {
       const postings = selectForHunt(store.db, { ids: args.ids });

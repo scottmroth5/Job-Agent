@@ -13,7 +13,6 @@ const LIST_FIELDS = [
   ['noiseTitleKeywords', 'Words that rule a title out (optional)', 'e.g. intern, sales'],
   ['homeLocations', 'Where you can work in person', 'Cities and areas, e.g. Anytown, ST; remote jobs are always included'],
   ['fractionalTerms', 'Fractional or part-time titles (optional)', 'e.g. Fractional CTO'],
-  ['excludedSites', 'Job sites to skip (optional)', 'Domains, e.g. example-jobs.com'],
 ];
 
 // Which of the knowledge doc's seven sections the text has, by heading (agents/knowledge-sections.js sectionCheck does the

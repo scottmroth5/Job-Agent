@@ -6,6 +6,7 @@
 import { currentUserId } from '../db/scope.js';
 import { OWNER_ID } from '../db/users.js';
 import { validateConfig } from '../tools/config.js';
+import { withExcludedSites } from './excluded-sites.js';
 
 const CONFIG_KEY = 'search.config';
 const PROFILE_KEY = 'profile.text';
@@ -135,16 +136,25 @@ export function scheduledUsers(db) {
     .all(SCHEDULE_KEY, OWNER_ID);
 }
 
-const views = new Map(); // uid -> config, cleared when anyone saves
+const views = new Map(); // uid -> { base, db, config }, cleared when anyone saves settings or skipped sites
+export const clearConfigViews = () => views.clear();
 
-/** The settings for whoever this runs as: the owner's file for the owner, else the user's own. */
+/**
+ * The settings for whoever this runs as: the owner's file for the owner, else the user's own; either way with the
+ * user's skipped sites (Settings) added to search.excludedSites.
+ */
 export function configFor(db, uid, ownerConfig) {
-  if (uid === OWNER_ID) return ownerConfig;
-  if (!views.has(uid)) {
+  const base = uid === OWNER_ID ? ownerConfig : null;
+  const seen = views.get(uid);
+  if (seen && seen.base === base && seen.db === db) return seen.config;
+  let config = base;
+  if (uid !== OWNER_ID) {
     const name = db.prepare('SELECT name FROM users WHERE id = ?').pluck().get(uid) ?? '';
-    views.set(uid, userConfig(db, uid, name));
+    config = userConfig(db, uid, name);
   }
-  return views.get(uid);
+  config = withExcludedSites(db, uid, config);
+  views.set(uid, { base, db, config });
+  return config;
 }
 
 /**

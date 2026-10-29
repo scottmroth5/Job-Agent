@@ -233,6 +233,10 @@ in meeting_preps (UUID keys) and as a Google Doc in "Job Agent Meeting Prep". Ab
 Default model and promotion threshold live in agents/discovery/score.js with the eval evidence behind them.
 Change the prompt, schema, model, or threshold only after rerunning the scoring eval and comparing pairwise accuracy.
 Never kept (tools/listings.js): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
+Job sites to skip (agents/excluded-sites.js, server/excluded-sites-routes.js, Settings and Skip this site under the job panel's
+link): each user's own list with a note per site in user_settings; configFor adds it to search.excludedSites (the owner's
+file entries stay, shown as from the file), so scripts read config through configFor(store.raw, OWNER_ID, loadConfig()).
+Saved jobs from a site are removed only on request (archiveSiteJobs; never one applied to). test/excluded-sites.test.js.
 Without posting text a score is capped at 5 (analysis.uncappedScore keeps the original) and the job is never promoted; the UI flags 7+ ones.
 The job panel's score details (server/queries.js scoreDetails) say when, by which model, from text or title, and with
 which prompt (agents/prompts.js describeVersion matches the stored version hash: default, a saved edit, or earlier).

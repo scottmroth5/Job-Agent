@@ -106,26 +106,39 @@ export function findDuplicates(db) {
  * recognized and never added again.
  */
 export function archiveListings(db, { config, now = new Date(), dryRun = false } = {}) {
-  const lk = lookups(db);
-  const evaluate = lk.ids('status', 'evaluate');
   const skipped = findListings(db, config);
   const seen = new Set(skipped.map((p) => p.id));
   const found = [...skipped, ...findDuplicates(db).filter((p) => !seen.has(p.id))];
-  if (!dryRun && found.length) {
-    const nowIso = now.toISOString();
-    const update = db.prepare('UPDATE postings SET stage = @stage, status = @status, updated_at = @now WHERE id = @id AND user_id = @uid');
-    const history = db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)");
-    const stage = lk.role('stage', 'archive');
-    db.transaction(() => {
-      for (const p of found) {
-        const status = !evaluate.includes(p.status) ? p.status : /^duplicate of/.test(p.reason) ? 'duplicate' : 'passed';
-        update.run({ id: p.id, stage, status, now: nowIso });
-        addNote(db, p.id, `Removed ${localDay(now)}: ${p.reason}.`, { source: 'agent', now });
-        if (status !== p.status) history.run(p.id, p.status, status, nowIso);
-      }
-    })();
-  }
+  if (!dryRun && found.length) archiveFound(db, found, now);
   return { archived: found, dryRun };
+}
+
+/**
+ * The saved jobs from one skipped site that cleanup would remove (not archived or still to evaluate, and not in
+ * progress), or archives them: Skip this site's "remove the saved ones". Jobs you applied to are never touched.
+ */
+export function archiveSiteJobs(db, site, { now = new Date(), dryRun = false } = {}) {
+  const found = findListings(db, { search: { excludedSites: [site] } }).filter((p) => p.reason.startsWith('excluded site'));
+  if (!dryRun && found.length) archiveFound(db, found, now);
+  return { archived: found, dryRun };
+}
+
+// Archives each one and marks it passed (or duplicate) with a note and status history, changed_by 'agent'.
+function archiveFound(db, found, now) {
+  const lk = lookups(db);
+  const evaluate = lk.ids('status', 'evaluate');
+  const nowIso = now.toISOString();
+  const update = db.prepare('UPDATE postings SET stage = @stage, status = @status, updated_at = @now WHERE id = @id AND user_id = @uid');
+  const history = db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)");
+  const stage = lk.role('stage', 'archive');
+  db.transaction(() => {
+    for (const p of found) {
+      const status = !evaluate.includes(p.status) ? p.status : /^duplicate of/.test(p.reason) ? 'duplicate' : 'passed';
+      update.run({ id: p.id, stage, status, now: nowIso });
+      addNote(db, p.id, `Removed ${localDay(now)}: ${p.reason}.`, { source: 'agent', now });
+      if (status !== p.status) history.run(p.id, p.status, status, nowIso);
+    }
+  })();
 }
 
 /**

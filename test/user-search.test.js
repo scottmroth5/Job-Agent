@@ -58,7 +58,7 @@ test('the server config reads as whoever the request runs as', () => {
   assert.deepEqual(runAsUser(b, () => ({ ...config }).candidate.name), 'Sam', 'spreading works too');
   saveUserConfig(raw, b, { ...B_SEARCH, search: { ...B_SEARCH.search, terms: ['Chief Data Officer'] } }, 'Sam');
   assert.deepEqual(runAsUser(b, () => config.search.terms), ['Chief Data Officer'], 'a save shows at once');
-  assert.equal(configFor(raw, OWNER_ID, OWNER_CONFIG), OWNER_CONFIG);
+  assert.deepEqual(configFor(raw, OWNER_ID, OWNER_CONFIG), OWNER_CONFIG, "the owner's file, with no sites skipped on Settings");
 });
 
 async function setup() {

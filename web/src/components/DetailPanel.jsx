@@ -57,6 +57,82 @@ function ScoreDetails({ d }) {
 const STEP_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };
 const dueText = (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
+// The link without its scheme and "www.", shortened for the header: "execthread.com/jobs/1234".
+const shortUrl = (url) => {
+  try {
+    const u = new URL(url);
+    const text = `${u.hostname.replace(/^www\./, '')}${u.pathname === '/' ? '' : u.pathname}${u.search}`;
+    return text.length > 70 ? `${text.slice(0, 69)}…` : text;
+  } catch {
+    return url;
+  }
+};
+
+/**
+ * The posting's link, and Skip this site: a note on why, then the site is on Settings > Job sites to skip, and the
+ * saved jobs from it (this one included, unless you applied) can be removed in one step.
+ */
+function PostingLink({ url, demo, onChanged }) {
+  const [mode, setMode] = useState(null); // null | 'ask' | { site, savedJobs } | { removed }
+  const [note, setNote] = useState('');
+  const [error, setError] = useState(null);
+  const act = async (fn) => {
+    setError(null);
+    try {
+      await fn();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+  const skip = (e) => {
+    e.preventDefault();
+    act(async () => {
+      const r = await api.skipSite(url, note.trim());
+      setMode({ site: r.site, savedJobs: r.sites.find((s) => s.site === r.site)?.savedJobs ?? 0 });
+    });
+  };
+  return (
+    <div className="posting-url small">
+      {demo ? <span className="muted">{shortUrl(url)}</span> : <a href={url} target="_blank" rel="noreferrer" title={url}>{shortUrl(url)}</a>}
+      {!demo && mode === null && (
+        <button type="button" className="link-button" onClick={() => setMode('ask')} title="Never keep jobs from this site">
+          Skip this site
+        </button>
+      )}
+      {mode === 'ask' && (
+        <form className="row skip-ask" onSubmit={skip}>
+          <input aria-label="Why skip this site (optional)" value={note} maxLength={300} placeholder="Why (optional), e.g. paywall" onChange={(e) => setNote(e.target.value)} />
+          <button type="submit" className="primary">Skip this site</button>
+          <button type="button" className="link" onClick={() => setMode(null)}>Cancel</button>
+        </form>
+      )}
+      {mode?.site && (
+        <div className="row">
+          <span>
+            Skipping {mode.site}: new jobs from it are never kept (Settings &gt; Job sites to skip).
+          </span>
+          {mode.savedJobs > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                act(async () => {
+                  const r = await api.removeSiteJobs(mode.site);
+                  setMode({ removed: r.removed, from: mode.site });
+                  await onChanged();
+                })
+              }
+            >
+              Remove the {mode.savedJobs === 1 ? 'saved job' : `${mode.savedJobs} saved jobs`} from it
+            </button>
+          )}
+        </div>
+      )}
+      {mode?.removed !== undefined && <span>Removed {mode.removed === 1 ? '1 saved job' : `${mode.removed} saved jobs`} from {mode.from} (archived and marked passed).</span>}
+      {error && <span className="error">{error}</span>}
+    </div>
+  );
+}
+
 function NextSteps({ steps, onPrepare, onDone }) {
   if (!steps?.length) return null;
   return (
@@ -241,6 +317,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                     </div>
                   </>
                 )}
+                {job.url && <PostingLink key={job.id} url={job.url} demo={demo} onChanged={async () => { await load(); onChanged(); }} />}
                 {job.pay && (
                   <div className="small">
                     Pay: {payText(job)}

@@ -65,7 +65,7 @@ export function validateManualInput(input) {
 /** Refuses a list-of-jobs page (it cannot be scored or applied to) or a link to an excluded site. */
 function rejectSkipped(posting, config) {
   const site = excludedSite(posting.url, config?.search?.excludedSites);
-  if (site) throw new Error(`Jobs from ${site} are excluded in your settings (search.excludedSites). Find the job on the employer's site and add that link.`);
+  if (site) throw new Error(`Jobs from ${site} are skipped in your settings (Settings > Job sites to skip). Find the job on the employer's site and add that link.`);
   const reason = listingReason(posting);
   if (reason) throw new Error(`This looks like a list of jobs, not one job (${reason}). Open it, pick a job, and add that job's link.`);
 }

@@ -51,6 +51,7 @@ import { registerUserRoutes } from './users-routes.js';
 import { claudeKeyWorks } from '../tools/claude.js';
 import { getLayout, registerLayoutRoutes } from './layout.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
+import { registerExcludedSiteRoutes } from './excluded-sites-routes.js';
 import { registerInboxRoutes, registerReminderRoutes } from './inbox-routes.js';
 import { addPosting } from '../agents/manual.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
@@ -85,6 +86,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const blocked = geoBlocker({ ...geo, log: geo.log ?? services.log ?? console });
   // Each user's own settings, background, and documents (agents/user-config.js): routes keep using config and services,
   // which answer for whoever the request runs as. The owner's are the settings file, the Google Doc, and their Drive.
+  const ownerConfig = config;
   if (config) config = userConfigView(config, store.raw ?? store.db);
   const asOwner = () => (currentUserId() ?? OWNER_ID) === OWNER_ID;
   const setupOf = (uid) => {
@@ -410,6 +412,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerResumeRoutes(app, { db }); // after attachments, which registers the raw-file body parser
   registerPrepRoutes(app, { store, config, services, startTask });
   registerNoteRoutes(app, { db });
+  registerExcludedSiteRoutes(app, { db, ownerConfig });
   let scheduler = null;
   const scheduled = (name) => scheduler?.status().find((j) => j.name === name) ?? null;
   const pipeline = services.runPipeline ? registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline, schedule: () => scheduled('pipeline') }) : null;

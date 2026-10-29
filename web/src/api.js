@@ -60,6 +60,11 @@ export const api = {
   profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
   // A job's cover letter versions, revising with Claude, and saving or restoring a version (server/letter-routes.js).
   letters: (id) => request('GET', `/api/postings/${id}/letters`),
+  excludedSites: () => request('GET', '/api/excluded-sites'),
+  skipSite: (site, note = '') => request('POST', '/api/excluded-sites', { site, note }),
+  setSiteNote: (site, note) => request('PATCH', `/api/excluded-sites/${encodeURIComponent(site)}`, { note }),
+  unskipSite: (site) => request('DELETE', `/api/excluded-sites/${encodeURIComponent(site)}`),
+  removeSiteJobs: (site) => request('POST', `/api/excluded-sites/${encodeURIComponent(site)}/remove-jobs`),
   reviseLetter: (id, body) => request('POST', `/api/postings/${id}/letter/revise`, body),
   saveLetter: (id, content, source) => request('POST', `/api/postings/${id}/letter`, { content, source }),
   restoreLetter: (id, versionId) => request('POST', `/api/postings/${id}/letter/restore`, { versionId }),

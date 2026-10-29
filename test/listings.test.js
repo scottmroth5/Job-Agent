@@ -122,7 +122,7 @@ test('excluded sites match the domain and its subdomains only', () => {
 test('manual add refuses an excluded site before fetching anything', async () => {
   const store = openJobStore(':memory:');
   const http = { get: () => assert.fail('no fetch for an excluded site') };
-  await assert.rejects(addPosting({ url: 'https://www.payjobs.example/job/1' }, { store, config: excluding, http }), /excluded in your settings/);
+  await assert.rejects(addPosting({ url: 'https://www.payjobs.example/job/1' }, { store, config: excluding, http }), /skipped in your settings/);
   store.close();
 });
 

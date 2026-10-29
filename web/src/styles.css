@@ -628,3 +628,13 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 .letter-versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .letter-versions li + li { border-top: 1px solid var(--border); padding-top: 8px; }
 .letter-section .row button.on { background: var(--border); }
+
+/* The posting link under the job title, and the job sites to skip on Settings. */
+.posting-url { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 2px; overflow-wrap: anywhere; }
+.posting-url .row { flex-basis: 100%; }
+.skip-ask input { flex: 1 1 180px; min-width: 0; }
+.skip-sites { list-style: none; padding: 0; margin: 8px 0; display: grid; gap: 8px; }
+.skip-site { border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; display: grid; gap: 6px; }
+.skip-site input { flex: 1 1 220px; min-width: 0; }
+.skip-form { align-items: flex-end; }
+.skip-form label { flex: 1 1 200px; display: grid; gap: 4px; min-width: 0; }

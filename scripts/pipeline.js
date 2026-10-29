@@ -51,7 +51,7 @@ async function main() {
   const started = new Date().toISOString();
   if (!Number.isInteger(uid) || uid < 1) throw new Error(`--user must be a user id, not "${userArg}"`);
   const store = openJobStore(undefined, { fallbackUid: uid });
-  const config = owner ? loadConfig() : configFor(store.raw, uid, null);
+  const config = configFor(store.raw, uid, owner ? loadConfig() : null); // either way with the skipped sites from Settings
   if (!owner) {
     const user = store.raw.prepare('SELECT status FROM users WHERE id = ?').get(uid);
     if (user?.status !== 'active') throw new Error(`User ${uid} is not an active account.`);
