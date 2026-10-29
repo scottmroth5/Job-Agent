@@ -155,7 +155,6 @@ function StaleItem({ t, demo, onOpenJob, onClosed }) {
             </button>
           ) : (
             <>
-              {!demo && (
                 <button
                   type="button"
                   className="primary"
@@ -169,7 +168,6 @@ function StaleItem({ t, demo, onOpenJob, onClosed }) {
                 >
                   Close {jobs.length === 1 ? 'it' : `all ${jobs.length}`} as no response
                 </button>
-              )}
               <button type="button" className="link" onClick={() => setJobs(null)}>
                 Hide
               </button>
@@ -271,7 +269,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
       : { href: '#/admin', title: 'Admin', stat: 'Lists, spending, users', hidden: demo || !isAdmin(me) },
     settings: { href: '#/settings', title: 'Settings', stat: 'Account and AI key' },
     help: { href: '#/help', title: 'Help', stat: 'Guides and questions' },
-    add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description', hidden: demo },
+    add: { onClick: onAddJob, title: 'Add a job', stat: 'Link or description' },
   };
   // The saved order comes with the summary, so it applies as soon as the page has its numbers.
   const order = (draft ?? arranged(HOME_TILES, s?.layout?.home)).filter((k) => !tiles[k].hidden);
@@ -326,7 +324,6 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
           />
         ))}
       </div>
-      {!demo && (
         <div className="arrange-bar">
           {draft ? (
             <>
@@ -347,13 +344,10 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
           )}
           {error && <span className="small error">{error}</span>}
         </div>
-      )}
 
-      {!demo && (
         <section className="home-card">
           <PipelineButton onFinished={onPipelineFinished} />
         </section>
-      )}
 
       {budget && (
         <a className="home-card budget-card" href={!demo && isAdmin(me) ? '#/admin/spending' : '#/settings'}>

@@ -27,9 +27,6 @@ function SiteRow({ s, demo, onChange, onError }) {
         {s.addedAt && <span className="muted small">since {new Date(s.addedAt).toLocaleDateString()}</span>}
         {s.savedJobs > 0 && <span className="badge warn">{plural(s.savedJobs, 'saved job')}</span>}
       </div>
-      {demo ? (
-        s.note && <p className="small">{s.note}</p>
-      ) : (
         <div className="row">
           <input
             aria-label={`Note for ${s.site}`}
@@ -48,7 +45,6 @@ function SiteRow({ s, demo, onChange, onError }) {
             Stop skipping
           </button>
         </div>
-      )}
     </li>
   );
 }
@@ -105,7 +101,7 @@ export default function ExcludedSitesSettings() {
                 <div className="row">
                   <b>{s.site}</b>
                   <span className="muted small">from your settings file (search.excludedSites)</span>
-                  {s.savedJobs > 0 && !demo && (
+                  {s.savedJobs > 0 && (
                     <button type="button" onClick={() => api.removeSiteJobs(s.site).then(changed, (err) => setError(err.message))}>
                       Remove {plural(s.savedJobs, 'saved job')}
                     </button>
@@ -114,7 +110,6 @@ export default function ExcludedSitesSettings() {
               </li>
             ))}
           </ul>
-          {!demo && (
             <form className="row skip-form" onSubmit={add}>
               <label>
                 Site
@@ -128,7 +123,6 @@ export default function ExcludedSitesSettings() {
                 Skip this site
               </button>
             </form>
-          )}
           {error && <div className="error">{error}</div>}
         </>
       )}

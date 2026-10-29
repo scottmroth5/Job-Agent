@@ -47,14 +47,12 @@ export default function FollowUpSettings() {
           <form className="row skip-form" onSubmit={save}>
             <label>
               Stale after (days with no reply)
-              <input type="number" min={data.min} max={data.max} step={1} value={days} disabled={demo} onChange={(e) => setDays(e.target.value)} />
+              <input type="number" min={data.min} max={data.max} step={1} value={days} onChange={(e) => setDays(e.target.value)} />
             </label>
-            {!demo && (
               <button type="submit" className="primary" disabled={!days || Number(days) === data.staleDays}>
                 Save
               </button>
-            )}
-            {!demo && data.staleDays !== data.defaultStaleDays && (
+            {data.staleDays !== data.defaultStaleDays && (
               <button type="button" onClick={() => setDays(String(data.defaultStaleDays))}>
                 Use the default ({data.defaultStaleDays})
               </button>

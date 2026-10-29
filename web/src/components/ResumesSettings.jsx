@@ -51,7 +51,7 @@ function ResumeRow({ r, demo, onChanged, onError }) {
   };
   return (
     <li className="resume-row">
-      <fieldset className="bare" disabled={demo}>
+      <fieldset className="bare">
         <div className="grid2">
           <label>
             Label

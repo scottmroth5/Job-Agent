@@ -204,7 +204,7 @@ function Versions({ job, versions, onRestored }) {
                 {open === v.id ? 'Hide' : 'View'}
               </button>
               <LetterDownload jobId={job.id} versionId={v.id} />
-              {!v.current && !demo && (
+              {!v.current && (
                 <button
                   type="button"
                   onClick={async () => {
@@ -281,7 +281,6 @@ export default function LetterSection({ job, onChanged }) {
           {copied ? 'Copied!' : 'Copy letter'}
         </button>
         <LetterDownload jobId={job.id} />
-        {!demo && (
           <>
             <button type="button" className={mode === 'revise' ? 'on' : ''} onClick={() => toggle('revise')}>
               Revise with Claude
@@ -290,7 +289,6 @@ export default function LetterSection({ job, onChanged }) {
               Use my own version
             </button>
           </>
-        )}
         {versions.length > 1 && (
           <button type="button" className={mode === 'versions' ? 'on' : ''} onClick={() => toggle('versions')}>
             Versions ({versions.length})

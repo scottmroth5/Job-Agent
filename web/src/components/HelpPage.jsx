@@ -33,7 +33,6 @@ export default function HelpPage() {
 
   return (
     <div className="help-page">
-      {!demo && (
         <section className="home-card">
           <h2>Ask</h2>
           <form onSubmit={ask}>
@@ -48,7 +47,6 @@ export default function HelpPage() {
           {answer && <p className="help-answer">{answer}</p>}
           {error && <div className="error">{error}</div>}
         </section>
-      )}
       {(guides ?? []).map((g) => (
         <section key={g.id} className="home-card help-guide">
           <button type="button" className="link help-title" aria-expanded={open === g.id} onClick={() => setOpen(open === g.id ? null : g.id)}>

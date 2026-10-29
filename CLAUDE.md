@@ -272,19 +272,22 @@ deploy/cloud.env.example.
 ## Demo
 AUTH_MODE=demo (server/auth.js): no sign-in; every non-read request gets 403 except POST /api/prompts/:name/preview,
 which writes nothing; server/index.js starts with demo services (no Google auth, Claude, browser, or schedule) and replays
-demo/sample-data.js SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI hides
-change controls through useDemo() (web/src/demo.jsx) and the demo-hide class; the server's refusal is what protects it.
+demo/sample-data.js SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI shows every
+control: web/src/api.js (setDemoMode from /api/me) stops every non-GET request before it is sent (prompt preview aside),
+rejects with DEMO_NOT_SAVED, and fires demo-blocked, which DemoNotice (web/src/demo.jsx) shows; the server's refusal is
+what protects it. Only Open posting (sample links) and the admin pages stay hidden.
 The demo's /api/me names the sample candidate (DEMO_EMAIL, an example.com address) so the header reads like production's.
-Demo Settings shows the sample candidate's About you and search read-only (DEMO_ABOUT_YOU and DEMO_CONFIG, served by
+Demo Settings shows the sample candidate's About you and search, editable but never saved (DEMO_ABOUT_YOU and DEMO_CONFIG, served by
 server/account-routes.js in demo mode; nothing stored). A sample watch-out about location comes only from that job's workplace.
 scripts/demo-seed.js builds the sample database (marked with the demo_database setting; it refuses any other database,
 checked read-only) from demo/sample-data.js; sample prompt edits are the repo defaults plus one line (PROMPT_EDITS) and must
 validate. Sample data is invented and on example.com domains; never copy the user's data, wording, or history into it.
 npm run demo previews it locally (demo-data/, gitignored); test/demo.test.js walks every route to prove it is read-only.
 A new route that changes data is refused in the demo automatically; a new read route must not call an outside service.
-The demo never calls Claude (no client, no key). An AI action shown in the demo answers with a canned sample from a
-demo-only GET route built from demo/sample-data.js (Find someone to contact: /api/postings/:id/find-contact/sample,
-demoContactResult), labeled as a sample in the UI; the real POST stays refused.
+The demo never calls Claude (no client, no key). Its AI actions answer with canned samples in the real response shapes,
+labeled as samples and never saved: demo/samples.js (prep, letter, tweaks, re-score, revision, Help answer, draft; loaded
+by api.js only in the demo, its own chunk) through local stand-in tasks, and Find someone to contact from the demo-only
+GET /api/postings/:id/find-contact/sample (demoContactResult). test/demo-samples.test.js holds them to the real rules.
 
 ## Spending and internet safety
 Make Claude clients only with tools/claude.js createJobClaude(db). Each call is paid by the user it runs as: the owner, and

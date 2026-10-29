@@ -365,7 +365,7 @@ a.budget.over { color: var(--low); font-weight: 600; }
 @media (prefers-color-scheme: dark) {
   .demo-banner { background: #3a3014; color: #f3e2b0; border-color: #6b5821; }
 }
-.app.demo .demo-hide { display: none; }
+/* The demo shows every control: changes are stopped with a notice (web/src/api.js, DemoNotice), AI answers with samples. */
 fieldset.plain { min-width: 0; }
 fieldset.plain:not(.terms-box) { border: 0; padding: 0; margin: 0; }
 fieldset.plain:disabled select, fieldset.plain:disabled input { opacity: 0.85; cursor: default; }
@@ -650,3 +650,10 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 }
 /* The demo's sample answers (no AI, nothing saved). */
 .sample-result { border: 1px dashed var(--border); border-radius: 10px; padding: 10px 12px; margin: 10px 0; }
+/* The demo's "nothing was saved" notice, at the bottom of the screen. */
+.demo-notice { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 1000; max-width: min(560px, calc(100vw - 32px)); display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 10px; background: #1f2937; color: #fff; box-shadow: 0 6px 24px rgba(0,0,0,.25); font-size: 14px; }
+.demo-notice .link { color: #fff; font-size: 18px; line-height: 1; padding: 0 2px; }
+@media (prefers-color-scheme: dark) {
+  .demo-notice { background: #f3f4f6; color: #111827; }
+  .demo-notice .link { color: #111827; }
+}

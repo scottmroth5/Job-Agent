@@ -150,7 +150,6 @@ function AccountSettings({ tabs }) {
               {ai.keySet ? ' Your key is saved.' : ' Add a key to turn them on.'}
             </p>
             {b.spentUsd > 0 && <p className="muted small">Used this month ({b.monthLabel}): {usd(b.spentUsd)}.</p>}
-            {!demo && (
               <form className="row key-form" onSubmit={save}>
                 <label>
                   {ai.keySet ? 'Replace your key' : 'Your Claude API key'}
@@ -172,7 +171,6 @@ function AccountSettings({ tabs }) {
                   </button>
                 )}
               </form>
-            )}
             <p className="muted small">
               Get a key at console.anthropic.com (API keys). The app checks it with Anthropic, stores it encrypted, and uses it only for your own requests; nobody, including the owner, can see it.
             </p>

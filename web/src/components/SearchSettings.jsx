@@ -148,9 +148,9 @@ export default function SearchSettings() {
           draft from your resume and LinkedIn profile. At least {data.profileChars.min} characters. <a href="#/help">Help</a>, <i>Writing your knowledge
           doc</i>, explains each section with full examples.
         </p>
-        {demo ? (
-          <p className="warn-box small">A sample: the knowledge doc of Jordan, the demo's made-up candidate. In your own account you start from the template, fill it from a document, or build a draft from your resume and LinkedIn profile.</p>
-        ) : (
+        {demo && (
+          <p className="warn-box small">A sample: the knowledge doc of Jordan, the demo's made-up candidate. Try Build a draft (a canned sample, no AI) or edit the text; nothing is saved here.</p>
+        )}
           <>
             <div className="row">
               <label className="button file-button">
@@ -179,10 +179,9 @@ export default function SearchSettings() {
             </div>
             <DraftBuilder onUseProfile={useDraftProfile} onUseSearch={owner ? null : useDraftSearch} />
           </>
-        )}
-        <SectionChecklist sections={data.knowledgeSections ?? []} text={profile} template={data.knowledgeTemplate} readOnly={demo} onChange={setProfile} />
+        <SectionChecklist sections={data.knowledgeSections ?? []} text={profile} template={data.knowledgeTemplate} onChange={setProfile} />
         <form onSubmit={(e) => { e.preventDefault(); run(() => api.saveAccountProfile(profile), 'Saved.'); }}>
-          <textarea className="profile-text" rows={12} maxLength={data.profileChars.max} value={profile} readOnly={demo} onChange={(e) => setProfile(e.target.value)} />
+          <textarea className="profile-text" rows={12} maxLength={data.profileChars.max} value={profile} onChange={(e) => setProfile(e.target.value)} />
           <div className="row demo-hide">
             <button className="primary" type="submit" disabled={profile === data.profile}>
               Save
@@ -201,9 +200,9 @@ export default function SearchSettings() {
       <section className="home-card">
         <h2>Your search</h2>
         {missing.length > 0 && <p className="warn-box">To run your pipeline, fill in: {missing.join('; ')}.</p>}
-        {demo && <p className="muted small">Jordan's search: what the pipeline looks for. Read-only here.</p>}
+        {demo && <p className="muted small">Jordan's search: what the pipeline looks for. Try changing it; the demo saves nothing.</p>}
         <form className="search-form" onSubmit={saveSearch}>
-          <fieldset className="bare" disabled={demo}>
+          <fieldset className="bare">
           <div className="grid2">
             <label>Your name<input value={form.name} onChange={set('name')} /></label>
             <label>Sign letters as<input value={form.signoffName} onChange={set('signoffName')} placeholder="Defaults to your name" /></label>

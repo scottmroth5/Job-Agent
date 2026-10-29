@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api } from './api.js';
+import { api, setDemoMode } from './api.js';
 import { useLookups } from './lookups.jsx';
 import JobTable from './components/JobTable.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
@@ -10,7 +10,7 @@ import InboxPage from './components/InboxPage.jsx';
 import HomePage from './components/HomePage.jsx';
 import ActivityPage from './components/ActivityPage.jsx';
 import FunnelPage from './components/FunnelPage.jsx';
-import { DemoBanner, DemoContext } from './demo.jsx';
+import { DemoBanner, DemoContext, DemoNotice } from './demo.jsx';
 import { MeContext } from './me.jsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import HelpPage from './components/HelpPage.jsx';
@@ -42,7 +42,13 @@ export default function App() {
   const lk = useLookups();
   const [me, setMe] = useState(null);
   useEffect(() => {
-    api.me().then(setMe).catch(() => {});
+    api
+      .me()
+      .then((m) => {
+        setDemoMode(m?.demo); // before any change can be made: the demo stops changes and samples AI (api.js)
+        setMe(m);
+      })
+      .catch(() => {});
   }, []);
   const [filters, setFilters] = useState(loadFilters);
   const [jobs, setJobs] = useState([]);
@@ -120,6 +126,7 @@ export default function App() {
     <MeContext.Provider value={me}>
     <div className={demo ? 'app demo' : 'app'}>
       {demo && <DemoBanner requestAccessUrl={me?.requestAccessUrl} supportEmail={me?.supportEmail} />}
+      {demo && <DemoNotice />}
       <header className="topbar">
         {view !== 'home' && (
           <a href="#/" className="home-link" aria-label="Home">
@@ -194,11 +201,9 @@ export default function App() {
           {showAdvanced ? 'Hide advanced filters' : 'Advanced filters'}
           {advancedInUse > 0 && <span className="count-badge" title="Advanced filters in use">{advancedInUse}</span>}
         </button>
-        {!demo && (
           <button className="primary add-job" onClick={() => setAdding(true)}>
             + Add job
           </button>
-        )}
       </div>
       {showAdvanced && (
       <div className="filters advanced">

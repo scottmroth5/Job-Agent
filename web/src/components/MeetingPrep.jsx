@@ -51,7 +51,8 @@ function PrepDialog({ job, onClose, onDone }) {
       };
       const { taskId } = await api.startPrep(job.id, body);
       const final = await followTask(taskId, setTask);
-      if (final.status === 'done') onDone(final.result?.prepId);
+      // The demo's prep is a sample (no AI, nothing saved), opened from the result itself.
+      if (final.status === 'done') onDone(final.result?.prep ?? final.result?.prepId);
       else setError(final.error ?? 'The prep could not be written.');
     } catch (err) {
       setError(err.message);
@@ -152,15 +153,16 @@ function PrepDialog({ job, onClose, onDone }) {
 }
 
 /** A finished prep, formatted, with its Google Doc (when there is one), a copy button, and a Word download. */
-function PrepReader({ prepId, onClose }) {
+function PrepReader({ prepId, sample = null, onClose }) {
   const demo = useDemo();
   const [prep, setPrep] = useState(null);
   const [error, setError] = useState(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    api.prep(prepId).then(setPrep, (err) => setError(err.message));
-  }, [prepId]);
+    if (sample) setPrep(sample);
+    else api.prep(prepId).then(setPrep, (err) => setError(err.message));
+  }, [prepId, sample]);
   const copy = async () => {
     await navigator.clipboard.writeText(prep.content);
     setCopied(true);
@@ -178,13 +180,19 @@ function PrepReader({ prepId, onClose }) {
             <div className="links">
               {prep.docUrl && <a className="button" href={prep.docUrl} target="_blank" rel="noreferrer">Open Google Doc</a>}
               <button onClick={copy}>{copied ? 'Copied' : 'Copy text'}</button>
-              {!demo && (
+              {!sample && !demo && (
                 <a className="button" href={`/api/meeting-preps/${prep.id}/docx`} download>
                   Download Word
                 </a>
               )}
               <button onClick={() => window.print()}>Print</button>
             </div>
+            {sample && (
+              <p className="sample-result small">
+                <b>Sample prep.</b> In your own account Claude researches the people and the company and writes this from your knowledge doc and the job (about $1 to $2), and saves it
+                with the job. This demo used no AI and saved nothing.
+              </p>
+            )}
             <Markdown text={prep.content} className="md prep" />
             <p className="muted small">
               Written {new Date(prep.createdAt).toLocaleString()} by {prep.model}
@@ -206,6 +214,7 @@ export default function MeetingPrep({ job, onChanged, askSignal = 0 }) {
     if (askSignal) setAsking(true);
   }, [askSignal]);
   const [reading, setReading] = useState(null);
+  const [samplePrep, setSamplePrep] = useState(null); // the demo's sample prep (never saved)
   const [error, setError] = useState(null);
   const preps = job.meetingPreps ?? [];
 
@@ -250,6 +259,11 @@ export default function MeetingPrep({ job, onChanged, askSignal = 0 }) {
           job={job}
           onClose={() => setAsking(false)}
           onDone={(prepId) => {
+            if (prepId && typeof prepId === 'object') {
+              setAsking(false);
+              setSamplePrep(prepId);
+              return;
+            }
             setAsking(false);
             onChanged();
             if (prepId) setReading(prepId);
@@ -257,6 +271,7 @@ export default function MeetingPrep({ job, onChanged, askSignal = 0 }) {
         />
       )}
       {reading && <PrepReader prepId={reading} onClose={() => setReading(null)} />}
+      {samplePrep && <PrepReader sample={samplePrep} onClose={() => setSamplePrep(null)} />}
     </section>
   );
 }

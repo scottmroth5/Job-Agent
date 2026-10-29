@@ -94,7 +94,7 @@ function PostingLink({ url, demo, onChanged }) {
   return (
     <div className="posting-url small">
       {demo ? <span className="muted">{shortUrl(url)}</span> : <a href={url} target="_blank" rel="noreferrer" title={url}>{shortUrl(url)}</a>}
-      {!demo && mode === null && (
+      {mode === null && (
         <button type="button" className="link-button" onClick={() => setMode('ask')} title="Never keep jobs from this site">
           Skip this site
         </button>
@@ -130,6 +130,33 @@ function PostingLink({ url, demo, onChanged }) {
       {mode?.removed !== undefined && <span>Removed {mode.removed === 1 ? '1 saved job' : `${mode.removed} saved jobs`} from {mode.from} (archived and marked passed).</span>}
       {error && <span className="error">{error}</span>}
     </div>
+  );
+}
+
+/** The demo's sample result for Write resume tweaks and cover letter, Regenerate, or Re-score: shown, never saved. */
+function ActionSample({ sample, onHide }) {
+  return (
+    <section className="sample-result" aria-label="Sample result">
+      <p className="small">
+        <b>Sample result.</b> In your own account this would {sample.action === 'score' ? 'score the job on your AI (about 1 cent)' : 'write these on your AI (about 5 cents) and save them as the current letter and tweaks'}. This demo used no AI
+        and saved nothing.{' '}
+        <button type="button" className="link" onClick={onHide}>
+          Hide
+        </button>
+      </p>
+      {sample.score ? (
+        <p>
+          <b>{sample.score.score}/10</b> {sample.score.reason} <span className="muted small">{sample.score.note}</span>
+        </p>
+      ) : (
+        <>
+          <h4>Cover letter</h4>
+          <pre className="tweaks">{sample.letter}</pre>
+          <h4>Resume tweaks</h4>
+          <pre className="tweaks">{sample.tweaks}</pre>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -183,7 +210,11 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const [paste, setPaste] = useState('');
   const [task, setTask] = useState(null);
   const [contactSample, setContactSample] = useState(null); // the demo's canned Find someone to contact answer
-  useEffect(() => setContactSample(null), [id]);
+  const [actionSample, setActionSample] = useState(null); // the demo's canned Write, Regenerate, or Re-score result
+  useEffect(() => {
+    setContactSample(null);
+    setActionSample(null);
+  }, [id]);
   const [copied, setCopied] = useState(false);
   const [askPrep, setAskPrep] = useState(0); // the Next step box's Prepare for a meeting opens the prep form
   // With a Google Doc, the letter's text is shown on request; without one (other users), always.
@@ -255,7 +286,8 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
     try {
       const { taskId } = await api.action(id, action);
       const final = await followTask(taskId, setTask);
-      if (final.status === 'done') {
+      if (final.result?.sample) setActionSample({ action, ...final.result });
+      else if (final.status === 'done') {
         await load();
         onChanged();
       }
@@ -352,13 +384,10 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               onFindContact={async () => {
                 setError(null);
                 try {
-                  // The demo shows a canned sample (no AI, nothing saved); the real app runs the search as a task.
-                  if (demo) {
-                    setContactSample((await api.findContactSample(job.id)).markdown);
-                    return;
-                  }
                   const final = await followTask((await api.findContact(job.id)).taskId, setTask);
-                  if (final.status === 'done') {
+                  // The demo's answer is a sample (no AI, nothing saved): shown here instead of in Notes.
+                  if (final.result?.sample) setContactSample(final.result.markdown);
+                  else if (final.status === 'done') {
                     await load();
                     onChanged();
                   }
@@ -391,7 +420,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               </section>
             )}
             {task?.kind === 'find-contact' && <TaskProgress task={task} />}
-            {task?.kind === 'find-contact' && task.status === 'done' && <p className="muted small">Saved under Notes below. Check each person on LinkedIn before you write.</p>}
+            {task?.kind === 'find-contact' && task.status === 'done' && !task.result?.sample && <p className="muted small">Saved under Notes below. Check each person on LinkedIn before you write.</p>}
 
             <div className="links">
               {job.url && !demo && <a className="button primary" href={job.url} target="_blank" rel="noreferrer">Open posting / apply ↗</a>}
@@ -418,7 +447,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             {job.letter?.flags?.length > 0 && <div className="warn-box">Cover letter needs review: {job.letter.flags.join('; ')}</div>}
             {job.letter && !job.letter.url && !demo && isOwner(me) && <div className="warn-box">The cover letter was written but not saved as a Doc yet; the next run retries it.</div>}
 
-            <fieldset className="grid2 plain" disabled={demo}>
+            <fieldset className="grid2 plain">
               <label>
                 Status
                 <select value={job.status} onChange={(e) => save({ status: e.target.value })}>
@@ -450,7 +479,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             </fieldset>
 
             {fractional && (
-              <fieldset className="terms-box plain" disabled={demo}>
+              <fieldset className="terms-box plain">
                 <div className="grid2">
                   <label>
                     Rate
@@ -511,9 +540,9 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
 
             <MeetingPrep job={job} askSignal={askPrep} onChanged={async () => { await load(); onChanged(); }} />
 
-            {!demo && <Attachments jobId={job.id} items={job.attachments ?? []} onChanged={async () => { await load(); onChanged(); }} />}
+            {<Attachments jobId={job.id} items={job.attachments ?? []} onChanged={async () => { await load(); onChanged(); }} />}
 
-            {job.needsDescription && !demo && (
+            {job.needsDescription && (
               <section className="warn-box">
                 <h3>Needs a description</h3>
                 <p className="small">The posting could not be read automatically. Paste the job description to score it and write materials.</p>
@@ -524,7 +553,6 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               </section>
             )}
 
-            {!demo && (
             <section>
               <h3>Actions</h3>
               <div className="links">
@@ -535,8 +563,8 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                 {job.url && <button disabled={busy} onClick={() => run('refetch')}>Refetch posting</button>}
               </div>
               {task?.kind !== 'find-contact' && <TaskProgress task={task} />}
+              {actionSample && <ActionSample sample={actionSample} onHide={() => setActionSample(null)} />}
             </section>
-            )}
 
             <LetterSection job={job} onChanged={async () => { await load(); onChanged(); }} />
 
