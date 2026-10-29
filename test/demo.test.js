@@ -156,3 +156,29 @@ test('the demo caps every request per address, so a script cannot hammer the ser
   t = 1001;
   assert.equal((await app.inject('/x')).statusCode, 200, 'the window resets');
 });
+
+test("the demo's Find someone to contact is a canned sample: a read, no AI, nothing saved, and only in the demo", async () => {
+  const { dbPath } = seeded();
+  const { app, store } = await demoApp(dbPath);
+  const job = store.db.prepare('SELECT id, company, title FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').get();
+  const notes = () => store.db.prepare('SELECT COUNT(*) FROM posting_notes WHERE user_id = @uid').pluck().get();
+  const before = notes();
+  const res = await app.inject(`/api/postings/${job.id}/find-contact/sample`);
+  assert.equal(res.statusCode, 200);
+  const { sample, markdown } = res.json();
+  assert.equal(sample, true);
+  assert.ok(markdown.startsWith(`## Who to contact at ${job.company}`) && markdown.includes(job.title));
+  assert.ok(!/https?:\/\/(?![\w.-]*example\.com)/.test(markdown), 'every link is an example.com page');
+  assert.equal(notes(), before, 'nothing saved');
+  assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${job.id}/find-contact` })).statusCode, 403, 'the real search stays refused');
+  assert.equal((await app.inject('/api/postings/99999/find-contact/sample')).statusCode, 404);
+  await app.close();
+  store.close();
+
+  // Outside the demo there is no sample route.
+  const real = openJobStore(':memory:');
+  const plain = await buildApp({ store: real, config: DEMO_CONFIG, services: { createBrowser: async () => null } });
+  assert.equal((await plain.inject('/api/postings/1/find-contact/sample')).statusCode, 404);
+  await plain.close();
+  real.close();
+});

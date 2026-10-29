@@ -282,6 +282,9 @@ checked read-only) from demo/sample-data.js; sample prompt edits are the repo de
 validate. Sample data is invented and on example.com domains; never copy the user's data, wording, or history into it.
 npm run demo previews it locally (demo-data/, gitignored); test/demo.test.js walks every route to prove it is read-only.
 A new route that changes data is refused in the demo automatically; a new read route must not call an outside service.
+The demo never calls Claude (no client, no key). An AI action shown in the demo answers with a canned sample from a
+demo-only GET route built from demo/sample-data.js (Find someone to contact: /api/postings/:id/find-contact/sample,
+demoContactResult), labeled as a sample in the UI; the real POST stays refused.
 
 ## Spending and internet safety
 Make Claude clients only with tools/claude.js createJobClaude(db). Each call is paid by the user it runs as: the owner, and

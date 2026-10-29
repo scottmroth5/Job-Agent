@@ -66,6 +66,7 @@ export const api = {
   closeStale: () => request('POST', '/api/follow-ups/close-stale'),
   closeNoResponse: (id) => request('POST', `/api/postings/${id}/close-no-response`),
   findContact: (id) => request('POST', `/api/postings/${id}/find-contact`),
+  findContactSample: (id) => request('GET', `/api/postings/${id}/find-contact/sample`), // the demo's canned answer
   excludedSites: () => request('GET', '/api/excluded-sites'),
   skipSite: (site, note = '') => request('POST', '/api/excluded-sites', { site, note }),
   setSiteNote: (site, note) => request('PATCH', `/api/excluded-sites/${encodeURIComponent(site)}`, { note }),

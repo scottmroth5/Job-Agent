@@ -415,7 +415,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerPrepRoutes(app, { store, config, services, startTask });
   registerNoteRoutes(app, { db });
   registerExcludedSiteRoutes(app, { db, ownerConfig });
-  registerFollowUpRoutes(app, { store, config, services, startTask });
+  registerFollowUpRoutes(app, { store, config, services, startTask, demo: authMode === 'demo' });
   let scheduler = null;
   const scheduled = (name) => scheduler?.status().find((j) => j.name === name) ?? null;
   const pipeline = services.runPipeline ? registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline, schedule: () => scheduled('pipeline') }) : null;

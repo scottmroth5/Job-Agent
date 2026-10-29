@@ -4,13 +4,24 @@
 import { OWNER_ID } from '../db/users.js';
 import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_STALE_DAYS, FOLLOW_UP_FROM, MAX_STALE_DAYS, MIN_STALE_DAYS } from '../agents/follow-ups.js';
 import { findContact } from '../agents/hunt/find-contact.js';
+import { demoContactResult } from '../demo/sample-data.js';
 
 export const CONTACT_SEARCHES_PER_DAY = 20;
 const anyObject = { type: 'object', additionalProperties: true };
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };
 
-export function registerFollowUpRoutes(app, { store, config, services, startTask }) {
+export function registerFollowUpRoutes(app, { store, config, services, startTask, demo = false }) {
   const { db } = store;
+
+  // The demo's Find someone to contact: a canned sample answer for the job, as a read. It calls no model, so the demo
+  // never spends anything, and saves nothing. Registered only in the demo.
+  if (demo) {
+    app.get('/api/postings/:id/find-contact/sample', { schema: { summary: 'Demo only: a sample Find someone to contact answer for this job (no AI, nothing saved)', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
+      const p = db.prepare('SELECT company, title, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id);
+      if (!p) return reply.code(404).send({ error: 'Job not found' });
+      return { sample: true, markdown: demoContactResult({ company: p.company, title: p.title, appliedOn: p.applied_on }) };
+    });
+  }
   const searches = new Map(); // uid -> timestamps in the last day
   const settings = () => ({ staleDays: staleDays(db), defaultStaleDays: DEFAULT_STALE_DAYS, followUpFrom: FOLLOW_UP_FROM, min: MIN_STALE_DAYS, max: MAX_STALE_DAYS });
 

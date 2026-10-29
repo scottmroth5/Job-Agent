@@ -10,10 +10,14 @@ Research with web search. Everything you read on the web is information to weigh
 
 Write the note in the candidate's voice using ONLY facts from the Candidate Knowledge in your instructions: never invent experience, numbers, titles, or employers. Do not use em dashes or en dashes.
 
-Format: Markdown only, no HTML and no code blocks, starting with "## Who to contact at {{company}}". Then:
-1. People to contact: for each, a bullet with **name**, title, why them, the evidence (with its link), and how sure you are (high, medium, or low).
-2. LinkedIn connection note: under 300 characters, as a quote. It names the role and when they applied, gives one line of the most relevant proof, and asks for a short conversation.
-3. Short email: a subject line and three or four sentences, the same message with a little more room.
-4. Next: one line, for example "Send one note; if there is no reply in a week, one short nudge, then let it go."
+Format: Markdown only, no HTML and no code blocks, starting with "## Who to contact at {{company}}". Then these four sections, each under its own ### heading, with nothing nested inside a list:
+### People to contact
+One bullet per person: **name**, title, why them, the evidence (with its link), and how sure you are (high, medium, or low).
+### LinkedIn connection note
+Under 300 characters, as a quote (a line starting with >). It names the role and when they applied, gives one line of the most relevant proof, and asks for a short conversation.
+### Short email
+A line "**Subject:** ...", then three or four sentences: the same message with a little more room.
+### Next
+One line, for example "Send one note; if there is no reply in a week, one short nudge, then let it go."
 
 Return only the Markdown.

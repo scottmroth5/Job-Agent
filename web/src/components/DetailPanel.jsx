@@ -4,7 +4,7 @@ import { useLookups } from '../lookups.jsx';
 import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM, sourceLabel } from '../format.js';
 import TaskProgress from './TaskProgress.jsx';
 import Attachments from './Attachments.jsx';
-import Notes from './Notes.jsx';
+import Notes, { Markdown } from './Notes.jsx';
 import MeetingPrep from './MeetingPrep.jsx';
 import LetterSection from './LetterSection.jsx';
 import { useDemo } from '../demo.jsx';
@@ -157,7 +157,7 @@ function NextSteps({ steps, busy, onPrepare, onDone, onFindContact, onCloseNoRes
               </button>
             )}
             {(t.kind === 'follow_up' || t.kind === 'stale') && (
-              <button type="button" className="demo-hide" disabled={busy} onClick={onFindContact} title="Web search on your AI for the hiring manager or a recruiter, and a short note to send (saved in Notes)">
+              <button type="button" disabled={busy} onClick={onFindContact} title="Web search on your AI for the hiring manager or a recruiter, and a short note to send (saved in Notes)">
                 Find someone to contact
               </button>
             )}
@@ -182,6 +182,8 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const [terms, setTerms] = useState({ rateText: '', hoursText: '' });
   const [paste, setPaste] = useState('');
   const [task, setTask] = useState(null);
+  const [contactSample, setContactSample] = useState(null); // the demo's canned Find someone to contact answer
+  useEffect(() => setContactSample(null), [id]);
   const [copied, setCopied] = useState(false);
   const [askPrep, setAskPrep] = useState(0); // the Next step box's Prepare for a meeting opens the prep form
   // With a Google Doc, the letter's text is shown on request; without one (other users), always.
@@ -350,6 +352,11 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               onFindContact={async () => {
                 setError(null);
                 try {
+                  // The demo shows a canned sample (no AI, nothing saved); the real app runs the search as a task.
+                  if (demo) {
+                    setContactSample((await api.findContactSample(job.id)).markdown);
+                    return;
+                  }
                   const final = await followTask((await api.findContact(job.id)).taskId, setTask);
                   if (final.status === 'done') {
                     await load();
@@ -371,6 +378,18 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               }}
             />
             {/* The search's progress right under the step that started it; the result lands in Notes. */}
+            {contactSample && (
+              <section className="sample-result" aria-label="Sample result">
+                <p className="small">
+                  <b>Sample result.</b> In the real app this searches the web on your AI (about 10 to 30 cents) and saves the answer under Notes. This demo used no AI and saved
+                  nothing; the people are made up.{' '}
+                  <button type="button" className="link" onClick={() => setContactSample(null)}>
+                    Hide
+                  </button>
+                </p>
+                <Markdown text={contactSample} />
+              </section>
+            )}
             {task?.kind === 'find-contact' && <TaskProgress task={task} />}
             {task?.kind === 'find-contact' && task.status === 'done' && <p className="muted small">Saved under Notes below. Check each person on LinkedIn before you write.</p>}
 

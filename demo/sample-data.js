@@ -355,6 +355,35 @@ Engineering leader with 15 years in software and 8 leading teams, mostly in heal
 - Certified Scrum Professional. Conversational Spanish.
 - Mentor for first-time engineering managers in a local meetup.`;
 
+// The demo's Find someone to contact: a canned answer in the real one's shape, built from the sample job. The people are
+// invented and their links are example.com pages; no model is called and nothing is saved.
+const slug = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+export function demoContactResult({ company, title, appliedOn = null }) {
+  const site = `https://${slug(company) || 'example'}.example.com`;
+  const reportsTo = /\b(vp|vice president|head|svp|chief|cto)\b/i.test(title) ? 'Chief Technology Officer' : 'VP of Engineering';
+  return `## Who to contact at ${company}
+
+### People to contact
+
+- **Morgan Ellis**, ${reportsTo}: most likely the hiring manager, since the ${title} role reports to this seat. Evidence: the leadership page lists Morgan in this role ([${site}/about/leadership](${site}/about/leadership)). Sure: medium.
+- **Riley Chen**, Senior Technical Recruiter: posted engineering leadership roles this quarter. Evidence: the careers page names Riley as the recruiting contact ([${site}/careers](${site}/careers)). Sure: high.
+- No email addresses were found. The company's public press contacts use first.last@, so morgan.ellis@ is a guess to confirm, not a fact.
+
+### LinkedIn connection note
+
+> Hi Morgan, I applied for the ${title} role${appliedOn ? ` on ${appliedOn}` : ''}. I grew a health tech platform team from 6 to 45 engineers while releases stayed weekly. Would you be open to a 15 minute conversation?
+
+### Short email
+
+**Subject:** ${title} application, Jordan Avery
+
+Hi Morgan, I applied for the ${title} role and wanted to reach you directly. At my last company I grew the platform team from 6 to 45 engineers and led the technology side of an accreditation with no findings, which looks close to what ${company} is building toward. If it would help, I would welcome 15 minutes to hear what matters most in the first year. Thank you, Jordan
+
+### Next
+
+Send one note; if there is no reply in a week, one short nudge, then let it go.`;
+}
+
 // Job sites the sample candidate skips (Settings > Job sites to skip), each with a note: a real paywalled job board as
 // the example, and an invented one.
 export const DEMO_SKIPPED_SITES = [
