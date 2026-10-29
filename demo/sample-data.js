@@ -355,6 +355,13 @@ Engineering leader with 15 years in software and 8 leading teams, mostly in heal
 - Certified Scrum Professional. Conversational Spanish.
 - Mentor for first-time engineering managers in a local meetup.`;
 
+// Job sites the sample candidate skips (Settings > Job sites to skip), each with a note: a real paywalled job board as
+// the example, and an invented one.
+export const DEMO_SKIPPED_SITES = [
+  { site: 'execthread.com', note: 'Paywall: you pay a membership to see the jobs. Not worth it; find the job on the employer site instead.', daysAgo: 30 },
+  { site: 'paytoapply-jobs.example', note: 'Charges a fee to apply.', daysAgo: 12 },
+];
+
 // The sample candidate's resumes (Settings > Resumes), stored as text files. Letters and tweaks for VP, Head, CTO, and
 // Director titles were "written from" the executive one; the rest from the default. Invented, like everything here.
 export const DEMO_RESUMES = [

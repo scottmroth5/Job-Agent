@@ -35,6 +35,54 @@ export function stripSalutationAndSignoff(text, names = []) {
   return lines.join('\n');
 }
 
+// The greeting that ends a letter's header ("Dear Example Co Hiring Team,", "To whom it may concern:"), on its own line or
+// run into the header when a PDF's lines were joined. Searched only near the start; quantifiers are bounded.
+const GREETING = /(?:^|\s)(?:dear\s[^,:\n]{1,80}|to whom it may concern)[,:]/i;
+const GREETING_LINE = /^[ \t]*(?:hello|hi|greetings)\b[^,:\n]{0,60}[,:!][ \t]*$/im;
+// A sign-off and what follows it (name, contact lines) near the end: "Sincerely,\nPat Example\npat@example.com".
+const SIGNOFF = /(?:^|[\s.!?])(?:sincerely|best regards|kind regards|warm regards|warmest regards|regards|respectfully|best wishes|with gratitude|thank you)[,!][\s\S]{0,200}$/i;
+
+/**
+ * Paragraphs for text with none (a PDF's lines, wrapped at the page edge, with no blank lines between paragraphs):
+ * a line that ends a sentence and stops well short of the longest lines ends its paragraph. Text that has blank
+ * lines already is left alone.
+ */
+export function paragraphsFromLines(text) {
+  const s = String(text ?? '').replace(/\r\n?/g, '\n').trim();
+  if (s.includes('\n\n')) return s;
+  const lines = s.split('\n').map((l) => l.trim());
+  if (lines.length < 4) return s;
+  const longest = Math.max(...lines.map((l) => l.length));
+  const ends = (l) => /[.!?:]["'”’)]?$/.test(l) && l.length < longest * 0.85;
+  const paragraphs = [];
+  let current = [];
+  for (const l of lines) {
+    if (l) current.push(l);
+    if (l && ends(l)) {
+      paragraphs.push(current.join(' '));
+      current = [];
+    }
+  }
+  if (current.length) paragraphs.push(current.join(' '));
+  return paragraphs.join('\n\n');
+}
+
+/**
+ * The body of a letter the user wrote (pasted, or read from a file): paragraphs rebuilt when the text has none, and
+ * the header (name, contact lines, date, "Re:" line, greeting) and the sign-off with whatever follows it taken off,
+ * since the Word and PDF layout adds them. Text with no greeting near its start keeps its first lines.
+ */
+export function userLetterBody(text, names = []) {
+  let s = paragraphsFromLines(text);
+  const head = s.slice(0, 1200);
+  const greeting = GREETING.exec(head) ?? GREETING_LINE.exec(head);
+  if (greeting) s = s.slice(greeting.index + greeting[0].length);
+  const tailFrom = Math.max(0, s.length - 400);
+  const signoff = SIGNOFF.exec(s.slice(tailFrom));
+  if (signoff) s = s.slice(0, tailFrom + signoff.index + (/^[.!?]/.test(signoff[0]) ? 1 : 0));
+  return stripSalutationAndSignoff(s, names).trim();
+}
+
 /**
  * Runs the configured cover letter checks. Each rule has a label and either
  * text (one pattern against the whole letter) or sentence (two patterns that must both match one sentence).

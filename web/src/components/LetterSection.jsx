@@ -163,7 +163,7 @@ function OwnVersion({ job, current, onSaved, onClose }) {
             }}
           />
         </label>
-        <span className="muted small">Word, PDF, or text; or paste below. A greeting and sign-off are added for you in Word and PDF.</span>
+        <span className="muted small">Word, PDF, or text; or paste below. Word and PDF add your name, contact lines, date, greeting, and sign-off, so any in your text are taken off.</span>
       </div>
       <textarea className="letter-draft" rows={14} value={text} maxLength={8000} onChange={(e) => setText(e.target.value)} />
       <div className="row">

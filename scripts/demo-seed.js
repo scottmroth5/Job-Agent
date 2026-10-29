@@ -19,7 +19,7 @@ import { addNote } from '../agents/notes.js';
 import { companyTitleKey } from '../tools/urls.js';
 import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { pickResume } from '../agents/resumes.js';
-import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
+import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.js';
 
 const MARKER = 'demo_database';
@@ -222,6 +222,10 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     const bytes = Buffer.from(r.text);
     insertResume.run(randomUUID(), r.label, r.titles, i === 0 ? 1 : 0, r.filename, bytes.length, bytes, r.text, iso(40 - i, 10, 0), iso(12 - i, 10, 0));
   });
+  // Job sites to skip (Settings), with notes.
+  const skipped = DEMO_SKIPPED_SITES.map(({ site, note, daysAgo }) => ({ site, note, addedAt: iso(daysAgo, 9, 0) }));
+  db.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (@uid, 'search.excludedSites', ?, ?)").run(JSON.stringify(skipped), iso(12, 9, 0));
+
   const setResume = db.prepare('UPDATE artifacts SET resume_id = ? WHERE id = ? AND user_id = @uid');
   for (const a of db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all()) {
     setResume.run(pickResume(db, a.title)?.id ?? null, a.id);

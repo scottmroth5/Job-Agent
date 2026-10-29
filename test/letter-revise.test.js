@@ -96,3 +96,20 @@ test('Word and PDF downloads of the current letter and of any version', async ()
   await app.close();
   store.close();
 });
+
+test('a whole letter uploaded as your own version (header, greeting, sign-off) saves only its body, so the PDF has one header', async () => {
+  const { store, app, id } = await setup();
+  for (const format of ['pdf', 'docx']) {
+    // A full letter as a file: the app's own download stands in for one made in Word or saved as a PDF.
+    const file = (await app.inject(`/api/postings/${id}/letter.${format}?version=${(await app.inject(`/api/postings/${id}/letters`)).json().at(-1).id}`)).rawPayload;
+    const read = await app.inject({ method: 'POST', url: `/api/postings/${id}/letter/from-file`, headers: { 'content-type': 'application/octet-stream', 'x-filename': `mine.${format}` }, payload: file });
+    const body = read.json().text;
+    assert.equal(body, LETTER, `${format}: only the body, in its paragraphs`);
+    await app.inject({ method: 'POST', url: `/api/postings/${id}/letter`, payload: { content: `Pat Example\nAnytown, ST | pat@example.com\nOctober 29, 2026\nRe: VP Engineering at Example Co\nDear Example Co Hiring Team,\n${body}\nSincerely,\nPat Example`, source: 'user' } });
+    const text = (await documentText((await app.inject(`/api/postings/${id}/letter.pdf`)).rawPayload, 'l.pdf')).text;
+    assert.equal(text.split('Dear Example Co Hiring Team').length, 2, `${format}: one greeting in the PDF`);
+    assert.equal(text.split('pat@example.com').length, 2, `${format}: one contact line`);
+  }
+  await app.close();
+  store.close();
+});

@@ -6,7 +6,7 @@ import { createJobTracer } from '../tools/trace.js';
 import { OWNER_ID } from '../db/users.js';
 import { reviseLetter, MAX_TURNS } from '../agents/hunt/revise-letter.js';
 import { finishLetter, HUNT_MODEL } from '../agents/hunt/generate.js';
-import { letterDocName, letterHtml, stripSalutationAndSignoff } from '../agents/hunt/letters.js';
+import { letterDocName, letterHtml, userLetterBody } from '../agents/hunt/letters.js';
 import { pickResume, withResume } from '../agents/resumes.js';
 import { ensureLetterFolder } from '../tools/google/drive.js';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.js';
@@ -137,10 +137,10 @@ export function registerLetterRoutes(app, { store, config, services }) {
     async (req, reply) => {
       const posting = job(req.params.id);
       if (!posting) return reply.code(404).send({ error: 'Job not found' });
-      // Your own text keeps its wording; only a greeting or sign-off is taken off, since the layout adds those. A kept
-      // revision was already cleaned. Both get the letter checks.
+      // Your own text keeps its wording; its header (name, contact lines, date, Re: line, greeting) and sign-off are taken
+      // off, since the layout adds those. A kept revision was already cleaned. Both get the letter checks.
       const names = [config.candidate?.name, config.candidate?.signoffName];
-      const content = (req.body.source === 'user' ? stripSalutationAndSignoff(req.body.content, names) : req.body.content).trim();
+      const content = (req.body.source === 'user' ? userLetterBody(req.body.content, names) : req.body.content).trim();
       if (content.length < 100) return reply.code(400).send({ error: 'That is too short for a cover letter.' });
       const flags = finishLetter(content, config).flags;
       const resume = pickResume(db, posting.title);
@@ -170,7 +170,8 @@ export function registerLetterRoutes(app, { store, config, services }) {
       if (!job(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
       if (!Buffer.isBuffer(req.body)) return reply.code(400).send({ error: 'Send the file as the request body (application/octet-stream).' });
       const { text } = await documentText(req.body, uploadName(req));
-      return { text: text.slice(0, MAX_LETTER_CHARS) };
+      // The body only, as it will be saved, so what you review is what the Word and PDF show under their own header.
+      return { text: userLetterBody(text, [config.candidate?.name, config.candidate?.signoffName]).slice(0, MAX_LETTER_CHARS) };
     },
   );
 
