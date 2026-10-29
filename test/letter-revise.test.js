@@ -49,7 +49,7 @@ test('revising returns a cleaned draft and saves nothing; keeping it makes a new
   assert.equal(r.statusCode, 200);
   const body = r.json();
   assert.equal(body.changes, 'Made the close warmer.');
-  assert.ok(!/Thanks,|Pat$/.test(body.letter), 'the sign-off is taken off');
+  assert.ok(!body.letter.includes('Thanks,') && !body.letter.trimEnd().endsWith('Pat'), 'the sign-off is taken off');
   assert.ok(!body.letter.includes('--'), 'dashes are cleaned');
   assert.deepEqual(body.flags, ['confident'], 'the letter checks run');
   assert.match(sent[0].system, /Background/, 'the knowledge doc is the system prompt');
