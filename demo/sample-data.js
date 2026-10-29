@@ -357,7 +357,7 @@ Engineering leader with 15 years in software and 8 leading teams, mostly in heal
 
 // The demo's Find someone to contact: a canned answer in the real one's shape, built from the sample job. The people are
 // invented and their links are example.com pages; no model is called and nothing is saved.
-const slug = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+const slug = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('-');
 export function demoContactResult({ company, title, appliedOn = null }) {
   const site = `https://${slug(company) || 'example'}.example.com`;
   const reportsTo = /\b(vp|vice president|head|svp|chief|cto)\b/i.test(title) ? 'Chief Technology Officer' : 'VP of Engineering';

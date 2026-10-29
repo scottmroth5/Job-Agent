@@ -168,7 +168,8 @@ test("the demo's Find someone to contact is a canned sample: a read, no AI, noth
   const { sample, markdown } = res.json();
   assert.equal(sample, true);
   assert.ok(markdown.startsWith(`## Who to contact at ${job.company}`) && markdown.includes(job.title));
-  assert.ok(!/https?:\/\/(?![\w.-]*example\.com)/.test(markdown), 'every link is an example.com page');
+  const hosts = markdown.split(/[\s()[\]]+/).filter((w) => w.startsWith('http')).map((u) => new URL(u).hostname);
+  assert.ok(hosts.length > 0 && hosts.every((h) => h.endsWith('.example.com')), 'every link is an example.com page');
   assert.equal(notes(), before, 'nothing saved');
   assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${job.id}/find-contact` })).statusCode, 403, 'the real search stays refused');
   assert.equal((await app.inject('/api/postings/99999/find-contact/sample')).statusCode, 404);
