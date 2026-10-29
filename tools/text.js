@@ -1,3 +1,20 @@
+// Emoji and other pictographs, with the joiners, variation selectors, flag letters, and keycap marks they are built from.
+const PICTOGRAPHS = /[\p{Extended_Pictographic}\p{Regional_Indicator}‍︎️⃣]/gu;
+
+/**
+ * Text without emoji or pictographs ("🧪 Vice President, Engineering" becomes "Vice President, Engineering"), for job
+ * titles and anything written into a Word or PDF document, where they show as a picture or a "?". Spaces left behind
+ * are closed up; other symbols (accents, curly quotes, dashes) are kept.
+ */
+export function withoutPictographs(text) {
+  if (typeof text !== 'string') return text;
+  return text
+    .replace(PICTOGRAPHS, '')
+    .split('\n')
+    .map((line) => line.replace(/ {2,}/g, ' ').trim())
+    .join('\n');
+}
+
 /**
  * A letter body's paragraphs: blank lines separate them, and the lines of one paragraph join with a space. Line by
  * line with no pattern, so text straight from a request (a user's own letter) cannot make it backtrack.

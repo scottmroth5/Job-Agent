@@ -15,6 +15,7 @@ import { generateForPostings } from './hunt/generate.js';
 import { lookups } from './lookups.js';
 import { adoptNotesText } from './notes.js';
 import { localDay } from '../tools/dates.js';
+import { withoutPictographs } from '../tools/text.js';
 
 export const MANUAL_SOURCE = 'manual';
 export { isRealCompany };
@@ -104,8 +105,8 @@ export async function addPosting(input, ctx) {
   const item = {
     source: MANUAL_SOURCE,
     url,
-    title: input.title?.trim() || '',
-    company: input.company?.trim() || null,
+    title: withoutPictographs(input.title?.trim() || ''),
+    company: withoutPictographs(input.company?.trim() || '') || null,
     location: input.location?.trim() || null,
     description: pasted,
     rateText: input.rateText?.trim() || null,

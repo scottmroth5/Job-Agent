@@ -5,7 +5,8 @@
 // writePdf(lines) takes blocks: { text, size?, bold?, gray?, bullet?, before?, after?, rule?, keep? } where before and
 // after are extra points of space, rule draws a line under the block, and keep starts a new page unless that many points
 // fit below (to keep a heading with what follows).
-import { paragraphsOf } from './text.js';
+import { paragraphsOf, withoutPictographs } from './text.js';
+import { headerLines } from './letter-header.js';
 
 // Helvetica advance widths (1/1000 em) for ASCII 32 to 126, from the standard font metrics; bold is a little wider.
 const HELV = [
@@ -16,9 +17,10 @@ const HELV = [
 ];
 
 /** Text in WinAnsi (latin-1 plus typographic quotes, dashes, and bullets); anything else becomes "?". */
+// Emoji and pictographs have no WinAnsi glyph: they are dropped, not printed as "?".
 export function winAnsi(s) {
   const map = { '‘': 0x91, '’': 0x92, '“': 0x93, '”': 0x94, '•': 0x95, '–': 0x96, '—': 0x97, '…': 0x85, ' ': 0x20 };
-  return [...String(s)]
+  return [...withoutPictographs(String(s))]
     .map((ch) => {
       const c = ch.codePointAt(0);
       if (map[ch]) return String.fromCharCode(map[ch]);
@@ -54,10 +56,12 @@ export function writePdf(blocks) {
   const H = 792;
   const M = 54;
   const pages = [];
+  const annots = [[]]; // each page's links: { rect, url }
   let ops = [];
   let y = H - M;
   const newPage = () => {
     pages.push(ops.join('\n'));
+    annots.push([]);
     ops = [];
     y = H - M;
   };
@@ -66,6 +70,23 @@ export function writePdf(blocks) {
     const bold = Boolean(b.bold);
     y -= b.before ?? 0;
     if (b.keep && y < M + b.keep) newPage();
+    // A line of parts ({ text, url }) joined by " | ": links in blue, each a clickable area (header lines are short).
+    if (b.parts) {
+      if (y < M + size) newPage();
+      let x = M;
+      b.parts.forEach((p, i) => {
+        const pieces = i ? [{ text: ' | ' }, p] : [p];
+        for (const piece of pieces) {
+          const w = width(winAnsi(piece.text), size, bold);
+          const color = piece.url ? '0.07 0.33 0.62 rg' : b.gray ? '0.3 0.3 0.3 rg' : '0 0 0 rg';
+          ops.push(`BT /${bold ? 'F2' : 'F1'} ${size} Tf ${color} ${x.toFixed(1)} ${y.toFixed(1)} Td ${pdfString(piece.text)} Tj ET`);
+          if (piece.url) annots.at(-1).push({ rect: [x, y - 2, x + w, y + size - 1].map((n) => n.toFixed(1)), url: piece.url });
+          x += w;
+        }
+      });
+      y -= size * 1.32 + (b.after ?? 0);
+      continue;
+    }
     const indent = b.bullet ? 14 : 0;
     const lines = b.text === '' ? [''] : wrap(b.text, size, bold, W - 2 * M - indent);
     lines.forEach((l, i) => {
@@ -83,13 +104,19 @@ export function writePdf(blocks) {
   const objs = [];
   const font = (name) => `<< /Type /Font /Subtype /Type1 /BaseFont /${name} /Encoding /WinAnsiEncoding >>`;
   const pageIds = pages.map((_, i) => 5 + i * 2);
+  let nextId = 5 + pages.length * 2;
+  const annotIds = annots.map((list) => list.map(() => nextId++));
   objs[1] = '<< /Type /Catalog /Pages 2 0 R >>';
   objs[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
   objs[3] = font('Helvetica');
   objs[4] = font('Helvetica-Bold');
   pages.forEach((content, i) => {
     const id = pageIds[i];
-    objs[id] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${id + 1} 0 R >>`;
+    const links = annotIds[i].length ? ` /Annots [${annotIds[i].map((a) => `${a} 0 R`).join(' ')}]` : '';
+    objs[id] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${W} ${H}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${id + 1} 0 R${links} >>`;
+    annots[i].forEach((a, k) => {
+      objs[annotIds[i][k]] = `<< /Type /Annot /Subtype /Link /Rect [${a.rect.join(' ')}] /Border [0 0 0] /A << /S /URI /URI ${pdfString(a.url)} >> >>`;
+    });
     objs[id + 1] = `<< /Length ${Buffer.byteLength(content, 'latin1')} >>\nstream\n${content}\nendstream`;
   });
   let out = '%PDF-1.4\n%\xe2\xe3\xcf\xd3\n';
@@ -110,8 +137,7 @@ export function letterPdf({ candidate, company, title, date, body }) {
   const paragraphs = paragraphsOf(body);
   return writePdf([
     { text: candidate.name ?? '', size: 18, bold: true, after: 2 },
-    ...(candidate.contactLine ? [{ text: candidate.contactLine, size: 9.5, gray: true }] : []),
-    ...(candidate.linkedin ? [{ text: candidate.linkedin, size: 9.5, gray: true }] : []),
+    ...headerLines(candidate).map((parts) => ({ parts, size: 9.5, gray: true })),
     { text: date, before: 18, after: 6 },
     { text: `Re: ${title} at ${company}`, bold: true, after: 10 },
     { text: `Dear ${company} Hiring Team,`, after: 8 },

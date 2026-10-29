@@ -3,7 +3,9 @@
     "name": "Pat Example",
     "signoffName": "Pat Example",
     "contactLine": "Anytown, ST | pat@example.com | 555-0100",
-    "linkedin": "linkedin.com/in/example"
+    "linkedin": "linkedin.com/in/example",
+    "website": "example.com",
+    "github": "github.com/example"
   },
   "search": {
     "terms": ["VP Engineering", "Head of Engineering", "Director of Engineering"],

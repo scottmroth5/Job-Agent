@@ -3,6 +3,10 @@
 // design stays in their original file, which downloads as it was uploaded. The PDF comes from tools/pdf-writer.js.
 import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 import { writePdf } from './pdf-writer.js';
+import { withoutPictographs } from './text.js';
+
+// Every run of text, without emoji or pictographs (Word shows them as pictures).
+const textRun = (opts) => new TextRun({ ...opts, text: withoutPictographs(opts.text ?? '') });
 
 const BULLET = /^\s*[-*•●▪]\s+/;
 const YEARS = /\b(19|20)\d{2}\b.*\b((19|20)\d{2}|now|present|current)\b/i;
@@ -47,12 +51,12 @@ export function resumeBlocks(text) {
 /** The resume as a Word document. */
 export async function resumeDocx(text) {
   const children = resumeBlocks(text).map((b) => {
-    if (b.type === 'name') return new Paragraph({ heading: HeadingLevel.TITLE, children: [new TextRun({ text: b.text, bold: true, size: 36 })], spacing: { after: 60 } });
-    if (b.type === 'contact') return new Paragraph({ children: [new TextRun({ text: b.text, size: 20, color: '444444' })], spacing: { after: 60 } });
-    if (b.type === 'heading') return new Paragraph({ heading: HeadingLevel.HEADING_2, children: [new TextRun({ text: b.text, bold: true })], spacing: { before: 240, after: 80 } });
-    if (b.type === 'role') return new Paragraph({ children: [new TextRun({ text: b.text, bold: true })], spacing: { before: 120, after: 40 } });
-    if (b.type === 'bullet') return new Paragraph({ bullet: { level: 0 }, children: [new TextRun({ text: b.text })], spacing: { after: 40 } });
-    return new Paragraph({ children: [new TextRun({ text: b.text })], spacing: { after: 100 } });
+    if (b.type === 'name') return new Paragraph({ heading: HeadingLevel.TITLE, children: [textRun({ text: b.text, bold: true, size: 36 })], spacing: { after: 60 } });
+    if (b.type === 'contact') return new Paragraph({ children: [textRun({ text: b.text, size: 20, color: '444444' })], spacing: { after: 60 } });
+    if (b.type === 'heading') return new Paragraph({ heading: HeadingLevel.HEADING_2, children: [textRun({ text: b.text, bold: true })], spacing: { before: 240, after: 80 } });
+    if (b.type === 'role') return new Paragraph({ children: [textRun({ text: b.text, bold: true })], spacing: { before: 120, after: 40 } });
+    if (b.type === 'bullet') return new Paragraph({ bullet: { level: 0 }, children: [textRun({ text: b.text })], spacing: { after: 40 } });
+    return new Paragraph({ children: [textRun({ text: b.text })], spacing: { after: 100 } });
   });
   const doc = new Document({ styles: { default: { document: { run: { font: 'Calibri', size: 22 } } } }, sections: [{ children }] });
   return Packer.toBuffer(doc);

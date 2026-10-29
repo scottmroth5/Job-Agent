@@ -9,6 +9,7 @@ import { checkLocation } from '../../tools/location.js';
 import { detectTrack } from '../../tools/track.js';
 import { parseRate, parseHours } from '../../tools/rates.js';
 import { skipReason } from '../../tools/listings.js';
+import { withoutPictographs } from '../../tools/text.js';
 import { resolveDetails, RETRYABLE } from './details.js';
 import * as himalayas from './sources/himalayas.js';
 import * as remoteok from './sources/remoteok.js';
@@ -237,14 +238,14 @@ export async function runDiscovery({ store, config, http, browser = null, source
 
     store.tx(() => {
       for (const item of toInsert) {
-        const company = knownCompany(item.company) ? item.company : UNKNOWN_COMPANY;
+        const company = knownCompany(item.company) ? withoutPictographs(item.company) : UNKNOWN_COMPANY;
         const id = Number(
           insert.run({
             url: item.url,
             url_key: normalizeUrl(item.url),
             company,
-            title: item.title,
-            company_title_key: storedKey({ company, title: item.title }),
+            title: withoutPictographs(item.title),
+            company_title_key: storedKey({ company, title: withoutPictographs(item.title) }),
             source: item.source,
             location: item.location ?? null,
             salary: item.salary ?? null,

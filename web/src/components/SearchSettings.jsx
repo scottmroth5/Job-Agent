@@ -83,7 +83,7 @@ export default function SearchSettings() {
     }
     const c = d.config;
     setForm({
-      name: c.candidate.name, signoffName: c.candidate.signoffName, contactLine: c.candidate.contactLine, linkedin: c.candidate.linkedin,
+      name: c.candidate.name, signoffName: c.candidate.signoffName, contactLine: c.candidate.contactLine, linkedin: c.candidate.linkedin, website: c.candidate.website ?? '', github: c.candidate.github ?? '',
       homeAreaLabel: c.search.homeAreaLabel ?? '', localSearchLocation: c.search.localSearchLocation ?? '',
       ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, lines(c.search[k])])),
       targetLow: c.fractional?.targetAnnual?.[0] ?? '', targetHigh: c.fractional?.targetAnnual?.[1] ?? '',
@@ -128,7 +128,7 @@ export default function SearchSettings() {
     run(
       () =>
         api.saveAccountSearch({
-          candidate: { name: form.name, signoffName: form.signoffName, contactLine: form.contactLine, linkedin: form.linkedin },
+          candidate: { name: form.name, signoffName: form.signoffName, contactLine: form.contactLine, linkedin: form.linkedin, website: form.website, github: form.github },
           search: { homeAreaLabel: form.homeAreaLabel, localSearchLocation: form.localSearchLocation, ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, fromLines(form[k])])) },
           fractional: { targetAnnual: [Number(form.targetLow), Number(form.targetHigh)] },
         }),
@@ -208,6 +208,8 @@ export default function SearchSettings() {
             <label>Sign letters as<input value={form.signoffName} onChange={set('signoffName')} placeholder="Defaults to your name" /></label>
             <label>Contact line on letters<input value={form.contactLine} onChange={set('contactLine')} placeholder="City, ST | email | phone" /></label>
             <label>LinkedIn<input value={form.linkedin} onChange={set('linkedin')} placeholder="linkedin.com/in/…" /></label>
+            <label>Website (optional)<input value={form.website} onChange={set('website')} placeholder="yourname.com" /></label>
+            <label>GitHub (optional)<input value={form.github} onChange={set('github')} placeholder="github.com/…" /></label>
           </div>
           {LIST_FIELDS.map(([k, label, hint]) => (
             <label key={k}>

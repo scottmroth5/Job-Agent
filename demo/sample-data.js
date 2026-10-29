@@ -7,6 +7,8 @@ export const CANDIDATE = {
   signoffName: 'Jordan Avery',
   contactLine: 'Riverton, ST | jordan.avery@example.com | 555-0142',
   linkedin: 'linkedin.com/in/example-jordan-avery',
+  website: 'jordanavery.example.com',
+  github: 'github.com/example-jordan-avery',
 };
 
 // Who the demo is "signed in" as: the header shows it as production shows a signed-in address (the part before the @).

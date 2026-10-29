@@ -231,6 +231,10 @@ REVISIONS_PER_DAY; saves nothing), saving a kept revision (source v2-revision) o
 userLetterBody keeps its wording but takes off the header through the greeting and the sign-off on, and rebuilds a
 PDF's paragraphs; from-file returns the same body) as a new current version (with a Google Doc for the owner), restoring an older version as
 a new one, and Word or PDF downloads of any version (letter.docx / letter.pdf ?version=; tools/pdf-writer.js letterPdf). Report HTML escapes every value.
+The letter header (tools/letter-header.js headerLines, shared by Word, PDF, and the Google Doc): the contact line split on
+"|" and a line of candidate.linkedin, website, and github, each email or web address a clickable link (PDF link
+annotations). Every document's text goes through tools/text.js withoutPictographs (emoji show as pictures in Word and "?"
+in a PDF), and discovery and manual add save titles and companies without them. test/letter-header.test.js.
 Meeting prep (agents/hunt/prep.js, server/prep-routes.js, Prepare for a meeting in the job panel): Opus 5.5 at high effort,
 streamed, with server-side refusal fallbacks; with research on it uses web_search_20260209 (max 15) and web_fetch (max 5).
 Input is the people (name, role, firm, link, what the user knows), meeting kind, format, time, and free context, plus the

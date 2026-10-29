@@ -1,7 +1,8 @@
 // Cover letter and resume tweak helpers ported from v1 (legacy/job_hunt_agent.js):
 // role type, analysis text for prompts, salutation/sign-off stripping, rule checks, and the Doc layout.
 import { escapeHtml } from '../../tools/html.js';
-import { paragraphsOf } from '../../tools/text.js';
+import { paragraphsOf, withoutPictographs } from '../../tools/text.js';
+import { headerLines, SEPARATOR } from '../../tools/letter-header.js';
 import { keywordMatcher } from '../../tools/titles.js';
 
 const executive = keywordMatcher(['cto', 'vp', 'vice president', 'chief', 'director', 'head of']);
@@ -115,18 +116,19 @@ export function letterDocName(company, title, isoDate) {
 
 /** The cover letter as HTML for conversion to a Google Doc (v1's layout). Everything is escaped. */
 export function letterHtml({ candidate, company, title, date, body }) {
-  const p = (s, style = '') => `<p${style ? ` style="${style}"` : ''}>${escapeHtml(s)}</p>`;
+  const p = (s, style = '') => `<p${style ? ` style="${style}"` : ''}>${escapeHtml(withoutPictographs(s))}</p>`;
   const paragraphs = paragraphsOf(body)
     .map((para) => p(para))
     .join('\n');
   return [
     '<html><body>',
-    `<h1>${escapeHtml(candidate.name)}</h1>`,
-    candidate.contactLine ? p(candidate.contactLine, 'font-style:italic') : '',
-    candidate.linkedin ? p(candidate.linkedin, 'font-style:italic') : '',
+    `<h1>${escapeHtml(withoutPictographs(candidate.name))}</h1>`,
+    ...headerLines(candidate).map(
+      (parts) => `<p style="font-style:italic">${parts.map((x) => (x.url ? `<a href="${escapeHtml(x.url)}">${escapeHtml(x.text)}</a>` : escapeHtml(x.text))).join(SEPARATOR)}</p>`,
+    ),
     '<p></p>',
     p(date),
-    `<p><b>${escapeHtml(`Re: ${title} at ${company}`)}</b></p>`,
+    `<p><b>${escapeHtml(withoutPictographs(`Re: ${title} at ${company}`))}</b></p>`,
     '<p></p>',
     p(`Dear ${company} Hiring Team,`),
     paragraphs,

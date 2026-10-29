@@ -1,8 +1,12 @@
 // Word (.docx) copies of a cover letter and a meeting prep, for downloading: users without Google Docs send their
 // letters from these, and the owner can use them too. The letter follows the Google Doc's layout (agents/hunt/letters.js
 // letterHtml); the prep is its Markdown with headings, bullets, and bold kept. Text is set as text, never as markup.
-import { Document, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
-import { paragraphsOf } from '../tools/text.js';
+import { Document, ExternalHyperlink, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
+import { headerLines, SEPARATOR } from '../tools/letter-header.js';
+import { paragraphsOf, withoutPictographs } from '../tools/text.js';
+
+// Every run of text, without emoji or pictographs (Word shows them as pictures).
+const textRun = (opts) => new TextRun({ ...opts, text: withoutPictographs(opts.text ?? '') });
 
 const FONT = { font: 'Calibri', size: 22 }; // 11 pt
 
@@ -11,21 +15,28 @@ function runs(text) {
   return String(text)
     .split(/(\*\*[^*]+\*\*)/)
     .filter(Boolean)
-    .map((part) => (/^\*\*[^*]+\*\*$/.test(part) ? new TextRun({ text: part.slice(2, -2), bold: true }) : new TextRun({ text: part.replace(/\*\*/g, '') })));
+    .map((part) => (/^\*\*[^*]+\*\*$/.test(part) ? textRun({ text: part.slice(2, -2), bold: true }) : textRun({ text: part.replace(/\*\*/g, '') })));
+}
+
+/** A header line's parts as runs: plain text, or a clickable link (an email opens a new message). */
+function linkRuns(parts) {
+  return parts.flatMap((p, i) => [
+    ...(i ? [textRun({ text: SEPARATOR, italics: true })] : []),
+    p.url ? new ExternalHyperlink({ link: p.url, children: [textRun({ text: p.text, italics: true, color: '0563C1', underline: {} })] }) : textRun({ text: p.text, italics: true }),
+  ]);
 }
 
 /** The cover letter: name and contact lines, date, the role, greeting, body paragraphs, and sign-off. */
 export async function letterDocx({ candidate, company, title, date, body }) {
-  const para = (text, opts = {}) => new Paragraph({ children: [new TextRun({ text, ...opts })], spacing: { after: 160 } });
+  const para = (text, opts = {}) => new Paragraph({ children: [textRun({ text, ...opts })], spacing: { after: 160 } });
   const paragraphs = paragraphsOf(body);
   const doc = new Document({
     styles: { default: { document: { run: FONT } } },
     sections: [
       {
         children: [
-          new Paragraph({ heading: HeadingLevel.HEADING_1, children: [new TextRun({ text: candidate.name ?? '' })] }),
-          ...(candidate.contactLine ? [para(candidate.contactLine, { italics: true })] : []),
-          ...(candidate.linkedin ? [para(candidate.linkedin, { italics: true })] : []),
+          new Paragraph({ heading: HeadingLevel.HEADING_1, children: [textRun({ text: candidate.name ?? '' })] }),
+          ...headerLines(candidate).map((parts) => new Paragraph({ children: linkRuns(parts), spacing: { after: 160 } })),
           para(''),
           para(date),
           para(`Re: ${title} at ${company}`, { bold: true }),

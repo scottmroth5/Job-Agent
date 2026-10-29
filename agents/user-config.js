@@ -29,7 +29,7 @@ const money = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Math.round(N
 /** A user's settings before they have saved any: their name, and nothing to search for yet. */
 export function blankConfig(name = '') {
   return {
-    candidate: { name: text(name) || 'Job seeker', signoffName: '', contactLine: '', linkedin: '' },
+    candidate: { name: text(name) || 'Job seeker', signoffName: '', contactLine: '', linkedin: '', website: '', github: '' },
     search: {
       terms: [], relevantTitleKeywords: [], noiseTitleKeywords: [], homeLocations: [],
       fractionalTerms: [], fractionalTitleKeywords: [], siteSearch: false, excludedSites: [],
@@ -50,7 +50,7 @@ export function cleanConfig(input = {}, name = '') {
   const target = Array.isArray(f.targetAnnual) ? f.targetAnnual.map(money).filter(Boolean).slice(0, 2) : [];
   const config = {
     ...base,
-    candidate: { name: text(c.name) || base.candidate.name, signoffName: text(c.signoffName), contactLine: text(c.contactLine), linkedin: text(c.linkedin) },
+    candidate: { name: text(c.name) || base.candidate.name, signoffName: text(c.signoffName), contactLine: text(c.contactLine), linkedin: text(c.linkedin), website: text(c.website), github: text(c.github) },
     search: {
       ...base.search,
       terms: list(s.terms),

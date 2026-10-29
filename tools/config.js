@@ -42,7 +42,7 @@ export function validateConfig(config) {
   const strList = (v) => Array.isArray(v) && v.every(str);
 
   if (!str(config?.candidate?.name)) problems.push('candidate.name is required');
-  for (const key of ['signoffName', 'contactLine', 'linkedin']) {
+  for (const key of ['signoffName', 'contactLine', 'linkedin', 'website', 'github']) {
     if (config?.candidate?.[key] != null && typeof config.candidate[key] !== 'string') {
       problems.push(`candidate.${key} must be a string`);
     }
