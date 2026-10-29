@@ -119,7 +119,8 @@ test('the routes save the header, and a letter downloaded after uses it', async 
   const pdf = (await app.inject(`/api/postings/${id}/letter.pdf`)).rawPayload;
   const text = (await documentText(pdf, 'l.pdf')).text;
   // The text reader drops the spaces around "|", so compare without spaces.
-  assert.ok(text.includes('Pat M. Example') && text.split(' ').join('').includes('pat.m@example.com|555-0199') && text.includes('https://patexample.example.com'), text.slice(0, 200));
+  assert.ok(text.includes('Pat M. Example') && text.split(' ').join('').includes('pat.m@example.com|555-0199'), text.slice(0, 200));
+  assert.match(text, /^https:\/\/patexample\.example\.com$/m, 'the link line');
   assert.ok(!text.includes('pat@example.com'), 'the saved header, not the settings');
   assert.deepEqual([...pdf.toString('latin1').matchAll(/\/URI \(([^)]*)\)/g)].map((m) => m[1]), ['mailto:pat.m@example.com', 'https://patexample.example.com/']);
   await app.close();
