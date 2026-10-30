@@ -1,7 +1,7 @@
 // Cover letter and resume tweak helpers ported from v1 (legacy/job_hunt_agent.js):
 // role type, analysis text for prompts, salutation/sign-off stripping, rule checks, and the Doc layout.
 import { escapeHtml } from '../../tools/html.js';
-import { paragraphsOf, withoutPictographs } from '../../tools/text.js';
+import { fileTitle, paragraphsOf, withoutPictographs } from '../../tools/text.js';
 import { headerLines, SEPARATOR } from '../../tools/letter-header.js';
 import { keywordMatcher } from '../../tools/titles.js';
 
@@ -108,10 +108,9 @@ export function checkCoverLetter(text, rules = []) {
   return fired;
 }
 
-/** Drive file name, e.g. "Example_Co_VP_Engineering_CoverLetter_2026-09-30". */
-export function letterDocName(company, title, isoDate) {
-  const part = (s) => String(s ?? '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 50);
-  return `${part(company)}_${part(title)}_CoverLetter_${isoDate}`;
+/** The letter's file and Google Doc name, e.g. "Pat Example VP, Engineering at Example Co Cover Letter". */
+export function letterDocName(name, title, company) {
+  return fileTitle(name, title, company && `at ${company}`, 'Cover Letter');
 }
 
 /** The cover letter as HTML for conversion to a Google Doc (v1's layout). Everything is escaped. */

@@ -5,14 +5,14 @@
 // each request makes a new prep. Logs hold counts only, never names or text.
 import { randomUUID } from 'node:crypto';
 import { fillTemplate } from '../../tools/template.js';
-import { truncate } from '../../tools/text.js';
+import { fileTitle, truncate } from '../../tools/text.js';
 import { renderMarkdown } from '../../tools/markdown.js';
 import { ensurePrepFolder } from '../../tools/google/drive.js';
-import { localDay } from '../../tools/dates.js';
 import { getPrompt } from '../prompts.js';
 import { formatAnalysis } from './letters.js';
 import { listNotes, notesForPrompt } from '../notes.js';
 import { pickResume, withResume } from '../resumes.js';
+import { letterHeader } from '../letter-header.js';
 
 export const PREP_MODEL = 'claude-opus-5-5';
 // Research plus a long document: high effort, room for thinking, streamed so a long answer never times out.
@@ -118,11 +118,11 @@ export function extractDocument(content) {
   return doc.replace(/\s*[—–]\s*/g, ', ').replace(/,\s*,/g, ',');
 }
 
-/** Google Doc name, like the cover letters': MeetingPrep_Company_Person_2026-10-15. */
-export function prepDocName(company, attendees, isoDate) {
-  const part = (s) => String(s ?? '').replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
-  const who = attendees.length > 1 ? `${part(attendees[0].name)}_and_${attendees.length - 1}_more` : part(attendees[0]?.name);
-  return `MeetingPrep_${part(company)}_${who}_${isoDate}`;
+/** The prep's file and Google Doc name, like the letters': "Pat Example Meeting Prep with Alex Sample at Example Co". */
+export function prepDocName(name, company, attendees) {
+  const first = attendees[0]?.name;
+  const who = first && (attendees.length > 1 ? `${first} and ${attendees.length - 1} more` : first);
+  return fileTitle(name, 'Meeting Prep', who && `with ${who}`, company && `at ${company}`);
 }
 
 /** The prep as HTML for conversion to a Google Doc (tables get borders so they read like the examples). */
@@ -133,8 +133,6 @@ export function prepHtml(markdown) {
   return `<html><body style="font-family:Arial,sans-serif;font-size:11pt">${body}</body></html>`;
 }
 
-// The day in the user's zone (tools/dates.js).
-const isoLocalDate = (d) => localDay(d);
 
 /** Lists a job's preps, newest first, without their text. */
 export function listPreps(db, postingId) {
@@ -209,7 +207,7 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
     onStep('Saving it as a Google Doc');
     try {
       const folderId = await ensurePrepFolder(drive, db);
-      const name = prepDocName(posting.company, prepInput.attendees, isoLocalDate(prepInput.meetingAt ? new Date(prepInput.meetingAt) : now));
+      const name = prepDocName(letterHeader(db, config).name, posting.company, prepInput.attendees);
       const doc = await drive.createDocFromHtml({ name, html: prepHtml(content), folderId });
       db.prepare('UPDATE meeting_preps SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
       docUrl = doc.url;

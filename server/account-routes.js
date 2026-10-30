@@ -5,7 +5,8 @@ import { budgetStatus } from '../agents/budget.js';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.js';
 import { boxKey, seal } from '../tools/secret-box.js';
 import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, PROFILE_SOURCES, profileVersions, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
-import { prepDocx } from './word-docs.js';
+import { docxName, prepDocx } from './word-docs.js';
+import { fileTitle } from '../tools/text.js';
 import { validateConfig } from '../tools/config.js';
 import { deleteAccount, exportAccount } from '../agents/account-data.js';
 import { ATTACHMENTS_DIR } from './attachments.js';
@@ -236,7 +237,8 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       const uid = req.uid ?? OWNER_ID;
       const text = req.query.version ? versionAt(uid, req.query.version)?.text : demo ? DEMO_ABOUT_YOU : userProfile(db, uid);
       if (!text) return reply.code(404).send({ error: 'No knowledge doc yet.' });
-      const file = `Knowledge doc ${localDay(new Date())}${req.query.version ? ` v${req.query.version}` : ''}.docx`;
+      const name = demo ? DEMO_CONFIG.candidate.name : getUser(db, uid)?.name;
+      const file = docxName(fileTitle(name, 'Knowledge Doc', req.query.version && `v${req.query.version}`));
       return reply
         .header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         .header('Content-Disposition', `attachment; filename="${file}"`)

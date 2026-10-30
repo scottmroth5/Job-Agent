@@ -60,7 +60,9 @@ test('checkCoverLetter reports text and same-sentence rules once each', () => {
 });
 
 test('letterDocName and letterHtml build the v1 layout safely', () => {
-  assert.equal(letterDocName('Example & Co.', 'VP, Engineering', '2026-09-30'), 'Example_Co_VP_Engineering_CoverLetter_2026-09-30');
+  assert.equal(letterDocName('Pat Example', 'Director of Engineering', 'Leap'), 'Pat Example Director of Engineering at Leap Cover Letter');
+  assert.equal(letterDocName('Pat Example', 'VP / Engineering 🚀', 'Example & Co. "Labs"'), 'Pat Example VP Engineering at Example & Co. Labs Cover Letter');
+  assert.equal(letterDocName('José Núñez', 'CTO', ''), 'Jose Nunez CTO Cover Letter');
   const html = letterHtml({
     candidate: { name: 'Pat Example', contactLine: 'pat@example.com', linkedin: 'linkedin.com/in/example', signoffName: 'Pat' },
     company: 'Example <Co>',

@@ -19,6 +19,18 @@ export function withoutPictographs(text) {
  * A letter body's paragraphs: blank lines separate them, and the lines of one paragraph join with a space. Line by
  * line with no pattern, so text straight from a request (a user's own letter) cannot make it backtrack.
  */
+/**
+ * A document's file name from its parts: plain letters, digits, and a little punctuation, single spaces, no date, e.g.
+ * "Pat Example Director of Engineering at Example Co Cover Letter". Empty parts are left out.
+ */
+export function fileTitle(...parts) {
+  const plain = withoutPictographs(parts.filter(Boolean).join(' '))
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^A-Za-z0-9 .,&'()-]+/g, ' ');
+  return plain.split(' ').filter(Boolean).join(' ').slice(0, 150).trim();
+}
+
 export function paragraphsOf(text) {
   const out = [];
   let current = [];

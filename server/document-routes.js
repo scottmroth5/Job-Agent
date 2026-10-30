@@ -2,7 +2,7 @@
 // downloads are in server/letter-routes.js, with its versions.
 import { prepDocx, docxName } from './word-docs.js';
 import { prepDocName } from '../agents/hunt/prep.js';
-import { localDay } from '../tools/dates.js';
+import { letterHeader } from '../agents/letter-header.js';
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
@@ -23,7 +23,7 @@ export function registerDocumentRoutes(app, { db, config }) {
         attendees = [];
       }
       const buffer = await prepDocx(prep.content);
-      return send(reply, prepDocName(prep.company, attendees, localDay(new Date(prep.meeting_at ?? prep.created_at))), buffer);
+      return send(reply, prepDocName(letterHeader(db, config).name, prep.company, attendees), buffer);
     },
   );
 }

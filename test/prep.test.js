@@ -68,8 +68,8 @@ test('document: commentary before the last research step is dropped, citation pi
 });
 
 test('Google Doc: a readable name and bordered tables', () => {
-  assert.equal(prepDocName('Example Co, Inc.', [{ name: 'Alex Sample' }], '2026-10-15'), 'MeetingPrep_Example_Co_Inc_Alex_Sample_2026-10-15');
-  assert.equal(prepDocName('X', [{ name: 'A B' }, { name: 'C' }, { name: 'D' }], '2026-10-15'), 'MeetingPrep_X_A_B_and_2_more_2026-10-15');
+  assert.equal(prepDocName('Pat Example', 'Example Co, Inc.', [{ name: 'Alex Sample' }]), 'Pat Example Meeting Prep with Alex Sample at Example Co, Inc.');
+  assert.equal(prepDocName('Pat Example', 'X', [{ name: 'A B' }, { name: 'C' }, { name: 'D' }]), 'Pat Example Meeting Prep with A B and 2 more at X');
   const html = prepHtml(DOC);
   assert.match(html, /<table border="1"/);
   assert.match(html, /<h1>Call Prep: Alex Sample, Example Co<\/h1>/);
@@ -151,7 +151,7 @@ test('API: a prep runs as a task, is saved with its cost and Google Doc, listed 
   // 20000*4 + 6000*20 = 200000 per million = $0.20, plus 4 searches at $0.01
   assert.ok(Math.abs(list[0].costUsd - 0.24) < 1e-9);
   assert.equal(fake.docs[0].folderId, 'folder:Job Agent Meeting Prep');
-  assert.equal(fake.docs[0].name, 'MeetingPrep_Example_Co_Alex_Sample_2026-10-15');
+  assert.equal(fake.docs[0].name, 'Pat Example Meeting Prep with Alex Sample at Example Co');
 
   const one = (await app.inject(`/api/meeting-preps/${list[0].id}`)).json();
   assert.ok(one.content.startsWith('# Call Prep: Alex Sample'));

@@ -3,7 +3,7 @@
 // letterHtml); the prep is its Markdown with headings, bullets, and bold kept. Text is set as text, never as markup.
 import { Document, ExternalHyperlink, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 import { headerLines, SEPARATOR } from '../tools/letter-header.js';
-import { paragraphsOf, withoutPictographs } from '../tools/text.js';
+import { fileTitle, paragraphsOf, withoutPictographs } from '../tools/text.js';
 
 // Every run of text, without emoji or pictographs (Word shows them as pictures).
 const textRun = (opts) => new TextRun({ ...opts, text: withoutPictographs(opts.text ?? '') });
@@ -74,4 +74,4 @@ export async function prepDocx(markdown) {
 }
 
 /** A file name with only plain characters, for the download. */
-export const docxName = (name) => `${String(name).replace(/[^A-Za-z0-9 _.-]+/g, '_').slice(0, 120)}.docx`;
+export const docxName = (name) => `${fileTitle(name) || 'Document'}.docx`;

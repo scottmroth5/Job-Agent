@@ -12,7 +12,6 @@ import { ensureLetterFolder } from '../tools/google/drive.js';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.js';
 import { letterPdf } from '../tools/pdf-writer.js';
 import { letterHeader, saveLetterHeader, MAX_LINKS } from '../agents/letter-header.js';
-import { localDay } from '../tools/dates.js';
 import { uploadName } from './account-routes.js';
 import { letterDocx, docxName } from './word-docs.js';
 
@@ -65,7 +64,7 @@ export function registerLetterRoutes(app, { store, config, services }) {
     if (drive) {
       try {
         const folderId = await ensureLetterFolder(drive, db);
-        const name = letterDocName(posting.company, posting.title, localDay(now));
+        const name = letterDocName(letterHeader(db, config).name, posting.title, posting.company);
         const doc = await drive.createDocFromHtml({ name, folderId, html: letterHtml({ candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body: content }) });
         db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
       } catch {
@@ -204,10 +203,10 @@ export function registerLetterRoutes(app, { store, config, services }) {
     if (!version?.content) return reply.code(404).send({ error: 'No cover letter for this job yet.' });
     const written = new Date(version.created_at);
     const letter = { candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(written), body: version.content };
-    const name = letterDocName(posting.company, posting.title, localDay(written));
+    const name = letterDocName(letter.candidate.name, posting.title, posting.company);
     const [type, body, file] =
       format === 'pdf'
-        ? ['application/pdf', letterPdf(letter), `${docxName(name).replace(/\.docx$/, '')}.pdf`]
+        ? ['application/pdf', letterPdf(letter), `${name}.pdf`]
         : ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', await letterDocx(letter), docxName(name)];
     return reply.header('Content-Type', type).header('Content-Disposition', `attachment; filename="${file}"`).header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'no-store').send(body);
   };

@@ -21,7 +21,8 @@ test('the letter has the Google Doc layout; text stays text', async () => {
   const text = textOf(await documentXml(buffer));
   for (const s of ['Pat Example', 'Anytown, ST', 'October 26, 2026', 'Re: VP Engineering at Example Co', 'Dear Example Co Hiring Team,', 'Second paragraph.', 'Sincerely,', 'Pat']) assert.ok(text.includes(s), s);
   assert.ok(text.includes('&lt;b&gt;not bold&lt;/b&gt;'), 'markup is escaped as text');
-  assert.equal(docxName('Example_Co/VP:Engineering'), 'Example_Co_VP_Engineering.docx');
+  assert.equal(docxName('Example Co/VP:Engineering "Lead"'), 'Example Co VP Engineering Lead.docx');
+  assert.equal(docxName(''), 'Document.docx');
 });
 
 test('the prep keeps headings, bullets, and bold', async () => {
@@ -46,7 +47,7 @@ test('downloads: your own letter and prep; nobody else\'s', async () => {
   const letter = await app.inject({ url: `/api/postings/${job}/letter.docx`, headers: as('owner@example.com') });
   assert.equal(letter.statusCode, 200);
   assert.match(letter.headers['content-type'], /wordprocessingml/);
-  assert.match(letter.headers['content-disposition'], /^attachment; filename="Example_Co_VP_Engineering_CoverLetter_2026-10-2\d\.docx"$/);
+  assert.match(letter.headers['content-disposition'], /^attachment; filename="Owner Example VP Engineering at Example Co Cover Letter\.docx"$/);
   assert.ok(textOf(await documentXml(letter.rawPayload)).includes('Owner Example'), "the owner's own name, from their settings");
   assert.equal((await app.inject({ url: '/api/meeting-preps/p1/docx', headers: as('owner@example.com') })).statusCode, 200);
 

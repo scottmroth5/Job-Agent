@@ -5,7 +5,6 @@ import { fillTemplate } from '../../tools/template.js';
 import { sanitizeDashes, truncate } from '../../tools/text.js';
 import { letterHeader } from '../letter-header.js';
 import { ensureLetterFolder } from '../../tools/google/drive.js';
-import { localDay } from '../../tools/dates.js';
 import { getPrompt } from '../prompts.js';
 import { PROMOTE_AT } from '../discovery/score.js';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
@@ -80,8 +79,6 @@ export function finishLetter(text, config) {
 }
 
 const longDate = (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-// The day in the user's zone (tools/dates.js).
-const isoLocalDate = (d) => localDay(d);
 
 /**
  * Generates what each selected posting is missing: resume tweaks, a cover letter, or just the
@@ -114,7 +111,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
     if (!drive) return;
     try {
       folderId ??= await ensureLetterFolder(drive, db);
-      const name = letterDocName(posting.company, posting.title, isoLocalDate(now));
+      const name = letterDocName(letterHeader(db, config).name, posting.title, posting.company);
       const html = letterHtml({ candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body });
       const doc = await drive.createDocFromHtml({ name, html, folderId });
       setDoc.run(doc.id, doc.url, name, artifactId);

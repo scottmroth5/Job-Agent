@@ -98,7 +98,7 @@ test('generateForPostings writes tweaks and a letter Doc for promoted jobs only,
   assert.deepEqual([summary.selected, summary.tweaks, summary.letters, summary.docs], [1, 1, 1, 1]);
   assert.equal(requests.length, 2);
   assert.deepEqual(summary.flagged, [{ id: eligible, flags: ['confident'] }]);
-  assert.equal(drive.calls.docs[0].name, 'Example_Co_VP_Engineering_CoverLetter_2026-09-30');
+  assert.equal(drive.calls.docs[0].name, 'Pat Example VP Engineering at Example Co Cover Letter');
   assert.match(drive.calls.docs[0].html, /September 30, 2026/);
   assert.equal(drive.calls.docs[0].folderId, 'folder-1');
 

@@ -46,6 +46,7 @@ test('the routes: list, view, make current, and download the current doc or a ve
     return (await documentText(r.rawPayload, 'k.docx')).text;
   };
   assert.match(await word('/api/account/profile.docx'), /version 2/);
+  assert.match((await app.inject('/api/account/profile.docx?version=1')).headers['content-disposition'], /^attachment; filename="[^"]*Knowledge Doc v1\.docx"$/);
   assert.match(await word('/api/account/profile.docx?version=1'), /version 1/);
 
   const restored = await app.inject({ method: 'POST', url: '/api/account/profile/versions/1/restore' });
