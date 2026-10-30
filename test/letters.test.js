@@ -61,6 +61,7 @@ test('checkCoverLetter reports text and same-sentence rules once each', () => {
 
 test('letterDocName and letterHtml build the v1 layout safely', () => {
   assert.equal(letterDocName('Pat Example', 'Director of Engineering', 'Leap'), 'Pat Example Director of Engineering at Leap Cover Letter');
+  assert.equal(letterDocName('Pat Example', 'VP, Engineering', 'Example Co, Inc.'), 'Pat Example VP Engineering at Example Co Inc. Cover Letter', 'no commas');
   assert.equal(letterDocName('Pat Example', 'VP / Engineering 🚀', 'Example & Co. "Labs"'), 'Pat Example VP Engineering at Example & Co. Labs Cover Letter');
   assert.equal(letterDocName('José Núñez', 'CTO', ''), 'Jose Nunez CTO Cover Letter');
   const html = letterHtml({

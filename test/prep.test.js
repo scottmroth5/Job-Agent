@@ -68,7 +68,7 @@ test('document: commentary before the last research step is dropped, citation pi
 });
 
 test('Google Doc: a readable name and bordered tables', () => {
-  assert.equal(prepDocName('Pat Example', 'Example Co, Inc.', [{ name: 'Alex Sample' }]), 'Pat Example Meeting Prep with Alex Sample at Example Co, Inc.');
+  assert.equal(prepDocName('Pat Example', 'Example Co, Inc.', [{ name: 'Alex Sample' }]), 'Pat Example Meeting Prep with Alex Sample at Example Co Inc.');
   assert.equal(prepDocName('Pat Example', 'X', [{ name: 'A B' }, { name: 'C' }, { name: 'D' }]), 'Pat Example Meeting Prep with A B and 2 more at X');
   const html = prepHtml(DOC);
   assert.match(html, /<table border="1"/);
