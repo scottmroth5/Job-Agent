@@ -18,6 +18,9 @@ export function isOnSite(raw, domain, pathPrefix = '') {
   return /^https?:$/.test(url.protocol) && hostIs(url.hostname, domain) && url.pathname.toLowerCase().startsWith(pathPrefix.toLowerCase());
 }
 
+/** Whether a link is a Google redirect (google.com/goto or /url) that hides the job site it leads to. */
+export const isGoogleRedirect = (raw) => isOnSite(raw, 'google.com', '/goto') || isOnSite(raw, 'google.com', '/url');
+
 // Query parameters that only track where a click came from; they never identify a different job.
 const TRACKING = /^(utm_.*|trk.*|refid|trackingid|ref|gh_src|lever-source|source|src|fbclid|gclid|mc_.*)$/i;
 

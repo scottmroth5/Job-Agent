@@ -4,6 +4,7 @@
 import { extractJobPosting, htmlToText } from '../../tools/html.js';
 import { HttpError, RateLimitedError } from '../../tools/http.js';
 import { fetchPosting } from './sources/linkedin.js';
+import { isGoogleRedirect } from '../../tools/urls.js';
 
 export const MIN_DESCRIPTION = 200; // shorter text is treated as missing
 export const MIN_PAGE_TEXT = 800; // plain page text shorter than this is probably a JS shell
@@ -88,7 +89,9 @@ export async function resolveDetails(item, { http, browser, state = {} }) {
 
   let pageText = '';
   try {
-    const { text: html } = await http.get(item.url, { headers: { Accept: 'text/html,application/xhtml+xml' } });
+    const { text: html, url: landed } = await http.get(item.url, { headers: { Accept: 'text/html,application/xhtml+xml' } });
+    // A Google redirect keeps the job site it leads to (shown in the job panel, skippable, deduped by it).
+    if (landed && landed !== item.url && isGoogleRedirect(item.url) && /^https?:\/\//i.test(landed)) item.url = landed;
     const jp = extractJobPosting(html);
     if (jp) applyJobPosting(item, jp);
     if (jp?.description && jp.description.length >= MIN_DESCRIPTION) {

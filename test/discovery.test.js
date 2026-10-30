@@ -130,6 +130,13 @@ test('details: source text, LinkedIn endpoint, JSON-LD, page text, then browser'
   );
   assert.deepEqual([viaLd.fetchMethod, viaLd.company, viaLd.workplace], ['jsonld', 'Example Co', 'remote']);
 
+  // A Google redirect keeps the job site it lands on; other links keep their own address.
+  const landing = (to) => ({ get: async () => ({ status: 200, text: `<script type="application/ld+json">${JSON.stringify(ld)}</script>`, url: to }), sleep: async () => {} });
+  const viaGoogle = await resolveDetails({ url: 'https://www.google.com/goto?url=CAESabc' }, { http: landing('https://board.example.com/jobs/cto') });
+  assert.equal(viaGoogle.url, 'https://board.example.com/jobs/cto');
+  const direct = await resolveDetails({ url: 'https://jobs.example.com/9' }, { http: landing('https://jobs.example.com/moved') });
+  assert.equal(direct.url, 'https://jobs.example.com/9');
+
   const viaHtml = await resolveDetails({ url: 'https://jobs.example.com/2' }, { http: fakeHttp([['jobs.example.com/2', `<p>${LONG.repeat(2)}</p>`]]) });
   assert.equal(viaHtml.fetchMethod, 'html');
 
@@ -169,6 +176,19 @@ const config = {
 
 const fakeSource = (SOURCE, items) => ({ SOURCE, search: async () => ({ items: items.map((i) => ({ source: SOURCE, ...i })), requests: 1, errors: [], rateLimited: false }) });
 const base = (o) => ({ company: 'Example Co', location: 'Remote', workplace: 'remote', postedOn: '2026-09-28', description: LONG, ...o });
+
+test('a Google redirect is stored as the site it lands on, and dropped when that site is skipped', async () => {
+  const store = openJobStore(':memory:');
+  const page = `<script type="application/ld+json">${JSON.stringify({ '@type': 'JobPosting', title: 'CTO', hiringOrganization: { name: 'Example Co' }, description: LONG })}</script>`;
+  const lands = { 'CAESkept': 'https://jobs.example.com/cto', 'CAESskip': 'https://board.example.net/jobs/vp' };
+  const http = { get: async (url) => ({ status: 200, text: page, url: lands[new URL(url).searchParams.get('url')] }), sleep: async () => {} };
+  const google = (token, title) => ({ title, company: null, location: null, workplace: null, postedOn: '2026-09-28', url: `https://www.google.com/goto?url=${token}` });
+  const sources = { serper: fakeSource('Google Jobs', [google('CAESkept', 'CTO'), google('CAESskip', 'VP Engineering')]) };
+  const skipping = { ...config, search: { ...config.search, excludedSites: ['board.example.net'] } };
+  const summary = await runDiscovery({ store, config: skipping, http, sources, now: new Date('2026-09-30T12:00:00Z'), options: { pauseMs: 0 } });
+  assert.equal(summary.inserted, 1);
+  assert.deepEqual(store.db.prepare('SELECT url, title FROM postings').all().map((r) => [r.url, r.title]), [['https://jobs.example.com/cto', 'CTO']]);
+});
 
 function seedPosting(db, { url, company, title, source = 'LinkedIn', stage = 'discovered' }) {
   db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage, created_at, updated_at)

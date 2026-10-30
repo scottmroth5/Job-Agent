@@ -196,6 +196,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const toInsert = [];
   const seenAfter = new Set();
   for (const item of selected) {
+    if (skipReason(item, config)) continue; // a Google redirect resolved to a skipped site or a list of jobs
     const { ctKey, existing } = findExisting(item);
     if (existing) {
       recordDuplicate(item, existing);
