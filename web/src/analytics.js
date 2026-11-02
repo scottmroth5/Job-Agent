@@ -1,19 +1,23 @@
 // The public demo's usage counts, sent to PostHog (server/demo-analytics.js): which screens visitors open and which
-// sample features they try, never what they type or see. Every event is built here from fixed names and fixed
-// property values; anything else is dropped before it is sent. No SDK, cookies, or storage: an anonymous id lives
-// only as long as the page, and requests carry no referrer. A browser sending Global Privacy Control gets nothing
-// sent. Only the demo starts it (App, from /api/me), so the app itself sends nothing. A blocked or failing request
-// never affects the page.
+// sample features they try, and where the visit came from as one of five fixed categories, never what they type or
+// see. Every event is built here from fixed names and fixed property values; anything else is dropped before it is
+// sent. No SDK, cookies, or storage: an anonymous id lives only as long as the page, and requests carry no referrer
+// (the source is worked out here; the address, referrer, and utm text never leave the page). A browser sending
+// Global Privacy Control gets nothing sent. Only the demo starts it (App, from /api/me), so the app itself sends
+// nothing. A blocked or failing request never affects the page.
+import { hostIs } from '../../tools/urls.js';
 
 // Screens (App's VIEWS plus home), the demo's sample AI features, and what a stopped change was about.
 export const SECTIONS = ['home', 'jobs', 'inbox', 'funnel', 'activity', 'settings', 'help'];
 export const FEATURES = ['fit_evaluation', 'cover_letter', 'letter_revision', 'meeting_prep', 'find_contact', 'help_answer', 'profile_draft'];
 export const CHANGES = ['job_update', 'job_add', 'job_action', 'note', 'cover_letter', 'attachment', 'settings', 'inbox', 'pipeline', 'other'];
 export const ERROR_CATEGORIES = ['network', 'unexpected'];
+// Where a visit came from (trafficSource); personal_site is the site in DEMO_SOURCE_SITE.
+export const SOURCES = ['linkedin', 'github', 'personal_site', 'other', 'direct'];
 
 // Each event and the only properties (with their allowed values) it may carry.
 const EVENTS = {
-  demo_opened: {},
+  demo_opened: { source: SOURCES },
   section_viewed: { section: SECTIONS },
   job_viewed: {},
   change_blocked: { feature: CHANGES },
@@ -46,7 +50,42 @@ export function startAnalytics(config) {
   if (target || privacyControlOn() || !config || !/^phc_[A-Za-z0-9]+$/.test(config.key ?? '') || !/^https:\/\/[a-z0-9.-]+$/.test(config.host ?? '')) return;
   target = { key: config.key, url: `${config.host}/i/v0/e/` };
   distinctId = randomId();
-  track('demo_opened');
+  let source = 'other';
+  try {
+    source = trafficSource({ url: globalThis.location?.href, referrer: globalThis.document?.referrer, ownHost: globalThis.location?.hostname, site: config.site });
+  } catch {
+    // Unknown counts as other.
+  }
+  track('demo_opened', { source });
+}
+
+/**
+ * Where a visit came from, as one of SOURCES: a utm_source of linkedin, github, or the personal site's first label
+ * first, else the referrer's host (the demo's own host is direct, no referrer is direct, anything unknown is other).
+ */
+export function trafficSource({ url, referrer, ownHost, site } = {}) {
+  const siteLabel = site ? site.split('.')[0] : null;
+  let utm = null;
+  try {
+    utm = new URL(url).searchParams.get('utm_source')?.toLowerCase() ?? null;
+  } catch {
+    // No usable address: go by the referrer.
+  }
+  if (utm === 'linkedin' || utm === 'github') return utm;
+  if (utm && utm === siteLabel) return 'personal_site';
+
+  if (!referrer) return 'direct';
+  let host;
+  try {
+    host = new URL(referrer).hostname.toLowerCase();
+  } catch {
+    return 'other';
+  }
+  if (ownHost && host === String(ownHost).toLowerCase()) return 'direct';
+  if (hostIs(host, 'linkedin.com') || hostIs(host, 'lnkd.in')) return 'linkedin';
+  if (host === 'github.com') return 'github';
+  if (site && hostIs(host, site)) return 'personal_site';
+  return 'other';
 }
 
 /** The request body for an event, or null when the event or a property value is not on the lists above. */

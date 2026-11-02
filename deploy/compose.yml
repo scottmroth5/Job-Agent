@@ -62,6 +62,7 @@ services:
       # browser code) and its host. Left empty, the demo sends nothing. The app never reads these.
       DEMO_POSTHOG_KEY: ${DEMO_POSTHOG_KEY:-}
       DEMO_POSTHOG_HOST: ${DEMO_POSTHOG_HOST:-}
+      DEMO_SOURCE_SITE: ${DEMO_SOURCE_SITE:-}
     # Builds the sample database, then serves it. A restart resets the demo.
     command: ["sh", "-c", "node scripts/demo-seed.js --force && exec node server/index.js"]
     # Nothing on disk survives or is shared: the code is read-only and the sample data lives in memory.

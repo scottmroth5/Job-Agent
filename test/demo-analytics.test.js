@@ -11,7 +11,7 @@ import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { demoAnalytics } from '../server/demo-analytics.js';
 import { CONTENT_SECURITY_POLICY } from '../server/security.js';
-import { SECTIONS, changeFeature, eventBody, sampled, startAnalytics, track } from '../web/src/analytics.js';
+import { SECTIONS, SOURCES, changeFeature, eventBody, sampled, startAnalytics, track, trafficSource } from '../web/src/analytics.js';
 import { DEMO_CONFIG } from '../demo/sample-data.js';
 
 const KEY = 'phc_ExampleKey0123456789abcdefABCDEF';
@@ -101,6 +101,78 @@ async function withPrivacyControl(on, fn) {
   }
 }
 
+// The page's address and referrer (location, document), set for the length of fn.
+async function withPage(href, referrer, fn) {
+  const saved = ['location', 'document'].map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+  Object.defineProperty(globalThis, 'location', { value: { href, hostname: new URL(href).hostname }, configurable: true, writable: true });
+  Object.defineProperty(globalThis, 'document', { value: { referrer }, configurable: true, writable: true });
+  try {
+    return await fn();
+  } finally {
+    for (const [name, before] of saved) {
+      if (before) Object.defineProperty(globalThis, name, before);
+      else delete globalThis[name];
+    }
+  }
+}
+
+test('the traffic source is one of five categories, from a listed utm_source or the referrer host', () => {
+  const page = 'https://demo.example.com/#/';
+  const own = 'demo.example.com';
+  const site = 'example.org';
+  const from = (referrer, { url = page, withSite = true } = {}) => trafficSource({ url, referrer, ownHost: own, site: withSite ? site : undefined });
+
+  // utm_source first, only when it is on the list.
+  assert.equal(from('', { url: 'https://demo.example.com/?utm_source=linkedin#/' }), 'linkedin');
+  assert.equal(from('', { url: 'https://demo.example.com/?utm_source=LinkedIn' }), 'linkedin');
+  assert.equal(from('', { url: 'https://demo.example.com/?utm_source=github' }), 'github');
+  assert.equal(from('', { url: 'https://demo.example.com/?utm_source=example' }), 'personal_site');
+  // A spoofed or unknown utm_source falls through to the referrer.
+  assert.equal(from('', { url: 'https://demo.example.com/?utm_source=evil' }), 'direct');
+  assert.equal(from('https://www.linkedin.com/', { url: 'https://demo.example.com/?utm_source=<script>' }), 'linkedin');
+  assert.equal(from('', { url: 'https://demo.example.com/?utm_source=personal_site' }), 'direct');
+  assert.equal(from('', { url: 'https://demo.example.com/?utm_source=example', withSite: false }), 'direct');
+
+  // Referrer hosts.
+  assert.equal(from('https://linkedin.com/in/someone'), 'linkedin');
+  assert.equal(from('https://www.linkedin.com/feed/'), 'linkedin');
+  assert.equal(from('https://lnkd.in/abc123'), 'linkedin');
+  assert.equal(from('https://github.com/someone/repo'), 'github');
+  assert.equal(from('https://example.org/projects'), 'personal_site');
+  assert.equal(from('https://blog.example.org/post'), 'personal_site');
+  assert.equal(from('https://demo.example.com/#/jobs'), 'direct');
+  assert.equal(from(''), 'direct');
+  assert.equal(from(undefined), 'direct');
+  assert.equal(from('https://news.example.net/'), 'other');
+
+  // Lookalike hosts, a malformed referrer, and the personal site with no setting are other.
+  assert.equal(from('https://linkedin.com.example.com/'), 'other');
+  assert.equal(from('https://notlinkedin.com/'), 'other');
+  assert.equal(from('https://notgithub.com/'), 'other');
+  assert.equal(from('https://github.com.evil.test/'), 'other');
+  assert.equal(from('https://example.org.evil.test/'), 'other');
+  assert.equal(from('not a url'), 'other');
+  assert.equal(from('https://example.org/', { withSite: false }), 'other');
+
+  // Every answer is on the list.
+  for (const v of ['linkedin', 'github', 'personal_site', 'other', 'direct']) assert.ok(SOURCES.includes(v));
+  assert.equal(SOURCES.length, 5);
+});
+
+test('demo_opened carries only a listed source', () => {
+  const at = { key: KEY, id: 'anon-1' };
+  for (const source of SOURCES) assert.equal(eventBody('demo_opened', { source }, at).properties.source, source);
+  assert.equal(eventBody('demo_opened', { source: 'https://www.linkedin.com/feed/' }, at), null);
+  assert.equal(eventBody('demo_opened', { source: 'example' }, at), null);
+  assert.equal(eventBody('demo_opened', {}, at), null);
+});
+
+test('the personal site comes from DEMO_SOURCE_SITE, a bare hostname only', () => {
+  assert.equal(demoAnalytics({ ...DEMO_ENV, DEMO_SOURCE_SITE: ' Example.ORG ' }).site, 'example.org');
+  for (const bad of ['https://example.org', 'example', 'example.org/path', 'exa mple.org', ''])
+    assert.equal('site' in demoAnalytics({ ...DEMO_ENV, DEMO_SOURCE_SITE: bad }), false, bad);
+});
+
 test('Global Privacy Control: nothing is sent, not even demo_opened (runs before anything starts)', async (t) => {
   const sent = [];
   t.mock.method(globalThis, 'fetch', async (url) => {
@@ -126,10 +198,14 @@ test('sending: nothing before start, then only listed events, with no credential
 
   startAnalytics({ key: 'not a key', host: 'https://us.i.posthog.com' });
   assert.equal(sent.length, 0);
-  startAnalytics({ key: KEY, host: 'https://us.i.posthog.com' });
+  // The page's address and referrer decide the source; neither is sent.
+  await withPage('https://demo.example.com/?utm_source=linkedin&utm_campaign=secret-campaign#/jobs', 'https://www.linkedin.com/feed/secret-post', () =>
+    startAnalytics({ key: KEY, host: 'https://us.i.posthog.com', site: 'example.org' }));
   assert.equal(sent.length, 1);
   assert.equal(sent[0].url, 'https://us.i.posthog.com/i/v0/e/');
   assert.equal(sent[0].body.event, 'demo_opened');
+  assert.deepEqual(sent[0].body.properties, { app: 'job_hunt_demo', source: 'linkedin', $process_person_profile: false });
+  assert.doesNotMatch(JSON.stringify(sent[0].body), /secret|example\.(com|org)|utm|feed/);
   assert.equal(sent[0].init.credentials, 'omit');
   assert.equal(sent[0].init.referrerPolicy, 'no-referrer');
 

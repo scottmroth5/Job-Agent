@@ -302,7 +302,9 @@ Demo usage counts (optional): DEMO_POSTHOG_KEY/HOST on the demo container only (
 AUTH_MODE=demo); /api/me hands them to the page and the CSP's connect-src adds that host. web/src/analytics.js sends
 to PostHog's capture endpoint itself (no SDK, cookies, storage, referrer, or URLs): fixed event names and property values
 from its lists only, anything else dropped; never text, job details, or paths; nothing at all when the browser sends
-Global Privacy Control. A new event goes on its EVENTS list and in PRIVACY.md's demo section. The demo banner links
+Global Privacy Control. demo_opened carries source (SOURCES: trafficSource reads a listed utm_source or the referrer's
+host in the browser; the URL, referrer, and utm text are never sent); the personal site is DEMO_SOURCE_SITE in .env,
+never in the repo. A new event goes on its EVENTS list and in PRIVACY.md's demo section. The demo banner links
 /privacy. test/demo-analytics.test.js.
 Usage by week (Admin > Users, GET /api/admin/usage, ADMIN_ONLY, never in the demo): server/admin-queries.js usageByWeek
 counts pipeline runs completed (ok, partial) and failed, jobs added, letters (v2, v2-revision, user), preps, and accounts

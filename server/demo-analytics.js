@@ -9,6 +9,8 @@ export const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 /**
  * { key, host } from DEMO_POSTHOG_KEY (a project key, phc_..., meant for browser code) and DEMO_POSTHOG_HOST
  * (default the US cloud), or null: outside the demo, with no key, or with anything but an https posthog.com host.
+ * DEMO_SOURCE_SITE (a bare hostname, optional) adds site: the personal site counted as the personal_site source.
+ * It lives in .env, never the repo; the page only compares hostnames with it and never fetches it.
  */
 export function demoAnalytics(env = process.env) {
   if (env.AUTH_MODE !== 'demo') return null;
@@ -21,5 +23,6 @@ export function demoAnalytics(env = process.env) {
     return null;
   }
   if (url.protocol !== 'https:' || !hostIs(url.hostname, 'posthog.com')) return null;
-  return { key, host: url.origin };
+  const site = String(env.DEMO_SOURCE_SITE || '').trim().toLowerCase();
+  return { key, host: url.origin, ...(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(site) ? { site } : {}) };
 }
