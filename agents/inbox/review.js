@@ -1,5 +1,5 @@
 // Resolving emails marked needs_review. Each choice is logged as the user's decision and saved as a
-// labeled case for the inbox eval (data/evals/inbox, gitignored). A case's email text is sealed with EMAIL_ENC_KEY
+// labeled case for the inbox eval (data/evals/inbox, gitignored), except Dismiss: the user is not sure, so there is no label. A case's email text is sealed with EMAIL_ENC_KEY
 // (bodyEnc), never written in the clear; scripts/inbox-seal-cases.js seals cases written before that.
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -10,7 +10,7 @@ import { encrypt } from './crypto.js';
 import { listOpenApplications } from './match.js';
 
 export const REVIEW_CASES_PATH = dataPath('evals', 'inbox', 'review-cases.jsonl');
-export const CHOICES = ['confirm', 'reassign', 'not_job', 'opportunity'];
+export const CHOICES = ['confirm', 'reassign', 'not_job', 'opportunity', 'dismiss'];
 
 const parse = (s) => {
   try {
@@ -43,7 +43,7 @@ const classificationOf = (e) => ({
 /**
  * Applies one review choice.
  * @param {object} e        a row from listNeedsReview
- * @param {string} choice   'confirm' | 'reassign' | 'not_job' | 'opportunity'
+ * @param {string} choice   'confirm' | 'reassign' | 'not_job' | 'opportunity' | 'dismiss' (off the list, no action, no case)
  * @param {{ postingId?: number, body?: string, key?: Buffer, now?: Date, casesPath?: string }} opts
  *   body: the trimmed email text (re-read from Gmail), stored encrypted when the email gets linked
  * @returns {{ postingId: number|null, statusChange: object|null, review: string|null, notices: string[] }}
@@ -62,8 +62,8 @@ export function resolveReview(db, e, choice, { postingId, body = null, key = nul
       const r = applyActions(db, { email, postingId: target, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
       updateEmail(db, e.id, { postingId: target, matchRule: 'user', confidence: 1, reviewStatus: choice === 'confirm' ? 'confirmed' : 'reassigned', reviewReason: null, ...(body && key && !e.body_enc ? { bodyEnc: encrypt(body, key) } : {}) }, now);
       out = { postingId: target, ...r };
-    } else if (choice === 'not_job') {
-      updateEmail(db, e.id, { postingId: null, matchRule: null, reviewStatus: 'not_job', reviewReason: null, bodyEnc: null }, now);
+    } else if (choice === 'not_job' || choice === 'dismiss') {
+      updateEmail(db, e.id, { postingId: null, matchRule: null, reviewStatus: choice === 'dismiss' ? 'dismissed' : 'not_job', reviewReason: null, bodyEnc: null }, now);
     } else {
       const id = createOpportunity(db, { email, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
       updateEmail(db, e.id, { postingId: id, matchRule: 'user', reviewStatus: 'new_opportunity', reviewReason: null, ...(body && key ? { bodyEnc: encrypt(body, key) } : {}) }, now);
@@ -72,6 +72,7 @@ export function resolveReview(db, e, choice, { postingId, body = null, key = nul
     logDecision(db, { postingId: out.postingId, emailId: e.id, gmailMessageId: e.gmail_message_id, action: `review:${choice}`, decidedBy: 'user', promptVersion: e.prompt_version, detail: { previousGuess: e.guess?.id ?? null } }, now);
   })();
 
+  if (choice === 'dismiss') return out;
   saveEvalCase(casesPath, {
     gmailMessageId: e.gmail_message_id,
     sender: e.sender,

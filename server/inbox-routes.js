@@ -93,7 +93,7 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
     '/api/inbox/emails/:id/review',
     {
       schema: {
-        summary: 'Resolve an email that needs review: confirm the guess, reassign, not job related, or new opportunity',
+        summary: 'Resolve an email that needs review: confirm the guess, reassign, not job related, new opportunity, or dismiss',
         params: uuidParams,
         body: { type: 'object', required: ['choice'], additionalProperties: false, properties: { choice: { type: 'string', enum: CHOICES }, postingId: { type: 'integer', minimum: 1 } } },
         response: { 200: anyObject },
@@ -106,7 +106,7 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
       if (choice === 'reassign' && !postingId) return reply.code(400).send({ error: 'Choose the job to link it to.' });
       // The body is re-read from Gmail so a newly linked email keeps it (encrypted), as the inbox run would.
       let body = null;
-      if (inbox.ready() && choice !== 'not_job') {
+      if (inbox.ready() && choice !== 'not_job' && choice !== 'dismiss') {
         const m = await inbox.gmail({ onWait: () => {} }).getMessage(e.gmail_message_id).catch(() => null);
         body = m ? trimBody(m.rawBody, { html: m.bodyIsHtml, max: inbox.cfg.bodyChars }) : null;
       }

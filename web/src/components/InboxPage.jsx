@@ -84,6 +84,9 @@ function ReviewCard({ email, applications, onDone, onOpenJob }) {
           <button disabled={busy} onClick={() => setReassigning(true)}>Link to another job</button>
           <button disabled={busy} onClick={() => resolve('opportunity')}>New opportunity</button>
           <button disabled={busy} onClick={() => resolve('not_job')}>Not job related</button>
+          <button disabled={busy} title="Not sure: take it off this list without linking it or changing anything" onClick={() => resolve('dismiss')}>
+            Dismiss
+          </button>
         </div>
       )}
       {error && <div className="error">{error}</div>}

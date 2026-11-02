@@ -132,3 +132,17 @@ test('confirm without a guess explains what to do', () => {
   assert.equal(cases(casesPath).length, 0);
   store.close();
 });
+
+test('dismiss takes an unsure email off the list with no link, no status change, no body, and no eval case', () => {
+  const { store, db, ids, email, casesPath } = setup();
+  const id = email();
+  const r = resolveReview(db, listNeedsReview(db)[0], 'dismiss', { body: 'Thanks for applying.', key, now, casesPath });
+  assert.deepEqual([r.postingId, r.statusChange], [null, null]);
+  const row = db.prepare('SELECT review_status, posting_id, body_enc FROM emails WHERE id = ?').get(id);
+  assert.deepEqual([row.review_status, row.posting_id, row.body_enc], ['dismissed', null, null]);
+  assert.equal(db.prepare('SELECT status FROM postings WHERE id = ?').pluck().get(ids.guess), 'applied');
+  assert.equal(db.prepare("SELECT decided_by FROM decision_log WHERE action = 'review:dismiss'").pluck().get(), 'user');
+  assert.deepEqual(cases(casesPath), [], 'no label when the user is not sure');
+  assert.equal(listNeedsReview(db).length, 0);
+  store.close();
+});

@@ -56,14 +56,14 @@ async function main() {
       console.log(`  Summary:  ${e.summary ?? ''}`);
       if (e.review_reason) console.log(`  Why:      ${e.review_reason}`);
       console.log(`  Guess:    ${e.guess ? `#${e.guess.id} ${e.guess.title} at ${e.guess.company} (${e.guess.status})` : 'none'}`);
-      const a = (await rl.question(`  [c]onfirm guess, [r]eassign, [n]ot job related, [o]pportunity, [s]kip, [q]uit: `)).trim().toLowerCase();
+      const a = (await rl.question(`  [c]onfirm guess, [r]eassign, [n]ot job related, [o]pportunity, [d]ismiss (not sure: no action), [s]kip, [q]uit: `)).trim().toLowerCase();
       if (a === 'q') break;
-      const choice = { c: 'confirm', r: 'reassign', n: 'not_job', o: 'opportunity' }[a];
+      const choice = { c: 'confirm', r: 'reassign', n: 'not_job', o: 'opportunity', d: 'dismiss' }[a];
       if (!choice) continue;
       try {
         const postingId = choice === 'reassign' ? await pickApplication(rl, store.db) : undefined;
         let body = null;
-        if (gmail && choice !== 'not_job') {
+        if (gmail && choice !== 'not_job' && choice !== 'dismiss') {
           const m = await gmail.getMessage(e.gmail_message_id).catch(() => null);
           body = m ? trimBody(m.rawBody, { html: m.bodyIsHtml, max: cfg.bodyChars }) : null;
         }

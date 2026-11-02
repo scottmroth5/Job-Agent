@@ -12,6 +12,7 @@ import * as activity from './migrations/015-activity.js';
 import * as timeZoneColumn from './migrations/016-time-zone.js';
 import * as resumes from './migrations/017-resumes.js';
 import * as noResponse from './migrations/018-no-response.js';
+import * as dismissedEmail from './migrations/019-dismissed-email.js';
 import { scopeDb } from './scope.js';
 import { OWNER_ID } from './users.js';
 
@@ -25,7 +26,7 @@ const MIGRATIONS_DIR = repoPath('db', 'migrations');
 
 // Migrations that need code rather than plain SQL. Each exports id and up(db); foreignKeys = false marks a table rebuild
 // (agent-core runs it with foreign keys off, then checks them before it commits).
-const CODE_MIGRATIONS = [duplicateStatus, lookups, postingNotes, users, accounts, activity, timeZoneColumn, resumes, noResponse];
+const CODE_MIGRATIONS = [duplicateStatus, lookups, postingNotes, users, accounts, activity, timeZoneColumn, resumes, noResponse, dismissedEmail];
 
 /** Migrations: the .sql files in db/migrations plus CODE_MIGRATIONS, applied in id (file-name) order. */
 export function loadMigrations(dir = MIGRATIONS_DIR) {

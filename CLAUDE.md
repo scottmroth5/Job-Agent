@@ -76,7 +76,7 @@ npm run web:dev                   Vite dev server with hot reload on :5179, forw
 npm run add -- --url=...          add a job by hand (also --description-file, --title, --company, --track, --rate, --hours, --write-materials)
 npm run inbox:auth                one-time Gmail sign-in (gmail.readonly + gmail.modify); writes GMAIL_REFRESH_TOKEN and EMAIL_ENC_KEY to .env
 npm run inbox                     process new Gmail since the stored historyId (inbox:backfill -- --days=N --dry-run for history)
-npm run inbox:review              resolve needs_review emails; each choice becomes a case in data/evals/inbox/review-cases.jsonl
+npm run inbox:review              resolve needs_review emails; each choice but Dismiss (not sure: off the list, no action, 019) becomes a case in data/evals/inbox/review-cases.jsonl
                                   (its email text sealed with EMAIL_ENC_KEY as bodyEnc; none for not-job mail; inbox:seal-cases
                                   seals cases written before that)
 npm run backup                    encrypted backup (database, data/config/job-search.json, data/attachments) to the "Job Agent
