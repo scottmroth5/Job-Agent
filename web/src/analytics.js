@@ -1,8 +1,9 @@
 // The public demo's usage counts, sent to PostHog (server/demo-analytics.js): which screens visitors open and which
 // sample features they try, never what they type or see. Every event is built here from fixed names and fixed
 // property values; anything else is dropped before it is sent. No SDK, cookies, or storage: an anonymous id lives
-// only as long as the page, and requests carry no referrer. Only the demo starts it (App, from /api/me), so the app
-// itself sends nothing. A blocked or failing request never affects the page.
+// only as long as the page, and requests carry no referrer. A browser sending Global Privacy Control gets nothing
+// sent. Only the demo starts it (App, from /api/me), so the app itself sends nothing. A blocked or failing request
+// never affects the page.
 
 // Screens (App's VIEWS plus home), the demo's sample AI features, and what a stopped change was about.
 export const SECTIONS = ['home', 'jobs', 'inbox', 'funnel', 'activity', 'settings', 'help'];
@@ -31,9 +32,18 @@ const randomId = () => {
   }
 };
 
+/** Whether the browser sends Global Privacy Control: then the demo sends nothing at all. */
+const privacyControlOn = () => {
+  try {
+    return globalThis.navigator?.globalPrivacyControl === true;
+  } catch {
+    return true;
+  }
+};
+
 /** Starts sending for this page view: { key, host } from /api/me in the demo; anything else leaves it off. */
 export function startAnalytics(config) {
-  if (target || !config || !/^phc_[A-Za-z0-9]+$/.test(config.key ?? '') || !/^https:\/\/[a-z0-9.-]+$/.test(config.host ?? '')) return;
+  if (target || privacyControlOn() || !config || !/^phc_[A-Za-z0-9]+$/.test(config.key ?? '') || !/^https:\/\/[a-z0-9.-]+$/.test(config.host ?? '')) return;
   target = { key: config.key, url: `${config.host}/i/v0/e/` };
   distinctId = randomId();
   track('demo_opened');
@@ -56,7 +66,7 @@ export function eventBody(event, props = {}, { key, id, now = new Date() }) {
 /** Sends one event (see EVENTS); does nothing before startAnalytics or for anything not on the lists. */
 export function track(event, props) {
   try {
-    if (!target) return;
+    if (!target || privacyControlOn()) return;
     const body = eventBody(event, props, { key: target.key, id: distinctId });
     if (!body) return;
     fetch(target.url, {

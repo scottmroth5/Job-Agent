@@ -23,7 +23,8 @@ export function DemoBanner({ requestAccessUrl = null, supportEmail = null }) {
         <>
           {' '}Questions: <a href={`mailto:${supportEmail}`}>{supportEmail}</a>.
         </>
-      )}
+      )}{' '}
+      <a href="/privacy">Privacy</a>
     </div>
   );
 }

@@ -5,6 +5,7 @@ Job Hunt helps you find, track, and apply for jobs. It is run privately by its o
 ## Your account
 
 - You sign in with your Google account. Access is by invitation: the owner approves, pauses, or removes accounts at any time, and may stop running the app.
+- You must be 18 or older to use this app.
 - Keep your account to yourself. Do not use the app for anything unlawful, to harm anyone, or to send other people's personal data into it without their permission.
 
 ## AI features
@@ -20,6 +21,10 @@ The app is provided as it is, without any warranty. It may be unavailable, lose 
 ## Changes
 
 These terms can change. Using the app after a change means you accept the new terms.
+
+## Privacy
+
+- How your data is handled is described in the [privacy policy](/privacy).
 
 ## Contact
 

@@ -101,7 +101,7 @@ fallbackUid: the owner for scripts and tests; the server has none, so a user-tab
 store.raw is unscoped: migrations, backups, and server/admin-queries.js (the admin's cross-user reads: counts and account
 facts, never anyone's jobs or key) only.
 Accounts (phase 2): any verified Google address signs in (server/auth.js); AUTH_ALLOWED_EMAILS are the owner's addresses
-(accountFor; syncOwnerEmail gives user 1 the first). Anyone else: no row goes to /auth/register (name, note, terms; a form
+(accountFor; syncOwnerEmail gives user 1 the first). Anyone else: no row goes to /auth/register (name, note, 18 or older, terms; a form
 post, no script; MAX_PENDING open requests at most), pending to /auth/waiting, rejected to /auth/not-approved; API calls get
 403 with { account }. Paused accounts get in read-only (no writes, no AI). Admin > Users (server/users-routes.js, admin role,
 never in the demo): approve, reject, pause, resume, and AI setup. server/notices.js sends the account emails (see Hard rules).
@@ -301,8 +301,14 @@ GET /api/postings/:id/find-contact/sample (demoContactResult). test/demo-samples
 Demo usage counts (optional): DEMO_POSTHOG_KEY/HOST on the demo container only (server/demo-analytics.js returns null outside
 AUTH_MODE=demo); /api/me hands them to the page and the CSP's connect-src adds that host. web/src/analytics.js sends
 to PostHog's capture endpoint itself (no SDK, cookies, storage, referrer, or URLs): fixed event names and property values
-from its lists only, anything else dropped; never text, job details, or paths. A new event goes on its EVENTS list and
-in PRIVACY.md's demo section. test/demo-analytics.test.js.
+from its lists only, anything else dropped; never text, job details, or paths; nothing at all when the browser sends
+Global Privacy Control. A new event goes on its EVENTS list and in PRIVACY.md's demo section. The demo banner links
+/privacy. test/demo-analytics.test.js.
+Usage by week (Admin > Users, GET /api/admin/usage, ADMIN_ONLY, never in the demo): server/admin-queries.js usageByWeek
+counts pipeline runs completed (ok, partial) and failed, jobs added, letters (v2, v2-revision, user), preps, and accounts
+seen (any run, job, document, or last visit that week), by local Monday week. Totals only, kept in the app; the signed-in
+app sends nothing to any analytics service. test/usage.test.js.
+PRIVACY.md must stay true of the code: a new outside service, admin column, or demo event changes its wording.
 
 ## Spending and internet safety
 Make Claude clients only with tools/claude.js createJobClaude(db). Each call is paid by the user it runs as: the owner, and

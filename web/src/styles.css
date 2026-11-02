@@ -536,6 +536,9 @@ h3.with-icon { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .check-row input { width: auto; flex: none; margin: 0; }
 .setup-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
 .feedback-admin { margin-top: 18px; }
+.usage-admin { margin-bottom: 18px; }
+.usage-scroll { overflow-x: auto; }
+.usage-admin td { text-align: right; font-variant-numeric: tabular-nums; }
 .feedback-admin .request-note { font-style: normal; white-space: pre-wrap; }
 .setup-chips .chip { font: 12px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif; border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; color: var(--muted); }
 .setup-chips .chip.used { color: var(--text); background: var(--accent-soft); border-color: transparent; }

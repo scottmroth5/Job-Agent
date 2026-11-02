@@ -50,11 +50,16 @@ test('a new address is sent to request access; the request makes a pending accou
   assert.match(form1.body, /href="\/terms"/);
   assert.ok(!/<script/i.test(form1.body), 'no script: the CSP allows none inline');
 
-  assert.equal((await form(pat, { name: 'Pat' })).statusCode, 400, 'the terms must be accepted');
-  assert.equal((await form(pat, { name: '  ', terms: 'yes' })).statusCode, 400, 'a name is needed');
-  const other = await app.inject({ method: 'POST', url: '/auth/register', headers: { cookie: pat, origin: 'https://evil.example', 'content-type': 'application/x-www-form-urlencoded' }, payload: 'name=Pat&terms=yes' });
+  assert.match(form1.body, /name="age" value="yes" required> I am 18 or older/);
+  assert.equal((await form(pat, { name: 'Pat', age: 'yes' })).statusCode, 400, 'the terms must be accepted');
+  const young = await form(pat, { name: 'Pat', terms: 'yes' });
+  assert.equal(young.statusCode, 400, 'the age must be confirmed');
+  assert.match(young.body, /18 or older/);
+  assert.equal(store.raw.prepare("SELECT COUNT(*) FROM users WHERE email = 'pat@example.com'").pluck().get(), 0, 'no request without it');
+  assert.equal((await form(pat, { name: '  ', age: 'yes', terms: 'yes' })).statusCode, 400, 'a name is needed');
+  const other = await app.inject({ method: 'POST', url: '/auth/register', headers: { cookie: pat, origin: 'https://evil.example', 'content-type': 'application/x-www-form-urlencoded' }, payload: 'name=Pat&age=yes&terms=yes' });
   assert.equal(other.statusCode, 403, 'only from this site');
-  const ok = await form(pat, { name: 'Pat <b>Example</b>', note: 'Former colleague', terms: 'yes' });
+  const ok = await form(pat, { name: 'Pat <b>Example</b>', note: 'Former colleague', age: 'yes', terms: 'yes' });
   assert.deepEqual([ok.statusCode, ok.headers.location], [303, '/auth/waiting']);
   const row = store.raw.prepare("SELECT * FROM users WHERE email = 'pat@example.com'").get();
   assert.deepEqual([row.status, row.role, row.ai_source, Boolean(row.terms_accepted_at)], ['pending', 'user', 'own', true]);
@@ -64,14 +69,14 @@ test('a new address is sent to request access; the request makes a pending accou
   assert.ok(!sent[0].text.includes('Former colleague'), 'the note stays in the app');
 
   // Asking again changes nothing and sends nothing; the pending address waits.
-  await form(pat, { name: 'Pat', terms: 'yes' });
+  await form(pat, { name: 'Pat', age: 'yes', terms: 'yes' });
   assert.equal(sent.length, 1, JSON.stringify(sent.map((e) => [e.to, e.subject])));
   assert.deepEqual([(await app.inject({ url: '/', headers: { cookie: pat } })).headers.location], ['/auth/waiting']);
   assert.match((await app.inject({ url: '/auth/waiting', headers: { cookie: pat } })).body, /waiting|with the owner/i);
   assert.equal((await app.inject({ url: '/auth/register', headers: { cookie: pat } })).headers.location, '/auth/waiting');
   // A post from an address that already has an account goes nowhere (an earlier bug made an account with no address).
   assert.deepEqual(store.raw.prepare('SELECT email FROM users WHERE id != ? ORDER BY id').pluck().all(OWNER_ID), ['pat@example.com']);
-  assert.equal((await form('ja_session=forged.AAAA', { name: 'X', terms: 'yes' })).headers.location, '/auth/login', 'no session, no request');
+  assert.equal((await form('ja_session=forged.AAAA', { name: 'X', age: 'yes', terms: 'yes' })).headers.location, '/auth/login', 'no session, no request');
   assert.equal(store.raw.prepare('SELECT COUNT(*) FROM users').pluck().get(), 2);
   // The name is shown escaped wherever it appears.
   const list = (await app.inject({ url: '/api/admin/users', headers: { cookie: as(OWNER) } })).json();
@@ -82,8 +87,8 @@ test('a new address is sent to request access; the request makes a pending accou
 test('the owner approves, pauses, resumes, and rejects; each person is emailed about their own account only', async () => {
   const { store, app, sent, as, form, done } = await setup();
   const owner = as(OWNER);
-  await form(as('pat@example.com'), { name: 'Pat', terms: 'yes' });
-  await form(as('sam@example.com'), { name: 'Sam', terms: 'yes' });
+  await form(as('pat@example.com'), { name: 'Pat', age: 'yes', terms: 'yes' });
+  await form(as('sam@example.com'), { name: 'Sam', age: 'yes', terms: 'yes' });
   const ids = Object.fromEntries(store.raw.prepare('SELECT email, id FROM users').all().map((u) => [u.email, u.id]));
   const act = (id, decision, cookie = owner) => app.inject({ method: 'POST', url: `/api/admin/users/${id}/${decision}`, headers: { cookie, origin: SITE } });
 
@@ -129,7 +134,7 @@ test('the owner approves, pauses, resumes, and rejects; each person is emailed a
 
 test('Settings: a user saves their own key (checked, sealed, never returned) and removes it; the owner cannot', async () => {
   const { store, app, checked, as, form, done } = await setup();
-  await form(as('pat@example.com'), { name: 'Pat', terms: 'yes' });
+  await form(as('pat@example.com'), { name: 'Pat', age: 'yes', terms: 'yes' });
   const id = store.raw.prepare("SELECT id FROM users WHERE email = 'pat@example.com'").pluck().get();
   store.raw.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(id);
   const pat = as('pat@example.com');
@@ -156,7 +161,7 @@ test('Settings: a user saves their own key (checked, sealed, never returned) and
   await done();
 
   const refusing = await setup({ keyWorks: false });
-  await refusing.form(refusing.as('pat@example.com'), { name: 'Pat', terms: 'yes' });
+  await refusing.form(refusing.as('pat@example.com'), { name: 'Pat', age: 'yes', terms: 'yes' });
   refusing.store.raw.prepare("UPDATE users SET status = 'active' WHERE email = 'pat@example.com'").run();
   const res = await refusing.app.inject({ method: 'PUT', url: '/api/account/claude-key', headers: { cookie: refusing.as('pat@example.com'), origin: SITE }, payload: { key: madeUp } });
   assert.deepEqual([res.statusCode, res.json().error], [400, 'Anthropic did not accept this key.']);
@@ -168,7 +173,7 @@ test('requests close when too many are waiting; the privacy policy and terms are
   const insert = store.raw.prepare("INSERT INTO users (email, role, status, created_at, updated_at) VALUES (?, 'user', 'pending', 'x', 'x')");
   for (let i = 0; i < MAX_PENDING; i += 1) insert.run(`waiting${i}@example.com`);
   assert.match((await app.inject({ url: '/auth/register', headers: { cookie: as('late@example.com') } })).body, /not taking new requests/);
-  await form(as('late@example.com'), { name: 'Late', terms: 'yes' });
+  await form(as('late@example.com'), { name: 'Late', age: 'yes', terms: 'yes' });
   assert.equal(store.raw.prepare("SELECT COUNT(*) FROM users WHERE email = 'late@example.com'").pluck().get(), 0);
   for (const path of ['/privacy', '/terms']) {
     const res = await app.inject(path);

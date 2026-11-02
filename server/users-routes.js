@@ -2,7 +2,7 @@
 // and how each user's AI is paid for. Admin only (server/app.js refuses anyone else on /api/admin/users*), and never
 // registered in the demo. Each decision emails the person about their own account (server/notices.js).
 import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.js';
-import { listUsers } from './admin-queries.js';
+import { listUsers, usageByWeek } from './admin-queries.js';
 import { deleteAccount } from '../agents/account-data.js';
 import { ATTACHMENTS_DIR } from './attachments.js';
 
@@ -29,6 +29,24 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
       await notices.accountDeleted?.(user, { byOwner: true });
       return { deleted: true, jobs: counts.postings ?? 0 };
     },
+  );
+
+  // The app's weekly totals (counts only; no names, jobs, or text). Private: nothing goes to an analytics service.
+  const weekRow = {
+    type: 'object',
+    additionalProperties: false,
+    properties: Object.fromEntries([['weekStart', { type: 'string' }], ...['pipelineCompleted', 'pipelineFailed', 'jobsAdded', 'lettersWritten', 'prepsWritten', 'accountsSeen'].map((k) => [k, { type: 'integer' }])]),
+  };
+  app.get(
+    '/api/admin/usage',
+    {
+      schema: {
+        summary: 'Weekly totals across all accounts: pipeline runs, jobs added, letters, preps, accounts seen (admin)',
+        querystring: { type: 'object', additionalProperties: false, properties: { weeks: { type: 'integer', minimum: 1, maximum: 52, default: 12 } } },
+        response: { 200: { type: 'array', items: weekRow } },
+      },
+    },
+    async (req) => usageByWeek(db, { weeks: req.query.weeks }),
   );
 
   app.get('/api/admin/users', { schema: { summary: 'Every account, with its AI setup and this month\'s spend (admin)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>

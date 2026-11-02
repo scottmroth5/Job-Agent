@@ -31,7 +31,7 @@ import { adminWaiting } from './admin-queries.js';
 import { today } from './today.js';
 
 // Routes for admins: the Users screen and the feedback users sent (server/app.js refuses anyone else).
-const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback'];
+const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback', '/api/admin/usage'];
 // What a paused account may still change: resume itself (when it paused itself) or delete itself.
 const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
 import { backgroundFor, scheduledUsers, userConfigView } from '../agents/user-config.js';

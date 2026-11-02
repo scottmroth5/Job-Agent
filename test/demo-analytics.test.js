@@ -89,6 +89,32 @@ test('a stopped change is named by its kind, never its path', () => {
   assert.equal(changeFeature('POST', '/api/something-new?x=secret'), 'other');
 });
 
+// The browser's Global Privacy Control signal, set for the length of fn.
+async function withPrivacyControl(on, fn) {
+  const before = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { value: { globalPrivacyControl: on }, configurable: true, writable: true });
+  try {
+    return await fn();
+  } finally {
+    if (before) Object.defineProperty(globalThis, 'navigator', before);
+    else delete globalThis.navigator;
+  }
+}
+
+test('Global Privacy Control: nothing is sent, not even demo_opened (runs before anything starts)', async (t) => {
+  const sent = [];
+  t.mock.method(globalThis, 'fetch', async (url) => {
+    sent.push(url);
+    return new Response('{}');
+  });
+  await withPrivacyControl(true, async () => {
+    startAnalytics({ key: KEY, host: 'https://us.i.posthog.com' });
+    track('section_viewed', { section: 'jobs' });
+    await sampled('cover_letter', async () => 'ok');
+  });
+  assert.deepEqual(sent, []);
+});
+
 test('sending: nothing before start, then only listed events, with no credentials or referrer', async (t) => {
   const sent = [];
   t.mock.method(globalThis, 'fetch', async (url, init) => {
@@ -123,6 +149,13 @@ test('sending: nothing before start, then only listed events, with no credential
   // One anonymous id for the page; every body holds only the expected keys.
   assert.equal(new Set(sent.map((s) => s.body.distinct_id)).size, 1);
   for (const { body } of sent) assert.deepEqual(Object.keys(body).sort(), ['api_key', 'distinct_id', 'event', 'properties', 'timestamp']);
+
+  // Turning Global Privacy Control on mid-visit stops sending at once.
+  const count = sent.length;
+  await withPrivacyControl(true, () => track('job_viewed'));
+  assert.equal(sent.length, count);
+  await withPrivacyControl(false, () => track('job_viewed'));
+  assert.equal(sent.length, count + 1);
 
   // A failing request never reaches the page.
   t.mock.method(globalThis, 'fetch', () => {

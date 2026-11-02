@@ -153,6 +153,7 @@ export const api = {
   deleteAccount: (confirmEmail) => request('POST', '/api/account/delete', { confirmEmail }),
   deleteUser: (id, confirmEmail) => request('POST', `/api/admin/users/${id}/delete`, { confirmEmail }),
   adminFeedback: () => request('GET', '/api/admin/feedback'),
+  adminUsage: (weeks = 12) => request('GET', `/api/admin/usage?weeks=${weeks}`),
   feedbackDone: (id) => request('POST', `/api/admin/feedback/${id}/done`),
   /** Sends the file as the raw body with its name and type in headers (no multipart). */
   uploadAttachment: async (jobId, file) => {

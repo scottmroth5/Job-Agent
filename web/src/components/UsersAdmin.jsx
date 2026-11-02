@@ -165,6 +165,53 @@ function Feedback() {
   );
 }
 
+// The app's weekly totals across all accounts (GET /api/admin/usage): counts only, kept in the app.
+const USAGE_COLUMNS = [
+  ['pipelineCompleted', 'Pipeline runs'],
+  ['pipelineFailed', 'Failed'],
+  ['jobsAdded', 'Jobs added'],
+  ['lettersWritten', 'Letters'],
+  ['prepsWritten', 'Preps'],
+  ['accountsSeen', 'Accounts seen'],
+];
+
+function Usage() {
+  const [weeks, setWeeks] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    api.adminUsage().then(setWeeks, (err) => setError(err.message));
+  }, []);
+  if (!weeks) return error ? <div className="error">{error}</div> : null;
+  return (
+    <section className="usage-admin">
+      <h3>Usage by week</h3>
+      <p className="muted small">Totals across every account, kept in the app (weeks start Monday). Accounts seen: any visit, run, job, or document that week.</p>
+      <div className="usage-scroll">
+        <table className="history">
+          <thead>
+            <tr>
+              <th scope="col">Week of</th>
+              {USAGE_COLUMNS.map(([k, label]) => (
+                <th key={k} scope="col">{label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {weeks.map((w) => (
+              <tr key={w.weekStart}>
+                <th scope="row">{new Date(`${w.weekStart}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</th>
+                {USAGE_COLUMNS.map(([k]) => (
+                  <td key={k}>{w[k]}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
 /** Admin > Users: requests for access, accounts and how far each has got, how each user's AI is paid for, and feedback. */
 export default function UsersAdmin() {
   const [users, setUsers] = useState(null);
@@ -189,6 +236,7 @@ export default function UsersAdmin() {
   const waiting = users.filter((u) => u.status === 'pending').length;
   return (
     <div className="users-admin">
+      <Usage />
       <p className="muted small">
         People sign in with Google and ask for access; approving one emails them. {waiting ? `${waiting} waiting.` : 'No requests waiting.'}
       </p>

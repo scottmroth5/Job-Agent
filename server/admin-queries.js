@@ -2,6 +2,7 @@
 // users (test/user-scope.test.js exempts this file): it reads the unscoped database, and its routes need the admin role.
 // It returns account facts and counts only, never a user's jobs, notes, emails, background, or key.
 import { MIN_PROFILE_CHARS, scheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
+import { dayOf, localDay } from '../tools/dates.js';
 
 /**
  * Every account with this month's Claude spend, how many jobs it has, when it was last here, its last pipeline run, and
@@ -48,6 +49,52 @@ export function listFeedback(db, { limit = 200 } = {}) {
 /** Marks one piece of feedback done. False when there is none open with that id. */
 export const markFeedbackDone = (db, id, now = new Date()) =>
   db.prepare("UPDATE feedback SET status = 'done', done_at = ? WHERE id = ? AND status = 'open'").run(now.toISOString(), id).changes > 0;
+
+const addDays = (day, n) => {
+  const d = new Date(`${day}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+const mondayOf = (day) => addDays(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7));
+// Letters a person or the app wrote: v1 imports are not this app's work.
+const LETTER_SOURCES = new Set(['v2', 'v2-revision', 'user']);
+
+/**
+ * The app's weekly totals across everyone, newest week first (weeks start Monday, local days): pipeline runs completed
+ * and failed, jobs added, cover letters written, meeting preps written, and accounts seen (any account with a run, job,
+ * document, or visit that week). Counts only: never who, or anything about a job.
+ */
+export function usageByWeek(db, { weeks = 12, now = new Date() } = {}) {
+  const thisWeek = mondayOf(localDay(now));
+  const first = addDays(thisWeek, -7 * (weeks - 1));
+  // A day early, so no time zone drops a row; rows are then placed by their local day.
+  const since = new Date(`${addDays(first, -1)}T00:00:00Z`).toISOString();
+  const rows = new Map();
+  for (let i = 0; i < weeks; i += 1) {
+    const weekStart = addDays(thisWeek, -7 * i);
+    rows.set(weekStart, { weekStart, pipelineCompleted: 0, pipelineFailed: 0, jobsAdded: 0, lettersWritten: 0, prepsWritten: 0, seen: new Set() });
+  }
+  const add = (at, field, uid) => {
+    const day = dayOf(at);
+    const week = day && day >= first ? rows.get(mondayOf(day)) : null;
+    if (!week) return;
+    if (field) week[field] += 1;
+    if (uid != null) week.seen.add(uid);
+  };
+
+  for (const r of db.prepare('SELECT name, status, started_at AS at, user_id AS uid FROM runs WHERE started_at >= ?').all(since)) {
+    const field = r.name !== 'pipeline' ? null : ['ok', 'partial'].includes(r.status) ? 'pipelineCompleted' : r.status === 'failed' ? 'pipelineFailed' : null;
+    add(r.at, field, r.uid);
+  }
+  for (const p of db.prepare('SELECT created_at AS at, user_id AS uid FROM postings WHERE created_at >= ?').all(since)) add(p.at, 'jobsAdded', p.uid);
+  for (const a of db.prepare('SELECT kind, source, created_at AS at, user_id AS uid FROM artifacts WHERE created_at >= ?').all(since)) {
+    add(a.at, a.kind === 'cover_letter' && LETTER_SOURCES.has(a.source) ? 'lettersWritten' : null, a.uid);
+  }
+  for (const m of db.prepare('SELECT created_at AS at, user_id AS uid FROM meeting_preps WHERE created_at >= ?').all(since)) add(m.at, 'prepsWritten', m.uid);
+  for (const u of db.prepare('SELECT last_seen_at AS at, id AS uid FROM users WHERE last_seen_at >= ?').all(since)) add(u.at, null, u.uid);
+
+  return [...rows.values()].map(({ seen, ...week }) => ({ ...week, accountsSeen: seen.size }));
+}
 
 /** What waits for the admin: access requests and open feedback (the Home Admin tile). */
 export const adminWaiting = (db) => ({

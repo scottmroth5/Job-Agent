@@ -277,6 +277,7 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
       <form method="post" action="/auth/register" style="display:grid;gap:10px">
         <label>Your name<br><input name="name" required maxlength="${MAX_NAME}" autocomplete="name" style="width:100%;padding:6px"></label>
         <label>A note for the owner (optional)<br><textarea name="note" maxlength="${MAX_NOTE}" rows="4" style="width:100%;padding:6px"></textarea></label>
+        <label><input type="checkbox" name="age" value="yes" required> I am 18 or older.</label>
         <label><input type="checkbox" name="terms" value="yes" required> I accept the <a href="/terms" target="_blank">terms</a> and the <a href="/privacy" target="_blank">privacy policy</a>.</label>
         <button type="submit" class="primary">Request access</button>
       </form>${signOut}`,
@@ -288,6 +289,8 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
     const { session, go } = statePage(req, 'none');
     if (go) return reply.code(303).redirect(go);
     const body = req.body && typeof req.body === 'object' ? req.body : {};
+    // The terms require it (TERMS.md); the browser enforces the box too, but a hand-made post is refused here.
+    if (body.age !== 'yes') return html(reply, 'Request access', '<p>You must be 18 or older to use Job Hunt.</p><p><a href="/auth/register">Back</a></p>', 400);
     if (body.terms !== 'yes') return html(reply, 'Request access', '<p>Please accept the terms and privacy policy.</p><p><a href="/auth/register">Back</a></p>', 400);
     if (db.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() >= MAX_PENDING) return reply.redirect('/auth/register');
     let result;
