@@ -94,7 +94,7 @@ jobs:
           echo "image=ghcr.io/${owner}/job-agent" >> "$GITHUB_OUTPUT"
           # The weekly rebuild of an unchanged commit gets its own tag, so the previous image stays there to roll back to.
           if [ "$EVENT" = "schedule" ]; then echo "tag=sha-${SHA::7}-$(date -u +%Y%m%d)" >> "$GITHUB_OUTPUT"; else echo "tag=sha-${SHA::7}" >> "$GITHUB_OUTPUT"; fi
-          # The country database (US-only access) is downloaded fresh on each build day.
+          # The location database (US-only access, usage totals) is downloaded fresh on each build day.
           echo "stamp=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
       - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0

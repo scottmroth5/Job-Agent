@@ -3,7 +3,7 @@
 // It returns account facts and counts only, never a user's jobs, notes, emails, background, or key.
 import { MIN_PROFILE_CHARS, scheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
 import { currentTimeZone, currentUserId, runAsUser } from '../db/scope.js';
-import { dayOf, localDay } from '../tools/dates.js';
+import { appDay, dayOf, localDay } from '../tools/dates.js';
 
 /**
  * Every account with this month's Claude spend, how many jobs it has, when it was last here, its last pipeline run, and
@@ -136,6 +136,28 @@ function weeklyTotals(db, { weeks = 12, now = new Date() }) {
     claudeSpendUsd: Math.round(claudeSpendUsd * 100) / 100,
   }));
 }
+
+/**
+ * The device, location, and source totals (server/usage-totals.js) from a day on: each dimension on its own, largest
+ * first. Locations come back split ({ city, state, country }; unknown has empty parts). App-wide counts only.
+ */
+export function usageTotals(db, { since }) {
+  const rows = db
+    .prepare('SELECT dimension, value, SUM(count) AS count FROM usage_totals WHERE day >= ? GROUP BY dimension, value ORDER BY count DESC, value')
+    .all(since);
+  const of = (dimension) => rows.filter((r) => r.dimension === dimension).map(({ value, count }) => ({ value, count }));
+  return {
+    devices: of('device'),
+    locations: of('location').map(({ value, count }) => {
+      const [city = '', state = '', country = ''] = value === 'unknown' ? [] : value.split(', ');
+      return { city, state, country, count };
+    }),
+    sources: of('source'),
+  };
+}
+
+/** The first day (a Sunday, app zone) of the last `weeks` weeks, as usageByWeek counts them. */
+export const usagePeriodStart = (weeks, now = new Date()) => addDays(sundayOf(appDay(now)), -7 * (weeks - 1));
 
 /** What waits for the admin: access requests and open feedback (the Home Admin tile). */
 export const adminWaiting = (db) => ({

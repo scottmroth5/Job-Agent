@@ -7,6 +7,18 @@ import { DEMO_NOT_SAVED } from './api.js';
 export const DemoContext = createContext(false);
 export const useDemo = () => useContext(DemoContext);
 
+// The demo sends no Referer to other sites (Referrer-Policy: same-origin), so the link to the app says it came from the
+// demo (the app's usage totals count it as the demo source; server/usage-totals.js).
+const fromDemo = (url) => {
+  try {
+    const u = new URL(url);
+    u.searchParams.set('utm_source', 'demo');
+    return u.toString();
+  } catch {
+    return url;
+  }
+};
+
 /** requestAccessUrl (REQUEST_ACCESS_URL): the real app, where someone can sign in and ask for access. */
 export function DemoBanner({ requestAccessUrl = null, supportEmail = null }) {
   return (
@@ -16,7 +28,7 @@ export function DemoBanner({ requestAccessUrl = null, supportEmail = null }) {
       {requestAccessUrl && (
         <>
           {' '}
-          <a href={requestAccessUrl}>Request access</a> to use it for your own search.
+          <a href={fromDemo(requestAccessUrl)}>Request access</a> to use it for your own search.
         </>
       )}
       {supportEmail && (

@@ -17,7 +17,7 @@ import { openJobStore } from '../db/index.js';
 import { buildApp } from './app.js';
 import { schedulesFromEnv } from './scheduler.js';
 import { timeZone } from '../tools/dates.js';
-import { geoAllowFromEnv, loadCountryLookup } from './geo.js';
+import { geoAllowFromEnv, openGeo } from './geo.js';
 import { createAlerts } from './alerts.js';
 import { createNotices } from './notices.js';
 import { getSetting, setSetting } from '../db/settings.js';
@@ -113,16 +113,20 @@ const services = demo ? demoServices() : realServices();
 // addresses, e.g. "loopback,linklocal,uniquelocal" for Caddy on a private network. Never a hop count ("1"): Fastify
 // then reports the proxy as every visitor (test/proxy.test.js). Unset: the direct connection's address.
 const trustProxy = !process.env.TRUST_PROXY ? false : process.env.TRUST_PROXY === 'true' ? true : /^\d+$/.test(process.env.TRUST_PROXY) ? Number(process.env.TRUST_PROXY) : process.env.TRUST_PROXY;
-// US-only access (GEO_ALLOW, server/geo.js): the country database ships in the image; without it nothing is blocked.
+// US-only access (GEO_ALLOW, server/geo.js) and the usage totals' locations: the location database ships in the image;
+// without it nothing is blocked and locations count as unknown. The demo never opens it (it counts nothing).
 const geoAllow = geoAllowFromEnv();
-const geo = { allow: geoAllow, lookup: geoAllow.length ? await loadCountryLookup().catch(() => null) : null };
-if (geoAllow.length) console.log(geo.lookup ? `[geo] only ${geoAllow.join(', ')} allowed` : '[geo] the country database is missing: nothing is blocked (the next image build adds it)');
+const lookups = geoAllow.length || authMode === 'google' ? await openGeo().catch(() => null) : null;
+const geo = { allow: geoAllow, lookup: lookups?.country ?? null };
+if (geoAllow.length) console.log(geo.lookup ? `[geo] only ${geoAllow.join(', ')} allowed` : '[geo] the location database is missing: nothing is blocked (the next image build adds it)');
 if (geoAllow.length && !geo.lookup) {
-  services.alerts?.alert('geo-db', 'US-only blocking is off', 'The country database is missing from the server image, so visitors outside the allowed countries are not blocked. The next image build (or the weekly rebuild) adds it.', { once: true }).catch(() => {});
+  services.alerts?.alert('geo-db', 'US-only blocking is off', 'The location database is missing from the server image, so visitors outside the allowed countries are not blocked. The next image build (or the weekly rebuild) adds it.', { once: true }).catch(() => {});
 } else if (geo.lookup) {
   services.alerts?.recovered('geo-db');
 }
-const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode, auth: { settings: authConfig }, trustProxy, geo });
+// The admin's usage totals (server/usage-totals.js): the personal site and demo hosts that name a source.
+const usage = { location: lookups?.location ?? null, siteHost: process.env.SOURCE_SITE_HOST, demoHost: process.env.SOURCE_DEMO_HOST };
+const app = await buildApp({ store, config, services, webDir: repoPath('web', 'dist'), authMode, auth: { settings: authConfig }, trustProxy, geo, usage });
 await app.listen({ host, port });
 console.log(
   authMode === 'google'

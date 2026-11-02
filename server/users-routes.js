@@ -2,7 +2,8 @@
 // and how each user's AI is paid for. Admin only (server/app.js refuses anyone else on /api/admin/users*), and never
 // registered in the demo. Each decision emails the person about their own account (server/notices.js).
 import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.js';
-import { listUsers, usageByWeek } from './admin-queries.js';
+import { listUsers, usageByWeek, usagePeriodStart, usageTotals } from './admin-queries.js';
+import { DEVICES, SOURCES } from './usage-totals.js';
 import { deleteAccount } from '../agents/account-data.js';
 import { ATTACHMENTS_DIR } from './attachments.js';
 
@@ -43,16 +44,41 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
       claudeSpendUsd: { type: 'number' },
     },
   };
+  // Device, location, and source totals over the same weeks (server/usage-totals.js): app-wide, never per account.
+  const total = (values) => ({
+    type: 'object',
+    additionalProperties: false,
+    required: ['value', 'count'],
+    properties: { value: values ? { type: 'string', enum: values } : { type: 'string' }, count: { type: 'integer' } },
+  });
+  const place = {
+    type: 'object',
+    additionalProperties: false,
+    required: ['city', 'state', 'country', 'count'],
+    properties: { city: { type: 'string' }, state: { type: 'string' }, country: { type: 'string' }, count: { type: 'integer' } },
+  };
   app.get(
     '/api/admin/usage',
     {
       schema: {
-        summary: 'Weekly totals across all accounts, Sunday to Saturday, newest (this week so far) first (admin)',
+        summary: 'Weekly totals across all accounts (Sunday to Saturday, newest first), plus visits by device and location and arrivals by source (admin)',
         querystring: { type: 'object', additionalProperties: false, properties: { weeks: { type: 'integer', minimum: 4, maximum: 52, default: 12 } } },
-        response: { 200: { type: 'array', items: weekRow } },
+        response: {
+          200: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['weeks', 'devices', 'locations', 'sources'],
+            properties: {
+              weeks: { type: 'array', items: weekRow },
+              devices: { type: 'array', items: total(DEVICES) },
+              locations: { type: 'array', items: place },
+              sources: { type: 'array', items: total(SOURCES) },
+            },
+          },
+        },
       },
     },
-    async (req) => usageByWeek(db, { weeks: req.query.weeks }),
+    async (req) => ({ weeks: usageByWeek(db, { weeks: req.query.weeks }), ...usageTotals(db, { since: usagePeriodStart(req.query.weeks) }) }),
   );
 
   app.get('/api/admin/users', { schema: { summary: 'Every account, with its AI setup and this month\'s spend (admin)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>

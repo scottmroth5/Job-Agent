@@ -15,6 +15,7 @@ import { registerPrepRoutes } from './prep-routes.js';
 import { registerNoteRoutes } from './notes-routes.js';
 import { createScheduler } from './scheduler.js';
 import { BLOCKED_PAGE, geoBlocker } from './geo.js';
+import { registerUsageTotals } from './usage-totals.js';
 import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.js';
 import { timeZone } from '../tools/dates.js';
 import { createTaskRunner } from './tasks.js';
@@ -81,7 +82,7 @@ const taskAccepted = { 202: { type: 'object', properties: { taskId: { type: 'str
  * @param {string} [ctx.authMode]   'none' (default) or 'google'
  * @param {object} [ctx.auth]       { settings: authSettings(), exchange? } for google mode (tests pass a fake exchange)
  */
-export async function buildApp({ store, config, services, webDir, authMode = 'none', auth = {}, logger = false, trustProxy = false, geo = {} }) {
+export async function buildApp({ store, config, services, webDir, authMode = 'none', auth = {}, logger = false, trustProxy = false, geo = {}, usage = {} }) {
   // trustProxy: behind a reverse proxy (Caddy in the cloud), the client's address comes from X-Forwarded-For.
   const app = Fastify({ logger, trustProxy });
   // US-only access (server/geo.js, GEO_ALLOW): refused before anything else runs; the health check always passes.
@@ -144,6 +145,10 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   });
   if (authMode !== 'none') registerRateLimits(app, { now: auth.now, all: authMode === 'demo' ? DEMO_REQUEST_LIMIT : null });
   registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now, db, notices: services.notices ?? {} });
+  // The admin's usage totals (server/usage-totals.js): the signed-in app only, never the demo or a local run.
+  if (authMode === 'google') {
+    registerUsageTotals(app, { db: store.raw ?? store.db, location: usage.location, ownOrigin: new URL(auth.settings.publicUrl).origin, siteHost: usage.siteHost, demoHost: usage.demoHost, now: usage.now });
+  }
   // Multi-user (db/scope.js): each route handler, and every task it starts, runs as the signed-in user; with no sign-in
   // (AUTH_MODE none, and the demo) that is the owner. The user is decided, and refused if inactive or not allowed this
   // route, as soon as auth has run (onRequest, before the body is read); the handler runs as them from preHandler, after

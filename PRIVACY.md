@@ -23,6 +23,10 @@ You sign in with Google. The app asks Google only for your email address and tha
 - The app emails you only about your own account (for example, that it was approved). The owner is emailed when someone asks for access.
 - The app's administration screens show each account's email address, name, the note given when asking for access, join date, status, last seen time, setup status, whether a key is saved or the account uses the owner's allowance, last pipeline run, number of jobs, AI spending, and feedback, but not the text of your jobs, notes, or knowledge doc, or your key. As the person who runs the server, the owner has technical access to the database, and looks at account data only to keep the app running, or when you ask.
 
+## Usage totals
+
+The app keeps totals to show how it is used. Once a day, the first time you use the app in a browser, the server adds one to totals of visits by approximate location (city, state, and country) and by device type (phone, tablet, or computer). It works out your location from your IP address on the server, without an outside service. It also counts how people arrive at the app, using a general category: LinkedIn, GitHub, the owner's website, the demo, other, or direct. It does not keep your IP address, browser details, or the address you came from, and these totals are not linked to your account, so they remain if you delete it. Because few people use the app, a city total could still suggest who a visit came from. Only the owner sees these totals.
+
 ## The owner's Google access
 
 The owner's own Google sign-in lets the app create its own documents in the owner's Drive (`drive.file`), send the owner's report and account emails (`gmail.send`), and, for the owner's inbox feature, read and label job-related mail in the owner's own Gmail (`gmail.readonly`, `gmail.modify`). Nothing from the owner's mailbox is shown to other accounts. Use of information received from Google APIs adheres to the [Google API Services User Data Policy](https://developers.google.com/terms/api-services-user-data-policy), including its Limited Use requirements.
@@ -41,7 +45,7 @@ Under Settings you can, at any time:
 - **Download your data:** everything that is yours, as one file.
 - **Remove your Claude key.**
 - **Pause your account,** and resume it later.
-- **Delete your account:** it and everything in it are deleted at once. Copies inside the encrypted backups age out within about two months.
+- **Delete your account:** it and everything in it are deleted at once, apart from the usage totals above, which are not linked to it. Copies inside the encrypted backups age out within about two months.
 
 You can also revoke the app's Google access at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
 

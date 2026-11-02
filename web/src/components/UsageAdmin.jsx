@@ -63,14 +63,110 @@ function WeekBars({ field, weeks }) {
   );
 }
 
+// Device, location, and source totals (server/usage-totals.js): each shown on its own, never combined.
+const DEVICE_ORDER = [
+  ['phone', 'Phone'],
+  ['tablet', 'Tablet'],
+  ['computer', 'Computer'],
+];
+const SOURCE_ORDER = [
+  ['linkedin', 'LinkedIn'],
+  ['github', 'GitHub'],
+  ['site', 'Your site'],
+  ['demo', 'Demo'],
+  ['other', 'Other'],
+  ['direct', 'Direct'],
+];
+const count = (list, value) => list.find((r) => r.value === value)?.count ?? 0;
+
+/** Rows of [label, count] as horizontal bars, with the same numbers as a table for screen readers. */
+function Breakdown({ caption, label, rows }) {
+  const total = rows.reduce((s, [, n]) => s + n, 0);
+  if (!total) return <p className="muted">Nothing counted yet.</p>;
+  const max = Math.max(...rows.map(([, n]) => n));
+  return (
+    <>
+      <table className="sr-only">
+        <caption>{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col">{label}</th>
+            <th scope="col">Count</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map(([l, n]) => (
+            <tr key={l}>
+              <td>{l}</td>
+              <td>{n}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="funnel-bars" aria-hidden="true">
+        {rows.map(([l, n]) => (
+          <div key={l} className="funnel-row">
+            <span className="funnel-label">{l}</span>
+            <span className="funnel-track">
+              <span className="funnel-fill" style={{ width: `${Math.max(n ? 2 : 0, (n / max) * 100)}%` }} />
+            </span>
+            <span className="funnel-num">
+              <b>{n.toLocaleString()}</b>
+              <span className="muted small"> {Math.round((n / total) * 100)}%</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** Totals of [key, count], largest first, the top `limit` (the rest summed as "Everywhere else"). */
+function rollup(locations, keyOf, limit) {
+  const sums = new Map();
+  for (const l of locations) sums.set(keyOf(l), (sums.get(keyOf(l)) ?? 0) + l.count);
+  const sorted = [...sums].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  if (sorted.length <= limit) return sorted;
+  return [...sorted.slice(0, limit), ['Everywhere else', sorted.slice(limit).reduce((s, [, n]) => s + n, 0)]];
+}
+
+/** Visits by location: countries, then states, then cities, each its own chart; unknown is its own row. */
+function Locations({ locations }) {
+  const known = locations.filter((l) => l.country);
+  const unknown = locations.filter((l) => !l.country).reduce((s, l) => s + l.count, 0);
+  const withUnknown = (rows) => (unknown ? [...rows, ['Unknown', unknown]] : rows);
+  return (
+    <section className="funnel-card">
+      <h3>Visits by location</h3>
+      <p className="muted small">Approximate, from the address on the server. Each account counts once a day.</p>
+      <div className="usage-charts">
+        <div>
+          <h4>Countries</h4>
+          <Breakdown caption="Visits by country" label="Country" rows={withUnknown(rollup(known, (l) => l.country, 10))} />
+        </div>
+        <div>
+          <h4>States</h4>
+          <Breakdown caption="Visits by state, top 10" label="State" rows={withUnknown(rollup(known, (l) => `${l.state}, ${l.country}`, 10))} />
+        </div>
+        <div>
+          <h4>Cities</h4>
+          <Breakdown caption="Visits by city, top 10" label="City" rows={withUnknown(rollup(known, (l) => `${l.city}, ${l.state}`, 10))} />
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function UsageAdmin() {
   const [range, setRange] = useState(12);
-  const [rows, setRows] = useState(null);
+  const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {
     setError(null);
-    api.adminUsage(range).then(setRows, (err) => setError(err.message));
+    api.adminUsage(range).then(setData, (err) => setError(err.message));
   }, [range]);
+
+  const rows = data?.weeks ?? null;
 
   const latest = rows?.[1]; // the latest full week (row 0 is this week so far)
   const oldestFirst = rows ? [...rows].reverse() : [];
@@ -107,6 +203,20 @@ export default function UsageAdmin() {
             ))}
           </div>
 
+          <div className="usage-charts">
+            <section className="funnel-card">
+              <h3>Visits by device</h3>
+              <p className="muted small">Each account counts once a day.</p>
+              <Breakdown caption="Visits by device" label="Device" rows={DEVICE_ORDER.map(([v, l]) => [l, count(data.devices, v)])} />
+            </section>
+            <section className="funnel-card">
+              <h3>Arrivals by source</h3>
+              <p className="muted small">Page loads from outside the app; returning from Google sign-in is not counted.</p>
+              <Breakdown caption="Arrivals by source" label="Source" rows={SOURCE_ORDER.map(([v, l]) => [l, count(data.sources, v)])} />
+            </section>
+          </div>
+          <Locations locations={data.locations} />
+
           <section className="funnel-card">
             <h3>Every total</h3>
             <div className="usage-scroll">
@@ -140,6 +250,14 @@ export default function UsageAdmin() {
             Accounts seen: this week, accounts that visited; earlier weeks, accounts with a pipeline run or an added job (a
             scheduled run counts). Letters count those the app wrote or you saved, not v1 imports. Claude spend counts calls
             with a known price. A deleted account's activity leaves these totals, apart from spend on the owner's key.
+            Devices, locations, and sources are counted from November 2026 on and are not linked to any account.
+          </p>
+          <p className="muted small">
+            Location data:{' '}
+            <a href="https://db-ip.com" target="_blank" rel="noreferrer">
+              IP to City Lite by DB-IP
+            </a>
+            , CC BY 4.0.
           </p>
         </>
       )}

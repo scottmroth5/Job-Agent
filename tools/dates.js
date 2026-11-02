@@ -28,6 +28,12 @@ export function localDay(at = new Date()) {
   return zone ? dayIn(d, zone) : `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** The calendar day of a moment in the app's zone, whoever the request runs as (app-wide totals). */
+export function appDay(at = new Date()) {
+  const d = at instanceof Date ? at : new Date(at);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /** The local calendar day N days before a moment. */
 export function localDaysAgo(at, days) {
   return shift(localDay(new Date(at)), days);

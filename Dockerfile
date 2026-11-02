@@ -28,21 +28,21 @@ RUN npm ci
 COPY . .
 RUN npm run web:build && rm -rf node_modules
 
-# The country database for US-only access (server/geo.js): DB-IP's free IP to Country Lite (CC BY 4.0,
-# https://db-ip.com), this month's file or last month's. A failed download leaves no file, and the app then blocks
-# nothing and says so in its log; the weekly rebuild tries again.
+# The location database for US-only access and the admin's usage totals (server/geo.js): DB-IP's free IP to City Lite
+# (CC BY 4.0, https://db-ip.com), this month's file or last month's. A failed download leaves no file, and the app then
+# blocks nothing, counts locations as unknown, and says so in its log; the weekly rebuild tries again.
 FROM debian:bookworm-slim AS geo
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 # GEO_STAMP (the build date, from the deploy workflow) makes each build download the file afresh rather than reuse the cache.
 ARG GEO_STAMP=none
-RUN echo "country database for build $GEO_STAMP" && mkdir -p /geo \
+RUN echo "location database for build $GEO_STAMP" && mkdir -p /geo \
  && for m in "$(date -u +%Y-%m)" "$(date -u -d "$(date -u +%Y-%m-01) -1 month" +%Y-%m)"; do \
-      if curl -fsSL --max-time 120 -o /tmp/country.mmdb.gz "https://download.db-ip.com/free/dbip-country-lite-$m.mmdb.gz" \
-         && gunzip -c /tmp/country.mmdb.gz > /geo/country.mmdb && [ -s /geo/country.mmdb ]; then echo "country database $m"; break; fi; \
-      rm -f /geo/country.mmdb; \
-    done; rm -f /tmp/country.mmdb.gz; true
+      if curl -fsSL --max-time 300 -o /tmp/city.mmdb.gz "https://download.db-ip.com/free/dbip-city-lite-$m.mmdb.gz" \
+         && gunzip -c /tmp/city.mmdb.gz > /geo/city.mmdb && [ -s /geo/city.mmdb ]; then echo "location database $m"; break; fi; \
+      rm -f /geo/city.mmdb; \
+    done; rm -f /tmp/city.mmdb.gz; true
 
 # Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
 FROM node:22-bookworm-slim

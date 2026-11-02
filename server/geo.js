@@ -1,7 +1,9 @@
 // US-only access (owner's choice, 2026-10-25): requests from outside the allowed countries get a short 403 page, for the
 // app and the demo. The health check (/healthz, used by the deploy and Docker) always passes, as do private and
-// loopback addresses (inside the server). The country comes from DB-IP's free IP to Country Lite database (CC BY 4.0,
-// https://db-ip.com), downloaded into the image at build time (Dockerfile) and refreshed by the weekly rebuild.
+// loopback addresses (inside the server). The country comes from DB-IP's free IP to City Lite database (CC BY 4.0,
+// https://db-ip.com), downloaded into the image at build time (Dockerfile) and refreshed by the weekly rebuild; the
+// same file gives the approximate city and state for the admin's usage totals (server/usage-totals.js). Lookups are
+// local: no address ever goes to an outside service.
 // GEO_ALLOW (comma-separated country codes) turns it on; unset, nothing is blocked (local runs, tests). Without the
 // database it fails open and says so in the server log. An address the database does not know is let through: iPhones
 // (iCloud Private Relay, new mobile IPv6 ranges) often arrive from such addresses, and blocking them locked out real
@@ -11,7 +13,7 @@ import { existsSync } from 'node:fs';
 import { isIP } from 'node:net';
 import maxmind from 'maxmind';
 
-export const GEO_DB_PATH = process.env.GEO_DB || '/app/geo/country.mmdb';
+export const GEO_DB_PATH = process.env.GEO_DB || '/app/geo/city.mmdb';
 const ALWAYS_OPEN = [/^\/healthz(\?|$)/];
 
 /** The allowed country codes from GEO_ALLOW ("US", "US,CA"); empty when unset. */
@@ -33,11 +35,21 @@ export function isPrivateAddress(ip) {
   return false;
 }
 
-/** A country lookup from the database file: ip -> 'US' | null. Null when there is no file. */
-export async function loadCountryLookup(path = GEO_DB_PATH) {
+/**
+ * Lookups from the database file, or null when there is no file: country(ip) -> 'US' | null, and location(ip) ->
+ * { city, state, country } in English (any may be missing) | null.
+ */
+export async function openGeo(path = GEO_DB_PATH) {
   if (!existsSync(path)) return null;
   const reader = await maxmind.open(path);
-  return (ip) => reader.get(ip)?.country?.iso_code ?? null;
+  return {
+    country: (ip) => reader.get(ip)?.country?.iso_code ?? null,
+    location: (ip) => {
+      const r = reader.get(ip);
+      if (!r?.country) return null;
+      return { city: r.city?.names?.en ?? null, state: r.subdivisions?.[0]?.names?.en ?? null, country: r.country.names?.en ?? r.country.iso_code ?? null };
+    },
+  };
 }
 
 /** The first half of an address, for logs: 203.0.113.x or 2001:db8:1:: (a /24 or /48). */
