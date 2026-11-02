@@ -112,7 +112,7 @@ test('GET /api/admin/usage: the admin only, 4 to 52 weeks, the listed fields onl
   assert.equal(res.statusCode, 200);
   assert.equal(res.json().weeks.length, 4);
   for (const row of res.json().weeks) assert.deepEqual(Object.keys(row).sort(), FIELDS);
-  assert.deepEqual(Object.keys(res.json()).sort(), ['devices', 'locations', 'sources', 'weeks']);
+  assert.deepEqual(Object.keys(res.json()).sort(), ['browsers', 'devices', 'locations', 'sources', 'weeks']);
   for (const s of ['pat@example.com', 'Secret Title', 'Private']) assert.ok(!res.body.includes(s), s);
   assert.equal((await app.inject({ url: '/api/admin/usage', headers: as(OWNER) })).json().weeks.length, 12, 'twelve weeks by default');
   assert.equal((await app.inject({ url: '/api/admin/usage?weeks=52', headers: as(OWNER) })).json().weeks.length, 52);

@@ -63,7 +63,7 @@ function WeekBars({ field, weeks }) {
   );
 }
 
-// Device, location, and source totals (server/usage-totals.js): each shown on its own, never combined.
+// Device, browser, location, and source totals (server/usage-totals.js): each shown on its own, never combined.
 const DEVICE_ORDER = [
   ['phone', 'Phone'],
   ['tablet', 'Tablet'],
@@ -78,6 +78,12 @@ const SOURCE_ORDER = [
   ['direct', 'Direct'],
 ];
 const count = (list, value) => list.find((r) => r.value === value)?.count ?? 0;
+/** [value, count] for the largest `limit` (the list comes largest first), the rest summed as "Everything else". */
+const top = (list, limit) => {
+  const rows = list.map((r) => [r.value, r.count]);
+  if (rows.length <= limit) return rows;
+  return [...rows.slice(0, limit), ['Everything else', rows.slice(limit).reduce((s, [, n]) => s + n, 0)]];
+};
 
 /** Rows of [label, count] as horizontal bars, with the same numbers as a table for screen readers. */
 function Breakdown({ caption, label, rows }) {
@@ -210,6 +216,11 @@ export default function UsageAdmin() {
               <Breakdown caption="Visits by device" label="Device" rows={DEVICE_ORDER.map(([v, l]) => [l, count(data.devices, v)])} />
             </section>
             <section className="funnel-card">
+              <h3>Visits by browser</h3>
+              <p className="muted small">Browser and major version. Each account counts once a day.</p>
+              <Breakdown caption="Visits by browser, top 10" label="Browser" rows={top(data.browsers, 10)} />
+            </section>
+            <section className="funnel-card">
               <h3>Arrivals by source</h3>
               <p className="muted small">Page loads from outside the app; returning from Google sign-in is not counted.</p>
               <Breakdown caption="Arrivals by source" label="Source" rows={SOURCE_ORDER.map(([v, l]) => [l, count(data.sources, v)])} />
@@ -250,7 +261,7 @@ export default function UsageAdmin() {
             Accounts seen: this week, accounts that visited; earlier weeks, accounts with a pipeline run or an added job (a
             scheduled run counts). Letters count those the app wrote or you saved, not v1 imports. Claude spend counts calls
             with a known price. A deleted account's activity leaves these totals, apart from spend on the owner's key.
-            Devices, locations, and sources are counted from November 2026 on and are not linked to any account.
+            Devices, browsers, locations, and sources are counted from November 2026 on and are not linked to any account.
           </p>
           <p className="muted small">
             Location data:{' '}

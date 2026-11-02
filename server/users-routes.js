@@ -3,7 +3,7 @@
 // registered in the demo. Each decision emails the person about their own account (server/notices.js).
 import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.js';
 import { listUsers, usageByWeek, usagePeriodStart, usageTotals } from './admin-queries.js';
-import { DEVICES, SOURCES } from './usage-totals.js';
+import { BROWSER_NAMES, DEVICES, SOURCES } from './usage-totals.js';
 import { deleteAccount } from '../agents/account-data.js';
 import { ATTACHMENTS_DIR } from './attachments.js';
 
@@ -44,12 +44,12 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
       claudeSpendUsd: { type: 'number' },
     },
   };
-  // Device, location, and source totals over the same weeks (server/usage-totals.js): app-wide, never per account.
-  const total = (values) => ({
+  // Device, browser, location, and source totals over the same weeks (server/usage-totals.js): app-wide, never per account.
+  const total = (values, pattern) => ({
     type: 'object',
     additionalProperties: false,
     required: ['value', 'count'],
-    properties: { value: values ? { type: 'string', enum: values } : { type: 'string' }, count: { type: 'integer' } },
+    properties: { value: values ? { type: 'string', enum: values } : { type: 'string', pattern }, count: { type: 'integer' } },
   });
   const place = {
     type: 'object',
@@ -61,16 +61,17 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
     '/api/admin/usage',
     {
       schema: {
-        summary: 'Weekly totals across all accounts (Sunday to Saturday, newest first), plus visits by device and location and arrivals by source (admin)',
+        summary: 'Weekly totals across all accounts (Sunday to Saturday, newest first), plus visits by device, browser, and location and arrivals by source (admin)',
         querystring: { type: 'object', additionalProperties: false, properties: { weeks: { type: 'integer', minimum: 4, maximum: 52, default: 12 } } },
         response: {
           200: {
             type: 'object',
             additionalProperties: false,
-            required: ['weeks', 'devices', 'locations', 'sources'],
+            required: ['weeks', 'devices', 'browsers', 'locations', 'sources'],
             properties: {
               weeks: { type: 'array', items: weekRow },
               devices: { type: 'array', items: total(DEVICES) },
+              browsers: { type: 'array', items: total(null, `^(?:(?:${BROWSER_NAMES.join('|')}) \\d{1,3}|Other)$`) },
               locations: { type: 'array', items: place },
               sources: { type: 'array', items: total(SOURCES) },
             },

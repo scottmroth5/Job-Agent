@@ -14,7 +14,10 @@ import { deleteAccount, exportAccount } from '../agents/account-data.js';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
-import { GOOGLE_SIGNIN_RETURN, SOURCES, deviceOf, locationValue, sourceOf } from '../server/usage-totals.js';
+import { GOOGLE_SIGNIN_RETURN, SOURCES, browserOf, deviceOf, locationValue, sourceOf } from '../server/usage-totals.js';
+import * as usageBrowser from '../db/migrations/021-usage-browser.js';
+import Database from 'better-sqlite3';
+import { readFileSync } from 'node:fs';
 import { DEMO_CONFIG } from '../demo/sample-data.js';
 
 const SITE = 'https://jobs.example.com';
@@ -42,6 +45,44 @@ test('device type from the user agent and the mobile hint', () => {
   assert.equal(deviceOf({ 'user-agent': UA.windows }), 'computer');
   assert.equal(deviceOf({ 'user-agent': UA.windows, 'sec-ch-ua-mobile': '?1' }), 'phone');
   assert.equal(deviceOf({}), 'computer');
+});
+
+test('browser and major version: a fixed name and a number, or Other', () => {
+  const b = (ua) => browserOf({ 'user-agent': ua });
+  assert.equal(b(UA.windows), 'Chrome 130');
+  assert.equal(b(UA.androidPhone), 'Chrome 130');
+  assert.equal(b(UA.iphone), 'Safari 18');
+  assert.equal(b(UA.ipad), 'Safari 18');
+  assert.equal(b('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15'), 'Safari 18');
+  assert.equal(b(`${UA.windows} Edg/130.0.2849.68`), 'Edge 130');
+  assert.equal(b(`${UA.windows} OPR/115.0.0.0`), 'Opera 115');
+  assert.equal(b('Mozilla/5.0 (Linux; Android 15; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/27.0 Chrome/125.0.0.0 Mobile Safari/537.36'), 'Samsung Internet 27');
+  assert.equal(b('Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0'), 'Firefox 132');
+  assert.equal(b('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/130.0.6723.90 Mobile/15E148 Safari/604.1'), 'Chrome 130');
+  assert.equal(b('Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) FxiOS/132.0 Mobile/15E148 Safari/605.1.15'), 'Firefox 132');
+  // Anything else, or text made to look like a browser with extra words, never passes through.
+  assert.equal(b('curl/8.5.0'), 'Other');
+  assert.equal(b(''), 'Other');
+  assert.equal(b('Mozilla/5.0 Chrome/<script>'), 'Other');
+  assert.equal(b('Mozilla/5.0 Chrome/99999999'), 'Chrome 999');
+  for (const ua of Object.values(UA)) assert.match(b(ua), /^(?:(?:Edge|Opera|Samsung Internet|Firefox|Chrome|Safari) \d{1,3}|Other)$/);
+});
+
+test('migration 021 adds the browser dimension and keeps the totals already counted', () => {
+  const db = new Database(':memory:');
+  db.exec(readFileSync('db/migrations/020-usage-totals.sql', 'utf8'));
+  db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'device', 'phone', 3), ('2026-11-02', 'source', 'linkedin', 2)").run();
+  assert.throws(() => db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run());
+  usageBrowser.up(db);
+  db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run();
+  assert.deepEqual(db.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension').all(), [
+    { dimension: 'browser', value: 'Chrome 130', count: 1 },
+    { dimension: 'device', value: 'phone', count: 3 },
+    { dimension: 'source', value: 'linkedin', count: 2 },
+  ]);
+  assert.throws(() => db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'user', '1', 1)").run());
+  assert.equal(usageBrowser.foreignKeys, false);
+  db.close();
 });
 
 test('a location is "City, State, Country", or unknown', () => {
@@ -116,12 +157,13 @@ async function setup({ authMode = 'google' } = {}) {
 
 const page = (referer) => ({ 'sec-fetch-dest': 'document', accept: 'text/html', ...(referer ? { referer } : {}) });
 
-test('a visit counts once per account per day, by device and location', async () => {
+test('a visit counts once per account per day, by device, browser, and location', async () => {
   const { app, store, get, totals } = await setup();
   assert.equal((await get('/api/me')).statusCode, 200);
   await get('/api/me');
   await get('/api/summary');
   assert.deepEqual(totals(), [
+    { dimension: 'browser', value: 'Chrome 130', count: 1 },
     { dimension: 'device', value: 'computer', count: 1 },
     { dimension: 'location', value: 'Springfield, Illinois, United States', count: 1 },
   ]);
@@ -129,6 +171,8 @@ test('a visit counts once per account per day, by device and location', async ()
   await get('/api/me', { as: 'sam@example.com', ip: '198.51.100.66', ua: UA.iphone });
   await get('/api/me', { as: 'sam@example.com', ip: '198.51.100.66', ua: UA.iphone });
   assert.deepEqual(totals(), [
+    { dimension: 'browser', value: 'Chrome 130', count: 1 },
+    { dimension: 'browser', value: 'Safari 18', count: 1 },
     { dimension: 'device', value: 'computer', count: 1 },
     { dimension: 'device', value: 'phone', count: 1 },
     { dimension: 'location', value: 'Springfield, Illinois, United States', count: 1 },
@@ -194,7 +238,8 @@ test('the table holds no address, browser string, referrer, URL, or user id, and
   assert.deepEqual(store.raw.prepare('SELECT name FROM pragma_table_info(?) ORDER BY cid').pluck().all('usage_totals'), ['day', 'dimension', 'value', 'count']);
   const text = JSON.stringify(store.raw.prepare('SELECT * FROM usage_totals').all());
   for (const leak of ['203.0.113', 'Mozilla', 'iPad;', 'someone-private', 'secret', 'utm_source', 'sam@example.com', OWNER]) assert.ok(!text.includes(leak), leak);
-  for (const row of totals()) assert.ok(['device', 'location', 'source'].includes(row.dimension));
+  for (const row of totals()) assert.ok(['device', 'browser', 'location', 'source'].includes(row.dimension));
+  assert.ok(!text.includes('605.1.15') && !text.includes('AppleWebKit'), 'no user agent text');
   assert.ok(!totals().some((r) => r.value === String(sam)));
   assert.ok(!USER_TABLES.includes('usage_totals'));
 
@@ -203,6 +248,7 @@ test('the table holds no address, browser string, referrer, URL, or user id, and
   assert.equal(res.statusCode, 200);
   const body = res.json();
   assert.deepEqual(body.devices, [{ value: 'computer', count: 1 }, { value: 'tablet', count: 1 }]);
+  assert.deepEqual(body.browsers, [{ value: 'Chrome 130', count: 1 }, { value: 'Safari 18', count: 1 }]);
   assert.deepEqual(body.locations, [{ city: 'Springfield', state: 'Illinois', country: 'United States', count: 2 }]);
   assert.deepEqual(body.sources, [{ value: 'linkedin', count: 1 }]);
   assert.equal((await get('/api/admin/usage', { as: 'sam@example.com' })).statusCode, 403);

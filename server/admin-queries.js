@@ -138,7 +138,7 @@ function weeklyTotals(db, { weeks = 12, now = new Date() }) {
 }
 
 /**
- * The device, location, and source totals (server/usage-totals.js) from a day on: each dimension on its own, largest
+ * The device, browser, location, and source totals (server/usage-totals.js) from a day on: each dimension on its own, largest
  * first. Locations come back split ({ city, state, country }; unknown has empty parts). App-wide counts only.
  */
 export function usageTotals(db, { since }) {
@@ -148,6 +148,7 @@ export function usageTotals(db, { since }) {
   const of = (dimension) => rows.filter((r) => r.dimension === dimension).map(({ value, count }) => ({ value, count }));
   return {
     devices: of('device'),
+    browsers: of('browser'),
     locations: of('location').map(({ value, count }) => {
       const [city = '', state = '', country = ''] = value === 'unknown' ? [] : value.split(', ');
       return { city, state, country, count };

@@ -313,14 +313,15 @@ earlier weeks: distinct users with a run or added job), pipeline runs completed 
 letters (v2, v2-revision, user), preps, Claude spend (run_calls.cost_usd, priced calls only), and feedback received.
 The response schema allows those fields only. Tiles show the latest full week; bar charts carry .sr-only tables. Totals
 only, kept in the app: nothing logged, emailed, or sent to any analytics service. test/usage.test.js.
-Usage totals (server/usage-totals.js, usage_totals from 020, AUTH_MODE=google only): per app day (tools/dates.js appDay),
-visits by device (phone, tablet, computer from the user agent) and by location ("City, State, Country" or unknown, from
+Usage totals (server/usage-totals.js, usage_totals from 020 and 021, AUTH_MODE=google only): per app day (tools/dates.js appDay),
+visits by device (phone, tablet, computer from the user agent), by browser and major version (browserOf: a fixed
+name and a number, "Chrome 130", or Other), and by location ("City, State, Country" or unknown, from
 req.ip in the local DB-IP City Lite file, server/geo.js openGeo), once per account a day (an in-memory set, never stored);
 a visit is a signed-in Mozilla/ browser's successful / or /api/* request. Arrivals by source (linkedin, github, site, demo,
 other, direct): document loads of / and of /auth/login without next; Google sign-in returns and own-origin referrers are
 not counted; SOURCE_SITE_HOST and SOURCE_DEMO_HOST name site and demo. The table has day, dimension, value, count only:
 never an address, user agent, referrer, URL, or user id, and no link between dimensions. It is not a user table, so
-export and deletion leave it. GET /api/admin/usage returns { weeks, devices, locations, sources } for the period.
+export and deletion leave it. GET /api/admin/usage returns { weeks, devices, browsers, locations, sources } for the period.
 test/usage-totals.test.js.
 PRIVACY.md must stay true of the code: a new outside service, admin column, or demo event changes its wording.
 

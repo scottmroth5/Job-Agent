@@ -1,15 +1,16 @@
-// The admin's usage totals (Admin > Usage): app-wide counts per day of visits by device type and by approximate
-// location, and of arrivals by a general source. Signed-in app only (AUTH_MODE=google); the demo, local runs,
+// The admin's usage totals (Admin > Usage): app-wide counts per day of visits by device type, by browser and major
+// version, and by approximate location, and of arrivals by a general source. Signed-in app only (AUTH_MODE=google); the demo, local runs,
 // scheduled jobs, and the pipeline count nothing.
 // - A visit: the first successful request of the day from a signed-in browser (the page or an API call, never a
 //   static file, the health check, or a refused request), once per account per app day. The accounts already counted
 //   today are an in-memory set, cleared when the day changes and never written anywhere; a restart may count someone
-//   twice. The device type comes from the user agent and the location from the address, looked up in the local
+//   twice. The device type and browser come from the user agent and the location from the address, looked up in the local
 //   database (server/geo.js, never an outside service).
 // - An arrival: a page load of the app's main page (signed in or on its way to sign-in) or a direct link to sign-in,
 //   from outside the app, as one fixed source category.
-// The address, user agent, Referer, and URL are read here and dropped: usage_totals (migration 020) holds only the
-// day, the dimension, a fixed value or "City, State, Country", and a count. Nothing is logged.
+// The address, user agent, Referer, and URL are read here and dropped: usage_totals (migrations 020, 021) holds only
+// the day, the dimension, a fixed value ("Chrome 130" is a fixed name and a number) or "City, State, Country", and a
+// count. Nothing is logged.
 import { isPrivateAddress } from './geo.js';
 import { appDay } from '../tools/dates.js';
 import { hostIs } from '../tools/urls.js';
@@ -34,6 +35,28 @@ export function deviceOf(headers = {}) {
   if (/iPhone|iPod|Windows Phone|Mobi/i.test(ua)) return 'phone';
   if (/Android/i.test(ua)) return 'tablet'; // Android without "Mobile"
   return 'computer';
+}
+
+// Browsers by the token their user agent carries, most specific first (Edge, Opera, and Samsung also say Chrome and
+// Safari; Chrome on iPhone says Safari). The version is the major number only.
+const BROWSERS = [
+  ['Edge', /\bEdg(?:e|A|iOS)?\/(\d{1,3})/],
+  ['Opera', /\b(?:OPR|OPiOS)\/(\d{1,3})/],
+  ['Samsung Internet', /\bSamsungBrowser\/(\d{1,3})/],
+  ['Firefox', /\b(?:Firefox|FxiOS)\/(\d{1,3})/],
+  ['Chrome', /\b(?:Chrome|CriOS)\/(\d{1,3})/],
+  ['Safari', /\bVersion\/(\d{1,3})(?:\.\d+)*(?: Mobile\/\w+)? Safari\//],
+];
+export const BROWSER_NAMES = BROWSERS.map(([name]) => name);
+
+/** Browser and major version ("Chrome 130"), or "Other": a fixed name and a number, never the user agent's text. */
+export function browserOf(headers = {}) {
+  const ua = String(headers['user-agent'] ?? '');
+  for (const [name, re] of BROWSERS) {
+    const m = re.exec(ua);
+    if (m) return `${name} ${Number(m[1])}`;
+  }
+  return 'Other';
 }
 
 /** "City, State, Country" from a lookup ({ city, state, country }), or "unknown" without a country. */
@@ -132,6 +155,7 @@ export function registerUsageTotals(app, { db, location = null, ownOrigin = null
             loc = null;
           }
           addToTotal(db, day, 'device', deviceOf(req.headers));
+          addToTotal(db, day, 'browser', browserOf(req.headers));
           addToTotal(db, day, 'location', locationValue(loc));
         }
       }
