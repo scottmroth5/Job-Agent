@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import ListsAdmin from './ListsAdmin.jsx';
 import SpendingAdmin from './SpendingAdmin.jsx';
+import UsageAdmin from './UsageAdmin.jsx';
 import UsersAdmin from './UsersAdmin.jsx';
 import { useDemo } from '../demo.jsx';
 import { isAdmin, isOwner, useMe } from '../me.jsx';
@@ -11,6 +12,7 @@ const SECTIONS = [
   ['lists', 'Lists', (me, demo) => isOwner(me) && !demo],
   ['spending', 'Spending', (me, demo) => isAdmin(me) && !demo],
   ['users', 'Users', (me, demo) => isAdmin(me) && !demo],
+  ['usage', 'Usage', (me, demo) => isAdmin(me) && !demo],
 ];
 const sectionFromHash = () => {
   const s = /^#\/admin\/(\w+)/.exec(window.location.hash)?.[1];
@@ -55,6 +57,8 @@ export default function AdminPage() {
         <ListsAdmin />
       ) : section === 'spending' ? (
         <SpendingAdmin />
+      ) : section === 'usage' ? (
+        <UsageAdmin />
       ) : null}
     </>
   );

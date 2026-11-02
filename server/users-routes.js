@@ -32,17 +32,23 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
   );
 
   // The app's weekly totals (counts only; no names, jobs, or text). Private: nothing goes to an analytics service.
+  const counts = ['accountsSeen', 'pipelineCompleted', 'pipelineFailed', 'jobsAdded', 'lettersWritten', 'prepsWritten', 'feedbackReceived'];
   const weekRow = {
     type: 'object',
     additionalProperties: false,
-    properties: Object.fromEntries([['weekStart', { type: 'string' }], ...['pipelineCompleted', 'pipelineFailed', 'jobsAdded', 'lettersWritten', 'prepsWritten', 'accountsSeen'].map((k) => [k, { type: 'integer' }])]),
+    required: ['weekEnding', ...counts, 'claudeSpendUsd'],
+    properties: {
+      weekEnding: { type: 'string', description: 'The Saturday the week ends (YYYY-MM-DD, app time zone)' },
+      ...Object.fromEntries(counts.map((k) => [k, { type: 'integer' }])),
+      claudeSpendUsd: { type: 'number' },
+    },
   };
   app.get(
     '/api/admin/usage',
     {
       schema: {
-        summary: 'Weekly totals across all accounts: pipeline runs, jobs added, letters, preps, accounts seen (admin)',
-        querystring: { type: 'object', additionalProperties: false, properties: { weeks: { type: 'integer', minimum: 1, maximum: 52, default: 12 } } },
+        summary: 'Weekly totals across all accounts, Sunday to Saturday, newest (this week so far) first (admin)',
+        querystring: { type: 'object', additionalProperties: false, properties: { weeks: { type: 'integer', minimum: 4, maximum: 52, default: 12 } } },
         response: { 200: { type: 'array', items: weekRow } },
       },
     },

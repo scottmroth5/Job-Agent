@@ -2,6 +2,7 @@
 // users (test/user-scope.test.js exempts this file): it reads the unscoped database, and its routes need the admin role.
 // It returns account facts and counts only, never a user's jobs, notes, emails, background, or key.
 import { MIN_PROFILE_CHARS, scheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
+import { currentTimeZone, currentUserId, runAsUser } from '../db/scope.js';
 import { dayOf, localDay } from '../tools/dates.js';
 
 /**
@@ -55,45 +56,85 @@ const addDays = (day, n) => {
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 };
-const mondayOf = (day) => addDays(day, -((new Date(`${day}T00:00:00Z`).getUTCDay() + 6) % 7));
+const sundayOf = (day) => addDays(day, -new Date(`${day}T00:00:00Z`).getUTCDay());
 // Letters a person or the app wrote: v1 imports are not this app's work.
 const LETTER_SOURCES = new Set(['v2', 'v2-revision', 'user']);
 
 /**
- * The app's weekly totals across everyone, newest week first (weeks start Monday, local days): pipeline runs completed
- * and failed, jobs added, cover letters written, meeting preps written, and accounts seen (any account with a run, job,
- * document, or visit that week). Counts only: never who, or anything about a job.
+ * The app's weekly totals across everyone, newest week first; weeks run Sunday to Saturday by local day, and the first
+ * row is the current week so far. Each row: the Saturday it ends, accounts seen (this week: a last visit in it; earlier
+ * weeks: accounts with a run or an added job, since only the latest visit is kept), pipeline runs completed and
+ * failed, jobs added, cover letters written, meeting preps written, Claude spend (calls with a known price), and
+ * feedback received. Counts only: never who, or anything about a job.
  */
-export function usageByWeek(db, { weeks = 12, now = new Date() } = {}) {
-  const thisWeek = mondayOf(localDay(now));
+export function usageByWeek(db, options = {}) {
+  // The app's zone, not the asking admin's own (Settings): everyone sees the same weeks.
+  return currentTimeZone() ? runAsUser(currentUserId(), () => weeklyTotals(db, options)) : weeklyTotals(db, options);
+}
+
+function weeklyTotals(db, { weeks = 12, now = new Date() }) {
+  const thisWeek = sundayOf(localDay(now));
   const first = addDays(thisWeek, -7 * (weeks - 1));
   // A day early, so no time zone drops a row; rows are then placed by their local day.
   const since = new Date(`${addDays(first, -1)}T00:00:00Z`).toISOString();
   const rows = new Map();
   for (let i = 0; i < weeks; i += 1) {
     const weekStart = addDays(thisWeek, -7 * i);
-    rows.set(weekStart, { weekStart, pipelineCompleted: 0, pipelineFailed: 0, jobsAdded: 0, lettersWritten: 0, prepsWritten: 0, seen: new Set() });
+    rows.set(weekStart, {
+      weekEnding: addDays(weekStart, 6),
+      seen: new Set(),
+      pipelineCompleted: 0,
+      pipelineFailed: 0,
+      jobsAdded: 0,
+      lettersWritten: 0,
+      prepsWritten: 0,
+      claudeSpendUsd: 0,
+      feedbackReceived: 0,
+    });
   }
-  const add = (at, field, uid) => {
+  const current = rows.get(thisWeek);
+  const weekOf = (at) => {
     const day = dayOf(at);
-    const week = day && day >= first ? rows.get(mondayOf(day)) : null;
-    if (!week) return;
-    if (field) week[field] += 1;
-    if (uid != null) week.seen.add(uid);
+    return day && day >= first ? rows.get(sundayOf(day)) : null;
+  };
+  const add = (at, field, amount = 1) => {
+    const week = weekOf(at);
+    if (week) week[field] += amount;
+  };
+  // Earlier weeks count accounts by what they did; the current week by the last visit (below).
+  const did = (at, uid) => {
+    const week = weekOf(at);
+    if (week && week !== current) week.seen.add(uid);
   };
 
   for (const r of db.prepare('SELECT name, status, started_at AS at, user_id AS uid FROM runs WHERE started_at >= ?').all(since)) {
-    const field = r.name !== 'pipeline' ? null : ['ok', 'partial'].includes(r.status) ? 'pipelineCompleted' : r.status === 'failed' ? 'pipelineFailed' : null;
-    add(r.at, field, r.uid);
+    did(r.at, r.uid);
+    if (r.name !== 'pipeline') continue;
+    if (['ok', 'partial'].includes(r.status)) add(r.at, 'pipelineCompleted');
+    else if (r.status === 'failed') add(r.at, 'pipelineFailed');
   }
-  for (const p of db.prepare('SELECT created_at AS at, user_id AS uid FROM postings WHERE created_at >= ?').all(since)) add(p.at, 'jobsAdded', p.uid);
-  for (const a of db.prepare('SELECT kind, source, created_at AS at, user_id AS uid FROM artifacts WHERE created_at >= ?').all(since)) {
-    add(a.at, a.kind === 'cover_letter' && LETTER_SOURCES.has(a.source) ? 'lettersWritten' : null, a.uid);
+  for (const p of db.prepare('SELECT created_at AS at, user_id AS uid FROM postings WHERE created_at >= ?').all(since)) {
+    did(p.at, p.uid);
+    add(p.at, 'jobsAdded');
   }
-  for (const m of db.prepare('SELECT created_at AS at, user_id AS uid FROM meeting_preps WHERE created_at >= ?').all(since)) add(m.at, 'prepsWritten', m.uid);
-  for (const u of db.prepare('SELECT last_seen_at AS at, id AS uid FROM users WHERE last_seen_at >= ?').all(since)) add(u.at, null, u.uid);
+  for (const a of db.prepare("SELECT source, created_at AS at FROM artifacts WHERE kind = 'cover_letter' AND created_at >= ?").all(since)) {
+    if (LETTER_SOURCES.has(a.source)) add(a.at, 'lettersWritten');
+  }
+  for (const m of db.prepare('SELECT created_at AS at FROM meeting_preps WHERE created_at >= ?').all(since)) add(m.at, 'prepsWritten');
+  for (const c of db.prepare('SELECT cost_usd AS cost, created_at AS at FROM run_calls WHERE cost_usd IS NOT NULL AND created_at >= ?').all(since)) {
+    add(c.at, 'claudeSpendUsd', c.cost);
+  }
+  for (const f of db.prepare('SELECT created_at AS at FROM feedback WHERE created_at >= ?').all(since)) add(f.at, 'feedbackReceived');
+  for (const u of db.prepare('SELECT last_seen_at AS at, id AS uid FROM users WHERE last_seen_at >= ?').all(since)) {
+    if (weekOf(u.at) === current) current.seen.add(u.uid);
+  }
 
-  return [...rows.values()].map(({ seen, ...week }) => ({ ...week, accountsSeen: seen.size }));
+  return [...rows.values()].map(({ weekEnding, seen, claudeSpendUsd, ...counts }) => ({
+    weekEnding,
+    accountsSeen: seen.size,
+    ...counts,
+    claudeSpendUsd: Math.round(claudeSpendUsd * 100) / 100,
+  }));
 }
 
 /** What waits for the admin: access requests and open feedback (the Home Admin tile). */

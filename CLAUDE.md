@@ -306,10 +306,13 @@ Global Privacy Control. demo_opened carries source (SOURCES: trafficSource reads
 host in the browser; the URL, referrer, and utm text are never sent); the personal site is the parent domain of the
 demo's PUBLIC_URL (DEMO_SITE_ADDRESS), never written in the repo. A new event goes on its EVENTS list and in PRIVACY.md's demo section. The demo banner links
 /privacy. test/demo-analytics.test.js.
-Usage by week (Admin > Users, GET /api/admin/usage, ADMIN_ONLY, never in the demo): server/admin-queries.js usageByWeek
-counts pipeline runs completed (ok, partial) and failed, jobs added, letters (v2, v2-revision, user), preps, and accounts
-seen (any run, job, document, or last visit that week), by local Monday week. Totals only, kept in the app; the signed-in
-app sends nothing to any analytics service. test/usage.test.js.
+Usage (Admin > Usage, web/src/components/UsageAdmin.jsx; GET /api/admin/usage?weeks=4..52, ADMIN_ONLY, never in the
+demo): server/admin-queries.js usageByWeek gives one row per Sunday to Saturday week in the app's zone (never the asking
+admin's own), newest first, the first being this week so far: weekEnding, accounts seen (this week: users.last_seen_at;
+earlier weeks: distinct users with a run or added job), pipeline runs completed (ok, partial) and failed, jobs added,
+letters (v2, v2-revision, user), preps, Claude spend (run_calls.cost_usd, priced calls only), and feedback received.
+The response schema allows those fields only. Tiles show the latest full week; bar charts carry .sr-only tables. Totals
+only, kept in the app: nothing logged, emailed, or sent to any analytics service. test/usage.test.js.
 PRIVACY.md must stay true of the code: a new outside service, admin column, or demo event changes its wording.
 
 ## Spending and internet safety

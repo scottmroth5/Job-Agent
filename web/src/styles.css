@@ -539,6 +539,16 @@ h3.with-icon { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .usage-admin { margin-bottom: 18px; }
 .usage-scroll { overflow-x: auto; }
 .usage-admin td { text-align: right; font-variant-numeric: tabular-nums; }
+.usage-admin .stats { margin-bottom: 12px; }
+.usage-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; margin-bottom: 12px; }
+.usage-chart { min-width: 0; }
+.usage-chart h4 { margin: 0; }
+.usage-chart .weeks { overflow: hidden; }
+.usage-chart .week { min-width: 0; }
+.usage-chart .week-count { font-size: 10px; max-width: 100%; overflow: hidden; }
+.usage-chart .weeks.dense { gap: 2px; }
+.usage-admin .segmented button { white-space: nowrap; }
+.week.partial .week-bar { opacity: 0.45; }
 .feedback-admin .request-note { font-style: normal; white-space: pre-wrap; }
 .setup-chips .chip { font: 12px/1.6 system-ui, -apple-system, 'Segoe UI', sans-serif; border: 1px solid var(--border); border-radius: 10px; padding: 1px 8px; color: var(--muted); }
 .setup-chips .chip.used { color: var(--text); background: var(--accent-soft); border-color: transparent; }
