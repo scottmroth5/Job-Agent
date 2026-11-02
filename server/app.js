@@ -130,7 +130,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   await app.register(swagger, {
     openapi: { info: { title: 'Job Agent API', version: '1.0.0', description: 'Job Hunt UI backend' } },
   });
-  registerSecurityHeaders(app, { https: Boolean(auth.settings?.publicUrl?.startsWith('https://')) });
+  const analytics = authMode === 'demo' ? auth.settings?.analytics : null; // the demo's PostHog host, else none
+  registerSecurityHeaders(app, { https: Boolean(auth.settings?.publicUrl?.startsWith('https://')), connect: analytics ? [analytics.host] : [] });
   // A ceiling on every route per address (@fastify/rate-limit): far above normal use, it stops floods and scripted
   // abuse. The health check is exempt. The tighter limits for sign-in, refused requests, and the demo follow
   // (server/security.js).

@@ -1,4 +1,5 @@
 // Thin client for the Job Agent API (see /api/openapi.json).
+import { changeFeature, sampled, track } from './analytics.js';
 
 const OFFLINE = 'Cannot reach the Job Agent server. Start it with npm run ui, then try again.';
 
@@ -15,7 +16,8 @@ const DEMO_ALLOWED = /^\/api\/prompts\/[a-z-]+\/preview$/; // fills a draft prom
 const demoSamples = () => import('../../demo/samples.js');
 const demoTasks = new Map();
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
-function demoBlocked() {
+function demoBlocked(method, path) {
+  track('change_blocked', { feature: changeFeature(method, path) }); // the demo's usage counts (analytics.js)
   window.dispatchEvent(new CustomEvent('demo-blocked'));
   return Object.assign(new Error(DEMO_NOT_SAVED), { demo: true });
 }
@@ -29,7 +31,7 @@ function demoTask(kind, steps, result) {
 
 /** fetch, with the browser's bare "Failed to fetch" turned into a message that says what to do. */
 async function send(path, init) {
-  if (demoMode && init?.method && !['GET', 'HEAD'].includes(init.method) && !DEMO_ALLOWED.test(path.split('?')[0])) throw demoBlocked();
+  if (demoMode && init?.method && !['GET', 'HEAD'].includes(init.method) && !DEMO_ALLOWED.test(path.split('?')[0])) throw demoBlocked(init.method, path);
   try {
     return await fetch(path, init);
   } catch {
@@ -98,8 +100,10 @@ export const api = {
   closeNoResponse: (id) => request('POST', `/api/postings/${id}/close-no-response`),
   findContact: async (id) => {
     if (!demoMode) return request('POST', `/api/postings/${id}/find-contact`);
-    const { markdown } = await api.findContactSample(id);
-    return demoTask('find-contact', ['Searching for the hiring manager and a recruiter (about a minute)', 'Sample answer ready (demo: no AI, nothing saved)'], { markdown });
+    return sampled('find_contact', async () => {
+      const { markdown } = await api.findContactSample(id);
+      return demoTask('find-contact', ['Searching for the hiring manager and a recruiter (about a minute)', 'Sample answer ready (demo: no AI, nothing saved)'], { markdown });
+    });
   },
   findContactSample: (id) => request('GET', `/api/postings/${id}/find-contact/sample`), // the demo's canned answer
   excludedSites: () => request('GET', '/api/excluded-sites'),
@@ -109,8 +113,10 @@ export const api = {
   removeSiteJobs: (site) => request('POST', `/api/excluded-sites/${encodeURIComponent(site)}/remove-jobs`),
   reviseLetter: async (id, body) => {
     if (!demoMode) return request('POST', `/api/postings/${id}/letter/revise`, body);
-    const [{ sampleRevision }, job] = await Promise.all([demoSamples(), api.get(id), pause(1200)]);
-    return sampleRevision({ ...body, company: job.company, title: job.title });
+    return sampled('letter_revision', async () => {
+      const [{ sampleRevision }, job] = await Promise.all([demoSamples(), api.get(id), pause(1200)]);
+      return sampleRevision({ ...body, company: job.company, title: job.title });
+    });
   },
   saveLetter: (id, content, source) => request('POST', `/api/postings/${id}/letter`, { content, source }),
   restoreLetter: (id, versionId) => request('POST', `/api/postings/${id}/letter/restore`, { versionId }),
@@ -130,13 +136,17 @@ export const api = {
   help: () => request('GET', '/api/help'),
   buildDraft: async (payload) => {
     if (!demoMode) return request('POST', '/api/account/draft', payload);
-    const [{ sampleDraft }] = await Promise.all([demoSamples(), pause(1500)]);
-    return sampleDraft();
+    return sampled('profile_draft', async () => {
+      const [{ sampleDraft }] = await Promise.all([demoSamples(), pause(1500)]);
+      return sampleDraft();
+    });
   },
   askHelp: async (question) => {
     if (!demoMode) return request('POST', '/api/help/ask', { question });
-    const [{ sampleHelpAnswer }, guides] = await Promise.all([demoSamples(), api.help(), pause(800)]);
-    return sampleHelpAnswer(question, guides);
+    return sampled('help_answer', async () => {
+      const [{ sampleHelpAnswer }, guides] = await Promise.all([demoSamples(), api.help(), pause(800)]);
+      return sampleHelpAnswer(question, guides);
+    });
   },
   setTimeZone: (timeZone) => request('PUT', '/api/account/timezone', { timeZone }),
   resumeAccount: () => request('POST', '/api/account/resume'),
@@ -176,9 +186,11 @@ export const api = {
   action: async (id, action) => {
     // In the demo the AI actions answer with samples; Refetch posting changes data, so it is stopped like any change.
     if (!demoMode || !['score', 'write-materials', 'regenerate'].includes(action)) return request('POST', `/api/postings/${id}/actions/${action}`);
-    const [m, job] = await Promise.all([demoSamples(), api.get(id), pause(1200)]);
-    if (action === 'score') return demoTask(action, ['Reading the posting', 'Scoring with Sonnet 5.5', 'Sample score ready (demo: no AI, nothing saved)'], { score: m.sampleScore(job) });
-    return demoTask(action, ['Writing resume tweaks', 'Writing the cover letter', 'Sample ready (demo: no AI, nothing saved)'], { letter: m.sampleLetter(job, { regenerate: action === 'regenerate' }), tweaks: m.sampleTweaks(job) });
+    return sampled(action === 'score' ? 'fit_evaluation' : 'cover_letter', async () => {
+      const [m, job] = await Promise.all([demoSamples(), api.get(id), pause(1200)]);
+      if (action === 'score') return demoTask(action, ['Reading the posting', 'Scoring with Sonnet 5.5', 'Sample score ready (demo: no AI, nothing saved)'], { score: m.sampleScore(job) });
+      return demoTask(action, ['Writing resume tweaks', 'Writing the cover letter', 'Sample ready (demo: no AI, nothing saved)'], { letter: m.sampleLetter(job, { regenerate: action === 'regenerate' }), tweaks: m.sampleTweaks(job) });
+    });
   },
   addNote: (id, body) => request('POST', `/api/postings/${id}/notes`, { body }),
   updateNote: (noteId, body) => request('PATCH', `/api/notes/${noteId}`, { body }),
@@ -188,9 +200,11 @@ export const api = {
   },
   startPrep: async (id, body) => {
     if (!demoMode) return request('POST', `/api/postings/${id}/meeting-prep`, body);
-    const [{ samplePrep }, job] = await Promise.all([demoSamples(), api.get(id), pause(1500)]);
-    const steps = [body.research ? 'Researching the people and the company, then writing the prep (a few minutes)' : 'Writing the prep', 'Sample prep ready (demo: no AI, nothing saved)'];
-    return demoTask('meeting-prep', steps, { prep: { id: 'demo-sample', content: samplePrep(job, body), createdAt: new Date().toISOString(), model: 'a canned sample (no AI)', research: false, webSearches: 0, costUsd: null } });
+    return sampled('meeting_prep', async () => {
+      const [{ samplePrep }, job] = await Promise.all([demoSamples(), api.get(id), pause(1500)]);
+      const steps = [body.research ? 'Researching the people and the company, then writing the prep (a few minutes)' : 'Writing the prep', 'Sample prep ready (demo: no AI, nothing saved)'];
+      return demoTask('meeting-prep', steps, { prep: { id: 'demo-sample', content: samplePrep(job, body), createdAt: new Date().toISOString(), model: 'a canned sample (no AI)', research: false, webSearches: 0, costUsd: null } });
+    });
   },
   prep: (prepId) => request('GET', `/api/meeting-preps/${prepId}`),
   deletePrep: async (prepId) => {

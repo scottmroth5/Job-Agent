@@ -3,27 +3,29 @@
 // listens on this computer, so the rate limits are off there; the headers are always on.
 
 // The web page loads only its own scripts and styles. 'unsafe-inline' for styles covers React style attributes;
-// scripts stay strict, so injected markup can never run code.
-export const CONTENT_SECURITY_POLICY = [
+// scripts stay strict, so injected markup can never run code. connect adds origins the page may send to (the demo's
+// analytics host, server/demo-analytics.js); no script is ever loaded from them.
+export const contentSecurityPolicy = ({ connect = [] } = {}) => [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self'",
-  "connect-src 'self'",
+  ["connect-src 'self'", ...connect].join(' '),
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'self'",
   "frame-ancestors 'none'",
 ].join('; ');
+export const CONTENT_SECURITY_POLICY = contentSecurityPolicy();
 
 /**
  * Adds security headers to every response; a route that set its own (attachments' sandbox policy) keeps it.
- * @param {{ https?: boolean }} opts  https adds Strict-Transport-Security
+ * @param {{ https?: boolean, connect?: string[] }} opts  https adds Strict-Transport-Security; connect, see above
  */
-export function registerSecurityHeaders(app, { https = false } = {}) {
+export function registerSecurityHeaders(app, { https = false, connect = [] } = {}) {
   const headers = {
-    'content-security-policy': CONTENT_SECURITY_POLICY,
+    'content-security-policy': contentSecurityPolicy({ connect }),
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
     'referrer-policy': 'same-origin',

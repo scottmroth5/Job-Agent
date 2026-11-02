@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, setDemoMode } from './api.js';
+import { startAnalytics, track } from './analytics.js';
 import { useLookups } from './lookups.jsx';
 import JobTable from './components/JobTable.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
@@ -46,6 +47,7 @@ export default function App() {
       .me()
       .then((m) => {
         setDemoMode(m?.demo); // before any change can be made: the demo stops changes and samples AI (api.js)
+        if (m?.demo) startAnalytics(m.analytics); // the demo's usage counts, when configured (analytics.js)
         setMe(m);
       })
       .catch(() => {});
@@ -109,6 +111,14 @@ export default function App() {
   }, [lk, filters.track, filters.stage, filters.status]);
 
   const demo = Boolean(me?.demo);
+  // The demo's usage counts: the screen's fixed name, and that a job was opened (never which). Outside the demo,
+  // track does nothing.
+  useEffect(() => {
+    if (demo) track('section_viewed', { section: view });
+  }, [demo, view]);
+  useEffect(() => {
+    if (demo && selectedId) track('job_viewed');
+  }, [demo, selectedId]);
   const set = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
   const toggleStack = (id) => setStack((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   // Advanced filters live behind a link; the link shows how many are in use so a hidden one is never forgotten.

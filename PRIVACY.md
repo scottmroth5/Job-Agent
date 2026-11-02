@@ -39,6 +39,10 @@ Under Settings you can, at any time:
 
 You can also revoke the app's Google access at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
 
+## The public demo
+
+The demo (fictional sample data, no sign-in) may count how it is used with PostHog, an analytics service: that the demo was opened, which screen was viewed, that a job was opened, which sample feature was started or finished, and the kind of change it stopped. Each count carries only fixed names from that list. Never sent: what you type, job details, names, email addresses, page addresses, or the page you came from. The demo sets no cookies and stores no identifier; a random one lasts only while the page is open. PostHog receives your IP address with each request, as any web service does. A content blocker may stop these counts, and the demo works the same without them. The app itself (signed in) sends nothing to PostHog.
+
 ## Contact
 
 Questions about this policy, your data, or the app: {{supportContact}}.

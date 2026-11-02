@@ -298,6 +298,11 @@ The demo never calls Claude (no client, no key). Its AI actions answer with cann
 labeled as samples and never saved: demo/samples.js (prep, letter, tweaks, re-score, revision, Help answer, draft; loaded
 by api.js only in the demo, its own chunk) through local stand-in tasks, and Find someone to contact from the demo-only
 GET /api/postings/:id/find-contact/sample (demoContactResult). test/demo-samples.test.js holds them to the real rules.
+Demo usage counts (optional): DEMO_POSTHOG_KEY/HOST on the demo container only (server/demo-analytics.js returns null outside
+AUTH_MODE=demo); /api/me hands them to the page and the CSP's connect-src adds that host. web/src/analytics.js sends
+to PostHog's capture endpoint itself (no SDK, cookies, storage, referrer, or URLs): fixed event names and property values
+from its lists only, anything else dropped; never text, job details, or paths. A new event goes on its EVENTS list and
+in PRIVACY.md's demo section. test/demo-analytics.test.js.
 
 ## Spending and internet safety
 Make Claude clients only with tools/claude.js createJobClaude(db). Each call is paid by the user it runs as: the owner, and

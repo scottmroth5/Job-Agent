@@ -17,6 +17,7 @@ import { supportEmail } from '../tools/support.js';
 import { accountFor, getUser, MAX_NAME, MAX_NOTE, requestAccess } from '../db/users.js';
 import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, cookie } from './session.js';
 import { DEMO_CONFIG, DEMO_EMAIL } from '../demo/sample-data.js';
+import { demoAnalytics } from './demo-analytics.js';
 
 export const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
 export const MODES = ['none', 'google', 'demo'];
@@ -48,6 +49,8 @@ export function authSettings(env = process.env) {
     secret: env.SESSION_SECRET || '',
     // The demo's "Request access" link: the real app's address.
     requestAccessUrl: env.REQUEST_ACCESS_URL || '',
+    // The demo's usage counts (server/demo-analytics.js); null outside the demo.
+    analytics: demoAnalytics(env),
   };
 }
 
@@ -142,7 +145,7 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
       email: req.user ?? (mode === 'demo' ? DEMO_EMAIL : null),
       supportEmail: supportEmail(),
       ...(req.account ? { role: req.account.role, status: req.account.status, owner: req.account.uid === 1, name: user?.name ?? null } : { owner: mode === 'none', role: mode === 'none' ? 'admin' : null }),
-      ...(mode === 'demo' ? { demo: true, name: DEMO_CONFIG.candidate.name, requestAccessUrl: settings.requestAccessUrl || null } : {}),
+      ...(mode === 'demo' ? { demo: true, name: DEMO_CONFIG.candidate.name, requestAccessUrl: settings.requestAccessUrl || null, analytics: settings.analytics ?? null } : {}),
     };
   });
   if (mode === 'none') return;
