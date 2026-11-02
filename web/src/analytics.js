@@ -12,7 +12,7 @@ export const SECTIONS = ['home', 'jobs', 'inbox', 'funnel', 'activity', 'setting
 export const FEATURES = ['fit_evaluation', 'cover_letter', 'letter_revision', 'meeting_prep', 'find_contact', 'help_answer', 'profile_draft'];
 export const CHANGES = ['job_update', 'job_add', 'job_action', 'note', 'cover_letter', 'attachment', 'settings', 'inbox', 'pipeline', 'other'];
 export const ERROR_CATEGORIES = ['network', 'unexpected'];
-// Where a visit came from (trafficSource); personal_site is the site in DEMO_SOURCE_SITE.
+// Where a visit came from (trafficSource); personal_site is the domain above the demo's own address.
 export const SOURCES = ['linkedin', 'github', 'personal_site', 'other', 'direct'];
 
 // Each event and the only properties (with their allowed values) it may carry.

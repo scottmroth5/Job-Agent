@@ -9,8 +9,9 @@ export const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 /**
  * { key, host } from DEMO_POSTHOG_KEY (a project key, phc_..., meant for browser code) and DEMO_POSTHOG_HOST
  * (default the US cloud), or null: outside the demo, with no key, or with anything but an https posthog.com host.
- * DEMO_SOURCE_SITE (a bare hostname, optional) adds site: the personal site counted as the personal_site source.
- * It lives in .env, never the repo; the page only compares hostnames with it and never fetches it.
+ * It adds site, the site counted as the personal_site source: the parent domain of the demo's own address
+ * (PUBLIC_URL, from DEMO_SITE_ADDRESS; demo.example.com gives example.com), so it is never written in the repo.
+ * The page only compares hostnames with it and never fetches it.
  */
 export function demoAnalytics(env = process.env) {
   if (env.AUTH_MODE !== 'demo') return null;
@@ -23,6 +24,19 @@ export function demoAnalytics(env = process.env) {
     return null;
   }
   if (url.protocol !== 'https:' || !hostIs(url.hostname, 'posthog.com')) return null;
-  const site = String(env.DEMO_SOURCE_SITE || '').trim().toLowerCase();
-  return { key, host: url.origin, ...(/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(site) ? { site } : {}) };
+  const site = parentSite(env.PUBLIC_URL);
+  return { key, host: url.origin, ...(site ? { site } : {}) };
+}
+
+/** The domain above an address's host (demo.example.com gives example.com), or null without one (localhost, an IP). */
+function parentSite(publicUrl) {
+  let host;
+  try {
+    host = new URL(publicUrl).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
+  const labels = host.split('.');
+  if (labels.length < 3 || labels.every((l) => /^\d+$/.test(l))) return null;
+  return labels.slice(1).join('.');
 }

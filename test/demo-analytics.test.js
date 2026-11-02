@@ -18,8 +18,8 @@ const KEY = 'phc_ExampleKey0123456789abcdefABCDEF';
 const DEMO_ENV = { AUTH_MODE: 'demo', PUBLIC_URL: 'https://demo.example.com', DEMO_POSTHOG_KEY: KEY };
 
 test('only the demo, with a project key and an https posthog.com host, is configured', () => {
-  assert.deepEqual(demoAnalytics(DEMO_ENV), { key: KEY, host: 'https://us.i.posthog.com' });
-  assert.deepEqual(demoAnalytics({ ...DEMO_ENV, DEMO_POSTHOG_HOST: 'https://eu.i.posthog.com/' }), { key: KEY, host: 'https://eu.i.posthog.com' });
+  assert.deepEqual(demoAnalytics(DEMO_ENV), { key: KEY, host: 'https://us.i.posthog.com', site: 'example.com' });
+  assert.deepEqual(demoAnalytics({ ...DEMO_ENV, DEMO_POSTHOG_HOST: 'https://eu.i.posthog.com/' }), { key: KEY, host: 'https://eu.i.posthog.com', site: 'example.com' });
   assert.equal(demoAnalytics({ ...DEMO_ENV, AUTH_MODE: 'google' }), null);
   assert.equal(demoAnalytics({ ...DEMO_ENV, AUTH_MODE: undefined }), null);
   assert.equal(demoAnalytics({ ...DEMO_ENV, DEMO_POSTHOG_KEY: '' }), null);
@@ -38,7 +38,7 @@ async function appFor(authMode, env) {
 test('the demo hands the page its key and lets it reach the host; the app does neither', async () => {
   const demo = await appFor('demo', DEMO_ENV);
   const me = await demo.inject({ method: 'GET', url: '/api/me' });
-  assert.deepEqual(me.json().analytics, { key: KEY, host: 'https://us.i.posthog.com' });
+  assert.deepEqual(me.json().analytics, { key: KEY, host: 'https://us.i.posthog.com', site: 'example.com' });
   assert.match(me.headers['content-security-policy'], /connect-src 'self' https:\/\/us\.i\.posthog\.com;/);
   assert.match(me.headers['content-security-policy'], /script-src 'self';/);
   await demo.close();
@@ -167,10 +167,11 @@ test('demo_opened carries only a listed source', () => {
   assert.equal(eventBody('demo_opened', {}, at), null);
 });
 
-test('the personal site comes from DEMO_SOURCE_SITE, a bare hostname only', () => {
-  assert.equal(demoAnalytics({ ...DEMO_ENV, DEMO_SOURCE_SITE: ' Example.ORG ' }).site, 'example.org');
-  for (const bad of ['https://example.org', 'example', 'example.org/path', 'exa mple.org', ''])
-    assert.equal('site' in demoAnalytics({ ...DEMO_ENV, DEMO_SOURCE_SITE: bad }), false, bad);
+test('the personal site is the domain above the demo address', () => {
+  assert.equal(demoAnalytics(DEMO_ENV).site, 'example.com');
+  assert.equal(demoAnalytics({ ...DEMO_ENV, PUBLIC_URL: 'https://Demo.Jobs.Example.ORG/' }).site, 'jobs.example.org');
+  for (const none of ['http://localhost:5180', 'https://example.com', 'http://127.0.0.1:5180', 'not a url', undefined])
+    assert.equal('site' in demoAnalytics({ ...DEMO_ENV, PUBLIC_URL: none }), false, String(none));
 });
 
 test('Global Privacy Control: nothing is sent, not even demo_opened (runs before anything starts)', async (t) => {
