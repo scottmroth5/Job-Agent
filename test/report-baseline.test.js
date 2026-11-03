@@ -63,7 +63,8 @@ test('baseline: counts, sizes, spend, and outcome data across users, read-only a
     assert.deepEqual(r.outcomes, { applications: 4, noAppliedOn: 1, withLinkedEmail: 1, followUp: 1, stale: 2 });
 
     for (const out of [renderBaseline(r), JSON.stringify(r)]) {
-      assert.ok(!out.includes(SECRET) && !out.includes('example.com') && !out.includes('CTO'), 'no text from any row');
+      // No company, title, or email address from any row (a regex: CodeQL reads includes() of a host as a URL check).
+      assert.doesNotMatch(out, new RegExp(`${SECRET}|CTO|@`), 'no text from any row');
     }
     assert.deepEqual(baselineReport(path, { attachmentsDir: join(dir, 'none'), now }).attachments, { files: 0, bytes: 0 }, 'no attachments folder yet');
   } finally {
