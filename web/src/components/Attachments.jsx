@@ -66,10 +66,10 @@ export default function Attachments({ jobId, items, onChanged }) {
         onDrop={(e) => {
           e.preventDefault();
           setOver(false);
-          upload(e.dataTransfer.files);
+          void upload(e.dataTransfer.files);
         }}
       >
-        <input type="file" multiple disabled={busy} onChange={(e) => { upload(e.target.files); e.target.value = ''; }} />
+        <input type="file" multiple disabled={busy} onChange={(e) => { void upload(e.target.files); e.target.value = ''; }} />
         <span>{busy ? 'Uploading…' : 'Drop files here or choose files (25 MB each)'}</span>
       </label>
       {error && <div className="error">{error}</div>}

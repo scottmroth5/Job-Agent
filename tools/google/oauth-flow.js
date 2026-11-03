@@ -50,6 +50,7 @@ export async function signIn({ scopes, save, command }) {
 
   const result = new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error('Timed out waiting for the Google sign-in (5 minutes).')), TIMEOUT_MS);
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises -- the handler catches its own errors and settles the sign-in through finish
     server.on('request', async (req, res) => {
       const url = new URL(req.url, redirectUri);
       if (url.pathname !== '/') {

@@ -89,7 +89,7 @@ function ResumeRow({ r, demo, onChanged, onError }) {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 e.target.value = '';
-                if (file) act(() => api.replaceResume(r.id, file));
+                if (file) void act(() => api.replaceResume(r.id, file));
               }}
             />
           </label>
@@ -116,7 +116,7 @@ export default function ResumesSettings() {
   const [busy, setBusy] = useState(false);
   const load = () => api.resumes().then(setList, (err) => setError(err.message));
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
   const upload = async (file) => {
@@ -159,7 +159,7 @@ export default function ResumesSettings() {
             onChange={(e) => {
               const file = e.target.files?.[0];
               e.target.value = '';
-              if (file) upload(file);
+              if (file) void upload(file);
             }}
           />
         </label>

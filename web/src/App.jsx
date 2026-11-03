@@ -74,8 +74,8 @@ export default function App() {
 
   // Back on Home: fresh counts and setup steps (a key or search saved in Settings shows at once).
   useEffect(() => {
-    if (view === 'home') refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (view === 'home') void refresh();
+    // Only a change of view refreshes here; filter changes refresh through their own effect.
   }, [view]);
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -272,7 +272,7 @@ export default function App() {
         <AddJobDialog
           onClose={() => setAdding(false)}
           onAdded={(id) => {
-            refresh();
+            void refresh();
             if (id) setSelectedId(id);
           }}
         />

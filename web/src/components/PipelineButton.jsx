@@ -33,7 +33,7 @@ export default function PipelineButton({ onFinished }) {
       .pipeline()
       .then((s) => {
         setState(s);
-        if (s.taskId) follow(s.taskId); // a run started from this page before a reload
+        if (s.taskId) void follow(s.taskId); // a run started from this page before a reload
       })
       .catch(() => {});
   }, [follow]);
@@ -49,7 +49,7 @@ export default function PipelineButton({ onFinished }) {
     setError(null);
     try {
       const { taskId } = await api.runPipeline();
-      follow(taskId);
+      void follow(taskId);
     } catch (err) {
       setError(err.message);
     }

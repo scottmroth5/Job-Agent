@@ -129,7 +129,7 @@ export function createScheduler({ jobs, now = () => new Date(), log = console, e
     for (const job of state) {
       if (job.next && t >= job.next) {
         job.next = nextRun(job.schedule, t);
-        fire(job, 'scheduled');
+        void fire(job, 'scheduled'); // fire catches every error itself (try, finally, and onResult's catch)
       }
     }
   };
@@ -141,7 +141,7 @@ export function createScheduler({ jobs, now = () => new Date(), log = console, e
       for (const job of state) {
         const missed = lastRun(job.schedule, t);
         const ran = job.lastRanAt();
-        if (missed && t - missed <= CATCH_UP_HOURS * 3600 * 1000 && (!ran || new Date(ran) < missed)) fire(job, 'missed while the server was off');
+        if (missed && t - missed <= CATCH_UP_HOURS * 3600 * 1000 && (!ran || new Date(ran) < missed)) void fire(job, 'missed while the server was off');
       }
       timer = every(tick, CHECK_EVERY_MS);
       timer?.unref?.();

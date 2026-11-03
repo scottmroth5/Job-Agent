@@ -127,7 +127,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
       .inbox()
       .then((d) => {
         setData(d);
-        if (d.checkTaskId) follow(d.checkTaskId);
+        if (d.checkTaskId) void follow(d.checkTaskId);
       })
       .catch((err) => setError(err.message));
   }, [follow]);
@@ -137,7 +137,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
     setMessages([]);
     try {
       const { taskId } = await api.checkInbox();
-      follow(taskId);
+      void follow(taskId);
     } catch (err) {
       setError(err.message);
     }

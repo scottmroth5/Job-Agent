@@ -43,7 +43,7 @@ function TaskOutput({ id, onFinished }) {
         if (!stop) setState({ status: 'failed', error: err.message });
       }
     };
-    poll();
+    void poll();
     return () => {
       stop = true;
     };
@@ -89,7 +89,7 @@ export default function ActivityPage({ selectedId }) {
         .tasks()
         .then((t) => !stop && setTasks(t))
         .catch((err) => !stop && setError(err.message));
-    load();
+    void load();
     reload.current = load;
     const timer = setInterval(load, 3000);
     return () => {

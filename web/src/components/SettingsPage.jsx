@@ -113,7 +113,7 @@ function AccountSettings({ tabs }) {
   };
   const save = (e) => {
     e.preventDefault();
-    run(() => api.saveClaudeKey(key.trim()), 'Key saved. It is stored encrypted and will not be shown again.').then(() => setKey(''));
+    void run(() => api.saveClaudeKey(key.trim()), 'Key saved. It is stored encrypted and will not be shown again.').then(() => setKey(''));
   };
 
   if (!account) return error ? <div className="error">{error}</div> : <p className="muted">Loading…</p>;

@@ -147,5 +147,6 @@ const shutdown = async () => {
   store.close();
   process.exit(0);
 };
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+// void: shutdown ends the process either way; the signal handler has nothing to wait for.
+process.on('SIGINT', () => void shutdown());
+process.on('SIGTERM', () => void shutdown());
