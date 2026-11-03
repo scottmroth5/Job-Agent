@@ -10,10 +10,12 @@
 // Settings that belong to a person (the inbox cursor, their Drive folders, the Home tile order) move from
 // app_settings to the new user_settings table.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '013-users';
 export const foreignKeys = false;
 
-/** The tables this migration rebuilt (every user table at the time). Later ones are listed in db/user-tables.js. */
+/** The tables this migration rebuilt (every user table at the time). Later ones are listed in db/user-tables.ts. */
 export const USER_TABLES = [
   'postings', 'scores', 'artifacts', 'attachments', 'contacts', 'decision_log', 'email_threads', 'emails',
   'meeting_preps', 'posting_notes', 'posting_sightings', 'prompt_versions', 'reminders', 'status_history', 'user_settings',
@@ -22,7 +24,7 @@ export const USER_TABLES = [
 const OWNER = 1;
 
 // Per-table edits to the CREATE TABLE text: [before, after] pairs (each must match once), plus a per-user key.
-const EDITS = {
+const EDITS: Record<string, { replace: string[][]; add: string }> = {
   postings: { replace: [['url_key TEXT UNIQUE,', 'url_key TEXT,']], add: 'UNIQUE (user_id, url_key)' },
   emails: { replace: [['gmail_message_id TEXT NOT NULL UNIQUE,', 'gmail_message_id TEXT NOT NULL,']], add: 'UNIQUE (user_id, gmail_message_id)' },
   contacts: { replace: [['email TEXT NOT NULL UNIQUE,', 'email TEXT NOT NULL,']], add: 'UNIQUE (user_id, email)' },
@@ -37,14 +39,14 @@ const USER_FIRST_INDEXES = new Set([
 
 const PER_USER_SETTINGS = ["key = 'inbox.historyId'", "key LIKE 'drive.%'", "key LIKE 'layout:%'"];
 
-function rebuild(db, table) {
-  const create = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").pluck().get(table);
+function rebuild(db: Database, table: string) {
+  const create = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").pluck().get(table) as string | undefined;
   if (!create) throw new Error(`013: table ${table} is missing`);
   const head = new RegExp(`^CREATE TABLE ${table} \\(`);
   if (!head.test(create)) throw new Error(`013: ${table} does not start the expected way; nothing was changed`);
   let sql = create.replace(head, `CREATE TABLE ${table}_new (\n  user_id INTEGER NOT NULL REFERENCES users(id),`);
   const edit = EDITS[table];
-  for (const [before, after] of edit?.replace ?? []) {
+  for (const [before, after] of (edit?.replace ?? []) as Array<[string, string]>) {
     if (sql.split(before).length !== 2) throw new Error(`013: ${table} has no single "${before}"; nothing was changed`);
     sql = sql.replace(before, after);
   }
@@ -55,8 +57,8 @@ function rebuild(db, table) {
 
   const attached = db
     .prepare("SELECT type, name, sql FROM sqlite_master WHERE tbl_name = ? AND type IN ('index', 'trigger') AND sql IS NOT NULL")
-    .all(table);
-  const columns = db.prepare(`SELECT name FROM pragma_table_info('${table}')`).pluck().all().map((c) => `"${c}"`).join(', ');
+    .all(table) as Array<{ type: string; name: string; sql: string }>;
+  const columns = (db.prepare(`SELECT name FROM pragma_table_info('${table}')`).pluck().all() as string[]).map((c) => `"${c}"`).join(', ');
 
   db.exec(sql);
   db.exec(`INSERT INTO ${table}_new (user_id, ${columns}) SELECT ${OWNER}, ${columns} FROM ${table}`);
@@ -67,7 +69,7 @@ function rebuild(db, table) {
   }
 }
 
-export function up(db) {
+export function up(db: Database) {
   const now = new Date().toISOString();
   db.exec(`CREATE TABLE users (
     id INTEGER PRIMARY KEY,

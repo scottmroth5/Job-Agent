@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { resumeBlocks, resumeDocx, resumePdf } from '../tools/resume-format.ts';
 import { documentText } from '../tools/doc-text.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { addResume } from '../agents/resumes.js';
 import { buildApp } from '../server/app.js';
 import { DEMO_RESUMES } from '../demo/sample-data.js';

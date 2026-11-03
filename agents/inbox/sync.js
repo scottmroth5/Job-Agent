@@ -1,5 +1,5 @@
 // Which messages to look at: new ones since the stored Gmail historyId, or a window of days.
-import { getUserSetting, setUserSetting } from '../../db/settings.js';
+import { getUserSetting, setUserSetting } from '../../db/settings.ts';
 import { HistoryExpiredError } from './gmail.js';
 
 export const CURSOR_KEY = 'inbox.historyId';

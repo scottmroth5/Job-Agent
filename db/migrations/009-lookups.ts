@@ -4,10 +4,12 @@
 // as safe, and no table rebuild means nothing can cascade) and replaced by triggers that accept any ID in
 // lookup_values. Portable types; in PostgreSQL the triggers become foreign keys. Any failure rolls back.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '009-lookups';
 
 // [list, id, label, group, settings] in display order. Groups decide behavior (see agents/lookups.js).
-export const BUILT_INS = [
+export const BUILT_INS: Array<[list: string, id: string, label: string, group: string, settings?: object]> = [
   ['status', 'new', 'New', 'evaluate'],
   ['status', 'applied', 'Applied', 'waiting'],
   ['status', 'interviewing', 'Interviewing', 'conversation'],
@@ -23,7 +25,7 @@ export const BUILT_INS = [
   ['track', 'fractional', 'Fractional', 'track', { scorePrompt: 'score-fractional', terms: true }],
 ];
 
-export const BUILT_IN_ROLES = [
+export const BUILT_IN_ROLES: Array<[list: string, role: string, valueId: string]> = [
   ['status', 'default', 'new'],
   ['stage', 'default', 'discovered'],
   ['stage', 'promote', 'pipeline'],
@@ -38,7 +40,7 @@ const GUARD = `
   SELECT RAISE(ABORT, 'stage is not in the stage list') WHERE NOT EXISTS (SELECT 1 FROM lookup_values WHERE list = 'stage' AND id = NEW.stage);
   SELECT RAISE(ABORT, 'track is not in the track list') WHERE NOT EXISTS (SELECT 1 FROM lookup_values WHERE list = 'track' AND id = NEW.track);`;
 
-export function up(db) {
+export function up(db: Database) {
   db.exec(`
     CREATE TABLE lookup_values (
       list TEXT NOT NULL CHECK (list IN ('status', 'stage', 'track')),
@@ -63,7 +65,7 @@ export function up(db) {
   const now = new Date().toISOString();
   const insert = db.prepare(`INSERT INTO lookup_values (list, id, label, group_key, sort_order, settings_json, origin, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, 'built_in', ?, ?)`);
-  const order = {};
+  const order: Record<string, number> = {};
   for (const [list, vid, label, group, settings] of BUILT_INS) {
     order[list] = (order[list] ?? 0) + 10;
     insert.run(list, vid, label, group, order[list], settings ? JSON.stringify(settings) : null, now, now);
@@ -80,10 +82,10 @@ export function up(db) {
     if (missing.length) throw new Error(`009: jobs use ${list} values not in the list: ${missing.join(', ')}; nothing was changed.`);
   }
 
-  const createSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'postings'").pluck().get();
+  const createSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'postings'").pluck().get() as string;
   const removed = createSql.match(FIXED_LISTS) ?? [];
   if (removed.length !== 3) throw new Error(`009: expected the status, stage, and track CHECK lists, found ${removed.length}; nothing was changed.`);
-  const version = db.pragma('schema_version', { simple: true });
+  const version = db.pragma('schema_version', { simple: true }) as number;
   db.unsafeMode(true);
   try {
     db.pragma('writable_schema = ON');

@@ -1,9 +1,9 @@
 // Long-running UI actions (run the pipeline, check the inbox, add a job, score, write materials) run in the
 // background; the UI polls their progress and their output (the Activity tab). Kept in memory: a server
-// restart forgets finished tasks, which is fine. Each task belongs to the user it runs as (db/scope.js); the routes
+// restart forgets finished tasks, which is fine. Each task belongs to the user it runs as (db/scope.ts); the routes
 // show a user only their own (get, log, and list with { uid }), while the server's own checks see every task.
-import { currentUserId } from '../db/scope.js';
-import { OWNER_ID } from '../db/users.js';
+import { currentUserId } from '../db/scope.ts';
+import { OWNER_ID } from '../db/users.ts';
 
 const KEEP = 100;
 const MAX_LINES = 5000;

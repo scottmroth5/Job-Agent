@@ -11,7 +11,7 @@ const pathsWith = (env) =>
       process.execPath,
       ['--input-type=module', '-e', `
         const { dataPath } = await import('./tools/paths.ts');
-        const { DB_PATH } = await import('./db/index.js');
+        const { DB_PATH } = await import('./db/index.ts');
         const { CONFIG_PATH } = await import('./tools/config.ts');
         const { ATTACHMENTS_DIR } = await import('./server/attachments.js');
         const { TOKEN_PATH } = await import('./tools/google/auth.ts');

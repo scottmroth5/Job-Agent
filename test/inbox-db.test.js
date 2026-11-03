@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 
 const now = '2026-10-02T12:00:00.000Z';
 

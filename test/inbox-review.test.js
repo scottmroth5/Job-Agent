@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { storedKey } from '../agents/identity.js';
 import { insertEmail } from '../agents/inbox/store.js';
 import { loadKey, newKey, decrypt, encrypt } from '../agents/inbox/crypto.js';

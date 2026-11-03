@@ -3,10 +3,12 @@
 // rebuilt the way SQLite documents it (new table, rows copied, old dropped, new renamed). Nothing references it,
 // but the rule for rebuilds still applies: foreign keys off, checks before commit.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '021-usage-browser';
 export const foreignKeys = false;
 
-export function up(db) {
+export function up(db: Database) {
   db.exec(`
     CREATE TABLE usage_totals_new (
       day TEXT NOT NULL,

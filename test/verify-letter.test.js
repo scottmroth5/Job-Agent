@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { getPrompt, validateTemplate, defaultPrompt } from '../agents/prompts.js';
 import { buildVerifyRequest, cleanClaims, flagged, verifyLetter, MAX_CLAIMS } from '../agents/hunt/verify-letter.js';
 import { checkFor, checksFor, copyCheck, dismissClaim, runCheck, saveCheck } from '../agents/letter-checks.js';
@@ -111,7 +111,7 @@ test("another user's letter gets no check", async () => {
   const { store, db, artifact } = setup();
   const a = artifact();
   store.raw.prepare("INSERT INTO users (id, email, name, role, status, created_at, updated_at) VALUES (2, 'second@example.org', 'Second', 'user', 'active', 'x', 'x')").run();
-  const { runAsUser } = await import('../db/scope.js');
+  const { runAsUser } = await import('../db/scope.ts');
   runAsUser(2, () => {
     assert.equal(saveCheck(db, a, { status: 'checked', claims: CLAIMS }), null);
     assert.equal(dismissClaim(db, a, 0), null);

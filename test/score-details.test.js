@@ -2,7 +2,7 @@
 // current score was made, which prompt, and when a re-score would change it. Synthetic data only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { getPosting } from '../server/queries.js';
 import { defaultPrompt, describeVersion, getPrompt, savePrompt, versionOf } from '../agents/prompts.js';
 

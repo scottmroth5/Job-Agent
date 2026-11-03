@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
-import { importV1, mapStatus, extractFitScore, parseCoverLetterCell } from '../db/import-v1.js';
+import { openJobStore } from '../db/index.ts';
+import { importV1, mapStatus, extractFitScore, parseCoverLetterCell } from '../db/import-v1.ts';
 import { classifySheetFiles } from '../scripts/import-v1.js';
 
 // Synthetic rows using the real v1 column headers. No real data.

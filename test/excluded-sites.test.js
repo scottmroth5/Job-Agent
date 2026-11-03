@@ -3,9 +3,9 @@
 // you applied to. Synthetic data on example domains only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
-import { runAsUser } from '../db/scope.js';
-import { addUser, OWNER_ID } from '../db/users.js';
+import { openJobStore } from '../db/index.ts';
+import { runAsUser } from '../db/scope.ts';
+import { addUser, OWNER_ID } from '../db/users.ts';
 import { buildApp } from '../server/app.js';
 import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote, siteOf, withExcludedSites } from '../agents/excluded-sites.js';
 import { configFor, saveUserConfig } from '../agents/user-config.js';

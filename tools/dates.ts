@@ -1,7 +1,7 @@
 // Dates are stored as ISO calendar dates (YYYY-MM-DD). Arithmetic is done in UTC so the
 // machine's time zone never shifts a date.
 
-import { currentTimeZone } from '../db/scope.js';
+import { currentTimeZone } from '../db/scope.ts';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const iso = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
@@ -10,7 +10,7 @@ const iso = (d: Date) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pa
 // else the machine's zone. A server runs on UTC, so never take today from toISOString(): in the evening in the Americas that
 // is already tomorrow. Timestamps stay ISO UTC; only calendar days use these.
 
-// Each user may have their own zone (Settings; db/scope.js carries it with the request or job): their calendar days
+// Each user may have their own zone (Settings; db/scope.ts carries it with the request or job): their calendar days
 // follow it. The owner, scripts, and the schedule use the app's zone.
 
 /** The time zone calendar days follow now: the current user's own, else the app's. */

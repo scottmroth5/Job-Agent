@@ -1,7 +1,7 @@
 // Admin > Users (multi-user, phase 2): the accounts, approving and rejecting requests for access, pausing and resuming,
 // and how each user's AI is paid for. Admin only (server/app.js refuses anyone else on /api/admin/users*), and never
 // registered in the demo. Each decision emails the person about their own account (server/notices.js).
-import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.js';
+import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.ts';
 import { listUsers, usageByWeek, usagePeriodStart, usageTotals } from './admin-queries.js';
 import { BROWSER_NAMES, DEVICES, SOURCES } from './usage-totals.js';
 import { deleteAccount } from '../agents/account-data.js';

@@ -1,9 +1,11 @@
 // Multi-user, phase 4: when each user was last seen (the admin's Users screen), and feedback users send the owner.
 // feedback is a user table: each row is its sender's, and only server/admin-queries.js reads across users.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '015-activity';
 
-export function up(db) {
+export function up(db: Database) {
   db.exec(`ALTER TABLE users ADD COLUMN last_seen_at TEXT;
     CREATE TABLE feedback (
       id TEXT PRIMARY KEY,

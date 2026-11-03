@@ -4,7 +4,7 @@ import * as fractionaljobs from '../agents/discovery/sources/fractionaljobs.js';
 import { buildQueries, GO_FRACTIONAL } from '../agents/discovery/sources/serper.js';
 import { resolveDetails } from '../agents/discovery/details.js';
 import { runDiscovery } from '../agents/discovery/discover.js';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 
 // Made-up listings in the real markup shape.
 const card = ({ slug, company, title, hours, rate, location, date }) => `

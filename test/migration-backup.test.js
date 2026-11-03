@@ -1,4 +1,4 @@
-// A database is never changed by a migration without a checked copy first (db/index.js), and the pending check reports
+// A database is never changed by a migration without a checked copy first (db/index.ts), and the pending check reports
 // what would change without touching the real file. Synthetic temporary databases only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { openStore } from '@scottmroth5/agent-core';
-import { loadMigrations, openJobStore, pendingMigrations, pruneMigrationCopies } from '../db/index.js';
+import { loadMigrations, openJobStore, pendingMigrations, pruneMigrationCopies } from '../db/index.ts';
 
 /** A database file with every migration but the last, holding one job. */
 function olderDatabase() {

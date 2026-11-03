@@ -1,7 +1,7 @@
 // Each user's resumes (Settings > Resumes): the uploaded file, its text, a label, and the plain words of the job titles
 // it is for. pickResume chooses the one a job's letter, resume tweaks, and meeting prep are written from: the resume
 // whose words match the job title best, else the default, else the only one. withResume adds its text to the
-// background those calls read. Every query names user_id (db/user-tables.js lists resumes).
+// background those calls read. Every query names user_id (db/user-tables.ts lists resumes).
 import { randomUUID } from 'node:crypto';
 import { documentText } from '../tools/doc-text.ts';
 

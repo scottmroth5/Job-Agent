@@ -35,7 +35,7 @@ test('.env app options (schedules, budget, paths) are not private; everything el
 
 test('personal-data locations are refused regardless of .gitignore', () => {
   for (const f of ['data/config/job-search.json', 'data/job-agent.db', '.env', '.env.local', 'server/.env']) assert.ok(isForbiddenPath(f), f);
-  for (const f of ['db/index.js', 'tools/data.js', 'config/job-search.example.json', 'docs/env.md']) assert.ok(!isForbiddenPath(f), f);
+  for (const f of ['db/index.ts', 'tools/data.js', 'config/job-search.example.json', 'docs/env.md']) assert.ok(!isForbiddenPath(f), f);
 });
 
 test('masks terms so a secret is never printed in full', () => {

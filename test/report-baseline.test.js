@@ -4,8 +4,8 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { openJobStore } from '../db/index.js';
-import { addUser } from '../db/users.js';
+import { openJobStore } from '../db/index.ts';
+import { addUser } from '../db/users.ts';
 import { baselineReport, renderBaseline } from '../tools/baseline.ts';
 
 // Synthetic data only. "now" is fixed so waiting days are stable.

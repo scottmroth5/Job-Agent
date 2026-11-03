@@ -1,7 +1,7 @@
 // Google Drive: the app's cover letter folder and Docs created from HTML.
 // The drive.file permission only reaches files this app created, so the app makes and remembers its own folder.
 import { drive as driveApi } from '@googleapis/drive';
-import { getUserSetting, setUserSetting } from '../../db/settings.js';
+import { getUserSetting, setUserSetting } from '../../db/settings.ts';
 import type { OAuth2Client } from 'google-auth-library';
 import type { Database } from '../types.ts';
 
@@ -13,7 +13,7 @@ const FOLDER_SETTING = 'drive.coverLetterFolderId';
 /** Thin Drive client (easy to fake in tests): getFile, createFolder, createDocFromHtml. */
 export interface DriveClient {
   getFile(id: string): Promise<{ trashed?: boolean | null } | null | undefined>;
-  createFolder(name: string): Promise<string | null | undefined>;
+  createFolder(name: string): Promise<string>;
   createDocFromHtml(doc: { name: string; html: string; folderId?: string | null }): Promise<{ id: string | null | undefined; url: string | null | undefined }>;
 }
 
@@ -26,7 +26,8 @@ export function createDriveClient(auth: OAuth2Client): DriveClient {
     },
     async createFolder(name: string) {
       const { data } = await api.files.create({ requestBody: { name, mimeType: FOLDER_MIME }, fields: 'id' });
-      return data.id;
+      // Asked for fields: 'id', Drive always returns one.
+      return data.id as string;
     },
     /** Uploads HTML and converts it to a Google Doc in the folder. Returns { id, url }. */
     async createDocFromHtml({ name, html, folderId }: { name: string; html: string; folderId?: string | null }) {

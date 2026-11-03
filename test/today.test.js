@@ -2,12 +2,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { today, REMINDER_DAYS } from '../server/today.js';
 import { FOLLOW_UP_DAYS } from '../server/funnel.js';
-import { addUser } from '../db/users.js';
-import { runAsUser } from '../db/scope.js';
+import { addUser } from '../db/users.ts';
+import { runAsUser } from '../db/scope.ts';
 
 // Synthetic data only; "now" is fixed so due dates and waiting days are stable.
 const now = new Date('2026-10-26T12:00:00Z');

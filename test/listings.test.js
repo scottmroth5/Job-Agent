@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { listingReason, isListingPage, excludedSite, skipReason } from '../tools/listings.ts';
 import { interpretResult, ruleScore, isRuleScored, NO_TEXT_CAP } from '../agents/discovery/score.js';
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';

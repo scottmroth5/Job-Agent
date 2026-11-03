@@ -6,10 +6,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openStore } from '@scottmroth5/agent-core';
-import { loadMigrations, openJobStore } from '../db/index.js';
-import { USER_TABLES } from '../db/migrations/013-users.js';
-import { runAsUser, scopeDb } from '../db/scope.js';
-import { accountFor, addUser, OWNER_ID, syncOwnerEmail } from '../db/users.js';
+import { loadMigrations, openJobStore } from '../db/index.ts';
+import { USER_TABLES } from '../db/migrations/013-users.ts';
+import { runAsUser, scopeDb } from '../db/scope.ts';
+import { accountFor, addUser, OWNER_ID, syncOwnerEmail } from '../db/users.ts';
 
 function before013(path) {
   const store = openStore(path, { app: 'job-agent', migrations: loadMigrations().filter((m) => m.id < '013') });

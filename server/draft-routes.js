@@ -3,7 +3,7 @@
 // read in memory and dropped; the request body is never logged.
 import { draftProfile, MAX_FILE_BYTES, MAX_FILES } from '../agents/draft-profile.js';
 import { createJobTracer } from '../tools/trace.ts';
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID } from '../db/users.ts';
 
 export const DRAFTS_PER_DAY = 10;
 const anyObject = { type: 'object', additionalProperties: true };

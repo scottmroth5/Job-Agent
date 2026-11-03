@@ -5,14 +5,18 @@
 // user throws instead of reading everyone's rows; statements on app-wide tables (lookups, app_settings, runs) never
 // name @uid and run anywhere. test/user-scope.test.js checks that every query on a user table names user_id.
 import { AsyncLocalStorage } from 'node:async_hooks';
+import type { Database, Statement } from 'better-sqlite3';
 
-const context = new AsyncLocalStorage();
+/** The scoped database: better-sqlite3's, plus the unscoped one underneath and the current user's id. */
+export type ScopedDatabase = Database & { readonly unscoped: Database; readonly uid: number };
+
+const context = new AsyncLocalStorage<{ uid: number; timeZone: string | null }>();
 
 /**
  * Runs fn (and everything it starts) as user uid; returns what fn returns. timeZone is that user's own zone (an IANA
  * name), which tools/dates.ts uses for their calendar days; without it, the app's zone.
  */
-export function runAsUser(uid, fn, { timeZone = null } = {}) {
+export function runAsUser<T>(uid: number, fn: () => T, { timeZone = null }: { timeZone?: string | null } = {}): T {
   if (!Number.isInteger(uid) || uid < 1) throw new TypeError(`runAsUser: "${uid}" is not a user id`);
   return context.run({ uid, timeZone }, fn);
 }
@@ -23,25 +27,26 @@ export const currentTimeZone = () => context.getStore()?.timeZone ?? null;
 /** The user the current request or job runs as, or null outside runAsUser. */
 export const currentUserId = () => context.getStore()?.uid ?? null;
 
-const isPlainObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v) && !Buffer.isBuffer(v);
+const isPlainObject = (v: unknown) => v !== null && typeof v === 'object' && !Array.isArray(v) && !Buffer.isBuffer(v);
 
-function scopeStatement(stmt, userId) {
+// unknown[]: the bind values better-sqlite3 takes (numbers, strings, buffers, null, or one object of named values).
+function scopeStatement(stmt: Statement, userId: () => number): Statement {
   const needsUid = stmt.source.includes('@uid');
   // Named values travel in one plain object: add uid to it, or pass one holding only uid after the positional values.
-  const bind = (args) => {
+  const bind = (args: unknown[]): unknown[] => {
     if (!needsUid) return args;
     const uid = userId();
     const i = args.findIndex(isPlainObject);
     if (i < 0) return [...args, { uid }];
     const copy = [...args];
-    copy[i] = { ...args[i], uid };
+    copy[i] = { ...(args[i] as object), uid };
     return copy;
   };
   const scoped = {
-    run: (...args) => stmt.run(...bind(args)),
-    get: (...args) => stmt.get(...bind(args)),
-    all: (...args) => stmt.all(...bind(args)),
-    iterate: (...args) => stmt.iterate(...bind(args)),
+    run: (...args: unknown[]) => stmt.run(...bind(args)),
+    get: (...args: unknown[]) => stmt.get(...bind(args)),
+    all: (...args: unknown[]) => stmt.all(...bind(args)),
+    iterate: (...args: unknown[]) => stmt.iterate(...bind(args)),
     pluck: (on = true) => { stmt.pluck(on); return scoped; },
     raw: (on = true) => { stmt.raw(on); return scoped; },
     expand: (on = true) => { stmt.expand(on); return scoped; },
@@ -50,17 +55,17 @@ function scopeStatement(stmt, userId) {
     get source() { return stmt.source; },
     get reader() { return stmt.reader; },
   };
-  return scoped;
+  // The same methods as the statement it wraps (each binding @uid first), so it is used as one.
+  return scoped as unknown as Statement;
 }
 
 /**
- * The database as seen by the current user.
- * @param {import('better-sqlite3').Database} db  the shared database (a scoped one is unwrapped first)
- * @param {{ fallbackUid?: number|null }} [options]  who runs outside runAsUser: the owner for command-line scripts and
- *   tests; null (the server) makes a user-table query outside a request or job throw
+ * The database as seen by the current user. db is the shared database (a scoped one is unwrapped first); fallbackUid is
+ * who runs outside runAsUser: the owner for command-line scripts and tests; null (the server) makes a user-table query
+ * outside a request or job throw.
  */
-export function scopeDb(db, { fallbackUid = null } = {}) {
-  const raw = db.unscoped ?? db;
+export function scopeDb(db: Database | ScopedDatabase, { fallbackUid = null }: { fallbackUid?: number | null } = {}): ScopedDatabase {
+  const raw = (db as Partial<ScopedDatabase>).unscoped ?? db;
   const userId = () => {
     const uid = currentUserId() ?? fallbackUid;
     if (!uid) throw new Error('This query needs a user, but it is running outside a request or job (runAsUser).');
@@ -68,11 +73,11 @@ export function scopeDb(db, { fallbackUid = null } = {}) {
   };
   return new Proxy(raw, {
     get(target, prop) {
-      if (prop === 'prepare') return (sql) => scopeStatement(target.prepare(sql), userId);
+      if (prop === 'prepare') return (sql: string) => scopeStatement(target.prepare(sql), userId);
       if (prop === 'unscoped') return target;
       if (prop === 'uid') return userId();
       const value = Reflect.get(target, prop, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },
-  });
+  }) as ScopedDatabase;
 }

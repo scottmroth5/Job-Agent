@@ -3,7 +3,7 @@
 // Follow-ups, DEFAULT_STALE_DAYS), and never once archived; from then on it is stale: close it as no response (one job,
 // or every stale one at once) rather than chase it. Closing uses the status list's noResponse role ("No response", a
 // closed status), with a note and the user's status history, so the funnel still counts the application.
-import { getUserSetting, setUserSetting } from '../db/settings.js';
+import { getUserSetting, setUserSetting } from '../db/settings.ts';
 import { lookups } from './lookups.js';
 import { addNote } from './notes.js';
 import { localDay } from '../tools/dates.ts';

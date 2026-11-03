@@ -1,7 +1,7 @@
 // The support address (SUPPORT_EMAIL): shown where people look for help when it is set, and a fallback when not.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { page } from '../server/auth.js';
 import { loadGuides } from '../server/help-routes.js';

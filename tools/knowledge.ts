@@ -1,6 +1,6 @@
 // The owner's knowledge doc for scripts: the one they keep in Settings (user_settings), like every other user's.
 import { backgroundFor } from '../agents/user-config.js';
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID } from '../db/users.ts';
 import type { Database } from './types.ts';
 
 export const MIN_KNOWLEDGE_CHARS = 500;

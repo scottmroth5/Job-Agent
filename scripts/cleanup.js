@@ -7,10 +7,10 @@
 //   npm run cleanup -- --dry-run    list what would change
 //   npm run cleanup                 change it
 import { createJobTracer } from '../tools/trace.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.js';
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID } from '../db/users.ts';
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';
 import { rekeyPostings } from '../agents/identity.js';
 

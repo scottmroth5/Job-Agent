@@ -2,7 +2,7 @@
 // feedback table) and emailed to the owner with the user as reply-to; the owner sees it all on Admin > Users and marks it
 // done. A user may send FEEDBACK_PER_DAY a day, so the form can never be used to flood the owner's inbox.
 import { randomUUID } from 'node:crypto';
-import { getUser, OWNER_ID } from '../db/users.js';
+import { getUser, OWNER_ID } from '../db/users.ts';
 import { listFeedback, markFeedbackDone } from './admin-queries.js';
 
 export const FEEDBACK_PER_DAY = 10;

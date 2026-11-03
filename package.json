@@ -10,6 +10,7 @@
     "test": "node --test",
     "typecheck": "tsc -p . && tsc -p web && tsc -p types",
     "lint": "eslint .",
+    "db:types": "node scripts/db-types.js",
     "config:from-v1": "node scripts/config-from-v1.js",
     "check:personal": "node scripts/check-personal.js",
     "check:security": "node scripts/security-check.js",

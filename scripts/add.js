@@ -8,13 +8,13 @@ import { createJobTracer } from '../tools/trace.ts';
 import { createJobClaude } from '../tools/claude.ts';
 import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.js';
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID } from '../db/users.ts';
 import { ownerBackground } from '../tools/knowledge.ts';
 import { createHttp } from '../tools/http.ts';
 import { createBrowser } from '../tools/browser.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
 import { createDriveClient } from '../tools/google/drive.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { addPosting } from '../agents/manual.js';
 

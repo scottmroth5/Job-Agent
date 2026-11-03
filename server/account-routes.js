@@ -2,7 +2,7 @@
 // Anthropic's free model list, then sealed (tools/secret-box.ts, bound to the user's id) before it is stored; it is never
 // returned, logged, or shown to anyone, only whether one is set. The owner's AI uses ANTHROPIC_API_KEY instead.
 import { budgetStatus } from '../agents/budget.js';
-import { getUser, OWNER_ID, setClaudeKey } from '../db/users.js';
+import { getUser, OWNER_ID, setClaudeKey } from '../db/users.ts';
 import { boxKey, seal } from '../tools/secret-box.ts';
 import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, PROFILE_SOURCES, profileVersions, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
 import { docxName, prepDocx } from './word-docs.js';

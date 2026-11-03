@@ -8,7 +8,7 @@ import { buildContactRequest } from '../agents/hunt/find-contact.js';
 import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.js';
 import { buildClassifyRequest } from '../agents/inbox/classify.js';
 import { listOpenApplications } from '../agents/inbox/match.js';
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID } from '../db/users.ts';
 
 // The inbox prompt previews with a made-up email; real email bodies are never shown here.
 const SAMPLE_EMAIL = {

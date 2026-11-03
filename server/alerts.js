@@ -3,7 +3,7 @@
 // is missing. At most one email per kind of problem per day (the day is kept in app_settings as alert:<key>, so a
 // restart never resends), and with once, none again until it has recovered. Emails go only to the owner's own address
 // (EMAIL_ADDRESS, the same as the run report) and carry job names, dates and error messages only, like the log lines.
-import { getSetting, setSetting } from '../db/settings.js';
+import { getSetting, setSetting } from '../db/settings.ts';
 import { localDay } from '../tools/dates.ts';
 
 /**

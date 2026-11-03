@@ -4,7 +4,7 @@ import { createClaude } from '@scottmroth5/agent-core';
 import { pairwiseAccuracy, summarize } from '../evals/score/metrics.js';
 import { runEval } from '../evals/score/run.js';
 import { buildCases } from '../evals/score/build-cases.js';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 
 // Synthetic cases only.
 test('pairwiseAccuracy counts wins and half-credits ties', () => {

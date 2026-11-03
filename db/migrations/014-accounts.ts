@@ -5,10 +5,12 @@
 // user_id so run history and Claude spend are per user; it stays nullable because agent-core writes the row first and
 // tools/trace.ts stamps the user right after.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '014-accounts';
 export const foreignKeys = false;
 
-export function up(db) {
+export function up(db: Database) {
   const columns = db.prepare("SELECT name FROM pragma_table_info('users')").pluck().all().join(', ');
   db.exec(`CREATE TABLE users_new (
     id INTEGER PRIMARY KEY,

@@ -38,6 +38,8 @@ jobs:
       # Type checking and the promise lint rules (v3 Phase 2).
       - run: npm run typecheck
       - run: npm run lint
+      # db/types.ts must be what the migrations build.
+      - run: npm run db:types -- --check
       - run: npm run web:build
       - run: npm run check:personal -- --all
       - run: npm run check:security

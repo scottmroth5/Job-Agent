@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { addValue } from '../agents/lookups.js';
 import { funnel, applications, NO_REPLY_DAYS } from '../server/funnel.js';
 

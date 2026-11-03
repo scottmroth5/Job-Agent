@@ -2,14 +2,16 @@
 // a built-in closed status, after Rejected, and the status list's noResponse role pointing at it (Admin > Lists can point
 // it elsewhere). A list that already has a no_response value (a custom one) keeps it and gets the role.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '018-no-response';
 
-export function up(db) {
+export function up(db: Database) {
   const now = new Date().toISOString();
   const has = db.prepare("SELECT 1 FROM lookup_values WHERE list = 'status' AND id = 'no_response'").get();
   if (!has) {
-    const after = db.prepare("SELECT sort_order FROM lookup_values WHERE list = 'status' AND id = 'rejected'").pluck().get();
-    const order = after ?? (db.prepare("SELECT MAX(sort_order) FROM lookup_values WHERE list = 'status'").pluck().get() ?? 0) + 10;
+    const after = db.prepare("SELECT sort_order FROM lookup_values WHERE list = 'status' AND id = 'rejected'").pluck().get() as number | undefined;
+    const order = after ?? ((db.prepare("SELECT MAX(sort_order) FROM lookup_values WHERE list = 'status'").pluck().get() as number | null) ?? 0) + 10;
     // Make room right after Rejected.
     db.prepare("UPDATE lookup_values SET sort_order = sort_order + 1 WHERE list = 'status' AND sort_order > ?").run(order);
     db.prepare(`INSERT INTO lookup_values (list, id, label, group_key, sort_order, settings_json, origin, created_at, updated_at)
