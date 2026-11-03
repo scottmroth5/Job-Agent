@@ -4,7 +4,7 @@
 import { INBOX_SCOPES } from '../tools/google/auth.ts';
 import { signIn } from '../tools/google/oauth-flow.ts';
 import { setEnvValues, hasEnvValue, ENV_PATH } from '../tools/env-file.ts';
-import { newKey } from '../agents/inbox/crypto.js';
+import { newKey } from '../agents/inbox/crypto.ts';
 
 async function main() {
   let wrote = [];

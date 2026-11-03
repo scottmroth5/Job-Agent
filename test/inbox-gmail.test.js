@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { getUserSetting as getSetting, setUserSetting as setSetting } from '../db/settings.ts';
-import { createGmail, normalizeMessage, labelName, parseFrom, isQuotaError } from '../agents/inbox/gmail.js';
-import { newMessageIds, backfillMessageIds, saveCursor, CURSOR_KEY } from '../agents/inbox/sync.js';
+import { createGmail, normalizeMessage, labelName, parseFrom, isQuotaError } from '../agents/inbox/gmail.ts';
+import { newMessageIds, backfillMessageIds, saveCursor, CURSOR_KEY } from '../agents/inbox/sync.ts';
 import { fakeGmailApi, message } from './fixtures/inbox/fake-gmail.js';
 
 const msgs = [

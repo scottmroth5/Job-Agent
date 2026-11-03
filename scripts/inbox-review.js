@@ -5,12 +5,12 @@ import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { openJobStore } from '../db/index.ts';
 import { getInboxAuth } from '../tools/google/auth.ts';
-import { createGmail } from '../agents/inbox/gmail.js';
-import { loadInboxConfig } from '../agents/inbox/config.js';
-import { loadKey } from '../agents/inbox/crypto.js';
-import { trimBody } from '../agents/inbox/atsParse.js';
-import { listOpenApplications } from '../agents/inbox/match.js';
-import { listNeedsReview, resolveReview } from '../agents/inbox/review.js';
+import { createGmail } from '../agents/inbox/gmail.ts';
+import { loadInboxConfig } from '../agents/inbox/config.ts';
+import { loadKey } from '../agents/inbox/crypto.ts';
+import { trimBody } from '../agents/inbox/atsParse.ts';
+import { listOpenApplications } from '../agents/inbox/match.ts';
+import { listNeedsReview, resolveReview } from '../agents/inbox/review.ts';
 
 const TYPE_LABEL = { confirmation: 'Confirmation', rejection: 'Rejection', recruiter_outreach: 'Recruiter outreach', interview_request: 'Interview request', assessment: 'Assessment', offer: 'Offer', follow_up: 'Follow-up', other: 'Other' };
 

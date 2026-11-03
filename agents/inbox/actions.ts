@@ -1,21 +1,43 @@
 // What a classified email does: link it (or send it to review), move the application forward, and record
 // why. Status only ever moves forward automatically; anything else is flagged for review instead.
 import { storedKey } from '../identity.ts';
-import { logDecision, linkThread, upsertContact, addReminder } from './store.js';
+import { logDecision, linkThread, upsertContact, addReminder } from './store.ts';
 import { lookups } from '../lookups.ts';
 import { adoptNotesText } from '../notes.ts';
 import { localDay } from '../../tools/dates.ts';
+import type { Database } from '../../tools/types.ts';
+import type { Lookups } from '../lookups.ts';
+import type { Classification } from './classify.ts';
+
+/** decideLink's answer: the link to make (or not), and whether a person must look. */
+export interface LinkDecision {
+  postingId: number | null;
+  rule: string | null;
+  confidence: number;
+  reviewStatus: 'auto' | 'needs_review';
+  reason: string | null;
+  bestGuess: number | null;
+  opportunity: boolean;
+}
+
+/** planStatus's answer: one of a forward change, a reason for review, or nothing to do. */
+export type StatusPlan = { change: { from: string; to: string }; review?: undefined; none?: undefined } | { review: string; change?: undefined; none?: undefined } | { none: true; change?: undefined; review?: undefined };
+
+/** What the actions read from a classification (a stored one, from review, has no confidence or application). */
+type ActionClassification = Pick<Classification, 'type' | 'extracted' | 'summary'>;
+
+/** The stored email an action works from. */
+type ActionEmail = { id: string; gmailMessageId: string; threadId: string; sentAt: string; senderEmail: string };
 
 // The built-in statuses the inbox moves jobs to; ranks and closed statuses come from status groups (agents/lookups.ts).
-const TARGET = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };
+const TARGET: Record<string, string> = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };
 // Types that are about an application; without a confident link they need a person to place them.
 const APPLICATION_TYPES = ['confirmation', 'rejection', 'interview_request', 'assessment', 'offer', 'follow_up'];
 
 /**
- * The confidence gate. A rule match counts as certain. Returns
- *   { postingId, rule, confidence, reviewStatus: 'auto' | 'needs_review', reason, bestGuess, opportunity }
+ * The confidence gate. A rule match counts as certain.
  */
-export function decideLink({ ruleMatch, classification: c, threshold }) {
+export function decideLink({ ruleMatch, classification: c, threshold }: { ruleMatch: { postingId: number; rule: string } | null; classification: Pick<Classification, 'applicationId' | 'confidence' | 'type'>; threshold: number }): LinkDecision {
   if (ruleMatch) return { postingId: ruleMatch.postingId, rule: ruleMatch.rule, confidence: 1, reviewStatus: 'auto', reason: null, bestGuess: null, opportunity: false };
   if (c.applicationId != null) {
     if (c.confidence >= threshold) return { postingId: c.applicationId, rule: 'model', confidence: c.confidence, reviewStatus: 'auto', reason: null, bestGuess: null, opportunity: false };
@@ -34,7 +56,7 @@ export function decideLink({ ruleMatch, classification: c, threshold }) {
  *   { change: { from, to } } | { review: reason } | { none: true }
  * lk: lookups(db), or the built-in lists when omitted. An archived target status sends the email to review.
  */
-export function planStatus(current, type, lk = lookups(null)) {
+export function planStatus(current: string, type: string, lk: Lookups = lookups(null)): StatusPlan {
   const to = TARGET[type];
   if (!to || to === current) return { none: true };
   if (!lk.selectable('status', to)) return { review: `the "${lk.label('status', to)}" status is archived, so it was not set` };
@@ -45,10 +67,10 @@ export function planStatus(current, type, lk = lookups(null)) {
   return { review: `would move the status backward (${current} to ${to})` };
 }
 
-const dateOnly = (iso) => String(iso ?? '').slice(0, 10) || null;
+const dateOnly = (iso: string | null | undefined) => String(iso ?? '').slice(0, 10) || null;
 
 /** An ISO date from text like "October 9, 2026" or "2026-10-09", else null (the text is kept in the note). */
-export function parseDeadline(text) {
+export function parseDeadline(text: string | null | undefined) {
   if (!text) return null;
   const t = Date.parse(String(text).replace(/(\d)(st|nd|rd|th)\b/g, '$1'));
   return Number.isNaN(t) ? null : new Date(t).toISOString();
@@ -59,14 +81,19 @@ export function parseDeadline(text) {
  * senderEmail); c: the validated classification; decidedBy: 'rule:<name>' | 'model:<id>' | 'user'.
  * Returns { statusChange, review, notices[], reminderId }.
  */
-export function applyActions(db, { email, postingId, c, decidedBy, promptVersion, now = new Date() }) {
-  const posting = db.prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(postingId);
+export function applyActions(
+  db: Database,
+  { email, postingId, c, decidedBy, promptVersion, now = new Date() }: { email: ActionEmail; postingId: number; c: ActionClassification; decidedBy: string; promptVersion?: string | null; now?: Date },
+) {
+  const posting = db.prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as
+    | { id: number; company: string; title: string; status: string; stage: string; applied_on: string | null }
+    | undefined;
   if (!posting) return { statusChange: null, review: 'the application no longer exists', notices: [], reminderId: null };
   const nowIso = now.toISOString();
   const base = { postingId, emailId: email.id, gmailMessageId: email.gmailMessageId, decidedBy, promptVersion };
   const label = `${posting.title} at ${posting.company}`;
-  const notices = [];
-  let reminderId = null;
+  const notices: string[] = [];
+  let reminderId: string | null = null;
 
   linkThread(db, email.threadId, postingId, 'application', now);
   logDecision(db, { ...base, action: 'link', detail: { type: c.type } }, now);
@@ -77,7 +104,7 @@ export function applyActions(db, { email, postingId, c, decidedBy, promptVersion
 
   const lk = lookups(db);
   const plan = planStatus(posting.status, c.type, lk);
-  let statusChange = null;
+  let statusChange: { from: string; to: string } | null = null;
   if (plan.change) {
     const { from, to } = plan.change;
     db.transaction(() => {
@@ -108,7 +135,10 @@ export function applyActions(db, { email, postingId, c, decidedBy, promptVersion
 }
 
 /** A new opportunity from recruiter outreach that matches no application. The email body is not copied. */
-export function createOpportunity(db, { email, c, decidedBy, promptVersion, now = new Date() }) {
+export function createOpportunity(
+  db: Database,
+  { email, c, decidedBy, promptVersion, now = new Date() }: { email: ActionEmail; c: ActionClassification; decidedBy: string; promptVersion?: string | null; now?: Date },
+) {
   const lk = lookups(db);
   const nowIso = now.toISOString();
   const company = c.extracted.company ?? 'Unknown';

@@ -2,13 +2,13 @@
 // injection guard) over synthetic labeled emails. Each case gets a fresh in-memory database.
 import { openJobStore } from '../../db/index.ts';
 import { storedKey } from '../../agents/identity.ts';
-import { prefilter, domainOf } from '../../agents/inbox/prefilter.js';
-import { trimBody } from '../../agents/inbox/atsParse.js';
-import { classifyEmail } from '../../agents/inbox/classify.js';
-import { listOpenApplications } from '../../agents/inbox/match.js';
-import { decideEmail, estimateCostUsd } from '../../agents/inbox/process.js';
-import { parseFrom } from '../../agents/inbox/gmail.js';
-import { isContact, isCompanyDomain } from '../../agents/inbox/store.js';
+import { prefilter, domainOf } from '../../agents/inbox/prefilter.ts';
+import { trimBody } from '../../agents/inbox/atsParse.ts';
+import { classifyEmail } from '../../agents/inbox/classify.ts';
+import { listOpenApplications } from '../../agents/inbox/match.ts';
+import { decideEmail, estimateCostUsd } from '../../agents/inbox/process.ts';
+import { parseFrom } from '../../agents/inbox/gmail.ts';
+import { isContact, isCompanyDomain } from '../../agents/inbox/store.ts';
 
 function seed(db, applications) {
   const insert = db.prepare(`INSERT INTO postings (user_id, id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)

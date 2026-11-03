@@ -5,10 +5,10 @@ import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { progressLine } from '../server/pipeline-routes.js';
 import { storedKey } from '../agents/identity.ts';
-import { insertEmail, addReminder } from '../agents/inbox/store.js';
-import { createGmail } from '../agents/inbox/gmail.js';
-import { loadInboxConfig } from '../agents/inbox/config.js';
-import { loadKey, newKey } from '../agents/inbox/crypto.js';
+import { insertEmail, addReminder } from '../agents/inbox/store.ts';
+import { createGmail } from '../agents/inbox/gmail.ts';
+import { loadInboxConfig } from '../agents/inbox/config.ts';
+import { loadKey, newKey } from '../agents/inbox/crypto.ts';
 import { fakeGmailApi, message } from './fixtures/inbox/fake-gmail.js';
 
 // Synthetic data only.

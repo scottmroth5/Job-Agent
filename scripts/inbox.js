@@ -9,10 +9,10 @@ import { openJobStore } from '../db/index.ts';
 import { assertNoRunningRun } from '../tools/runs.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { getInboxAuth } from '../tools/google/auth.ts';
-import { createGmail } from '../agents/inbox/gmail.js';
-import { loadInboxConfig } from '../agents/inbox/config.js';
-import { loadKey } from '../agents/inbox/crypto.js';
-import { runInbox } from '../agents/inbox/process.js';
+import { createGmail } from '../agents/inbox/gmail.ts';
+import { loadInboxConfig } from '../agents/inbox/config.ts';
+import { loadKey } from '../agents/inbox/crypto.ts';
+import { runInbox } from '../agents/inbox/process.ts';
 import { getPrompt } from '../agents/prompts.ts';
 
 const argv = process.argv.slice(2);

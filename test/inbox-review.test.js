@@ -5,9 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
 import { storedKey } from '../agents/identity.ts';
-import { insertEmail } from '../agents/inbox/store.js';
-import { loadKey, newKey, decrypt, encrypt } from '../agents/inbox/crypto.js';
-import { listNeedsReview, resolveReview, sealCaseLines } from '../agents/inbox/review.js';
+import { insertEmail } from '../agents/inbox/store.ts';
+import { loadKey, newKey, decrypt, encrypt } from '../agents/inbox/crypto.ts';
+import { listNeedsReview, resolveReview, sealCaseLines } from '../agents/inbox/review.ts';
 
 // Synthetic data only.
 const key = loadKey({ EMAIL_ENC_KEY: newKey() });

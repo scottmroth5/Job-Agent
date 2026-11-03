@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { createClaude } from '@scottmroth5/agent-core';
 import { inboxMetrics } from '../evals/inbox/metrics.js';
 import { runInboxEval } from '../evals/inbox/run.js';
-import { loadInboxConfig } from '../agents/inbox/config.js';
-import { EMAIL_TYPES } from '../agents/inbox/classify.js';
+import { loadInboxConfig } from '../agents/inbox/config.ts';
+import { EMAIL_TYPES } from '../agents/inbox/classify.ts';
 
 const data = JSON.parse(readFileSync(new URL('../evals/inbox/cases.json', import.meta.url), 'utf8'));
 

@@ -3,8 +3,8 @@
 // none. The file is replaced only after the new text is written in full. Prints counts only.
 //   npm run inbox:seal-cases -- --dry-run      counts, no change
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { loadKey } from '../agents/inbox/crypto.js';
-import { REVIEW_CASES_PATH, sealCaseLines } from '../agents/inbox/review.js';
+import { loadKey } from '../agents/inbox/crypto.ts';
+import { REVIEW_CASES_PATH, sealCaseLines } from '../agents/inbox/review.ts';
 
 const dryRun = process.argv.includes('--dry-run');
 const fileArg = process.argv.find((a) => a.startsWith('--file='));

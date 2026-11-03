@@ -1,10 +1,48 @@
 // Database reads and writes for the inbox: emails, contacts, threads, the decision log, reminders.
 import { randomUUID } from 'node:crypto';
-import { domainIn } from './prefilter.js';
+import { domainIn } from './prefilter.ts';
+import type { Database } from '../../tools/types.ts';
+
+/** An email as the inbox stores it: the message's fields plus what matching and classifying decided. */
+export interface EmailRecord {
+  gmailMessageId: string;
+  threadId: string;
+  senderEmail: string;
+  senderDomain: string;
+  sentAt: string;
+  subject?: string | null;
+  type?: string | null;
+  postingId?: number | null;
+  matchRule?: string | null;
+  confidence?: number | null;
+  reviewStatus: string;
+  reviewReason?: string | null;
+  summary?: string | null;
+  extracted?: object | null;
+  bodyEnc?: string | null;
+  promptVersion?: string | null;
+  model?: string | null;
+}
+
+/** The email fields updateEmail may change. */
+export type EmailPatch = Partial<Pick<EmailRecord, 'postingId' | 'matchRule' | 'confidence' | 'reviewStatus' | 'reviewReason' | 'bodyEnc' | 'type'>>;
+
+/** One entry in decision_log. */
+export interface Decision {
+  postingId?: number | null;
+  emailId?: string | null;
+  gmailMessageId?: string | null;
+  action: string;
+  fromStatus?: string | null;
+  toStatus?: string | null;
+  decidedBy: string;
+  promptVersion?: string | null;
+  detail?: object | null;
+}
 
 const iso = (d = new Date()) => d.toISOString();
 
-export function insertEmail(db, e, now = new Date()) {
+export function insertEmail(db: Database, e: EmailRecord, now = new Date()) {
   const id = randomUUID();
   db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id, match_rule,
       confidence, review_status, review_reason, summary, extracted_json, body_enc, prompt_version, model, created_at, updated_at)
@@ -33,17 +71,17 @@ export function insertEmail(db, e, now = new Date()) {
   return id;
 }
 
-const EMAIL_COLUMNS = { postingId: 'posting_id', matchRule: 'match_rule', confidence: 'confidence', reviewStatus: 'review_status', reviewReason: 'review_reason', bodyEnc: 'body_enc', type: 'type' };
+const EMAIL_COLUMNS: Record<string, string> = { postingId: 'posting_id', matchRule: 'match_rule', confidence: 'confidence', reviewStatus: 'review_status', reviewReason: 'review_reason', bodyEnc: 'body_enc', type: 'type' };
 
-export function updateEmail(db, id, patch, now = new Date()) {
+export function updateEmail(db: Database, id: string, patch: EmailPatch, now = new Date()) {
   const keys = Object.keys(patch).filter((k) => EMAIL_COLUMNS[k]);
   if (!keys.length) return;
   db.prepare(`UPDATE emails SET ${keys.map((k) => `${EMAIL_COLUMNS[k]} = @${k}`).join(', ')}, updated_at = @now WHERE id = @id AND user_id = @uid`).run({ ...patch, id, now: iso(now) });
 }
 
-export const emailSeen = (db, gmailMessageId) => Boolean(db.prepare('SELECT 1 FROM emails WHERE gmail_message_id = ? AND user_id = @uid').get(gmailMessageId));
+export const emailSeen = (db: Database, gmailMessageId: string) => Boolean(db.prepare('SELECT 1 FROM emails WHERE gmail_message_id = ? AND user_id = @uid').get(gmailMessageId));
 
-export function logDecision(db, d, now = new Date()) {
+export function logDecision(db: Database, d: Decision, now = new Date()) {
   db.prepare(`INSERT INTO decision_log (user_id, id, posting_id, email_id, gmail_message_id, action, from_status, to_status, decided_by, prompt_version, detail_json, created_at)
     VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
     randomUUID(),
@@ -60,13 +98,17 @@ export function logDecision(db, d, now = new Date()) {
   );
 }
 
-export function linkThread(db, threadId, postingId, kind = 'application', now = new Date()) {
+export function linkThread(db: Database, threadId: string, postingId: number, kind = 'application', now = new Date()) {
   db.prepare(`INSERT INTO email_threads (user_id, thread_id, posting_id, kind, created_at) VALUES (@uid, ?, ?, ?, ?)
     ON CONFLICT (user_id, thread_id) DO UPDATE SET posting_id = excluded.posting_id`).run(threadId, postingId, kind, iso(now));
 }
 
 /** Adds or updates a contact; an existing link to an application is kept unless postingId is given. */
-export function upsertContact(db, { email, name = null, company = null, postingId = null, source = 'email' }, now = new Date()) {
+export function upsertContact(
+  db: Database,
+  { email, name = null, company = null, postingId = null, source = 'email' }: { email: string | null | undefined; name?: string | null; company?: string | null; postingId?: number | null; source?: string },
+  now = new Date(),
+) {
   const addr = String(email ?? '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) return null;
   db.prepare(`INSERT INTO contacts (user_id, id, email, name, company, posting_id, source, created_at, updated_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -75,24 +117,28 @@ export function upsertContact(db, { email, name = null, company = null, postingI
   return addr;
 }
 
-export const isContact = (db) => {
+export const isContact = (db: Database) => {
   const q = db.prepare('SELECT 1 FROM contacts WHERE email = ? AND user_id = @uid');
-  return (email) => Boolean(q.get(String(email ?? '').toLowerCase()));
+  return (email: string | null | undefined) => Boolean(q.get(String(email ?? '').toLowerCase()));
 };
 
-export const isCompanyDomain = (db) => {
-  const domains = db.prepare('SELECT DISTINCT company_domain FROM postings WHERE user_id = @uid AND company_domain IS NOT NULL').pluck().all();
-  return (domain) => domainIn(domain, domains);
+export const isCompanyDomain = (db: Database) => {
+  const domains = db.prepare('SELECT DISTINCT company_domain FROM postings WHERE user_id = @uid AND company_domain IS NOT NULL').pluck().all() as string[];
+  return (domain: string) => domainIn(domain, domains);
 };
 
 /** Remembers the employer's own domain from a matched sender (never an ATS, job board, or personal mail domain). */
-export function learnDomain(db, postingId, domain, { atsDomains, personalDomains = [] }) {
+export function learnDomain(db: Database, postingId: number, domain: string | null | undefined, { atsDomains, personalDomains = [] }: { atsDomains: string[]; personalDomains?: string[] }) {
   const d = String(domain ?? '').toLowerCase();
   if (!d || domainIn(d, atsDomains) || domainIn(d, personalDomains)) return false;
   return db.prepare('UPDATE postings SET company_domain = ? WHERE id = ? AND user_id = @uid AND company_domain IS NULL').run(d, postingId).changes > 0;
 }
 
-export function addReminder(db, { postingId, emailId, kind, dueAt = null, note = null }, now = new Date()) {
+export function addReminder(
+  db: Database,
+  { postingId, emailId, kind, dueAt = null, note = null }: { postingId: number; emailId: string | null; kind: string; dueAt?: string | null; note?: string | null },
+  now = new Date(),
+) {
   const id = randomUUID();
   db.prepare('INSERT INTO reminders (user_id, id, posting_id, email_id, kind, due_at, note, created_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?)').run(id, postingId, emailId, kind, dueAt, note, iso(now));
   return id;

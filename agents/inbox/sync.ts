@@ -1,17 +1,19 @@
 // Which messages to look at: new ones since the stored Gmail historyId, or a window of days.
 import { getUserSetting, setUserSetting } from '../../db/settings.ts';
-import { HistoryExpiredError } from './gmail.js';
+import { HistoryExpiredError } from './gmail.ts';
+import type { Gmail } from './gmail.ts';
+import type { Database } from '../../tools/types.ts';
 
 export const CURSOR_KEY = 'inbox.historyId';
 
-const windowQuery = (days) => `newer_than:${days}d -in:chats`;
+const windowQuery = (days: number) => `newer_than:${days}d -in:chats`;
 
 /**
  * New message IDs since the last run. mode: 'history' (normal), 'fallback' (the stored historyId was
  * rejected as too old; the last fallbackDays are read instead), or 'initial' (first run, same window).
  * The cursor is not saved here: call saveCursor(db, nextHistoryId) once the messages are processed.
  */
-export async function newMessageIds({ gmail, db, fallbackDays = 7 }) {
+export async function newMessageIds({ gmail, db, fallbackDays = 7 }: { gmail: Pick<Gmail, 'historySince' | 'profile' | 'listMessages'>; db: Database; fallbackDays?: number }) {
   const stored = getUserSetting(db, CURSOR_KEY);
   if (stored) {
     try {
@@ -27,9 +29,9 @@ export async function newMessageIds({ gmail, db, fallbackDays = 7 }) {
 }
 
 /** Message IDs in the last `days` days (inbox:backfill), with the historyId to continue from afterwards. */
-export async function backfillMessageIds({ gmail, days = 180 }) {
+export async function backfillMessageIds({ gmail, days = 180 }: { gmail: Pick<Gmail, 'profile' | 'listMessages'>; days?: number }) {
   const { historyId } = await gmail.profile();
   return { messageIds: await gmail.listMessages(windowQuery(days)), nextHistoryId: historyId, mode: 'backfill' };
 }
 
-export const saveCursor = (db, historyId) => historyId && setUserSetting(db, CURSOR_KEY, String(historyId));
+export const saveCursor = (db: Database, historyId: string | null | undefined) => historyId && setUserSetting(db, CURSOR_KEY, String(historyId));

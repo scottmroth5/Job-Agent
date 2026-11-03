@@ -4,12 +4,12 @@ import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { getUserSetting as getSetting } from '../db/settings.ts';
 import { storedKey } from '../agents/identity.ts';
-import { createGmail } from '../agents/inbox/gmail.js';
-import { loadInboxConfig } from '../agents/inbox/config.js';
-import { loadKey, newKey, decrypt } from '../agents/inbox/crypto.js';
-import { runInbox } from '../agents/inbox/process.js';
-import { looksLikeInjection } from '../agents/inbox/classify.js';
-import { CURSOR_KEY } from '../agents/inbox/sync.js';
+import { createGmail } from '../agents/inbox/gmail.ts';
+import { loadInboxConfig } from '../agents/inbox/config.ts';
+import { loadKey, newKey, decrypt } from '../agents/inbox/crypto.ts';
+import { runInbox } from '../agents/inbox/process.ts';
+import { looksLikeInjection } from '../agents/inbox/classify.ts';
+import { CURSOR_KEY } from '../agents/inbox/sync.ts';
 import { fakeGmailApi, message } from './fixtures/inbox/fake-gmail.js';
 
 // Everything here is synthetic: made-up companies, addresses, and email text.

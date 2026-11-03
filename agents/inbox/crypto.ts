@@ -8,7 +8,7 @@ const VERSION = 'v1';
 export const newKey = () => randomBytes(32).toString('base64');
 
 /** The 32-byte key from env, or a clear error. Never includes the key in the message. */
-export function loadKey(env = process.env) {
+export function loadKey(env: NodeJS.ProcessEnv = process.env) {
   const raw = env.EMAIL_ENC_KEY;
   if (!raw) throw new Error('EMAIL_ENC_KEY is not set. Run "npm run inbox:auth", which creates one in .env.');
   const key = /^[0-9a-f]{64}$/i.test(raw) ? Buffer.from(raw, 'hex') : Buffer.from(raw, 'base64');
@@ -16,7 +16,7 @@ export function loadKey(env = process.env) {
   return key;
 }
 
-export function encrypt(text, key) {
+export function encrypt(text: string, key: Buffer) {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key, iv);
   const data = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
@@ -24,7 +24,7 @@ export function encrypt(text, key) {
 }
 
 /** Throws when the value was changed or the key is wrong (GCM authentication). */
-export function decrypt(stored, key) {
+export function decrypt(stored: string, key: Buffer) {
   const [version, iv, tag, data] = String(stored).split(':');
   if (version !== VERSION || !iv || !tag || data === undefined) throw new Error('Not an encrypted email body.');
   const decipher = createDecipheriv('aes-256-gcm', key, Buffer.from(iv, 'base64'));

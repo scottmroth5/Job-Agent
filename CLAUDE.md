@@ -205,7 +205,7 @@ PRIVACY.md and TERMS.md), and the Add to Home Screen files (manifest.webmanifest
 server/app.js holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
 The Run pipeline button (server/pipeline-routes.js) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.js) checks
-Gmail in-process, resolves needs_review emails with agents/inbox/review.js, and closes reminders.
+Gmail in-process, resolves needs_review emails with agents/inbox/review.ts, and closes reminders.
 Every task keeps its output (server/tasks.js: steps plus log lines; pass the task's logger to createJobTracer so run logs land there);
 the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
