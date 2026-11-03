@@ -5,7 +5,7 @@
 // a letter: callers save a failed check and keep going. Logs hold counts only, never a claim's text.
 import { fillTemplate } from '../../tools/template.ts';
 import { truncate } from '../../tools/text.ts';
-import { getPrompt } from '../prompts.js';
+import { getPrompt } from '../prompts.ts';
 
 // Haiku 4.5 from the letter eval (EVALS.md, 2026-11-03): the same recall as Sonnet 5.5 with fewer extra flags, at
 // under half the cost.
@@ -58,6 +58,9 @@ export const flagged = (claims) => [...claims.filter((c) => c.verdict === 'contr
 /**
  * Checks one letter on the user's AI. Returns { claims, model, promptVersion, costUsd }; throws when the call fails
  * (the caller records a failed check).
+ * @param {{ claude: import('@scottmroth5/agent-core').Claude, db?: import('../../tools/types.ts').Database | null, background: string,
+ *   posting: object, letter: string, config: object | null, trace?: import('@scottmroth5/agent-core').Run | null, model?: string,
+ *   prompt?: { template: string, schema: object, version: string } }} options
  */
 export async function verifyLetter({ claude, db = null, background, posting, letter, config, trace = null, model = VERIFY_MODEL, prompt = getPrompt(db, 'verify-letter') }) {
   const res = await claude.send({ ...buildVerifyRequest({ posting, letter, background, prompt, config, model }), trace });

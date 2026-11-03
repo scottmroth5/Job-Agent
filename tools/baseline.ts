@@ -6,7 +6,7 @@ import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { runAsUser, scopeDb } from '../db/scope.ts';
 import { applications } from '../server/funnel.js';
-import { waitingApplications } from '../agents/follow-ups.js';
+import { waitingApplications } from '../agents/follow-ups.ts';
 
 const LINKED = "('auto', 'confirmed', 'reassigned')";
 

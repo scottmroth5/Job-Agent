@@ -4,7 +4,7 @@
 import { resolveDetails } from '../../agents/discovery/details.js';
 import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.js';
 import { checkLocation } from '../../tools/location.ts';
-import { lookups, sqlList } from '../../agents/lookups.js';
+import { lookups, sqlList } from '../../agents/lookups.ts';
 
 export const MIN_CASE_TEXT = 500;
 

@@ -1,4 +1,4 @@
-// Configurable lists for job status, stage, and track (agents/lookups.js). Jobs keep storing each value's
+// Configurable lists for job status, stage, and track (agents/lookups.ts). Jobs keep storing each value's
 // immutable text ID; labels, order, groups, and archiving live in lookup_values. The fixed CHECK lists on
 // postings are removed in place (writable_schema, as in 008: SQLite documents removing CHECK constraints
 // as safe, and no table rebuild means nothing can cascade) and replaced by triggers that accept any ID in
@@ -8,7 +8,7 @@ import type { Database } from '../../tools/types.ts';
 
 export const id = '009-lookups';
 
-// [list, id, label, group, settings] in display order. Groups decide behavior (see agents/lookups.js).
+// [list, id, label, group, settings] in display order. Groups decide behavior (see agents/lookups.ts).
 export const BUILT_INS: Array<[list: string, id: string, label: string, group: string, settings?: object]> = [
   ['status', 'new', 'New', 'evaluate'],
   ['status', 'applied', 'Applied', 'waiting'],

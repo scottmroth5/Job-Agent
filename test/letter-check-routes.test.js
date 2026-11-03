@@ -1,4 +1,4 @@
-// The cover letter fact check in the job panel and after generation (server/letter-routes.js, agents/letter-checks.js,
+// The cover letter fact check in the job panel and after generation (server/letter-routes.js, agents/letter-checks.ts,
 // agents/hunt/generate.js). Synthetic data; Claude is a stand-in.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

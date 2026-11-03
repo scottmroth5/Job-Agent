@@ -1,7 +1,7 @@
 // Runs the inbox's real decision code (pre-filter, rule cascade, Claude classification, confidence gate,
 // injection guard) over synthetic labeled emails. Each case gets a fresh in-memory database.
 import { openJobStore } from '../../db/index.ts';
-import { storedKey } from '../../agents/identity.js';
+import { storedKey } from '../../agents/identity.ts';
 import { prefilter, domainOf } from '../../agents/inbox/prefilter.js';
 import { trimBody } from '../../agents/inbox/atsParse.js';
 import { classifyEmail } from '../../agents/inbox/classify.js';

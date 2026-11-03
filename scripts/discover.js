@@ -4,7 +4,7 @@
 //   npm run discover -- --sources=himalayas,linkedin --no-details
 import { createJobTracer } from '../tools/trace.ts';
 import { loadConfig } from '../tools/config.ts';
-import { configFor } from '../agents/user-config.js';
+import { configFor } from '../agents/user-config.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { createHttp } from '../tools/http.ts';
 import { createBrowser } from '../tools/browser.ts';

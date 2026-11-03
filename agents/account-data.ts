@@ -9,24 +9,25 @@ import { rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { USER_TABLES } from '../db/user-tables.ts';
 import { OWNER_ID } from '../db/users.ts';
+import type { Database } from '../tools/types.ts';
 
 // Columns never exported: encrypted with keys the user does not hold.
-const HIDDEN = { emails: ['body_enc'], resumes: ['file'] }; // a resume's text is exported; the file itself downloads from Settings
+const HIDDEN: Record<string, string[]> = { emails: ['body_enc'], resumes: ['file'] }; // a resume's text is exported; the file itself downloads from Settings
 // Deleted first: rows that point at other user rows (postings last; its children also cascade).
 const DELETE_ORDER = ['decision_log', 'reminders', 'emails', 'email_threads', 'contacts', 'attachments', 'meeting_preps', 'posting_notes', 'posting_sightings', 'scores', 'letter_checks', 'artifacts', 'status_history', 'prompt_versions', 'user_settings', 'feedback', 'postings'];
 
 const ordered = () => [...DELETE_ORDER.filter((t) => USER_TABLES.includes(t)), ...USER_TABLES.filter((t) => !DELETE_ORDER.includes(t))];
 
 /** Everything that is this user's, as one object (the Settings download). */
-export function exportAccount(db, uid, now = new Date()) {
+export function exportAccount(db: Database, uid: number, now = new Date()) {
   const account = db
     .prepare(`SELECT id, email, name, role, status, request_note AS requestNote, terms_accepted_at AS termsAcceptedAt, ai_source AS aiSource,
         ai_cap_usd AS aiCapUsd, claude_key_enc IS NOT NULL AS claudeKeySaved, created_at AS createdAt FROM users WHERE id = ?`)
-    .get(uid);
+    .get(uid) as ({ claudeKeySaved: number } & Record<string, unknown>) | undefined;
   if (!account) throw Object.assign(new Error('Account not found.'), { statusCode: 404 });
-  const tables = {};
+  const tables: Record<string, Array<Record<string, unknown>>> = {};
   for (const t of USER_TABLES) {
-    const rows = db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid);
+    const rows = db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid) as Array<Record<string, unknown>>;
     tables[t] = rows.map((r) => {
       const copy = { ...r };
       for (const c of HIDDEN[t] ?? []) delete copy[c];
@@ -42,14 +43,14 @@ export function exportAccount(db, uid, now = new Date()) {
 
 /**
  * Deletes a user's account and everything that is theirs. Returns counts (rows by table, files). Throws for the owner.
- * @param {string} [attachmentsDir]  where attached files live (data/attachments)
+ * attachmentsDir is where attached files live (data/attachments).
  */
-export function deleteAccount(db, uid, { attachmentsDir = null } = {}) {
+export function deleteAccount(db: Database, uid: number, { attachmentsDir = null }: { attachmentsDir?: string | null } = {}) {
   if (uid === OWNER_ID) throw Object.assign(new Error("The owner's account cannot be deleted."), { statusCode: 400 });
-  const user = db.prepare('SELECT ai_source FROM users WHERE id = ?').get(uid);
+  const user = db.prepare('SELECT ai_source FROM users WHERE id = ?').get(uid) as { ai_source: string } | undefined;
   if (!user) throw Object.assign(new Error('Account not found.'), { statusCode: 404 });
-  const postingIds = db.prepare('SELECT id FROM postings WHERE user_id = ?').pluck().all(uid);
-  const counts = {};
+  const postingIds = db.prepare('SELECT id FROM postings WHERE user_id = ?').pluck().all(uid) as number[];
+  const counts: Record<string, number> = {};
   db.transaction(() => {
     for (const t of ordered()) counts[t] = db.prepare(`DELETE FROM "${t}" WHERE user_id = ?`).run(uid).changes;
     // Their runs: the owner's key paid for these (keep the cost, drop the details), or their own did (gone).

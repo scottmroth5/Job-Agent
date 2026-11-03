@@ -6,8 +6,8 @@ import { fillTemplate } from '../../tools/template.ts';
 import { homeAreaText } from '../../tools/config.ts';
 import { sanitizeDashes, truncate } from '../../tools/text.ts';
 import { skipReason } from '../../tools/listings.ts';
-import { getPrompt } from '../prompts.js';
-import { lookups, sqlList } from '../lookups.js';
+import { getPrompt } from '../prompts.ts';
+import { lookups, sqlList } from '../lookups.ts';
 
 // Chosen by the scoring eval (2026-09-30, 74 applied/passed cases): Sonnet 5.5 ranked applied above
 // passed jobs 84% of the time (Haiku 4.5: 72%, v1: 71%). At 7+ it promotes 56% of applied jobs and
@@ -60,7 +60,7 @@ export function loadScorePrompts(db = null) {
 
 /** The prompt for a posting's track, from either a single prompt or a { fulltime, fractional } set. */
 export function promptFor(posting, { prompt, prompts }) {
-  // scorePrompt comes from the track's settings (agents/lookups.js); without it, the built-in fractional track uses its prompt.
+  // scorePrompt comes from the track's settings (agents/lookups.ts); without it, the built-in fractional track uses its prompt.
   if (prompts) return prompts[(posting.scorePrompt ?? (posting.track === 'fractional' ? 'score-fractional' : 'score')) === 'score-fractional' ? 'fractional' : 'fulltime'];
   return prompt;
 }

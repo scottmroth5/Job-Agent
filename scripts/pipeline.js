@@ -17,7 +17,7 @@ import { assertNoRunningRun } from '../tools/runs.ts';
 import { openJobStore } from '../db/index.ts';
 import { runAsUser } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
-import { configFor, profileForAI } from '../agents/user-config.js';
+import { configFor, profileForAI } from '../agents/user-config.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { runDiscovery, SOURCES } from '../agents/discovery/discover.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
-import { addValue } from '../agents/lookups.js';
+import { addValue } from '../agents/lookups.ts';
 import { funnel, applications, NO_REPLY_DAYS } from '../server/funnel.js';
 
 // Synthetic data only. "now" is fixed so ages and weeks are stable.

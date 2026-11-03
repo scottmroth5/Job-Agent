@@ -1,4 +1,4 @@
-// Resumes (agents/resumes.js, server/resume-routes.js): upload, label and match titles, default, replace, delete,
+// Resumes (agents/resumes.ts, server/resume-routes.js): upload, label and match titles, default, replace, delete,
 // download your own only, and the right one reaching each job's letter and tweaks. Synthetic files and data only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,9 +7,9 @@ import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { addUser } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
-import { addResume, deleteResume, listResumes, MAX_RESUMES, pickResume, replaceResumeFile, updateResume, withResume } from '../agents/resumes.js';
+import { addResume, deleteResume, listResumes, MAX_RESUMES, pickResume, replaceResumeFile, updateResume, withResume } from '../agents/resumes.ts';
 import { generateForPostings } from '../agents/hunt/generate.js';
-import { exportAccount } from '../agents/account-data.js';
+import { exportAccount } from '../agents/account-data.ts';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';

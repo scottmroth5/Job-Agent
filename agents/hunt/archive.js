@@ -1,5 +1,5 @@
 // Moves finished or stale jobs out of the active stages (v1's archiveOldJobs rules), by status group
-// (agents/lookups.js):
+// (agents/lookups.ts):
 //   Closed                          archived right away, whatever their age
 //   In conversation, Decision       never archived automatically
 //   anything else                   archived once discovered more than 30 days ago
@@ -9,9 +9,9 @@
 //   demoteWithoutText   moves untouched active jobs with no description back to the default stage
 import { skipReason } from '../../tools/listings.ts';
 import { parseResultTitle } from '../discovery/sources/serper.js';
-import { identityKey, isRealCompany } from '../identity.js';
-import { lookups, sqlList } from '../lookups.js';
-import { addNote } from '../notes.js';
+import { identityKey, isRealCompany } from '../identity.ts';
+import { lookups, sqlList } from '../lookups.ts';
+import { addNote } from '../notes.ts';
 import { localDay, localDaysAgo } from '../../tools/dates.ts';
 
 export const ARCHIVE_AFTER_DAYS = 30;

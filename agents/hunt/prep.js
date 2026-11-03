@@ -8,11 +8,11 @@ import { fillTemplate } from '../../tools/template.ts';
 import { fileTitle, truncate } from '../../tools/text.ts';
 import { renderMarkdown } from '../../tools/markdown.ts';
 import { ensurePrepFolder } from '../../tools/google/drive.ts';
-import { getPrompt } from '../prompts.js';
+import { getPrompt } from '../prompts.ts';
 import { formatAnalysis } from './letters.js';
-import { listNotes, notesForPrompt } from '../notes.js';
-import { pickResume, withResume } from '../resumes.js';
-import { letterHeader } from '../letter-header.js';
+import { listNotes, notesForPrompt } from '../notes.ts';
+import { pickResume, withResume } from '../resumes.ts';
+import { letterHeader } from '../letter-header.ts';
 
 export const PREP_MODEL = 'claude-opus-5-5';
 // Research plus a long document: high effort, room for thinking, streamed so a long answer never times out.
@@ -166,7 +166,7 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
   const letter = db.prepare("SELECT content FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").pluck().get(postingId);
   const prompt = getPrompt(db, 'meeting-prep');
   const notes = notesForPrompt(listNotes(db, postingId));
-  const resume = pickResume(db, posting.title); // the user's resume for this job (agents/resumes.js), if any
+  const resume = pickResume(db, posting.title); // the user's resume for this job (agents/resumes.ts), if any
 
   const people = prepInput.attendees.length;
   onStep(prepInput.research ? `Researching ${people === 1 ? 'the person' : `${people} people`} and the company, then writing the prep (a few minutes)` : 'Writing the prep');

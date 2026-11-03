@@ -4,12 +4,36 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { repoPath } from '../tools/paths.ts';
+import type { Database } from '../tools/types.ts';
+
+/** One editable prompt: where its default lives and which placeholders it may and must use. */
+export interface PromptDefinition {
+  label: string;
+  usedBy: string;
+  file: string[];
+  schemaFile?: string[];
+  allowed: string[];
+  required: string[];
+}
+
+/** The prompt in effect, as getPrompt returns it. */
+export interface Prompt {
+  name: string;
+  label: string;
+  template: string;
+  schema: object | null;
+  version: string;
+  source: 'custom' | 'default';
+  versionId: number | null;
+  note: string | null;
+  updatedAt: string | null;
+}
 
 const SCORING_PLACEHOLDERS = ['candidateName', 'homeLocations', 'company', 'roleTitle', 'jobLocation', 'jobUrl', 'locationNoteBlock', 'jobContentBlock'];
 const HUNT_PLACEHOLDERS = ['candidateName', 'company', 'roleTitle', 'roleType', 'analysis', 'jobContentBlock', 'notesBlock'];
 
 /** name -> label, default file, schema file (read-only), allowed and required placeholders. */
-export const PROMPTS = {
+export const PROMPTS: Record<string, PromptDefinition> = {
   score: {
     label: 'Full-time scoring',
     usedBy: 'Scoring full-time jobs (npm run score, pipeline, UI Re-score)',
@@ -73,20 +97,20 @@ export const PROMPTS = {
 };
 
 export const MAX_TEMPLATE_CHARS = 20000;
-const hash = (...parts) => {
+const hash = (...parts: Array<string | null | undefined>) => {
   const h = createHash('sha256');
   for (const p of parts) h.update(p ?? '');
   return h.digest('hex').slice(0, 10);
 };
 
-function definition(name) {
+function definition(name: string): PromptDefinition {
   const def = PROMPTS[name];
   if (!def) throw Object.assign(new Error(`Unknown prompt "${name}". Known: ${Object.keys(PROMPTS).join(', ')}`), { statusCode: 404 });
   return def;
 }
 
 /** The repo default for a prompt: { template, schema (object or null), schemaText }. */
-export function defaultPrompt(name) {
+export function defaultPrompt(name: string) {
   const def = definition(name);
   const template = readFileSync(repoPath(...def.file), 'utf8');
   const schemaText = def.schemaFile ? readFileSync(repoPath(...def.schemaFile), 'utf8') : null;
@@ -98,10 +122,10 @@ export function defaultPrompt(name) {
  * version is a short hash of template + schema, stored with every score and artifact.
  * db may be null (tests, scripts without a database), which always gives the default.
  */
-export function getPrompt(db, name) {
+export function getPrompt(db: Database | null | undefined, name: string): Prompt {
   const def = definition(name);
   const base = defaultPrompt(name);
-  const row = db ? db.prepare('SELECT id, template, note, created_at FROM prompt_versions WHERE name = ? AND user_id = @uid AND active = 1').get(name) : null;
+  const row = db ? db.prepare('SELECT id, template, note, created_at FROM prompt_versions WHERE name = ? AND user_id = @uid AND active = 1').get(name) as { id: number; template: string; note: string | null; created_at: string } | undefined : null;
   const template = row?.template ?? base.template;
   return {
     name,
@@ -117,14 +141,14 @@ export function getPrompt(db, name) {
 }
 
 /** Placeholder names used in a template, in order of first appearance. */
-export function placeholdersIn(template) {
-  return [...new Set([...String(template).matchAll(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g)].map((m) => m[1]))];
+export function placeholdersIn(template: unknown): string[] {
+  return [...new Set([...String(template).matchAll(/\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g)].map((m) => m[1] as string))];
 }
 
 /** Returns a list of problems that would break a run; empty when the template is safe to save. */
-export function validateTemplate(name, template) {
+export function validateTemplate(name: string, template: unknown) {
   const def = definition(name);
-  const problems = [];
+  const problems: string[] = [];
   const t = String(template ?? '');
   if (!t.trim()) problems.push('The prompt is empty.');
   if (t.length > MAX_TEMPLATE_CHARS) problems.push(`The prompt is over ${MAX_TEMPLATE_CHARS.toLocaleString()} characters.`);
@@ -140,7 +164,7 @@ export function validateTemplate(name, template) {
 }
 
 /** Saves a new version and makes it active. Throws (statusCode 400) with the problems when invalid. */
-export function savePrompt(db, name, { template, note }, now = new Date()) {
+export function savePrompt(db: Database, name: string, { template, note }: { template: string; note?: string | null }, now = new Date()) {
   const problems = validateTemplate(name, template);
   if (problems.length) throw Object.assign(new Error(problems.join(' ')), { statusCode: 400, problems });
   const current = getPrompt(db, name);
@@ -153,7 +177,7 @@ export function savePrompt(db, name, { template, note }, now = new Date()) {
 }
 
 /** Makes an earlier version active again, or returns to the repo default when versionId is null. */
-export function restorePrompt(db, name, versionId) {
+export function restorePrompt(db: Database, name: string, versionId: number | null) {
   definition(name);
   db.transaction(() => {
     if (versionId != null) {
@@ -167,14 +191,14 @@ export function restorePrompt(db, name, versionId) {
 }
 
 /** The version hash a template has (what scores and artifacts record), for a template not yet saved. */
-export const versionOf = (name, template) => hash(template, defaultPrompt(name).schemaText);
+export const versionOf = (name: string, template: string) => hash(template, defaultPrompt(name).schemaText);
 
 /**
  * What a recorded prompt version was, for the job panel's score details: the repo default, one of the user's saved
  * edits (with its note and date), or one no longer known (the default text has changed since); and whether it is the
  * prompt in use now. null when nothing was recorded ('default' rows from before versions were hashed).
  */
-export function describeVersion(db, name, version) {
+export function describeVersion(db: Database, name: string, version: string | null | undefined) {
   if (!version || version === 'default') return null;
   const saved = listVersions(db, name).find((v) => v.version === version);
   const kind = version === versionOf(name, defaultPrompt(name).template) ? 'default' : saved ? 'edit' : 'earlier';
@@ -182,10 +206,10 @@ export function describeVersion(db, name, version) {
 }
 
 /** Saved versions, newest first, with a hash matching what scores and artifacts record. */
-export function listVersions(db, name) {
+export function listVersions(db: Database, name: string) {
   const base = defaultPrompt(name);
-  return db
+  return (db
     .prepare('SELECT id, template, note, active, created_at FROM prompt_versions WHERE name = ? AND user_id = @uid ORDER BY id DESC')
-    .all(name)
+    .all(name) as Array<{ id: number; template: string; note: string | null; active: number; created_at: string }>)
     .map((r) => ({ id: r.id, note: r.note, active: Boolean(r.active), createdAt: r.created_at, version: hash(r.template, base.schemaText), template: r.template }));
 }

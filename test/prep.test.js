@@ -5,7 +5,7 @@ import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { buildPrepRequest, extractDocument, normalizePrepInput, prepDocName, prepHtml, PREP_MODEL } from '../agents/hunt/prep.js';
-import { getPrompt } from '../agents/prompts.js';
+import { getPrompt } from '../agents/prompts.ts';
 
 const config = {
   candidate: { name: 'Pat Example', signoffName: 'Pat' },

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { lookups, addValue, updateValue, moveValue, setRole, usageCounts, idFromLabel, sqlList } from '../agents/lookups.js';
+import { lookups, addValue, updateValue, moveValue, setRole, usageCounts, idFromLabel, sqlList } from '../agents/lookups.ts';
 
 test('the built-in lists reproduce the original behavior', () => {
   const store = openJobStore(':memory:');

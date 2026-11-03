@@ -1,5 +1,5 @@
-// The configurable lists (agents/lookups.js): read them for the UI, and manage them on the Admin screen.
-import { LISTS, GROUPS, ROLES, ROLE_LABELS, SCORE_PROMPTS, lookups, addValue, updateValue, moveValue, setRole, usageCounts } from '../agents/lookups.js';
+// The configurable lists (agents/lookups.ts): read them for the UI, and manage them on the Admin screen.
+import { LISTS, GROUPS, ROLES, ROLE_LABELS, SCORE_PROMPTS, lookups, addValue, updateValue, moveValue, setRole, usageCounts } from '../agents/lookups.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const listParams = { type: 'object', required: ['list'], properties: { list: { type: 'string', enum: LISTS } } };

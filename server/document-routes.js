@@ -2,7 +2,7 @@
 // downloads are in server/letter-routes.js, with its versions.
 import { prepDocx, docxName } from './word-docs.js';
 import { prepDocName } from '../agents/hunt/prep.js';
-import { letterHeader } from '../agents/letter-header.js';
+import { letterHeader } from '../agents/letter-header.ts';
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 

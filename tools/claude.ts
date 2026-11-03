@@ -2,12 +2,12 @@
 // Each call is paid for by the user it runs as (db/scope.ts; scripts run as the owner):
 //   the owner, and users the owner put on their key: ANTHROPIC_API_KEY;
 //   anyone else: their own key, sealed in users.claude_key_enc (tools/secret-box.ts) and opened only in memory here.
-// No key means no AI (NoClaudeKeyError). Before every call the caps are checked (agents/budget.js checkBudget); the
+// No key means no AI (NoClaudeKeyError). Before every call the caps are checked (agents/budget.ts checkBudget); the
 // first refusal of a month can tell someone (onCapReached).
 import { createHash } from 'node:crypto';
 import { createClaude } from '@scottmroth5/agent-core';
 import type { Claude, SendOptions } from '@scottmroth5/agent-core';
-import { BudgetExceededError, checkBudget } from '../agents/budget.js';
+import { BudgetExceededError, checkBudget } from '../agents/budget.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID, sealedClaudeKey } from '../db/users.ts';
 import { open } from './secret-box.ts';

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { storedKey } from '../agents/identity.js';
+import { storedKey } from '../agents/identity.ts';
 import { decideLink, planStatus, applyActions, createOpportunity, parseDeadline } from '../agents/inbox/actions.js';
 import { insertEmail, learnDomain, isCompanyDomain } from '../agents/inbox/store.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';

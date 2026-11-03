@@ -3,7 +3,7 @@ import { api } from '../api.js';
 import { useDemo } from '../demo.jsx';
 import { isOwner, useMe } from '../me.jsx';
 
-// Settings > Prompts: each user's own prompt edits (prompt_versions rows are theirs; agents/prompts.js getPrompt reads
+// Settings > Prompts: each user's own prompt edits (prompt_versions rows are theirs; agents/prompts.ts getPrompt reads
 // the current user's active edit, else the repo default). Saved versions, restore, a no-AI preview, and the output
 // format the code reads.
 

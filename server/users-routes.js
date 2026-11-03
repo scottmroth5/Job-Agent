@@ -4,7 +4,7 @@
 import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.ts';
 import { listUsers, usageByWeek, usagePeriodStart, usageTotals } from './admin-queries.js';
 import { BROWSER_NAMES, DEVICES, SOURCES } from './usage-totals.js';
-import { deleteAccount } from '../agents/account-data.js';
+import { deleteAccount } from '../agents/account-data.ts';
 import { ATTACHMENTS_DIR } from './attachments.js';
 
 const anyObject = { type: 'object', additionalProperties: true };

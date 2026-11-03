@@ -3,7 +3,7 @@
 // Scoring is a separate step (Phase 2c).
 import { normalizeUrl } from '../../tools/urls.ts';
 import { localDay, localDaysAgo } from '../../tools/dates.ts';
-import { identityKey, storedKey } from '../identity.js';
+import { identityKey, storedKey } from '../identity.ts';
 import { keywordMatcher } from '../../tools/titles.ts';
 import { checkLocation } from '../../tools/location.ts';
 import { detectTrack } from '../../tools/track.ts';
@@ -16,7 +16,7 @@ import * as remoteok from './sources/remoteok.js';
 import * as fractionaljobs from './sources/fractionaljobs.js';
 import * as linkedin from './sources/linkedin.js';
 import * as serper from './sources/serper.js';
-import { lookups, sqlList } from '../lookups.js';
+import { lookups, sqlList } from '../lookups.ts';
 
 /** Sources in priority order: when the same job appears in several, the earlier source wins. */
 export const SOURCES = { himalayas, remoteok, fractionaljobs, linkedin, serper };

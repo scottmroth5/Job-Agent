@@ -16,7 +16,7 @@ const LIST_FIELDS = [
   ['fractionalTerms', 'Fractional or part-time titles (optional)', 'e.g. Fractional CTO'],
 ];
 
-// Which of the knowledge doc's seven sections the text has, by heading (agents/knowledge-sections.js sectionCheck does the
+// Which of the knowledge doc's seven sections the text has, by heading (agents/knowledge-sections.ts sectionCheck does the
 // same on the server). A numbered heading counts by its number whatever its title ("SECTION 5: TARGET ROLES"), since the
 // prompts name sections by number; an unnumbered one by the standard title. Plain "1. ..." list items do not count.
 const norm = (t) => String(t).toLowerCase().replace(/[^a-z]+/g, ' ').trim();

@@ -4,11 +4,29 @@
 // stays valid on the jobs that have it, and drops out of menus and automation targets.
 
 import { BUILT_INS, BUILT_IN_ROLES } from '../db/migrations/009-lookups.ts';
+import type { Database } from '../tools/types.ts';
+import type { LookupRolesRow, LookupValuesRow } from '../db/types.ts';
+
+/** One value of a list, as the app uses it. settings: a track's scorePrompt and terms. */
+export interface LookupValue {
+  id: string;
+  label: string;
+  group: string;
+  order: number;
+  settings: { scorePrompt?: string; terms?: boolean };
+  origin: string;
+  archived: boolean;
+}
+
+type StatusGroup = { rank: number | null; needsAction: boolean; inProgress: boolean; autoArchive: 'age' | 'never' | 'now' };
+
+/** A list value's row as build() reads it (the database's, or a built-in seed's). */
+type ValueRow = Pick<LookupValuesRow, 'list' | 'id' | 'label' | 'group_key' | 'sort_order' | 'settings_json' | 'origin' | 'archived_at'>;
 
 export const LISTS = ['status', 'stage', 'track'];
 
 /** Groups per list, in order, with what each one means. */
-export const GROUPS = {
+export const GROUPS: Record<string, Array<{ key: string; label: string; help: string }>> = {
   status: [
     { key: 'evaluate', label: 'To evaluate', help: 'Shows under Needs action; archived after 30 days' },
     { key: 'waiting', label: 'Waiting to hear back', help: 'Shows under In progress; archived after 30 days' },
@@ -25,7 +43,7 @@ export const GROUPS = {
 };
 
 // What each status group does. rank orders the inbox's forward-only moves; closed is terminal.
-const STATUS_GROUP = {
+const STATUS_GROUP: Record<string, StatusGroup> = {
   evaluate: { rank: 0, needsAction: true, inProgress: false, autoArchive: 'age' },
   waiting: { rank: 1, needsAction: false, inProgress: true, autoArchive: 'age' },
   conversation: { rank: 2, needsAction: false, inProgress: true, autoArchive: 'never' },
@@ -34,22 +52,22 @@ const STATUS_GROUP = {
 };
 
 /** Roles a list has, and which group the value holding each role must be in (null: any). */
-export const ROLES = {
+export const ROLES: Record<string, Record<string, string[] | null>> = {
   status: { default: ['evaluate'], noResponse: ['closed'] },
   stage: { default: ['found', 'active'], promote: ['active'], archive: ['archived'] },
   track: { default: null },
 };
-export const ROLE_LABELS = { default: 'Default for new jobs', promote: 'Where 7+ jobs are promoted', archive: 'Where archived jobs go', noResponse: 'Where stale applications are closed (no reply)' };
+export const ROLE_LABELS: Record<string, string> = { default: 'Default for new jobs', promote: 'Where 7+ jobs are promoted', archive: 'Where archived jobs go', noResponse: 'Where stale applications are closed (no reply)' };
 
 export const SCORE_PROMPTS = ['score', 'score-fractional'];
 const ID = /^[a-z][a-z0-9_]{0,39}$/;
 
-const cache = new WeakMap();
+const cache = new WeakMap<object, Lookups>();
 
-function build(rows, roles) {
-  const byList = Object.fromEntries(LISTS.map((l) => [l, []]));
+function build(rows: ValueRow[], roles: Array<Pick<LookupRolesRow, 'list' | 'role' | 'value_id'>>) {
+  const byList: Record<string, LookupValue[]> = Object.fromEntries(LISTS.map((l) => [l, []]));
   for (const r of rows) {
-    byList[r.list].push({
+    (byList[r.list] as LookupValue[]).push({
       id: r.id,
       label: r.label,
       group: r.group_key,
@@ -59,14 +77,14 @@ function build(rows, roles) {
       archived: Boolean(r.archived_at),
     });
   }
-  const roleMap = Object.fromEntries(LISTS.map((l) => [l, {}]));
-  for (const r of roles) roleMap[r.list][r.role] = r.value_id;
+  const roleMap: Record<string, Record<string, string>> = Object.fromEntries(LISTS.map((l) => [l, {}]));
+  for (const r of roles) (roleMap[r.list] as Record<string, string>)[r.role] = r.value_id;
   return makeApi(byList, roleMap);
 }
 
 /** The built-in lists (the 009 seeds), for code and tests that run without a database. */
-let builtIn = null;
-export function builtInLookups() {
+let builtIn: Lookups | null = null;
+export function builtInLookups(): Lookups {
   builtIn ??= build(
     BUILT_INS.map(([list, id, label, group, settings], i) => ({ list, id, label, group_key: group, sort_order: (i + 1) * 10, settings_json: settings ? JSON.stringify(settings) : null, origin: 'built_in', archived_at: null })),
     BUILT_IN_ROLES.map(([list, role, value_id]) => ({ list, role, value_id })),
@@ -75,34 +93,34 @@ export function builtInLookups() {
 }
 
 /** Drops the cached lists (call after any edit). */
-export const invalidateLookups = (db) => cache.delete(db);
+export const invalidateLookups = (db: Database) => cache.delete(db);
 
 /**
  * The lists for this database, cached until invalidateLookups(db). Helpers include archived values,
  * because their behavior still applies to the jobs that have them.
  */
-export function lookups(db) {
+export function lookups(db: Database | null | undefined): Lookups {
   if (!db) return builtInLookups();
   if (!cache.has(db)) {
-    cache.set(db, build(db.prepare('SELECT * FROM lookup_values ORDER BY list, sort_order, id').all(), db.prepare('SELECT list, role, value_id FROM lookup_roles').all()));
+    cache.set(db, build(db.prepare('SELECT * FROM lookup_values ORDER BY list, sort_order, id').all() as ValueRow[], db.prepare('SELECT list, role, value_id FROM lookup_roles').all() as LookupRolesRow[]));
   }
-  return cache.get(db);
+  return cache.get(db) as Lookups;
 }
 
-function makeApi(byList, roles) {
-  const find = (list, id) => byList[list]?.find((v) => v.id === id) ?? null;
-  const statusIds = (pred) => byList.status.filter((v) => pred(STATUS_GROUP[v.group] ?? {})).map((v) => v.id);
+function makeApi(byList: Record<string, LookupValue[]>, roles: Record<string, Record<string, string>>) {
+  const find = (list: string, id: string | null | undefined) => byList[list]?.find((v) => v.id === id) ?? null;
+  const statusIds = (pred: (g: Partial<StatusGroup>) => boolean | undefined) => (byList.status as LookupValue[]).filter((v) => pred(STATUS_GROUP[v.group] ?? {})).map((v) => v.id);
   const api = {
-    values: (list, { includeArchived = true } = {}) => byList[list].filter((v) => includeArchived || !v.archived),
+    values: (list: string, { includeArchived = true }: { includeArchived?: boolean } = {}) => (byList[list] as LookupValue[]).filter((v) => includeArchived || !v.archived),
     get: find,
-    label: (list, id) => find(list, id)?.label ?? id,
-    groupOf: (list, id) => find(list, id)?.group ?? null,
+    label: (list: string, id: string) => find(list, id)?.label ?? id,
+    groupOf: (list: string, id: string | null | undefined) => find(list, id)?.group ?? null,
     /** IDs in any of the given groups. */
-    ids: (list, ...groups) => byList[list].filter((v) => groups.includes(v.group)).map((v) => v.id),
-    role: (list, name) => roles[list]?.[name] ?? null,
-    roles: (list) => ({ ...roles[list] }),
+    ids: (list: string, ...groups: string[]) => (byList[list] as LookupValue[]).filter((v) => groups.includes(v.group)).map((v) => v.id),
+    role: (list: string, name: string): string | null => roles[list]?.[name] ?? null,
+    roles: (list: string): Record<string, string> => ({ ...roles[list] }),
     /** True when the value exists and is not archived (allowed for a new choice). */
-    selectable: (list, id) => Boolean(find(list, id) && !find(list, id).archived),
+    selectable: (list: string, id: string) => Boolean(find(list, id) && !find(list, id)?.archived),
     /** Status behavior. */
     needsAction: () => statusIds((g) => g.needsAction),
     inProgress: () => statusIds((g) => g.inProgress),
@@ -110,23 +128,26 @@ function makeApi(byList, roles) {
     closed: () => statusIds((g) => g.autoArchive === 'now'),
     neverAutoArchived: () => statusIds((g) => g.autoArchive === 'never'),
     /** Forward-only rank of a status: 0..3, or null for a closed (terminal) status. */
-    rank: (statusId) => STATUS_GROUP[find('status', statusId)?.group]?.rank ?? null,
-    isClosed: (statusId) => find('status', statusId)?.group === 'closed',
+    rank: (statusId: string | null | undefined) => STATUS_GROUP[find('status', statusId)?.group as string]?.rank ?? null,
+    isClosed: (statusId: string | null | undefined) => find('status', statusId)?.group === 'closed',
     /** Track settings. */
-    scorePrompt: (trackId) => (find('track', trackId)?.settings.scorePrompt === 'score-fractional' ? 'score-fractional' : 'score'),
-    showsTerms: (trackId) => Boolean(find('track', trackId)?.settings.terms),
+    scorePrompt: (trackId: string | null | undefined) => (find('track', trackId)?.settings.scorePrompt === 'score-fractional' ? 'score-fractional' : 'score'),
+    showsTerms: (trackId: string | null | undefined) => Boolean(find('track', trackId)?.settings.terms),
   };
   return api;
 }
 
+/** The lists for one database: makeApi's helpers. */
+export type Lookups = ReturnType<typeof makeApi>;
+
 /** A quoted SQL list of IDs, e.g. ('new', 'applied'). IDs are validated, so inlining them is safe. */
-export function sqlList(ids) {
+export function sqlList(ids: string[]) {
   for (const id of ids) if (!ID.test(id)) throw new Error(`Not a list value ID: ${id}`);
   return ids.length ? `(${ids.map((id) => `'${id}'`).join(', ')})` : "('')";
 }
 
 /** An ID from a label: "Phone screen" -> phone_screen; suffixed when taken. */
-export function idFromLabel(label, taken = []) {
+export function idFromLabel(label: unknown, taken: string[] = []) {
   let base = String(label ?? '')
     .toLowerCase()
     .normalize('NFKD')
@@ -140,13 +161,13 @@ export function idFromLabel(label, taken = []) {
   return id;
 }
 
-const bad = (message) => Object.assign(new Error(message), { statusCode: 400 });
+const bad = (message: string) => Object.assign(new Error(message), { statusCode: 400 });
 
-function checkList(list) {
+function checkList(list: string) {
   if (!LISTS.includes(list)) throw bad(`Unknown list "${list}". Lists: ${LISTS.join(', ')}.`);
 }
 
-function checkLabel(db, list, label, exceptId = null) {
+function checkLabel(db: Database, list: string, label: unknown, exceptId: string | null = null) {
   const l = String(label ?? '').trim();
   if (!l) throw bad('Enter a label.');
   if (l.length > 60) throw bad('Keep the label to 60 characters or fewer.');
@@ -155,11 +176,12 @@ function checkLabel(db, list, label, exceptId = null) {
   return l;
 }
 
-function checkGroup(list, group) {
-  if (!GROUPS[list].some((g) => g.key === group)) throw bad(`Choose a group: ${GROUPS[list].map((g) => g.label).join(', ')}.`);
+function checkGroup(list: string, group: unknown) {
+  const groups = GROUPS[list] as Array<{ key: string; label: string }>;
+  if (!groups.some((g) => g.key === group)) throw bad(`Choose a group: ${groups.map((g) => g.label).join(', ')}.`);
 }
 
-function checkSettings(list, settings) {
+function checkSettings(list: string, settings: { scorePrompt?: string; terms?: unknown } | null | undefined) {
   if (list !== 'track') return null;
   const s = { scorePrompt: settings?.scorePrompt ?? 'score', terms: Boolean(settings?.terms) };
   if (!SCORE_PROMPTS.includes(s.scorePrompt)) throw bad(`The scoring prompt must be one of: ${SCORE_PROMPTS.join(', ')}.`);
@@ -167,7 +189,7 @@ function checkSettings(list, settings) {
 }
 
 /** Adds a value; returns its new ID. */
-export function addValue(db, list, { label, group, settings }, now = new Date()) {
+export function addValue(db: Database, list: string, { label, group, settings }: { label: unknown; group?: string; settings?: { scorePrompt?: string; terms?: unknown } }, now = new Date()) {
   checkList(list);
   const l = checkLabel(db, list, label);
   const g = list === 'track' ? 'track' : group;
@@ -182,25 +204,31 @@ export function addValue(db, list, { label, group, settings }, now = new Date())
 }
 
 /** Changes a value's label, group, settings, or archived state. Refuses changes that would break a role. */
-export function updateValue(db, list, id, patch, now = new Date()) {
+export function updateValue(
+  db: Database,
+  list: string,
+  id: string,
+  patch: { label?: unknown; group?: string; settings?: { scorePrompt?: string; terms?: unknown }; archived?: boolean },
+  now = new Date(),
+) {
   checkList(list);
   const lk = lookups(db);
   const v = lk.get(list, id);
   if (!v) throw Object.assign(new Error(`No ${list} value "${id}".`), { statusCode: 404 });
-  const set = {};
+  const set: Record<string, string | null> = {};
   if (patch.label !== undefined) set.label = checkLabel(db, list, patch.label, id);
   const roleNames = Object.entries(lk.roles(list)).filter(([, vid]) => vid === id).map(([r]) => r);
   if (patch.group !== undefined && list !== 'track') {
     checkGroup(list, patch.group);
     for (const r of roleNames) {
-      const allowed = ROLES[list][r];
-      if (allowed && !allowed.includes(patch.group)) throw bad(`"${v.label}" is the ${ROLE_LABELS[r].toLowerCase()}, which must be in ${allowed.join(' or ')}. Move that role first.`);
+      const allowed = ROLES[list]?.[r];
+      if (allowed && !allowed.includes(patch.group)) throw bad(`"${v.label}" is the ${(ROLE_LABELS[r] as string).toLowerCase()}, which must be in ${allowed.join(' or ')}. Move that role first.`);
     }
     set.group_key = patch.group;
   }
   if (patch.settings !== undefined) set.settings_json = JSON.stringify(checkSettings(list, { ...v.settings, ...patch.settings }));
   if (patch.archived !== undefined) {
-    if (patch.archived && roleNames.length) throw bad(`"${v.label}" is the ${roleNames.map((r) => ROLE_LABELS[r].toLowerCase()).join(' and ')}. Choose another value for that first.`);
+    if (patch.archived && roleNames.length) throw bad(`"${v.label}" is the ${roleNames.map((r) => (ROLE_LABELS[r] as string).toLowerCase()).join(' and ')}. Choose another value for that first.`);
     set.archived_at = patch.archived ? now.toISOString() : null;
   }
   const keys = Object.keys(set);
@@ -212,7 +240,7 @@ export function updateValue(db, list, id, patch, now = new Date()) {
 }
 
 /** Moves a value one place up (-1) or down (+1) in its list. */
-export function moveValue(db, list, id, direction) {
+export function moveValue(db: Database, list: string, id: string, direction: number) {
   checkList(list);
   const all = lookups(db).values(list);
   const i = all.findIndex((v) => v.id === id);
@@ -221,28 +249,31 @@ export function moveValue(db, list, id, direction) {
   if (j < 0 || j >= all.length) return;
   const swap = db.prepare('UPDATE lookup_values SET sort_order = ? WHERE list = ? AND id = ?');
   db.transaction(() => {
-    swap.run(all[j].order, list, all[i].id);
-    swap.run(all[i].order === all[j].order ? all[i].order + (direction < 0 ? 1 : -1) : all[i].order, list, all[j].id);
+    const a = all[i] as LookupValue;
+    const b = all[j] as LookupValue;
+    swap.run(b.order, list, a.id);
+    swap.run(a.order === b.order ? a.order + (direction < 0 ? 1 : -1) : a.order, list, b.id);
   })();
   invalidateLookups(db);
 }
 
 /** Points a role (for example the default status) at another value. */
-export function setRole(db, list, role, valueId) {
+export function setRole(db: Database, list: string, role: string, valueId: string) {
   checkList(list);
-  if (!ROLES[list][role] && ROLES[list][role] !== null) throw bad(`The ${list} list has no role "${role}".`);
+  const listRoles = ROLES[list] as Record<string, string[] | null>;
+  if (!listRoles[role] && listRoles[role] !== null) throw bad(`The ${list} list has no role "${role}".`);
   const lk = lookups(db);
   const v = lk.get(list, valueId);
   if (!v) throw bad(`No ${list} value "${valueId}".`);
   if (v.archived) throw bad(`"${v.label}" is archived; restore it first.`);
-  const allowed = ROLES[list][role];
-  if (allowed && !allowed.includes(v.group)) throw bad(`The ${ROLE_LABELS[role].toLowerCase()} must be in ${allowed.join(' or ')}.`);
+  const allowed = listRoles[role];
+  if (allowed && !allowed.includes(v.group)) throw bad(`The ${(ROLE_LABELS[role] as string).toLowerCase()} must be in ${allowed.join(' or ')}.`);
   db.prepare('INSERT INTO lookup_roles (list, role, value_id) VALUES (?, ?, ?) ON CONFLICT (list, role) DO UPDATE SET value_id = excluded.value_id').run(list, role, valueId);
   invalidateLookups(db);
 }
 
 /** How many jobs use each value of a list. */
-export function usageCounts(db, list) {
+export function usageCounts(db: Database, list: string): Record<string, number> {
   checkList(list);
-  return Object.fromEntries(db.prepare(`SELECT ${list} AS id, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY ${list}`).all().map((r) => [r.id, r.n]));
+  return Object.fromEntries((db.prepare(`SELECT ${list} AS id, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY ${list}`).all() as Array<{ id: string; n: number }>).map((r) => [r.id, r.n]));
 }

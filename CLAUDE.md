@@ -118,7 +118,7 @@ post, no script; MAX_PENDING open requests at most), pending to /auth/waiting, r
 never in the demo): approve, reject, pause, resume, and AI setup. server/notices.js sends the account emails (see Hard rules).
 Requests run as their user (server/app.js: decided in onRequest, run as them from preHandler). OWNER_ONLY routes: the inbox
 (the owner's own Gmail; another person's needs Google's restricted-scope review) and what everyone shares (lists, the owner's cap).
-Each user's own search (phase 3, agents/user-config.js): the owner's settings file and Google Doc stay theirs; anyone else saves
+Each user's own search (phase 3, agents/user-config.ts): the owner's settings file and Google Doc stay theirs; anyone else saves
 search settings (plain text fields only, so no user text becomes a regex: cover letter checks, site search, and private terms
 stay the owner's) and their background text on Settings (user_settings). The server's config is userConfigView and
 services.knowledge and services.drive answer for the current user (others: their background; no Drive, so letters and preps
@@ -141,7 +141,7 @@ FEEDBACK_PER_DAY a day; it is emailed to the owner with the sender as Reply-To (
 listed on Users with Mark done. ADMIN_ONLY prefixes in server/app.js: /api/admin/users, /api/admin/feedback. The Home Admin
 tile counts waiting requests and open feedback (summary.adminWaiting, admins only). test/feedback.test.js covers these.
 Phase 5 (per-user lists) was skipped: the status, stage, and track lists stay shared and the owner's to edit.
-Phase 6 (agents/account-data.js): Settings > Your data and account. Download my data (GET /api/account/export: every
+Phase 6 (agents/account-data.ts): Settings > Your data and account. Download my data (GET /api/account/export: every
 user-table row plus the account and runs; never the sealed key or email bodies). Pause (and resume, only when self-paused:
 decided_by = self; PAUSED_MAY in server/app.js lets a paused account resume or delete). Delete my account (typed address):
 every user-table row (db/user-tables.ts order), attached file folders, the account; runs on their own key are deleted, runs
@@ -153,16 +153,16 @@ users.time_zone (016) rides in the request or job context (runAsUser(uid, fn, { 
 localDaysAgo, dayOf, and timeZone() follow it, else the app's TZ. The owner, scripts, budgets (calendar months), and the
 scheduler use the app's zone. test/help-timezone.test.js.
 Onboarding: Home shows Get started (summary.setup: AI paid for, About you long enough, search complete) until all three
-are done. Build a draft (agents/draft-profile.js, POST /api/account/draft, Settings > About you): the user's resume and
+are done. Build a draft (agents/draft-profile.ts, POST /api/account/draft, Settings > About you): the user's resume and
 LinkedIn profile as PDFs (documents), text files and pasted text, and notes go to DRAFT_MODEL on their own AI with
 DRAFT_SCHEMA; it returns a draft About you and starting search with [add: ...] gaps and questions. Nothing is saved (the
 forms are filled for review), files are never kept, the materials are untrusted data (system prompt), DRAFTS_PER_DAY.
 The owner gets it too.
-The knowledge doc (About you in code, "Your knowledge doc" in the UI) has seven numbered sections (agents/knowledge-sections.js):
+The knowledge doc (About you in code, "Your knowledge doc" in the UI) has seven numbered sections (agents/knowledge-sections.ts):
 the default prompts name "Section 5: Job Targets" and "Section 6 (Cover Letter Rules)", so numbers and titles change only with
 the prompts. The draft builder writes them, Settings shows a checklist and Start from the template / Add the missing
 sections, and test/knowledge-sections.test.js checks the template, the demo's DEMO_ABOUT_YOU, and every example in help/about-you.md.
-Everyone's knowledge doc, the owner's included, lives only in the app (user_settings): agents/user-config.js backgroundFor
+Everyone's knowledge doc, the owner's included, lives only in the app (user_settings): agents/user-config.ts backgroundFor
 (>= 500 characters, else a message saying to write it under Settings) for the server and tools/knowledge.ts ownerBackground
 for scripts. There is no Google Doc any more (no YOUR_KNOWLEDGE_DOC_ID, no documents.readonly scope); services.knowledge is
 only a test stand-in for the owner's.
@@ -171,7 +171,7 @@ before in user_settings profile.versions (newest first, 20 at most; a doc saved 
 GET /api/account/profile/versions, /versions/:n, POST /versions/:n/restore, and GET /api/account/profile.docx?version=
 (prepDocx). test/knowledge-versions.test.js.
 Fill from a document (POST /api/account/profile/from-file) returns a file's text without saving; tools/doc-text.ts reads
-PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.js, server/resume-routes.js,
+PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.ts, server/resume-routes.js,
 Settings > Resumes): file and text in the resumes table (so backups, export, and deletion cover them; export omits the
 blob), a label, plain title words, one default. pickResume chooses per job title; withResume adds its text to the
 background for letters, tweaks, and meeting prep (never scoring), and artifacts/meeting_preps record resume_id. Downloads: GET /api/resumes/:id/file?format=original|text|docx|pdf;
@@ -188,7 +188,7 @@ The Home page (#/) opens with Today and upcoming (server/today.js, summary.today
 past due, jobs at an offer, applications worth a follow-up, and one item for all stale ones; each opens its job), then a tile per screen.
 The job panel's Next step box is the same list for one job (GET /api/postings/:id nextSteps; every open reminder, however
 far out), with Prepare for a meeting and Done (registerReminderRoutes, registered with or without Gmail).
-Follow-ups (agents/follow-ups.js, server/follow-up-routes.js): no reply from FOLLOW_UP_DAYS (7, server/funnel.js) until
+Follow-ups (agents/follow-ups.ts, server/follow-up-routes.js): no reply from FOLLOW_UP_DAYS (7, server/funnel.js) until
 the user's stale days (Settings > Follow-ups, user_settings followUp.staleDays, default 45; never archived jobs) is a
 follow-up with Find someone to contact (agents/hunt/find-contact.js: Sonnet with web search on the user's AI, prompt
 find-contact, the result saved as an agent note) and Close: no response; from the stale days on it is stale, closed one at
@@ -224,7 +224,7 @@ Attachments (server/attachments.js): the raw file is the POST body with its name
 data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images open inline, and downloads carry nosniff and a sandbox CSP.
 
 ## Prompts
-agents/prompts.js is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active
+agents/prompts.ts is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active
 (prompt_versions table, with history), else the repo file, which stays the default. Settings > Prompts (#/settings/prompts, web/src/components/PromptsSettings.jsx, routes /api/prompts in server/admin.js)
 edits every template in PROMPTS for the current user only (prompt_versions is a user table); Admin keeps Lists, Spending,
 and Users (all app-wide: the shared lists, the cap on the owner's key, accounts) and is shown to admins only, never in the demo; each
@@ -246,7 +246,7 @@ REVISIONS_PER_DAY; saves nothing), saving a kept revision (source v2-revision) o
 userLetterBody keeps its wording but takes off the header through the greeting and the sign-off on, and rebuilds a
 PDF's paragraphs; from-file returns the same body) as a new current version (with a Google Doc for the owner), restoring an older version as
 a new one, and Word or PDF downloads of any version (letter.docx / letter.pdf ?version=; tools/pdf-writer.ts letterPdf). Report HTML escapes every value.
-The letter header is each user's own (agents/letter-header.js, user_settings letter.header, Settings > Cover letter
+The letter header is each user's own (agents/letter-header.ts, user_settings letter.header, Settings > Cover letter
 header, GET/PUT /api/letter-header): name, sign-off name, email, phone, location, and up to 6 links; until saved it comes
 from config.candidate (tools/letter-header.ts fromCandidate), and every letter document reads it through letterHeader.
 headerLines (shared by Word, PDF, and the Google Doc) puts email, phone, and location on one line and the links as many
@@ -255,7 +255,7 @@ in a PDF), and discovery and manual add save titles and companies without them. 
 Letter fact check (v3 Phase 1; agents/hunt/verify-letter.js, prompt verify-letter with agents/hunt/schemas/verify-letter.json,
 VERIFY_MODEL, Haiku 4.5 from the letter eval): each claim a letter makes about the candidate, supported, unsupported, or contradicted by the
 knowledge doc plus the job's resume (system); the posting is data. letter_checks (022, a user table) holds one row per
-version (agents/letter-checks.js: claims_json with dismissed flags; failed = could not run). generateForPostings checks
+version (agents/letter-checks.ts: claims_json with dismissed flags; failed = could not run). generateForPostings checks
 each letter it writes on the same trace; the panel checks a version after a save (POST /api/postings/:id/letters/:versionId/check,
 CHECKS_PER_DAY) and dismisses claims (.../claims/:index/dismiss); restore copies the check. It never blocks a letter, a
 save, or a download; logs hold counts only. The demo seeds SAMPLE_CHECK_CLAIMS and answers Check again with sampleCheck.
@@ -270,13 +270,13 @@ in meeting_preps (UUID keys) and as a Google Doc in "Job Agent Meeting Prep". Ab
 Default model and promotion threshold live in agents/discovery/score.js with the eval evidence behind them.
 Change the prompt, schema, model, or threshold only after rerunning the scoring eval and comparing pairwise accuracy.
 Never kept (tools/listings.ts): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
-Job sites to skip (agents/excluded-sites.js, server/excluded-sites-routes.js, Settings and Skip this site under the job panel's
+Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.js, Settings and Skip this site under the job panel's
 link): each user's own list with a note per site in user_settings; configFor adds it to search.excludedSites (the owner's
 file entries stay, shown as from the file), so scripts read config through configFor(store.raw, OWNER_ID, loadConfig()).
 Saved jobs from a site are removed only on request (archiveSiteJobs; never one applied to). test/excluded-sites.test.js.
 Without posting text a score is capped at 5 (analysis.uncappedScore keeps the original) and the job is never promoted; the UI flags 7+ ones.
 The job panel's score details (server/queries.js scoreDetails) say when, by which model, from text or title, and with
-which prompt (agents/prompts.js describeVersion matches the stored version hash: default, a saved edit, or earlier).
+which prompt (agents/prompts.ts describeVersion matches the stored version hash: default, a saved edit, or earlier).
 Sonnet 5.5 and Opus 5.5 always think: keep effort low and maxTokens generous for scoring (MODEL_SETTINGS).
 Scripts that need secrets load .env through node --env-file.
 
@@ -356,7 +356,7 @@ PRIVACY.md must stay true of the code: a new outside service, admin column, or d
 Make Claude clients only with tools/claude.ts createJobClaude(db). Each call is paid by the user it runs as: the owner, and
 users the owner put on their key (users.ai_source 'owner'), use ANTHROPIC_API_KEY; anyone else their own key, saved in
 Settings (server/account-routes.js: checked with Anthropic's free model list, sealed by tools/secret-box.ts with USER_KEY_SECRET
-and the user id, never returned, logged, or shown, even to the admin). No key, no AI (NoClaudeKeyError). Caps (agents/budget.js
+and the user id, never returned, logged, or shown, even to the admin). No key, no AI (NoClaudeKeyError). Caps (agents/budget.ts
 checkBudget, from run_calls joined to runs.user_id): everything on the owner's key against the owner's cap (Admin > Spending,
 else MONTHLY_CLAUDE_BUDGET_USD, else $50), and each user on it against their own monthly cap (Admin > Users); the first
 refusal of a month emails that user and the owner. Every Claude call must pass a trace (a createJobTracer run) so its cost

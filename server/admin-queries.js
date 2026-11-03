@@ -1,7 +1,7 @@
 // The admin's cross-user reads (multi-user). The only place, with the migrations, that may query user tables across
 // users (test/user-scope.test.js exempts this file): it reads the unscoped database, and its routes need the admin role.
 // It returns account facts and counts only, never a user's jobs, notes, emails, background, or key.
-import { MIN_PROFILE_CHARS, scheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
+import { MIN_PROFILE_CHARS, scheduledForUser, userConfig, userProfile } from '../agents/user-config.ts';
 import { currentTimeZone, currentUserId, runAsUser } from '../db/scope.ts';
 import { appDay, dayOf, localDay } from '../tools/dates.ts';
 

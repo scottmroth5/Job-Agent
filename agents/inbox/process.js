@@ -10,7 +10,7 @@ import { encrypt } from './crypto.js';
 import { makeEvent, createEmitter } from './events.js';
 import { labelName } from './gmail.js';
 import { newMessageIds, backfillMessageIds, saveCursor } from './sync.js';
-import { getPrompt } from '../prompts.js';
+import { getPrompt } from '../prompts.ts';
 
 // Rough Haiku 4.5 list prices for dry-run estimates: $1 / $5 per million input / output tokens.
 const ESTIMATE = { fixedTokens: 900, perApplicationTokens: 15, outputTokens: 250, input: 1, output: 5 };

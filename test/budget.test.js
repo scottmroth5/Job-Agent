@@ -1,10 +1,10 @@
-// Claude spending caps and who pays for each call (agents/budget.js, tools/claude.ts). Synthetic runs and calls only;
+// Claude spending caps and who pays for each call (agents/budget.ts, tools/claude.ts). Synthetic runs and calls only;
 // Claude is faked, and keys are made up.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
-import { budgetLimit, budgetStatus, setBudgetLimit, spendByLabel, BudgetExceededError, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.js';
+import { budgetLimit, budgetStatus, setBudgetLimit, spendByLabel, BudgetExceededError, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.ts';
 import { runAsUser } from '../db/scope.ts';
 import { addUser, OWNER_ID, setAiAccess, setClaudeKey } from '../db/users.ts';
 import { createJobClaude, NoClaudeKeyError } from '../tools/claude.ts';

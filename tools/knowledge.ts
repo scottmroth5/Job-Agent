@@ -1,5 +1,5 @@
 // The owner's knowledge doc for scripts: the one they keep in Settings (user_settings), like every other user's.
-import { backgroundFor } from '../agents/user-config.js';
+import { backgroundFor } from '../agents/user-config.ts';
 import { OWNER_ID } from '../db/users.ts';
 import type { Database } from './types.ts';
 

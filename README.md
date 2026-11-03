@@ -211,7 +211,7 @@ These ideas are under consideration and may change as the application evolves.
 |---|---|
 | `agents/discovery` | Job sources, full-text fetching, location checks, scoring, and scoring prompts |
 | `agents/hunt` | Resume tweaks, cover letters, the report email, and archiving |
-| `agents/manual.js` | Adding jobs by hand |
+| `agents/manual.ts` | Adding jobs by hand |
 | `agents/inbox` | Gmail inbox: pre-filter, matching, classification, status actions, review |
 | `server/` | Local API (OpenAPI spec at `/api/openapi.json`) |
 | `web/` | React web page |

@@ -1,5 +1,5 @@
 // A cover letter's header, shared by the Word, PDF, and Google Doc layouts. The header is each user's own (Settings >
-// Cover letter header, agents/letter-header.js): name, email, phone, an optional location, the sign-off name, and links.
+// Cover letter header, agents/letter-header.ts): name, email, phone, an optional location, the sign-off name, and links.
 // Until they save one it comes from their settings (candidate.name, contactLine, linkedin, website, github), through
 // fromCandidate. headerLines gives the contact lines as parts { text, url } (url null for plain text): email, phone,
 // and location on one line, then the links, as many to a line as fit. An email links as mailto:, a web address

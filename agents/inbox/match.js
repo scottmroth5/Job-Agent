@@ -4,10 +4,10 @@
 //   3 domain       the sender's domain is the company domain of exactly one open application
 //   4 ats_subject  company (and title) parsed from an ATS email identify exactly one open application
 import { companyTitleKey } from '../../tools/urls.ts';
-import { identityKey } from '../identity.js';
+import { identityKey } from '../identity.ts';
 import { domainIn } from './prefilter.js';
 import { parseAtsEmail } from './atsParse.js';
-import { lookups, sqlList } from '../lookups.js';
+import { lookups, sqlList } from '../lookups.ts';
 
 /**
  * Applications an email can be about: any in-progress status (in any stage, since applied jobs are

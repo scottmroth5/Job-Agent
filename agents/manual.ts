@@ -2,7 +2,7 @@
 // you did not paste it, check location and track, score, and write materials when it scores
 // well (or when asked). Used by the UI's Add job and by npm run add.
 import { normalizeUrl, isOnSite } from '../tools/urls.ts';
-import { identityKey, storedKey, isRealCompany } from './identity.js';
+import { identityKey, storedKey, isRealCompany } from './identity.ts';
 import { checkLocation } from '../tools/location.ts';
 import { detectTrack } from '../tools/track.ts';
 import { parseRate, parseHours } from '../tools/rates.ts';
@@ -12,24 +12,86 @@ import { jobIdFromUrl } from './discovery/sources/linkedin.js';
 import * as fractionaljobs from './discovery/sources/fractionaljobs.js';
 import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/score.js';
 import { generateForPostings } from './hunt/generate.js';
-import { lookups } from './lookups.js';
-import { adoptNotesText } from './notes.js';
+import { lookups } from './lookups.ts';
+import { adoptNotesText } from './notes.ts';
 import { localDay } from '../tools/dates.ts';
 import { withoutPictographs } from '../tools/text.ts';
+import type { Claude, Run } from '@scottmroth5/agent-core';
+import type { JobStore } from '../db/index.ts';
+import type { Http } from '../tools/http.ts';
+import type { UserConfig } from './user-config.ts';
+
+/** What the Add job dialog and npm run add send. */
+export interface ManualInput {
+  url?: string;
+  title?: string;
+  company?: string;
+  location?: string;
+  description?: string;
+  notes?: string;
+  track?: string;
+  rateText?: string;
+  hoursText?: string;
+  writeMaterials?: boolean;
+}
+
+/** What addPosting runs with: the store, the user's settings, and the clients (each may be a test fake). */
+export interface ManualContext {
+  store: JobStore;
+  config: UserConfig;
+  http?: Http;
+  browser?: unknown;
+  claude: Claude;
+  /** The knowledge doc (with the chosen resume), the system prompt for scoring and writing. */
+  knowledge: string;
+  /** createDriveClient(), or null to skip Google Docs. */
+  drive: object | null;
+  run?: Run;
+  onStep?: (message: string) => void;
+}
+
+/** The job as it is read before saving: what was typed in, then what the page or its source added. */
+interface ManualItem {
+  source: string;
+  url: string | null;
+  title: string;
+  company: string | null;
+  location: string | null;
+  description: string | null;
+  rateText: string | null;
+  hoursText: string | null;
+  linkedinJobId: string | null;
+  workplace?: string | null;
+  extra?: Record<string, unknown>;
+  fetchStatus?: string;
+  fetchMethod?: string;
+  fetchDetails?: (http: unknown) => unknown;
+}
 
 export const MANUAL_SOURCE = 'manual';
 export { isRealCompany };
 const MIN_PASTED = 100;
 
-const STAGE_LABEL = { discovered: 'Discovered', pipeline: 'Pipeline', archived: 'Archived' };
+const STAGE_LABEL: Record<string, string> = { discovered: 'Discovered', pipeline: 'Pipeline', archived: 'Archived' };
 
 /** What an existing posting is, in words the Add job dialog can show. */
-export function describeExisting(db, id) {
+export function describeExisting(db: JobStore['db'], id: number) {
   const p = db
     .prepare(`SELECT p.id, p.title, p.company, p.source, p.stage, p.status, p.track, p.discovered_on, p.url,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id ORDER BY CASE WHEN s.source LIKE 'v2%' THEN 0 ELSE 1 END, s.id DESC LIMIT 1) AS score
       FROM postings p WHERE p.id = ? AND p.user_id = @uid`)
-    .get(id);
+    .get(id) as {
+    id: number;
+    title: string;
+    company: string;
+    source: string | null;
+    stage: string;
+    status: string;
+    track: string;
+    discovered_on: string;
+    url: string | null;
+    score: number | null;
+  };
   const parts = [
     `found by ${p.source === MANUAL_SOURCE ? 'you' : p.source} on ${p.discovered_on}`,
     STAGE_LABEL[p.stage] ?? p.stage,
@@ -52,7 +114,7 @@ export function describeExisting(db, id) {
 }
 
 /** Checks the input before any work. Throws with a message fit for the UI. */
-export function validateManualInput(input) {
+export function validateManualInput(input: ManualInput) {
   const url = input.url?.trim();
   const description = input.description?.trim();
   if (!url && !description) throw new Error('Add a link to the posting, a pasted description, or both.');
@@ -64,7 +126,7 @@ export function validateManualInput(input) {
 }
 
 /** Refuses a list-of-jobs page (it cannot be scored or applied to) or a link to an excluded site. */
-function rejectSkipped(posting, config) {
+function rejectSkipped(posting: { url?: string | null; title?: string | null }, config?: UserConfig) {
   const site = excludedSite(posting.url, config?.search?.excludedSites);
   if (site) throw new Error(`Jobs from ${site} are skipped in your settings (Settings > Job sites to skip). Find the job on the employer's site and add that link.`);
   const reason = listingReason(posting);
@@ -72,16 +134,14 @@ function rejectSkipped(posting, config) {
 }
 
 /**
- * Adds one job and runs it through the same steps as discovered jobs.
- * @param {object} input   { url?, title?, company?, location?, description?, notes?, track?, rateText?, hoursText?, writeMaterials? }
- * @param {object} ctx     { store, config, http, browser, claude, knowledge, drive, run, onStep(message) }
- * @returns {Promise<{ id, created, score, promoted, materials }>}
+ * Adds one job and runs it through the same steps as discovered jobs. Returns { id, created, score, promoted, materials },
+ * or { id, created: false, existing, matchedBy } when the job is already saved.
  */
-export async function addPosting(input, ctx) {
+export async function addPosting(input: ManualInput, ctx: ManualContext) {
   validateManualInput(input);
   const { store, config, http, browser, claude, knowledge, drive, run } = ctx;
   rejectSkipped({ url: input.url?.trim() }, config);
-  const step = (m) => {
+  const step = (m: string) => {
     ctx.onStep?.(m);
     run?.log?.('info', m);
   };
@@ -91,10 +151,10 @@ export async function addPosting(input, ctx) {
 
   // 1. Already known?
   const urlKey = normalizeUrl(url);
-  const byUrl = urlKey ? db.prepare('SELECT id FROM postings WHERE url_key = ? AND user_id = @uid').get(urlKey) : null;
+  const byUrl = urlKey ? (db.prepare('SELECT id FROM postings WHERE url_key = ? AND user_id = @uid').get(urlKey) as { id: number } | undefined) : null;
   // Company + title only identifies a job when the company is real, not a placeholder like "Unknown".
   const ctKey = input.title ? identityKey({ company: input.company, title: input.title }) : null;
-  const existing = byUrl ?? (ctKey ? db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(ctKey) : null);
+  const existing = byUrl ?? (ctKey ? (db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(ctKey) as { id: number } | undefined) : null);
   if (existing) {
     const match = describeExisting(db, existing.id);
     step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
@@ -102,7 +162,7 @@ export async function addPosting(input, ctx) {
   }
 
   // 2. Text and details
-  const item = {
+  const item: ManualItem = {
     source: MANUAL_SOURCE,
     url,
     title: withoutPictographs(input.title?.trim() || ''),
@@ -113,13 +173,14 @@ export async function addPosting(input, ctx) {
     hoursText: input.hoursText?.trim() || null,
     linkedinJobId: jobIdFromUrl(url),
   };
-  if (url && isOnSite(url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, url);
+  // http is the same client resolveDetails was given (tools/http.ts).
+  if (url && isOnSite(url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h as Http, url);
   if (pasted) {
     Object.assign(item, { fetchStatus: 'ok', fetchMethod: 'pasted' });
     // Still read the page for title/company/terms when they were not typed in.
     if (url && (!item.title || !item.company)) {
       step('Reading the posting page for title and company');
-      const probe = { ...item, description: null };
+      const probe: ManualItem = { ...item, description: null };
       await resolveDetails(probe, { http, browser });
       item.title ||= probe.title || '';
       item.company ??= probe.company;
@@ -140,7 +201,7 @@ export async function addPosting(input, ctx) {
   rejectSkipped(item, config);
   // The link may have supplied the company and title: check again for the same job saved from another site.
   const fetchedKey = identityKey(item);
-  const sameJob = fetchedKey ? db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(fetchedKey) : null;
+  const sameJob = fetchedKey ? (db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(fetchedKey) as { id: number } | undefined) : null;
   if (sameJob) {
     const match = describeExisting(db, sameJob.id);
     step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
@@ -200,14 +261,15 @@ export async function addPosting(input, ctx) {
 
   // 5. Score
   step('Scoring');
-  const scored = await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], concurrency: 1 } });
-  if (scored.failures.length) throw new Error(`Saved as job #${id}, but scoring failed: ${scored.failures[0].error}`);
-  const score = db.prepare("SELECT score FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(id);
+  // The shape scorePostings returns (agents/discovery/score.js, typed when discovery is converted).
+  const scored = (await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], concurrency: 1 } })) as { failures: Array<{ error: string }>; promoted: number[] };
+  if (scored.failures.length) throw new Error(`Saved as job #${id}, but scoring failed: ${scored.failures[0]?.error}`);
+  const score = db.prepare("SELECT score FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(id) as number | undefined;
   const promoted = scored.promoted.includes(id);
   step(`Scored ${score} of 10${promoted ? ', moved to your pipeline' : ''}`);
 
   // 6. Materials
-  let materials = null;
+  let materials: { docs?: unknown } | null = null;
   if (promoted || input.writeMaterials) {
     if (!promoted) db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), nowIso, id);
     step('Writing resume tweaks and cover letter');

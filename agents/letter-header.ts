@@ -4,14 +4,16 @@
 // document (Word, PDF, the Google Doc, the pipeline's letters) reads it through letterHeader.
 import { getUserSetting, setUserSetting } from '../db/settings.ts';
 import { fromCandidate, hrefOf, isEmail } from '../tools/letter-header.ts';
+import type { CandidateFields, LetterHeader } from '../tools/letter-header.ts';
+import type { Database } from '../tools/types.ts';
 
 const KEY = 'letter.header';
 export const MAX_LINKS = 6;
 const MAX = { name: 120, signoffName: 120, email: 200, phone: 40, location: 120, link: 300 };
-const bad = (message) => Object.assign(new Error(message), { statusCode: 400 });
+const bad = (message: string) => Object.assign(new Error(message), { statusCode: 400 });
 
 /** The current user's header: their saved one, else one from config.candidate. saved says which. */
-export function letterHeader(db, config) {
+export function letterHeader(db: Database, config: { candidate?: CandidateFields } | null | undefined): LetterHeader & { saved: boolean } {
   const raw = getUserSetting(db, KEY);
   if (raw) {
     try {
@@ -24,20 +26,21 @@ export function letterHeader(db, config) {
 }
 
 /** The fields as stored: trimmed, with links that are web addresses (https:// added when left off). */
-function clean(h = {}) {
-  const text = (v, max) => String(v ?? '').trim().slice(0, max);
+// h is JSON from a request or a saved setting; each field is turned into text before use.
+function clean(h: Record<string, unknown> = {}): LetterHeader {
+  const text = (v: unknown, max: number) => String(v ?? '').trim().slice(0, max);
   return {
     name: text(h.name, MAX.name),
     signoffName: text(h.signoffName, MAX.signoffName),
     email: text(h.email, MAX.email),
     phone: text(h.phone, MAX.phone),
     location: text(h.location, MAX.location),
-    links: (Array.isArray(h.links) ? h.links : []).map((l) => text(l, MAX.link)).filter(Boolean).slice(0, MAX_LINKS),
+    links: (Array.isArray(h.links) ? h.links : []).map((l: unknown) => text(l, MAX.link)).filter(Boolean).slice(0, MAX_LINKS),
   };
 }
 
 /** Saves the current user's header after checking it; returns it as letterHeader does. */
-export function saveLetterHeader(db, input) {
+export function saveLetterHeader(db: Database, input: Record<string, unknown>) {
   const h = clean(input);
   if (!h.name) throw bad('Enter your name as it should appear on your letters.');
   if (h.email && !isEmail(h.email)) throw bad('That email address does not look right.');

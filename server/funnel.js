@@ -1,14 +1,14 @@
 // The application funnel: Applied -> Responded -> Interview -> Offer, with rates, timing, results by source,
 // applications per week, and the applications waiting for a reply. Built from status groups
-// (agents/lookups.js), status history, and linked emails, so statuses added later count automatically.
+// (agents/lookups.ts), status history, and linked emails, so statuses added later count automatically.
 // Timing uses only dated events (your changes, the agent's, and emails); v1-imported history has the import
 // date, not the real one, so it counts a milestone but not its timing.
-import { lookups } from '../agents/lookups.js';
+import { lookups } from '../agents/lookups.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 
 export const NO_REPLY_DAYS = 21;
-// Applications with no reply are worth a follow-up from FOLLOW_UP_DAYS until the stale days (agents/follow-ups.js).
+// Applications with no reply are worth a follow-up from FOLLOW_UP_DAYS until the stale days (agents/follow-ups.ts).
 export const FOLLOW_UP_DAYS = 7;
 export const DEFAULT_STALE_DAYS = 45;
 export const WEEKS = 12;

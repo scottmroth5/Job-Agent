@@ -4,7 +4,7 @@ import { openJobStore } from '../db/index.ts';
 import { listingReason, isListingPage, excludedSite, skipReason } from '../tools/listings.ts';
 import { interpretResult, ruleScore, isRuleScored, NO_TEXT_CAP } from '../agents/discovery/score.js';
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';
-import { validateManualInput, addPosting } from '../agents/manual.js';
+import { validateManualInput, addPosting } from '../agents/manual.ts';
 import { listPostings, summary } from '../server/queries.js';
 
 // Synthetic titles and links in the shapes seen in Google results; no real data.
@@ -226,7 +226,7 @@ test('rows carry pay from the job terms, the source salary, or the description, 
 
 test('editing the company finds the earlier copy, and duplicateOf archives this one with a note', async () => {
   const { updatePosting, getPosting } = await import('../server/queries.js');
-  const { rekeyPostings, findCopies } = await import('../agents/identity.js');
+  const { rekeyPostings, findCopies } = await import('../agents/identity.ts');
   const store = openJobStore(':memory:');
   const { db } = store;
   const set = (id, company, title) => db.prepare('UPDATE postings SET company = ?, title = ? WHERE id = ?').run(company, title, id);

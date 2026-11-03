@@ -4,10 +4,11 @@
 // or every stale one at once) rather than chase it. Closing uses the status list's noResponse role ("No response", a
 // closed status), with a note and the user's status history, so the funnel still counts the application.
 import { getUserSetting, setUserSetting } from '../db/settings.ts';
-import { lookups } from './lookups.js';
-import { addNote } from './notes.js';
+import { lookups } from './lookups.ts';
+import { addNote } from './notes.ts';
 import { localDay } from '../tools/dates.ts';
 import { applications, DEFAULT_STALE_DAYS, FOLLOW_UP_DAYS } from '../server/funnel.js';
+import type { Database } from '../tools/types.ts';
 
 export { DEFAULT_STALE_DAYS };
 export const FOLLOW_UP_FROM = FOLLOW_UP_DAYS;
@@ -16,12 +17,12 @@ export const MAX_STALE_DAYS = 365;
 const KEY = 'followUp.staleDays';
 
 /** The current user's stale-application days (Settings), else DEFAULT_STALE_DAYS. */
-export function staleDays(db) {
+export function staleDays(db: Database) {
   const n = Number(getUserSetting(db, KEY));
   return Number.isInteger(n) && n >= MIN_STALE_DAYS && n <= MAX_STALE_DAYS ? n : DEFAULT_STALE_DAYS;
 }
 
-export function setStaleDays(db, days) {
+export function setStaleDays(db: Database, days: unknown) {
   const n = Number(days);
   if (!Number.isInteger(n) || n < MIN_STALE_DAYS || n > MAX_STALE_DAYS) {
     throw Object.assign(new Error(`Choose a whole number of days from ${MIN_STALE_DAYS} to ${MAX_STALE_DAYS}.`), { statusCode: 400 });
@@ -34,7 +35,7 @@ export function setStaleDays(db, days) {
  * The current user's applications still waiting for a reply, split: followUp (FOLLOW_UP_FROM days up to the stale days,
  * not archived) and stale (the stale days or more, archived or not), each oldest first.
  */
-export function waitingApplications(db, { now = new Date(), stale = staleDays(db) } = {}) {
+export function waitingApplications(db: Database, { now = new Date(), stale = staleDays(db) }: { now?: Date; stale?: number } = {}) {
   const archived = lookups(db).ids('stage', 'archived');
   const waiting = applications(db, { now })
     .filter((a) => !a.responded.reached && !a.closed)
@@ -50,7 +51,7 @@ export function waitingApplications(db, { now = new Date(), stale = staleDays(db
  * Closes applications as no response (the noResponse role's status): ids, or every stale one when ids is null. Only
  * applications still waiting (no reply, not closed) are changed. Returns the ones closed: [{ id, company, title, days }].
  */
-export function closeNoResponse(db, { ids = null, now = new Date(), dryRun = false } = {}) {
+export function closeNoResponse(db: Database, { ids = null, now = new Date(), dryRun = false }: { ids?: Array<number | string> | null; now?: Date; dryRun?: boolean } = {}) {
   const lk = lookups(db);
   const status = lk.role('status', 'noResponse') ?? lk.ids('status', 'closed')[0];
   const { stale } = waitingApplications(db, { now });

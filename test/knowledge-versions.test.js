@@ -1,4 +1,4 @@
-// Knowledge doc versions and Word downloads (agents/user-config.js saveUserProfile and profileVersions, the
+// Knowledge doc versions and Word downloads (agents/user-config.ts saveUserProfile and profileVersions, the
 // /api/account/profile routes): every save keeps the one before, an earlier version can be made current again, and any
 // version downloads as Word. Synthetic text only.
 import { test } from 'node:test';
@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { addUser, OWNER_ID } from '../db/users.ts';
-import { MAX_PROFILE_VERSIONS, profileVersions, saveUserProfile, userProfile } from '../agents/user-config.js';
+import { MAX_PROFILE_VERSIONS, profileVersions, saveUserProfile, userProfile } from '../agents/user-config.ts';
 import { documentText } from '../tools/doc-text.ts';
 
 const doc = (n) => `## 1. Summary\nEngineering leader, version ${n}.\n\n## 2. Experience\n- Grew a platform team from 6 to 45 engineers.`;
