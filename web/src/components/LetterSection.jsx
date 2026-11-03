@@ -115,7 +115,7 @@ function FactCheck({ job, version, autoRun, onChecked }) {
           ))}
         </ul>
       )}
-      {check?.status === 'checked' && <p className="muted small">Uses your AI, about 2 cents a check. It only compares the letter with your knowledge doc and resume; it never changes the letter.</p>}
+      {check?.status === 'checked' && <p className="muted small">Uses your AI, about a cent a check. It only compares the letter with your knowledge doc and resume; it never changes the letter.</p>}
       {error && <div className="error">{error}</div>}
     </div>
   );

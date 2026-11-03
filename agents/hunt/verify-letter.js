@@ -7,7 +7,9 @@ import { fillTemplate } from '../../tools/template.js';
 import { truncate } from '../../tools/text.js';
 import { getPrompt } from '../prompts.js';
 
-export const VERIFY_MODEL = 'claude-sonnet-5-5';
+// Haiku 4.5 from the letter eval (EVALS.md, 2026-11-03): the same recall as Sonnet 5.5 with fewer extra flags, at
+// under half the cost.
+export const VERIFY_MODEL = 'claude-haiku-4-5';
 // Per model, as for scoring: Haiku 4.5 takes no effort setting; Sonnet and Opus 5.5 always think, so effort stays low.
 export const VERIFY_SETTINGS = {
   'claude-haiku-4-5': { maxTokens: 4000 },

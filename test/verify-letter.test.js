@@ -69,7 +69,10 @@ test('verifyLetter returns the cleaned claims, the model, and the prompt version
   const r = await verifyLetter({ claude: fakeClaude({ claims: CLAIMS }, calls), background, posting, letter, config });
   assert.equal(r.claims.length, 3);
   assert.equal(r.promptVersion, getPrompt(null, 'verify-letter').version);
-  assert.equal(calls[0].effort, 'low');
+  assert.deepEqual([calls[0].model, calls[0].effort], ['claude-haiku-4-5', undefined], 'Haiku takes no effort setting');
+  const sonnet = await verifyLetter({ claude: fakeClaude({ claims: CLAIMS }, calls), background, posting, letter, config, model: 'claude-sonnet-5-5' });
+  assert.equal(sonnet.model, 'claude-sonnet-5-5');
+  assert.equal(calls[1].effort, 'low');
 });
 
 test('checks are saved per version, dismissed one by one, and copied to a restored version', async () => {

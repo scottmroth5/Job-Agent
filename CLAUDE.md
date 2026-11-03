@@ -249,7 +249,7 @@ headerLines (shared by Word, PDF, and the Google Doc) puts email, phone, and loc
 to a line as fit; each email or web address is a clickable link (PDF link annotations). Every document's text goes through tools/text.js withoutPictographs (emoji show as pictures in Word and "?"
 in a PDF), and discovery and manual add save titles and companies without them. test/letter-header.test.js.
 Letter fact check (v3 Phase 1; agents/hunt/verify-letter.js, prompt verify-letter with agents/hunt/schemas/verify-letter.json,
-VERIFY_MODEL at low effort): each claim a letter makes about the candidate, supported, unsupported, or contradicted by the
+VERIFY_MODEL, Haiku 4.5 from the letter eval): each claim a letter makes about the candidate, supported, unsupported, or contradicted by the
 knowledge doc plus the job's resume (system); the posting is data. letter_checks (022, a user table) holds one row per
 version (agents/letter-checks.js: claims_json with dismissed flags; failed = could not run). generateForPostings checks
 each letter it writes on the same trace; the panel checks a version after a save (POST /api/postings/:id/letters/:versionId/check,
