@@ -3,11 +3,11 @@ import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { addValue, updateValue, setRole, lookups } from '../agents/lookups.ts';
 import { archivePostings } from '../agents/hunt/archive.js';
-import { selectPostings } from '../agents/discovery/score.js';
+import { selectPostings } from '../agents/discovery/score.ts';
 import { planStatus } from '../agents/inbox/actions.js';
 import { listOpenApplications } from '../agents/inbox/match.js';
 import { listPostings, summary, updatePosting } from '../server/queries.js';
-import { buildScoreRequest, loadScorePrompts } from '../agents/discovery/score.js';
+import { buildScoreRequest, loadScorePrompts } from '../agents/discovery/score.ts';
 
 // Synthetic data only.
 function setup() {

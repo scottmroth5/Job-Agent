@@ -1,8 +1,8 @@
 // Builds scoring eval cases from past postings with a known outcome: applied (positive) or
 // passed (negative). Text comes from the pasted job description, or is fetched again.
 // Cases contain personal job-search data, so they live in gitignored data/evals/.
-import { resolveDetails } from '../../agents/discovery/details.js';
-import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.js';
+import { resolveDetails } from '../../agents/discovery/details.ts';
+import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.ts';
 import { checkLocation } from '../../tools/location.ts';
 import { lookups, sqlList } from '../../agents/lookups.ts';
 

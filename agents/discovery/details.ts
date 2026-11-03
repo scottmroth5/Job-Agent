@@ -3,26 +3,36 @@
 // JSON-LD -> the page as plain text -> headless browser for pages that need JavaScript.
 import { extractJobPosting, htmlToText } from '../../tools/html.ts';
 import { HttpError, RateLimitedError } from '../../tools/http.ts';
-import { fetchPosting } from './sources/linkedin.js';
+import { fetchPosting } from './sources/linkedin.ts';
 import { isGoogleRedirect } from '../../tools/urls.ts';
+import type { Http } from '../../tools/http.ts';
+import type { JobItem, PageRenderer } from './types.ts';
+
+type JobPosting = NonNullable<ReturnType<typeof extractJobPosting>>;
+
+/** Shared across one run's resolveDetails calls: LinkedIn's back-off and block. */
+export interface DetailsState {
+  linkedinBlocked?: boolean;
+  linkedinBackedOff?: boolean;
+}
 
 export const MIN_DESCRIPTION = 200; // shorter text is treated as missing
 export const MIN_PAGE_TEXT = 800; // plain page text shorter than this is probably a JS shell
 export const MAX_TEXT = 20000; // stored text is capped; prompts trim further
 export const LINKEDIN_BACKOFF_MS = 60000; // one pause after LinkedIn's first 429, before giving up for the run
 
-const cap = (s) => (s && s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
+const cap = (s: string | null | undefined) => (s && s.length > MAX_TEXT ? s.slice(0, MAX_TEXT) : s);
 
 // Bot-check and access-denied pages. These sites block automated access on purpose, so the
 // posting is marked blocked (not retried) rather than worked around.
 const BOT_CHECK = /performing security verification|verify(ing)? (that )?you are (not a bot|human)|just a moment\.\.\.|access denied|attention required|enable javascript and cookies to continue/i;
 
 /** True when page text is a bot check or access-denied page rather than a job posting. */
-export function isBotCheck(text) {
+export function isBotCheck(text: string | null | undefined) {
   return BOT_CHECK.test(String(text ?? '').slice(0, 1000));
 }
 
-function applyJobPosting(item, jp) {
+function applyJobPosting(item: JobItem, jp: JobPosting) {
   item.company ??= jp.company;
   if (!item.title) item.title = jp.title ?? item.title;
   item.location ??= jp.location;
@@ -36,7 +46,8 @@ function applyJobPosting(item, jp) {
  * Resolves details in place and returns the item with fetchStatus/fetchMethod set.
  * state.linkedinBlocked is shared across calls: after a LinkedIn 429 no more LinkedIn requests are made.
  */
-export async function resolveDetails(item, { http, browser, state = {} }) {
+// T keeps the caller's own item type (manual add's has fields of its own).
+export async function resolveDetails<T extends JobItem>(item: T, { http, browser, state = {} }: { http: Http; browser?: PageRenderer | null; state?: DetailsState }): Promise<T> {
   if (item.description && item.description.length >= MIN_DESCRIPTION) {
     return Object.assign(item, { description: cap(item.description), fetchStatus: 'ok', fetchMethod: 'source' });
   }
@@ -128,9 +139,11 @@ export async function resolveDetails(item, { http, browser, state = {} }) {
 /** Fetch statuses worth retrying on a later run (temporary failures, not "no text on the page"). */
 export const RETRYABLE = ['rate_limited', 'timeout', 'error', 'needs_browser', 'http_429', 'http_500', 'http_502', 'http_503', 'http_504'];
 
-function failure(err) {
+// unknown: whatever was thrown; only its class and name are read.
+function failure(err: unknown) {
   if (err instanceof RateLimitedError) return 'rate_limited';
   if (err instanceof HttpError) return `http_${err.status}`;
-  if (err?.name === 'TimeoutError' || err?.name === 'AbortError') return 'timeout';
+  const name = (err as { name?: string } | null)?.name;
+  if (name === 'TimeoutError' || name === 'AbortError') return 'timeout';
   return 'error';
 }

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersions, validateTemplate, placeholdersIn } from '../agents/prompts.ts';
-import { scorePostings } from '../agents/discovery/score.js';
+import { scorePostings } from '../agents/discovery/score.ts';
 
 test('every default prompt passes its own validation', () => {
   for (const name of Object.keys(PROMPTS)) assert.deepEqual(validateTemplate(name, defaultPrompt(name).template), [], name);

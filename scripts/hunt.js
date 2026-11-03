@@ -14,7 +14,7 @@ import { createDriveClient } from '../tools/google/drive.ts';
 import { assertNoRunningRun } from '../tools/runs.ts';
 import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
-import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
+import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { generateForPostings, selectForHunt, estimateHuntCost } from '../agents/hunt/generate.js';
 
 function parseArgs(argv) {

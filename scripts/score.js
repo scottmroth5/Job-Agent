@@ -19,7 +19,7 @@ import {
   loadScorePrompt,
   scorePostings,
   selectPostings,
-} from '../agents/discovery/score.js';
+} from '../agents/discovery/score.ts';
 
 function parseArgs(argv) {
   const get = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];

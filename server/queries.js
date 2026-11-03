@@ -1,7 +1,7 @@
 // Database reads and edits behind the API. Rows come back in the shape the UI uses (camelCase).
 import { annualize, parseRate, parseHours, findPayInText } from '../tools/rates.ts';
 import { checkLocation } from '../tools/location.ts';
-import { PROMOTE_AT } from '../agents/discovery/score.js';
+import { PROMOTE_AT } from '../agents/discovery/score.ts';
 import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.ts';
 import { lookups, sqlList } from '../agents/lookups.ts';
 import { listAttachments } from './attachments.js';

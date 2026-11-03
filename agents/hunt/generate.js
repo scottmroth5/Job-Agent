@@ -6,7 +6,7 @@ import { sanitizeDashes, truncate } from '../../tools/text.ts';
 import { letterHeader } from '../letter-header.ts';
 import { ensureLetterFolder } from '../../tools/google/drive.ts';
 import { getPrompt } from '../prompts.ts';
-import { PROMOTE_AT } from '../discovery/score.js';
+import { PROMOTE_AT } from '../discovery/score.ts';
 import { runCheck } from '../letter-checks.ts';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
 import { lookups, sqlList } from '../lookups.ts';

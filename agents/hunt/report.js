@@ -2,7 +2,7 @@
 // collectReport() reads the database; renderReport() is pure. Every value is HTML-escaped.
 import { escapeHtml as e } from '../../tools/html.ts';
 import { sendEmail } from '../../tools/google/gmail.ts';
-import { PROMOTE_AT } from '../discovery/score.js';
+import { PROMOTE_AT } from '../discovery/score.ts';
 import { lookups, sqlList } from '../lookups.ts';
 
 // Pipeline order in the report: decisions first, then conversations, then waiting, then to evaluate.

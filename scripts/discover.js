@@ -11,7 +11,7 @@ import { createBrowser } from '../tools/browser.ts';
 import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { assertNoRunningRun } from '../tools/runs.ts';
-import { runDiscovery, SOURCES } from '../agents/discovery/discover.js';
+import { runDiscovery, SOURCES } from '../agents/discovery/discover.ts';
 
 function parseArgs(argv) {
   const get = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];

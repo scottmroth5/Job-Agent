@@ -12,7 +12,7 @@ import { ownerBackground } from '../tools/knowledge.ts';
 import { dataPath } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
-import { MODEL_SETTINGS, MIN_KNOWLEDGE_CHARS, PROMOTE_AT } from '../agents/discovery/score.js';
+import { MODEL_SETTINGS, MIN_KNOWLEDGE_CHARS, PROMOTE_AT } from '../agents/discovery/score.ts';
 import { buildCases } from '../evals/score/build-cases.js';
 import { runEval, estimateEval } from '../evals/score/run.js';
 

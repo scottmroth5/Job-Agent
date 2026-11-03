@@ -267,7 +267,7 @@ knowledge doc, posting, analysis, latest letter, and notes. The document is the 
 in meeting_preps (UUID keys) and as a Google Doc in "Job Agent Meeting Prep". About $1 to $2 each; logs hold counts only.
 
 ## Scoring
-Default model and promotion threshold live in agents/discovery/score.js with the eval evidence behind them.
+Default model and promotion threshold live in agents/discovery/score.ts with the eval evidence behind them.
 Change the prompt, schema, model, or threshold only after rerunning the scoring eval and comparing pairwise accuracy.
 Never kept (tools/listings.ts): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
 Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.js, Settings and Skip this site under the job panel's

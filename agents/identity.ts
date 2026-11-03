@@ -3,7 +3,7 @@
 // the stored company is a placeholder. postings.company_title_key holds storedKey(); keep it current with
 // rekeyPostings after the key rules change (npm run cleanup does).
 import { companyTitleKey } from '../tools/urls.ts';
-import { parseResultTitle } from './discovery/sources/serper.js';
+import { parseResultTitle } from './discovery/sources/serper.ts';
 import { lookups, sqlList } from './lookups.ts';
 import type { Database } from '../tools/types.ts';
 

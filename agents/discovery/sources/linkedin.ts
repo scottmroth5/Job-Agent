@@ -3,33 +3,35 @@
 // supplies the full description for each new job.
 import { decodeEntities, htmlToText } from '../../../tools/html.ts';
 import { RateLimitedError } from '../../../tools/http.ts';
+import type { Http } from '../../../tools/http.ts';
+import type { JobItem, SourceContext, SourceResult } from '../types.ts';
 
 export const SOURCE = 'LinkedIn';
 const SEARCH = 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search';
 const POSTING = 'https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/';
 const PAGE_SIZE = 10;
 
-const text = (html) => decodeEntities(String(html ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+const text = (html: string | null | undefined) => decodeEntities(String(html ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
 
-export function searchUrl({ keywords, mode, localLocation, start = 0 }) {
+export function searchUrl({ keywords, mode, localLocation, start = 0 }: { keywords: string; mode: string; localLocation?: string; start?: number }) {
   const p = new URLSearchParams({ keywords, f_TPR: 'r604800', sortBy: 'DD', start: String(start) });
   if (mode === 'remote') {
     p.set('location', 'United States');
     p.set('f_WT', '2');
   } else {
-    p.set('location', localLocation);
+    p.set('location', localLocation as string);
     p.set('distance', '25');
   }
   return `${SEARCH}?${p}`;
 }
 
 /** Job ID from a LinkedIn job URL (…/jobs/view/some-title-at-company-1234567890/). */
-export function jobIdFromUrl(url) {
+export function jobIdFromUrl(url: string | null | undefined) {
   return /linkedin\.com\/jobs\/view\/(?:[^/?#]*-)?(\d{6,})/i.exec(String(url ?? ''))?.[1] ?? null;
 }
 
 /** Parses the job cards in one search-results page. mode 'remote' marks every job remote. */
-export function parseSearchPage(html, mode) {
+export function parseSearchPage(html: string | null | undefined, mode: string): JobItem[] {
   return String(html ?? '')
     .split(/<li[\s>]/)
     .slice(1)
@@ -56,17 +58,17 @@ export function parseSearchPage(html, mode) {
         description: null,
       };
     })
-    .filter(Boolean);
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 }
 
 /** Parses the guest posting page: title, company, location, description text and the job criteria list. */
-export function parsePosting(html) {
+export function parsePosting(html: string | null | undefined) {
   const s = String(html ?? '');
   const body = /show-more-less-html__markup[^>]*>([\s\S]*?)<\/div>/.exec(s)?.[1];
-  const criteria = {};
+  const criteria: Record<string, string> = {};
   const re = /description__job-criteria-subheader[^>]*>([\s\S]*?)<\/h3>[\s\S]*?description__job-criteria-text[^>]*>([\s\S]*?)<\/span>/g;
   for (const m of s.matchAll(re)) criteria[text(m[1])] = text(m[2]);
-  const field = (cls, tag) => text(new RegExp(`class="[^"]*${cls}[^"]*"[^>]*>([\\s\\S]*?)</${tag}>`).exec(s)?.[1]) || null;
+  const field = (cls: string, tag: string) => text(new RegExp(`class="[^"]*${cls}[^"]*"[^>]*>([\\s\\S]*?)</${tag}>`).exec(s)?.[1]) || null;
   return {
     title: field('top-card-layout__title', 'h2') ?? field('topcard__title', 'h\\d'),
     company: field('topcard__org-name-link', 'a'),
@@ -78,7 +80,7 @@ export function parsePosting(html) {
 }
 
 /** Fetches full details for one LinkedIn job. Throws RateLimitedError on 429. */
-export async function fetchPosting(http, jobId) {
+export async function fetchPosting(http: Http, jobId: string) {
   const { text: html } = await http.get(`${POSTING}${jobId}`);
   return parsePosting(html);
 }
@@ -87,10 +89,10 @@ export async function fetchPosting(http, jobId) {
  * Runs the remote search, plus the local one when localSearchLocation is set, for every full-time term,
  * and a remote search for every fractional term (those items are tagged searchTrack 'fractional').
  */
-export async function search({ http, config, delayMs = 1500, maxPages = 2 }) {
-  const out = { items: [], requests: 0, errors: [], rateLimited: false };
+export async function search({ http, config, delayMs = 1500, maxPages = 2 }: SourceContext & { maxPages?: number }): Promise<SourceResult> {
+  const out: SourceResult = { items: [], requests: 0, errors: [], rateLimited: false };
   const modes = config.search.localSearchLocation ? ['remote', 'local'] : ['remote'];
-  const searches = [
+  const searches: Array<{ term: string; modes: string[]; searchTrack?: string }> = [
     ...config.search.terms.map((term) => ({ term, modes })),
     ...(config.search.fractionalTerms ?? []).map((term) => ({ term, modes: ['remote'], searchTrack: 'fractional' })),
   ];
@@ -111,7 +113,7 @@ export async function search({ http, config, delayMs = 1500, maxPages = 2 }) {
             out.rateLimited = true;
             break outer;
           }
-          out.errors.push(`${term} (${mode}): ${err.message}`);
+          out.errors.push(`${term} (${mode}): ${(err as Error).message}`);
           break;
         }
       }

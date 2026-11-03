@@ -21,8 +21,8 @@ declare module '@scottmroth5/agent-core' {
     /** A single user message; use this or messages. */
     prompt?: string;
     messages?: unknown[];
-    /** JSON Schema; the response is constrained to it and parsed into data. */
-    schema?: object;
+    /** JSON Schema; the response is constrained to it and parsed into data. Null or absent: plain text. */
+    schema?: object | null;
     thinking?: object;
     effort?: string;
     tools?: unknown[];

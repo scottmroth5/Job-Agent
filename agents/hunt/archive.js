@@ -8,7 +8,7 @@
 //   archiveListings     removes skipped postings (list-of-jobs pages, excluded sites) and duplicates
 //   demoteWithoutText   moves untouched active jobs with no description back to the default stage
 import { skipReason } from '../../tools/listings.ts';
-import { parseResultTitle } from '../discovery/sources/serper.js';
+import { parseResultTitle } from '../discovery/sources/serper.ts';
 import { identityKey, isRealCompany } from '../identity.ts';
 import { lookups, sqlList } from '../lookups.ts';
 import { addNote } from '../notes.ts';

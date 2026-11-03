@@ -4,18 +4,20 @@
 import { decodeEntities, htmlToText } from '../../../tools/html.ts';
 import { RateLimitedError } from '../../../tools/http.ts';
 import { parseRate, parseHours } from '../../../tools/rates.ts';
+import type { Http } from '../../../tools/http.ts';
+import type { JobItem, PostingDetails, SourceContext, SourceResult } from '../types.ts';
 
 export const SOURCE = 'Fractional Jobs';
 const BASE = 'https://www.fractionaljobs.io';
-const text = (s) => decodeEntities(String(s ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+const text = (s: string | null | undefined) => decodeEntities(String(s ?? '').replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
 
-function isoFromLongDate(s) {
+function isoFromLongDate(s: string) {
   const d = new Date(`${s} 12:00 UTC`);
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
 /** Parses the listing cards on the home page into common items (search track 'fractional'). */
-export function parseListing(html) {
+export function parseListing(html: string | null | undefined): JobItem[] {
   return String(html ?? '')
     .split('job-item w-dyn-item')
     .slice(1)
@@ -28,8 +30,8 @@ export function parseListing(html) {
       const location = inline.find((t) => t !== hoursText && t !== rateText) ?? null;
       const date = /<div class="date">([^<]+)</.exec(card)?.[1]?.trim();
       if (!href || heads.length < 1) return null;
-      const title = heads[heads.length - 1];
-      const company = heads.length > 1 ? heads[0] : null;
+      const title = heads[heads.length - 1] as string;
+      const company = heads.length > 1 ? (heads[0] as string) : null;
       const hours = parseHours(hoursText);
       return {
         source: SOURCE,
@@ -48,14 +50,14 @@ export function parseListing(html) {
         jobType: 'Fractional',
         searchTrack: 'fractional',
         description: null,
-        fetchDetails: (http) => fetchPosting(http, `${BASE}${href}`),
+        fetchDetails: (http: Http) => fetchPosting(http, `${BASE}${href}`),
       };
     })
-    .filter(Boolean);
+    .filter((item): item is NonNullable<typeof item> => item !== null);
 }
 
 /** The value following a labeled field on the job page ("Weekly Commitment" -> "5 - 10 hrs"). */
-function labeled(html, label) {
+function labeled(html: string, label: string) {
   const i = html.indexOf(`>${label}<`);
   if (i < 0) return null;
   const after = html.slice(i + label.length + 2, i + 1500);
@@ -64,7 +66,7 @@ function labeled(html, label) {
 }
 
 /** Parses a job page: description text plus the labeled terms and notes. */
-export function parsePosting(html) {
+export function parsePosting(html: string | null | undefined): PostingDetails {
   const s = String(html ?? '');
   const start = s.indexOf('w-richtext');
   const body = start >= 0 ? s.slice(s.indexOf('>', start) + 1, s.indexOf('</div>', start)) : '';
@@ -83,20 +85,20 @@ export function parsePosting(html) {
   };
 }
 
-export async function fetchPosting(http, url) {
+export async function fetchPosting(http: Http, url: string) {
   const { text: html } = await http.get(url, { headers: { Accept: 'text/html' } });
   return parsePosting(html);
 }
 
 /** One request: the home page listing. Job pages are fetched later, only for new postings. */
-export async function search({ http }) {
-  const out = { items: [], requests: 1, errors: [], rateLimited: false };
+export async function search({ http }: Pick<SourceContext, 'http'>): Promise<SourceResult> {
+  const out: SourceResult = { items: [], requests: 1, errors: [], rateLimited: false };
   try {
     const { text: html } = await http.get(BASE, { headers: { Accept: 'text/html' } });
     out.items = parseListing(html);
   } catch (err) {
     if (err instanceof RateLimitedError) out.rateLimited = true;
-    else out.errors.push(err.message);
+    else out.errors.push((err as Error).message);
   }
   return out;
 }

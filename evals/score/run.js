@@ -1,6 +1,6 @@
 // Runs scoring models over the eval cases with the production scoring code (scoreOne), and
 // summarizes each model next to v1's stored scores. Writes nothing to postings.
-import { scoreOne, estimateCost, loadScorePrompt, PROMOTE_AT } from '../../agents/discovery/score.js';
+import { scoreOne, estimateCost, loadScorePrompt, PROMOTE_AT } from '../../agents/discovery/score.ts';
 import { summarize } from './metrics.js';
 
 async function mapLimit(items, limit, fn) {

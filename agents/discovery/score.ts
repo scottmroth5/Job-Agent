@@ -8,6 +8,42 @@ import { sanitizeDashes, truncate } from '../../tools/text.ts';
 import { skipReason } from '../../tools/listings.ts';
 import { getPrompt } from '../prompts.ts';
 import { lookups, sqlList } from '../lookups.ts';
+import type { Claude, Run } from '@scottmroth5/agent-core';
+import type { JobSearchConfig } from '../../tools/config.ts';
+import type { Database, JobStore } from '../../tools/types.ts';
+import type { PostingsRow } from '../../db/types.ts';
+
+/** What scoring reads from a posting: a stored row, or an eval case shaped like one. */
+export type ScoreInput = Pick<PostingsRow, 'company' | 'title'> &
+  Partial<Pick<PostingsRow, 'id' | 'location' | 'url' | 'location_check' | 'fetched_text' | 'jd_text' | 'track' | 'rate_text' | 'rate_min' | 'rate_max' | 'rate_unit' | 'hours_min' | 'hours_max'>> & {
+    /** The track's scoring prompt (agents/lookups.ts scorePrompt). */
+    scorePrompt?: string;
+  };
+
+/** One track's scoring prompt, as loadScorePrompt returns it. */
+export interface ScorePrompt {
+  template: string;
+  schema: object | null;
+  version: string;
+  track: string;
+  source: string;
+}
+
+/**
+ * A score's analysis: the schema's fields (score.json or score-fractional.json), cleaned. The fields code reads are
+ * named; the rest are kept as the model gave them.
+ */
+export type ScoreAnalysis = Record<string, unknown> & {
+  score: number;
+  reason?: string;
+  locationConcern?: string;
+  uncappedScore?: number;
+  rate?: { min?: number | null; max?: number | null; unit?: string } | null;
+  hoursPerWeek?: { min?: number | null; max?: number | null } | null;
+};
+
+/** The settings a score's rule check reads (the user's search settings, or an eval's). */
+type ScoreConfig = Pick<JobSearchConfig, 'candidate' | 'search' | 'fractional'>;
 
 // Chosen by the scoring eval (2026-09-30, 74 applied/passed cases): Sonnet 5.5 ranked applied above
 // passed jobs 84% of the time (Haiku 4.5: 72%, v1: 71%). At 7+ it promotes 56% of applied jobs and
@@ -27,7 +63,7 @@ const CONTENT_CHARS = 6000;
  * Per-model request settings. Sonnet 5.5 and Opus 5.5 always think; low effort keeps scoring
  * cheap, and maxTokens leaves room for thinking. Haiku 4.5 takes no effort setting.
  */
-export const MODEL_SETTINGS = {
+export const MODEL_SETTINGS: Record<string, { maxTokens: number; effort?: string }> = {
   'claude-haiku-4-5': { maxTokens: 1500 },
   'claude-sonnet-5-5': { maxTokens: 8000, effort: 'low' },
   'claude-opus-5-5': { maxTokens: 8000, effort: 'low' },
@@ -36,7 +72,7 @@ export const MODEL_SETTINGS = {
 // Rough list prices (USD per million tokens) for dry-run and eval budget estimates only.
 // Actual cost is computed by agent-core from real usage. expectedOutput is the average output
 // (including thinking) measured in the 2026-09-30 eval; caching is ignored, so estimates run high.
-const ESTIMATE_RATES = {
+const ESTIMATE_RATES: Record<string, { input: number; output: number; expectedOutput: number }> = {
   'claude-haiku-4-5': { input: 1, output: 5, expectedOutput: 330 },
   'claude-sonnet-5-5': { input: 2, output: 10, expectedOutput: 550 },
   'claude-opus-5-5': { input: 4, output: 20, expectedOutput: 600 },
@@ -48,42 +84,43 @@ const ESTIMATE_RATES = {
  * 'fulltime' is score.md/score.json; 'fractional' is score-fractional.md/score-fractional.json.
  * db may be omitted, which gives the repo default.
  */
-export function loadScorePrompt(track = 'fulltime', db = null) {
+export function loadScorePrompt(track = 'fulltime', db: Database | null = null): ScorePrompt {
   const p = getPrompt(db, track === 'fractional' ? 'score-fractional' : 'score');
   return { template: p.template, schema: p.schema, version: p.version, track, source: p.source };
 }
 
 /** Both tracks' prompts, keyed by track. */
-export function loadScorePrompts(db = null) {
+export function loadScorePrompts(db: Database | null = null) {
   return { fulltime: loadScorePrompt('fulltime', db), fractional: loadScorePrompt('fractional', db) };
 }
 
 /** The prompt for a posting's track, from either a single prompt or a { fulltime, fractional } set. */
-export function promptFor(posting, { prompt, prompts }) {
+export function promptFor(posting: ScoreInput, { prompt, prompts }: { prompt?: ScorePrompt; prompts?: { fulltime: ScorePrompt; fractional: ScorePrompt } }): ScorePrompt {
   // scorePrompt comes from the track's settings (agents/lookups.ts); without it, the built-in fractional track uses its prompt.
   if (prompts) return prompts[(posting.scorePrompt ?? (posting.track === 'fractional' ? 'score-fractional' : 'score')) === 'score-fractional' ? 'fractional' : 'fulltime'];
-  return prompt;
+  // One of prompt or prompts is always given (scorePostings passes prompts, the eval a single prompt).
+  return prompt as ScorePrompt;
 }
 
-const k = (n) => `$${Math.round(n / 1000)}K`;
+const k = (n: number) => `$${Math.round(n / 1000)}K`;
 
 /** "$200K to $250K" from config.fractional.targetAnnual. */
-function stackingTarget(config) {
+function stackingTarget(config: ScoreConfig) {
   const t = config.fractional?.targetAnnual;
   return t ? `${k(t[0])} to ${k(t[1])}` : 'a full-time income';
 }
 
 /** Posted pay and hours for the fractional prompt, when the source gave them. */
-function termsBlock(p) {
-  const parts = [];
+function termsBlock(p: ScoreInput) {
+  const parts: string[] = [];
   if (p.rate_text) parts.push(`pay ${p.rate_text}`);
-  else if (p.rate_min != null) parts.push(`pay ${k(p.rate_min)}${p.rate_max !== p.rate_min ? ` to ${k(p.rate_max)}` : ''} per ${p.rate_unit ?? 'period'}`);
+  else if (p.rate_min != null) parts.push(`pay ${k(p.rate_min)}${p.rate_max !== p.rate_min ? ` to ${k(p.rate_max as number)}` : ''} per ${p.rate_unit ?? 'period'}`);
   if (p.hours_min != null) parts.push(`${p.hours_min}${p.hours_max !== p.hours_min ? ` to ${p.hours_max}` : ''} hours per week`);
   return parts.length ? `Posted terms: ${parts.join(', ')}\n` : '';
 }
 
 /** Text Claude sees as the job's location. Postings already judged remote are shown as remote. */
-function locationForPrompt(p) {
+function locationForPrompt(p: ScoreInput) {
   const loc = (p.location ?? '').trim();
   if (p.location_check === 'remote' && !/\bremote\b/i.test(loc)) return loc ? `Remote (listed location: ${loc})` : 'Remote';
   return loc || 'Not specified';
@@ -91,9 +128,11 @@ function locationForPrompt(p) {
 
 /**
  * Builds the claude.send() options for one posting.
- * posting: { company, title, location, url, location_check, fetched_text?, jd_text? }
  */
-export function buildScoreRequest(posting, { config, knowledge, model, prompt, prompts }) {
+export function buildScoreRequest(
+  posting: ScoreInput,
+  { config, knowledge, model, prompt, prompts }: { config: ScoreConfig; knowledge: string; model: string; prompt?: ScorePrompt; prompts?: { fulltime: ScorePrompt; fractional: ScorePrompt } },
+) {
   const settings = MODEL_SETTINGS[model];
   if (!settings) throw new Error(`No scoring settings for model "${model}". Known: ${Object.keys(MODEL_SETTINGS).join(', ')}`);
   const chosen = promptFor(posting, { prompt, prompts });
@@ -120,13 +159,14 @@ export function buildScoreRequest(posting, { config, knowledge, model, prompt, p
 }
 
 /** Cleans Claude's structured result and applies the deterministic caps. */
-export function interpretResult(data, posting) {
-  const clean = (v) => {
+// data is the model's answer, constrained by the prompt's output schema.
+export function interpretResult(data: Record<string, unknown>, posting: ScoreInput) {
+  const clean = (v: unknown) => {
     if (Array.isArray(v)) return v.map((s) => sanitizeDashes(String(s))).filter(Boolean);
     if (typeof v === 'string') return sanitizeDashes(v);
     return v; // numbers, null, and nested objects such as rate and hoursPerWeek
   };
-  const analysis = Object.fromEntries(Object.entries(data).map(([key, v]) => [key, clean(v)]));
+  const analysis = Object.fromEntries(Object.entries(data).map(([key, v]) => [key, clean(v)])) as ScoreAnalysis;
   let score = analysis.score;
   if (posting.location_check === 'unverified') score = Math.min(score, UNVERIFIED_CAP);
   if (analysis.locationConcern === 'conflict') score = Math.min(score, CONFLICT_SCORE);
@@ -140,10 +180,10 @@ export function interpretResult(data, posting) {
 }
 
 /** True when scoring needs no AI call: a clear location conflict, a list-of-jobs page, or an excluded site. */
-export const isRuleScored = (posting, config) => posting.location_check === 'conflict' || skipReason(posting, config) !== null;
+export const isRuleScored = (posting: ScoreInput, config: Pick<JobSearchConfig, 'search'>) => posting.location_check === 'conflict' || skipReason(posting, config) !== null;
 
 /** The no-AI score for a skipped posting (list of jobs, excluded site) or a clear location conflict. */
-export function ruleScore(posting, config) {
+export function ruleScore(posting: ScoreInput, config: Pick<JobSearchConfig, 'search'>): { score: number; reason: string; analysis: ScoreAnalysis } {
   const skip = skipReason(posting, config);
   if (skip) {
     const reason = `Skipped: ${skip}. Scored by rule without an AI call.`;
@@ -173,14 +213,17 @@ export function ruleScore(posting, config) {
  * Scores one posting: the location rule, or one Claude call. Shared by production runs and the eval.
  * Returns { score, reason, analysis, source: 'v2' | 'v2-rule', model, costUsd }.
  */
-export async function scoreOne(posting, { config, claude, knowledge, model, prompt, prompts, trace }) {
-  if (isRuleScored(posting, config)) return { ...ruleScore(posting, config), source: 'v2-rule', model: null, costUsd: 0 };
+export async function scoreOne(
+  posting: ScoreInput,
+  { config, claude, knowledge, model, prompt, prompts, trace }: Parameters<typeof buildScoreRequest>[1] & { claude: Claude; trace?: Run | null },
+) {
+  if (isRuleScored(posting, config)) return { ...ruleScore(posting, config), source: 'v2-rule' as const, model: null, costUsd: 0 as number | null };
   const res = await claude.send({ ...buildScoreRequest(posting, { config, knowledge, model, prompt, prompts }), trace });
-  return { ...interpretResult(res.data, posting), source: 'v2', model: res.model, costUsd: res.costUsd };
+  return { ...interpretResult(res.data, posting), source: 'v2' as const, model: res.model as string | null, costUsd: res.costUsd };
 }
 
 /** Rough cost estimate for scoring postings with a model (dry runs and eval budget guard). */
-export function estimateCost(postings, { model, knowledgeChars, templateChars, config }) {
+export function estimateCost(postings: ScoreInput[], { model, knowledgeChars, templateChars, config }: { model: string; knowledgeChars: number; templateChars: number; config: Pick<JobSearchConfig, 'search'> }) {
   const r = ESTIMATE_RATES[model];
   if (!r) return null;
   let usd = 0;
@@ -194,14 +237,17 @@ export function estimateCost(postings, { model, knowledgeChars, templateChars, c
 }
 
 /** Selects postings to score: v2-discovered, not yet scored by v2, not passed or rejected. */
-export function selectPostings(db, { ids, allUnscored = false, limit, rescore = false } = {}) {
-  const where = [];
+export function selectPostings(
+  db: Database,
+  { ids, allUnscored = false, limit, rescore = false }: { ids?: number[]; allUnscored?: boolean; limit?: number; rescore?: boolean } = {},
+): PostingsRow[] {
+  const where: string[] = [];
   // rescore (with ids) scores again even when a v2 score exists and whatever the status; used by the UI's Re-score.
   if (!(rescore && ids?.length)) {
     where.push("NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule'))");
     where.push(`p.status NOT IN ${sqlList(lookups(db).closed())}`);
   }
-  const params = [];
+  const params: number[] = [];
   if (ids?.length) {
     where.push(`p.id IN (${ids.map(() => '?').join(', ')})`);
     params.push(...ids);
@@ -209,30 +255,32 @@ export function selectPostings(db, { ids, allUnscored = false, limit, rescore = 
     where.push('p.fetch_status IS NOT NULL');
   }
   const sql = `SELECT p.* FROM postings p WHERE p.user_id = @uid ${where.length ? `AND ${where.join(' AND ')}` : ''} ORDER BY p.id${limit ? ' LIMIT ?' : ''}`;
-  return db.prepare(sql).all(...params, ...(limit ? [limit] : []));
+  return db.prepare(sql).all(...params, ...(limit ? [limit] : [])) as PostingsRow[];
 }
 
-async function mapLimit(items, limit, fn) {
+async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
   let next = 0;
   await Promise.all(
     Array.from({ length: Math.min(limit, items.length) }, async () => {
-      while (next < items.length) await fn(items[next++]);
+      while (next < items.length) await fn(items[next++] as T);
     }),
   );
 }
 
 /**
- * Scores selected postings, stores each score as it completes, and promotes high scores.
- * @param {object} ctx
- * @param {{db, tx}} ctx.store
- * @param {object} ctx.config
- * @param {{send: Function}} ctx.claude         from agent-core createClaude()
- * @param {string} ctx.knowledge                Candidate Knowledge text (system prompt)
- * @param {string} ctx.model
- * @param {object} [ctx.run]                    trace run from createJobTracer().startRun()
- * @param {object} [ctx.options]                { ids, allUnscored, limit, concurrency = 3, promoteAt = 8, maxConsecutiveFailures = 5 }
+ * Scores selected postings, stores each score as it completes, and promotes high scores. knowledge is the knowledge doc
+ * (the system prompt); run is the trace from createJobTracer().startRun().
  */
-export async function scorePostings({ store, config, claude, knowledge, model, run, now = new Date(), options = {} }) {
+export async function scorePostings({ store, config, claude, knowledge, model, run, now = new Date(), options = {} }: {
+  store: Pick<JobStore, 'db' | 'tx'>;
+  config: ScoreConfig;
+  claude: Claude;
+  knowledge: string;
+  model: string;
+  run?: Run | null;
+  now?: Date;
+  options?: { ids?: number[]; allUnscored?: boolean; limit?: number; rescore?: boolean; concurrency?: number; promoteAt?: number; maxConsecutiveFailures?: number };
+}) {
   const { ids, allUnscored, limit, rescore, concurrency = 3, promoteAt = PROMOTE_AT, maxConsecutiveFailures = 5 } = options;
   if (!knowledge || knowledge.length < MIN_KNOWLEDGE_CHARS) {
     throw new Error(`Candidate Knowledge is missing or under ${MIN_KNOWLEDGE_CHARS} characters; scoring aborted.`);
@@ -252,7 +300,15 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
       rate_unit = COALESCE(rate_unit, @rateUnit), hours_min = COALESCE(hours_min, @hoursMin), hours_max = COALESCE(hours_max, @hoursMax)
     WHERE id = @id AND user_id = @uid`);
 
-  const summary = { selected: postings.length, scored: 0, ruleScored: 0, distribution: {}, promoted: [], failures: [], aborted: false };
+  const summary = {
+    selected: postings.length,
+    scored: 0,
+    ruleScored: 0,
+    distribution: {} as Record<number, number>,
+    promoted: [] as number[],
+    failures: [] as Array<{ id: number; error: string }>,
+    aborted: false,
+  };
   let consecutive = 0;
   run?.log?.('info', postings.length ? `Scoring ${postings.length} postings with ${model}` : 'Nothing to score');
 
@@ -285,8 +341,9 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
       else if (summary.scored % 10 === 0 && summary.scored < postings.length) run?.log?.('info', `Scored ${summary.scored}/${postings.length}`);
     } catch (err) {
       consecutive += 1;
-      summary.failures.push({ id: p.id, error: `${err.name}: ${err.message}` });
-      run?.log?.('warn', `Scoring failed for posting ${p.id}: ${err.name}`);
+      const e = err as Error;
+      summary.failures.push({ id: p.id, error: `${e.name}: ${e.message}` });
+      run?.log?.('warn', `Scoring failed for posting ${p.id}: ${e.name}`);
       if (consecutive >= maxConsecutiveFailures) {
         summary.aborted = true;
         run?.log?.('error', `Stopping after ${consecutive} consecutive failures.`);

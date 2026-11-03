@@ -17,7 +17,7 @@ import Database from 'better-sqlite3';
 import { setSetting } from '../db/settings.ts';
 import { addNote } from '../agents/notes.ts';
 import { companyTitleKey } from '../tools/urls.ts';
-import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
+import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { pickResume } from '../agents/resumes.ts';
 import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
 import { saveCheck } from '../agents/letter-checks.ts';
