@@ -3,7 +3,7 @@
 // repo (read-only here) because code reads their field names.
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { repoPath } from '../tools/paths.js';
+import { repoPath } from '../tools/paths.ts';
 
 const SCORING_PLACEHOLDERS = ['candidateName', 'homeLocations', 'company', 'roleTitle', 'jobLocation', 'jobUrl', 'locationNoteBlock', 'jobContentBlock'];
 const HUNT_PLACEHOLDERS = ['candidateName', 'company', 'roleTitle', 'roleType', 'analysis', 'jobContentBlock', 'notesBlock'];

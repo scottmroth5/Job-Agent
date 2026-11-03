@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.js';
-import { paragraphsOf, sanitizeDashes, truncate } from '../tools/text.js';
+import { paragraphsOf, sanitizeDashes, truncate } from '../tools/text.ts';
 import {
   buildScoreRequest,
   interpretResult,

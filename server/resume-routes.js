@@ -2,10 +2,10 @@
 // replace the file, delete, and download your own. Files and text live in the resumes table (agents/resumes.js); a
 // download is always an attachment with nosniff and a sandbox policy, like job attachments.
 import { addResume, deleteResume, listResumes, replaceResumeFile, resumeFile, updateResume } from '../agents/resumes.js';
-import { MAX_DOC_BYTES } from '../tools/doc-text.js';
+import { MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { uploadName } from './account-routes.js';
 import { disposition } from './attachments.js';
-import { resumeDocx, resumePdf } from '../tools/resume-format.js';
+import { resumeDocx, resumePdf } from '../tools/resume-format.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
@@ -61,7 +61,7 @@ export function registerResumeRoutes(app, { db }) {
     return reply.code(204).send();
   });
 
-  // format: original (the file as uploaded), text, docx, or pdf (both laid out from its text by tools/resume-format.js).
+  // format: original (the file as uploaded), text, docx, or pdf (both laid out from its text by tools/resume-format.ts).
   app.get(
     '/api/resumes/:id/file',
     {

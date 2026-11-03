@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { findPersonalHits, maskTerm, envValues, isForbiddenPath } from '../scripts/check-personal.js';
 import { buildConfig } from '../scripts/config-from-v1.js';
-import { validateConfig } from '../tools/config.js';
-import { repoPath } from '../tools/paths.js';
+import { validateConfig } from '../tools/config.ts';
+import { repoPath } from '../tools/paths.ts';
 
 test('finds private terms case-insensitively, as whole words, with line numbers', () => {
   const text = 'line one\nWritten by Pat EXAMPLE\nbrother of nobody\nemail pat@example.com here';

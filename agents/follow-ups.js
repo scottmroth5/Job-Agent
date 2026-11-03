@@ -6,7 +6,7 @@
 import { getUserSetting, setUserSetting } from '../db/settings.js';
 import { lookups } from './lookups.js';
 import { addNote } from './notes.js';
-import { localDay } from '../tools/dates.js';
+import { localDay } from '../tools/dates.ts';
 import { applications, DEFAULT_STALE_DAYS, FOLLOW_UP_DAYS } from '../server/funnel.js';
 
 export { DEFAULT_STALE_DAYS };

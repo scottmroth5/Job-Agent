@@ -8,7 +8,7 @@
 
 /**
  * @param {object} o
- * @param {(email: { to: string, subject: string, text: string }) => Promise<unknown>} [o.send]  tools/google/gmail.js sendEmail with the owner's sign-in
+ * @param {(email: { to: string, subject: string, text: string }) => Promise<unknown>} [o.send]  tools/google/gmail.ts sendEmail with the owner's sign-in
  * @param {() => string|null} o.owner   the owner's address (EMAIL_ADDRESS)
  * @param {() => string} o.appUrl       PUBLIC_URL
  * @param {{ warn?: Function }} [o.log]

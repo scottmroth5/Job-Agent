@@ -4,7 +4,7 @@
 // restart never resends), and with once, none again until it has recovered. Emails go only to the owner's own address
 // (EMAIL_ADDRESS, the same as the run report) and carry job names, dates and error messages only, like the log lines.
 import { getSetting, setSetting } from '../db/settings.js';
-import { localDay } from '../tools/dates.js';
+import { localDay } from '../tools/dates.ts';
 
 /**
  * @param {object} o

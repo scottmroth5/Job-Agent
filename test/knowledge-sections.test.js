@@ -7,7 +7,7 @@ import { KNOWLEDGE_SECTIONS, knowledgeTemplate, sectionCheck } from '../agents/k
 import { DRAFT_SYSTEM } from '../agents/draft-profile.js';
 import { defaultPrompt } from '../agents/prompts.js';
 import { DEMO_ABOUT_YOU } from '../demo/sample-data.js';
-import { repoPath } from '../tools/paths.js';
+import { repoPath } from '../tools/paths.ts';
 
 const all = (text) => sectionCheck(text).every((s) => s.found);
 const byTitle = (t) => KNOWLEDGE_SECTIONS.find((s) => s.title === t);

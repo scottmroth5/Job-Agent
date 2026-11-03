@@ -1,9 +1,9 @@
 // Cover letter and resume tweak helpers ported from v1 (legacy/job_hunt_agent.js):
 // role type, analysis text for prompts, salutation/sign-off stripping, rule checks, and the Doc layout.
-import { escapeHtml } from '../../tools/html.js';
-import { fileTitle, paragraphsOf, withoutPictographs } from '../../tools/text.js';
-import { headerLines, SEPARATOR } from '../../tools/letter-header.js';
-import { keywordMatcher } from '../../tools/titles.js';
+import { escapeHtml } from '../../tools/html.ts';
+import { fileTitle, paragraphsOf, withoutPictographs } from '../../tools/text.ts';
+import { headerLines, SEPARATOR } from '../../tools/letter-header.ts';
+import { keywordMatcher } from '../../tools/titles.ts';
 
 const executive = keywordMatcher(['cto', 'vp', 'vice president', 'chief', 'director', 'head of']);
 

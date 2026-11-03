@@ -1,10 +1,10 @@
 // Fills in a new posting's full text (and missing company/title/location) before it is stored.
 // Order: text from the source itself -> LinkedIn guest endpoint -> the page's JobPosting
 // JSON-LD -> the page as plain text -> headless browser for pages that need JavaScript.
-import { extractJobPosting, htmlToText } from '../../tools/html.js';
-import { HttpError, RateLimitedError } from '../../tools/http.js';
+import { extractJobPosting, htmlToText } from '../../tools/html.ts';
+import { HttpError, RateLimitedError } from '../../tools/http.ts';
 import { fetchPosting } from './sources/linkedin.js';
-import { isGoogleRedirect } from '../../tools/urls.js';
+import { isGoogleRedirect } from '../../tools/urls.ts';
 
 export const MIN_DESCRIPTION = 200; // shorter text is treated as missing
 export const MIN_PAGE_TEXT = 800; // plain page text shorter than this is probably a JS shell

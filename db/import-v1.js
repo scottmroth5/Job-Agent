@@ -1,7 +1,7 @@
 // One-time import of the v1 Google Sheets exports into the Job-Agent database.
 // Pure logic over parsed CSV rows; scripts/import-v1.js handles files and output.
-import { normalizeUrl, companyTitleKey } from '../tools/urls.js';
-import { parseSheetDate, parsePostedDate, localDay } from '../tools/dates.js';
+import { normalizeUrl, companyTitleKey } from '../tools/urls.ts';
+import { parseSheetDate, parsePostedDate, localDay } from '../tools/dates.ts';
 import { adoptNotesText } from '../agents/notes.js';
 
 const STATUS_MAP = {

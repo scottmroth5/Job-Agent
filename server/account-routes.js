@@ -1,18 +1,18 @@
 // Settings (multi-user, phase 2): the signed-in user's account and their own Claude key. The key is checked with
-// Anthropic's free model list, then sealed (tools/secret-box.js, bound to the user's id) before it is stored; it is never
+// Anthropic's free model list, then sealed (tools/secret-box.ts, bound to the user's id) before it is stored; it is never
 // returned, logged, or shown to anyone, only whether one is set. The owner's AI uses ANTHROPIC_API_KEY instead.
 import { budgetStatus } from '../agents/budget.js';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.js';
-import { boxKey, seal } from '../tools/secret-box.js';
+import { boxKey, seal } from '../tools/secret-box.ts';
 import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, PROFILE_SOURCES, profileVersions, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
 import { docxName, prepDocx } from './word-docs.js';
-import { fileTitle } from '../tools/text.js';
-import { validateConfig } from '../tools/config.js';
+import { fileTitle } from '../tools/text.ts';
+import { validateConfig } from '../tools/config.ts';
 import { deleteAccount, exportAccount } from '../agents/account-data.js';
 import { ATTACHMENTS_DIR } from './attachments.js';
-import { isTimeZone, localDay } from '../tools/dates.js';
+import { isTimeZone, localDay } from '../tools/dates.ts';
 import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.js';
-import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.js';
+import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { KNOWLEDGE_SECTIONS, knowledgeTemplate } from '../agents/knowledge-sections.js';
 
 // What Settings needs to guide a knowledge doc: the sections (for its checklist) and a blank template.
@@ -53,7 +53,7 @@ function account(db, uid) {
 
 /**
  * @param {object} o
- * @param {(apiKey: string) => Promise<boolean>} [o.checkKey]  tools/claude.js claudeKeyWorks (tests pass a fake)
+ * @param {(apiKey: string) => Promise<boolean>} [o.checkKey]  tools/claude.ts claudeKeyWorks (tests pass a fake)
  */
 export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }) {
   // Phase 6: take your data with you, pause yourself, or delete your account. Deleting needs your address typed.

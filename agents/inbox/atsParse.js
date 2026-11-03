@@ -1,6 +1,6 @@
 // Company and job title from the subject or opening lines of applicant-tracking-system emails, plus body
 // trimming. Deterministic, so most confirmations and rejections match without asking Claude.
-import { htmlToText } from '../../tools/html.js';
+import { htmlToText } from '../../tools/html.ts';
 
 const clean = (s) =>
   String(s ?? '')

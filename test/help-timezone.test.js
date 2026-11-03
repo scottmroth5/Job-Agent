@@ -10,8 +10,8 @@ import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
 import { ASKS_PER_DAY, HELP_MODEL, loadGuides } from '../server/help-routes.js';
-import { createJobClaude } from '../tools/claude.js';
-import { isTimeZone, localDay, localDaysAgo, timeZone } from '../tools/dates.js';
+import { createJobClaude } from '../tools/claude.ts';
+import { isTimeZone, localDay, localDaysAgo, timeZone } from '../tools/dates.ts';
 
 const SITE = 'http://localhost:5178';
 // 25 hours apart, so their calendar days always differ.

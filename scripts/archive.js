@@ -1,7 +1,7 @@
 // Moves finished or stale jobs out of the pipeline (v1's archive rules).
 //   npm run archive -- --dry-run    list what would move
 //   npm run archive                 move them
-import { createJobTracer } from '../tools/trace.js';
+import { createJobTracer } from '../tools/trace.ts';
 import { openJobStore } from '../db/index.js';
 import { archivePostings } from '../agents/hunt/archive.js';
 

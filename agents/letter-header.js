@@ -1,9 +1,9 @@
 // Each user's cover letter header (Settings > Cover letter header): name, email, phone, an optional location, the
 // sign-off name, and links, in user_settings. Until a user saves one it is built from their settings (the owner's file,
-// or their saved search) by tools/letter-header.js fromCandidate, so nothing changes until they edit it. Every letter
+// or their saved search) by tools/letter-header.ts fromCandidate, so nothing changes until they edit it. Every letter
 // document (Word, PDF, the Google Doc, the pipeline's letters) reads it through letterHeader.
 import { getUserSetting, setUserSetting } from '../db/settings.js';
-import { fromCandidate, hrefOf, isEmail } from '../tools/letter-header.js';
+import { fromCandidate, hrefOf, isEmail } from '../tools/letter-header.ts';
 
 const KEY = 'letter.header';
 export const MAX_LINKS = 6;

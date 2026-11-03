@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api.js';
-import { renderMarkdown } from '../../../tools/markdown.js';
+import { renderMarkdown } from '../../../tools/markdown.ts';
 
 const MAX_FILES = 4;
 const MAX_MB = 8;

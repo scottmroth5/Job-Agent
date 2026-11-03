@@ -1,8 +1,8 @@
 // LinkedIn public (logged-out) job search. Two searches per term: remote across the US
 // (f_WT=2) and local around search.localSearchLocation. The guest posting endpoint
 // supplies the full description for each new job.
-import { decodeEntities, htmlToText } from '../../../tools/html.js';
-import { RateLimitedError } from '../../../tools/http.js';
+import { decodeEntities, htmlToText } from '../../../tools/html.ts';
+import { RateLimitedError } from '../../../tools/http.ts';
 
 export const SOURCE = 'LinkedIn';
 const SEARCH = 'https://www.linkedin.com/jobs-guest/jobs/api/seeMoreJobPostings/search';

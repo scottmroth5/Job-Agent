@@ -1,7 +1,7 @@
 // A static security check of the code (npm run check:security; also run by the test suite and CI). Fast and
 // deterministic, it guards the rules the app relies on against script injection and unsafe code:
 //   - the web page never writes raw HTML or runs strings as code: dangerouslySetInnerHTML only ever receives
-//     renderMarkdown(...) (tools/markdown.js escapes everything first), and there is no innerHTML, outerHTML,
+//     renderMarkdown(...) (tools/markdown.ts escapes everything first), and there is no innerHTML, outerHTML,
 //     insertAdjacentHTML, document.write, eval, new Function, or string timers
 //   - the Content-Security-Policy keeps scripts to the app's own files only (no 'unsafe-inline', 'unsafe-eval', data:)
 //   - child processes are started only from the known places, each with fixed commands
@@ -20,7 +20,7 @@ const files = (dir, out = []) => {
     if (SKIP.includes(name)) continue;
     const p = join(dir, name);
     if (statSync(p).isDirectory()) files(p, out);
-    else if (/\.(m?js|jsx)$/.test(name)) out.push(p);
+    else if (/\.(m?js|jsx|ts|tsx)$/.test(name) && !name.endsWith('.d.ts')) out.push(p);
   }
   return out;
 };
@@ -41,7 +41,7 @@ const CHILD_PROCESS_ALLOWED = {
   'server/index.js': 'runs scripts/pipeline.js and scripts/backup.js as their own processes',
   'scripts/check-personal.js': 'reads staged files from git in the pre-commit hook',
   'scripts/evals.js': 'runs the eval scripts',
-  'tools/google/oauth-flow.js': 'opens the browser for the one-time Google sign-in on the owner computer',
+  'tools/google/oauth-flow.ts': 'opens the browser for the one-time Google sign-in on the owner computer',
 };
 
 /** Every problem found: [{ file, line, rule }]. */

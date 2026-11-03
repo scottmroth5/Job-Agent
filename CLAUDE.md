@@ -36,7 +36,7 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
                     decision, closed; stage: found, active, archived; track settings choose the scoring prompt and pay fields) and
                     from roles (default status/stage/track, promotion stage, archive stage). Never compare to a literal status,
                     stage, or track ID for behavior: use lookups(db) helpers and sqlList(). Values are archived, never deleted
-/agents/identity.js same-job matching: companyTitleKey (tools/urls.js) spells out VP/Sr/CTO, drops "of/and/remote" and company suffixes;
+/agents/identity.js same-job matching: companyTitleKey (tools/urls.ts) spells out VP/Sr/CTO, drops "of/and/remote" and company suffixes;
                     placeholder companies ("See posting") are read from the Google title. Rule changes need npm run cleanup to rekey
 /web                React (Vite) UI: Home (#/, a tile per screen with its count, Run pipeline, the Claude budget), Jobs (#/jobs: stage,
                     status, and search; track, needs description, discovered since, and score under Advanced filters), detail panel,
@@ -88,7 +88,7 @@ npm run inbox:review              resolve needs_review emails; each choice but D
 npm run backup                    encrypted backup (database, data/config/job-search.json, data/attachments) to the "Job Agent
                                   Backups" Drive folder; -- --to <folder> writes it to a folder; -- --check-passphrase checks .env
 npm run db:pending                migrations a database open would apply, tried on a throwaway copy (deploy.sh runs it first)
-npm run report:baseline           v3 baseline (tools/baseline.js): rows per table, database and attachment sizes, Claude spend by
+npm run report:baseline           v3 baseline (tools/baseline.ts): rows per table, database and attachment sizes, Claude spend by
                                   month, accounts by status, outcome data gaps; counts only, opened read-only (no migrations).
                                   -- --json; output stays out of the repo
 npm run backup:restore -- --file latest --out data/restore/job-agent.db   decrypt into NEW files (never over the live database)
@@ -126,7 +126,7 @@ The Run pipeline button runs the presser's pipeline; one pipeline at a time acro
 the schedule" run after the owner's scheduled pipeline (and inbox), one by one, each as themselves. Other child scripts run as
 the owner; tasks keep their user and the task routes show only that user's.
 Per-user settings live in user_settings (getUserSetting: inbox cursor, Drive folders, layouts); app_settings is app-wide
-(alerts, the owner's cap, allowance-notice months, demo marker). runs.user_id (014) is stamped by tools/trace.js
+(alerts, the owner's cap, allowance-notice months, demo marker). runs.user_id (014) is stamped by tools/trace.ts
 createJobTracer, the only way to start a traced run. App-wide still: lookups (lists) and the pipeline lock.
 test/user-scope.test.js fails on any query on a user table that does not name user_id; test/user-isolation.test.js calls
 every route as a second user against the owner's demo data; test/registration.test.js covers accounts, emails, and keys.
@@ -145,9 +145,9 @@ decided_by = self; PAUSED_MAY in server/app.js lets a paused account resume or d
 every user-table row (db/user-tables.js order), attached file folders, the account; runs on their own key are deleted, runs
 on the owner's key are kept for the owner's cap with meta and summary cleared. The owner deletes an account the same way
 (POST /api/admin/users/:id/delete). Both email the person; a self-delete also tells the owner. test/account-data.test.js.
-Help (#/help, server/help-routes.js): guides in help/*.md (generic, rendered with tools/markdown.js) and Ask, answered from
+Help (#/help, server/help-routes.js): guides in help/*.md (generic, rendered with tools/markdown.ts) and Ask, answered from
 the guides only on the asker's own AI (HELP_MODEL, a traced 'help' run, ASKS_PER_DAY; nothing logged or stored). Time zones:
-users.time_zone (016) rides in the request or job context (runAsUser(uid, fn, { timeZone })); tools/dates.js localDay,
+users.time_zone (016) rides in the request or job context (runAsUser(uid, fn, { timeZone })); tools/dates.ts localDay,
 localDaysAgo, dayOf, and timeZone() follow it, else the app's TZ. The owner, scripts, budgets (calendar months), and the
 scheduler use the app's zone. test/help-timezone.test.js.
 Onboarding: Home shows Get started (summary.setup: AI paid for, About you long enough, search complete) until all three
@@ -161,20 +161,20 @@ the default prompts name "Section 5: Job Targets" and "Section 6 (Cover Letter R
 the prompts. The draft builder writes them, Settings shows a checklist and Start from the template / Add the missing
 sections, and test/knowledge-sections.test.js checks the template, the demo's DEMO_ABOUT_YOU, and every example in help/about-you.md.
 Everyone's knowledge doc, the owner's included, lives only in the app (user_settings): agents/user-config.js backgroundFor
-(>= 500 characters, else a message saying to write it under Settings) for the server and tools/knowledge.js ownerBackground
+(>= 500 characters, else a message saying to write it under Settings) for the server and tools/knowledge.ts ownerBackground
 for scripts. There is no Google Doc any more (no YOUR_KNOWLEDGE_DOC_ID, no documents.readonly scope); services.knowledge is
 only a test stand-in for the owner's.
 Knowledge doc versions: every save (PUT /api/account/profile with source typed, file, draft, or restore) keeps the one
 before in user_settings profile.versions (newest first, 20 at most; a doc saved before versions starts the list as earlier);
 GET /api/account/profile/versions, /versions/:n, POST /versions/:n/restore, and GET /api/account/profile.docx?version=
 (prepDocx). test/knowledge-versions.test.js.
-Fill from a document (POST /api/account/profile/from-file) returns a file's text without saving; tools/doc-text.js reads
+Fill from a document (POST /api/account/profile/from-file) returns a file's text without saving; tools/doc-text.ts reads
 PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.js, server/resume-routes.js,
 Settings > Resumes): file and text in the resumes table (so backups, export, and deletion cover them; export omits the
 blob), a label, plain title words, one default. pickResume chooses per job title; withResume adds its text to the
 background for letters, tweaks, and meeting prep (never scoring), and artifacts/meeting_preps record resume_id. Downloads: GET /api/resumes/:id/file?format=original|text|docx|pdf;
-tools/resume-format.js lays the text out as Word (docx) and as a PDF it writes itself (Helvetica, WinAnsi; no library). Guides with a template and made-up examples: help/about-you.md,
-help/search-settings.md, help/prompts.md. tools/markdown.js renders fenced blocks (escaped). test/onboarding.test.js.
+tools/resume-format.ts lays the text out as Word (docx) and as a PDF it writes itself (Helvetica, WinAnsi; no library). Guides with a template and made-up examples: help/about-you.md,
+help/search-settings.md, help/prompts.md. tools/markdown.ts renders fenced blocks (escaped). test/onboarding.test.js.
 Letters and preps in the app: the job panel shows a letter's text (always without a Google Doc, on request with one) with
 Copy and Download Word; the prep reader has Download Word too. server/word-docs.js builds the .docx (the letter in the
 Google Doc's layout from the current user's settings; the prep from its Markdown), server/document-routes.js serves your
@@ -230,8 +230,8 @@ user's own spend by feature is on Settings (GET /api/spending; setting the cap s
 their fields. Personal wording belongs in edits or the knowledge doc, never in the repo defaults.
 
 ## Tracks
-Postings are fulltime or fractional (tools/track.js). Fractional postings score with prompts/score-fractional.md, which adds
-fit (High/Medium/Stretch/Poor), why it fits, caveats, pay and hours; annualized estimates use tools/rates.js (tracker math).
+Postings are fulltime or fractional (tools/track.ts). Fractional postings score with prompts/score-fractional.md, which adds
+fit (High/Medium/Stretch/Poor), why it fits, caveats, pay and hours; annualized estimates use tools/rates.ts (tracker math).
 Go Fractional is bot-protected: it is never scraped, and search.siteSearch stays false unless the Serper plan allows site: queries.
 
 ## Hunt
@@ -243,12 +243,12 @@ The job panel's Cover letter (web/src/components/LetterSection.jsx, server/lette
 REVISIONS_PER_DAY; saves nothing), saving a kept revision (source v2-revision) or the user's own text (source user; letters.js
 userLetterBody keeps its wording but takes off the header through the greeting and the sign-off on, and rebuilds a
 PDF's paragraphs; from-file returns the same body) as a new current version (with a Google Doc for the owner), restoring an older version as
-a new one, and Word or PDF downloads of any version (letter.docx / letter.pdf ?version=; tools/pdf-writer.js letterPdf). Report HTML escapes every value.
+a new one, and Word or PDF downloads of any version (letter.docx / letter.pdf ?version=; tools/pdf-writer.ts letterPdf). Report HTML escapes every value.
 The letter header is each user's own (agents/letter-header.js, user_settings letter.header, Settings > Cover letter
 header, GET/PUT /api/letter-header): name, sign-off name, email, phone, location, and up to 6 links; until saved it comes
-from config.candidate (tools/letter-header.js fromCandidate), and every letter document reads it through letterHeader.
+from config.candidate (tools/letter-header.ts fromCandidate), and every letter document reads it through letterHeader.
 headerLines (shared by Word, PDF, and the Google Doc) puts email, phone, and location on one line and the links as many
-to a line as fit; each email or web address is a clickable link (PDF link annotations). Every document's text goes through tools/text.js withoutPictographs (emoji show as pictures in Word and "?"
+to a line as fit; each email or web address is a clickable link (PDF link annotations). Every document's text goes through tools/text.ts withoutPictographs (emoji show as pictures in Word and "?"
 in a PDF), and discovery and manual add save titles and companies without them. test/letter-header.test.js.
 Letter fact check (v3 Phase 1; agents/hunt/verify-letter.js, prompt verify-letter with agents/hunt/schemas/verify-letter.json,
 VERIFY_MODEL, Haiku 4.5 from the letter eval): each claim a letter makes about the candidate, supported, unsupported, or contradicted by the
@@ -267,7 +267,7 @@ in meeting_preps (UUID keys) and as a Google Doc in "Job Agent Meeting Prep". Ab
 ## Scoring
 Default model and promotion threshold live in agents/discovery/score.js with the eval evidence behind them.
 Change the prompt, schema, model, or threshold only after rerunning the scoring eval and comparing pairwise accuracy.
-Never kept (tools/listings.js): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
+Never kept (tools/listings.ts): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
 Job sites to skip (agents/excluded-sites.js, server/excluded-sites-routes.js, Settings and Skip this site under the job panel's
 link): each user's own list with a note per site in user_settings; configFor adds it to search.excludedSites (the owner's
 file entries stay, shown as from the file), so scripts read config through configFor(store.raw, OWNER_ID, loadConfig()).
@@ -287,9 +287,9 @@ bug is fixed as a bug, never hidden. Each any or @ts-expect-error has its reason
 agent-core exports until Agent-Core ships its own; keep it in step on an upgrade.
 
 ## Portability (Windows now, a Linux server later)
-Calendar days come from tools/dates.js localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
+Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
 which is UTC (10 PM Eastern is already tomorrow). Timestamps stay ISO UTC.
-Personal data paths come from tools/paths.js dataPath(...) (DATA_DIR, default the repo's data folder); never repoPath('data', ...).
+Personal data paths come from tools/paths.ts dataPath(...) (DATA_DIR, default the repo's data folder); never repoPath('data', ...).
 CI (.github/workflows/ci.yml) runs npm audit (production, high), npm test in America/Los_Angeles and UTC, the web build, and the personal-data scan.
 
 ## Cloud
@@ -338,7 +338,7 @@ earlier weeks: distinct users with a run or added job), pipeline runs completed 
 letters (v2, v2-revision, user), preps, Claude spend (run_calls.cost_usd, priced calls only), and feedback received.
 The response schema allows those fields only. Tiles show the latest full week; bar charts carry .sr-only tables. Totals
 only, kept in the app: nothing logged, emailed, or sent to any analytics service. test/usage.test.js.
-Usage totals (server/usage-totals.js, usage_totals from 020 and 021, AUTH_MODE=google only): per app day (tools/dates.js appDay),
+Usage totals (server/usage-totals.js, usage_totals from 020 and 021, AUTH_MODE=google only): per app day (tools/dates.ts appDay),
 visits by device (phone, tablet, computer from the user agent), by browser and major version (browserOf: a fixed
 name and a number, "Chrome 130", or Other), and by location ("City, State, Country" or unknown, from
 req.ip in the local DB-IP City Lite file, server/geo.js openGeo), once per account a day (an in-memory set, never stored);
@@ -351,9 +351,9 @@ test/usage-totals.test.js.
 PRIVACY.md must stay true of the code: a new outside service, admin column, or demo event changes its wording.
 
 ## Spending and internet safety
-Make Claude clients only with tools/claude.js createJobClaude(db). Each call is paid by the user it runs as: the owner, and
+Make Claude clients only with tools/claude.ts createJobClaude(db). Each call is paid by the user it runs as: the owner, and
 users the owner put on their key (users.ai_source 'owner'), use ANTHROPIC_API_KEY; anyone else their own key, saved in
-Settings (server/account-routes.js: checked with Anthropic's free model list, sealed by tools/secret-box.js with USER_KEY_SECRET
+Settings (server/account-routes.js: checked with Anthropic's free model list, sealed by tools/secret-box.ts with USER_KEY_SECRET
 and the user id, never returned, logged, or shown, even to the admin). No key, no AI (NoClaudeKeyError). Caps (agents/budget.js
 checkBudget, from run_calls joined to runs.user_id): everything on the owner's key against the owner's cap (Admin > Spending,
 else MONTHLY_CLAUDE_BUDGET_USD, else $50), and each user on it against their own monthly cap (Admin > Users); the first
@@ -384,7 +384,7 @@ Health-Review): an online SQLite snapshot that must pass its integrity check, pa
 gzipped, then AES-256-GCM with a scrypt key from JOB_BACKUP_PASSPHRASE (.env only, never uploaded or logged) and a fresh
 salt and nonce per file, verified by decrypting before upload with the drive.file scope. Plaintext snapshots live only in
 the OS temp folder. Never back up .env or data/google. Kept: 7 nightly, 3 weekly, 1 monthly.
-SUPPORT_EMAIL (tools/support.js) is the published help address: Settings, Help ({{supportContact}} in help/*.md, PRIVACY.md,
+SUPPORT_EMAIL (tools/support.ts) is the published help address: Settings, Help ({{supportContact}} in help/*.md, PRIVACY.md,
 TERMS.md), the sign-in pages, the demo banner, /api/me. It is configuration, never written in the repo.
 Email goes only to the owner (the run report, failure alerts, access requests) and to a person about their own account
 (approved, not approved, paused, allowance reached), through server/notices.js, which picks each recipient itself: names,

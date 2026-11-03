@@ -1,8 +1,8 @@
 // Telling whether two postings are the same job. Links differ between sites, so a job is identified by
-// company and title (tools/urls.js companyTitleKey), with the company read from a Google page title when
+// company and title (tools/urls.ts companyTitleKey), with the company read from a Google page title when
 // the stored company is a placeholder. postings.company_title_key holds storedKey(); keep it current with
 // rekeyPostings after the key rules change (npm run cleanup does).
-import { companyTitleKey } from '../tools/urls.js';
+import { companyTitleKey } from '../tools/urls.ts';
 import { parseResultTitle } from './discovery/sources/serper.js';
 import { lookups, sqlList } from './lookups.js';
 

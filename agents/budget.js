@@ -1,4 +1,4 @@
-// Claude spending caps. Every Claude call goes through tools/claude.js, which checks the caps before it sends.
+// Claude spending caps. Every Claude call goes through tools/claude.ts, which checks the caps before it sends.
 // Spend comes from run_calls (agent-core records each call as it finishes), joined to runs for the user, so the call
 // that crosses a cap completes and the next one is refused. Months are calendar months in the app time zone.
 //   The owner's key (ANTHROPIC_API_KEY) pays for the owner's runs and for users the owner put on it; all of that counts

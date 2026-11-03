@@ -3,11 +3,11 @@
 //   npm run eval:letters -- --dry-run                       the estimate only, no calls
 //   npm run eval:letters -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=1 [--verbose]
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
-import { createJobTracer } from '../tools/trace.js';
-import { createJobClaude } from '../tools/claude.js';
-import { repoPath, dataPath } from '../tools/paths.js';
+import { createJobTracer } from '../tools/trace.ts';
+import { createJobClaude } from '../tools/claude.ts';
+import { repoPath, dataPath } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.js';
-import { exitWhenDone } from '../tools/exit.js';
+import { exitWhenDone } from '../tools/exit.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.js';
 import { runLetterEval, estimateLetterEval } from '../evals/letters/run.js';
 

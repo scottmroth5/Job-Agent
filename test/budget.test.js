@@ -1,4 +1,4 @@
-// Claude spending caps and who pays for each call (agents/budget.js, tools/claude.js). Synthetic runs and calls only;
+// Claude spending caps and who pays for each call (agents/budget.js, tools/claude.ts). Synthetic runs and calls only;
 // Claude is faked, and keys are made up.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,8 +7,8 @@ import { buildApp } from '../server/app.js';
 import { budgetLimit, budgetStatus, setBudgetLimit, spendByLabel, BudgetExceededError, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.js';
 import { runAsUser } from '../db/scope.js';
 import { addUser, OWNER_ID, setAiAccess, setClaudeKey } from '../db/users.js';
-import { createJobClaude, NoClaudeKeyError } from '../tools/claude.js';
-import { boxKey, seal } from '../tools/secret-box.js';
+import { createJobClaude, NoClaudeKeyError } from '../tools/claude.ts';
+import { boxKey, seal } from '../tools/secret-box.ts';
 
 const local = (y, mo, d, h = 12) => new Date(y, mo - 1, d, h);
 

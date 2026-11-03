@@ -1,6 +1,6 @@
 // Inbox settings: config/inbox.json (generic, committed). Personal values never go here.
 import { readFileSync } from 'node:fs';
-import { repoPath } from '../../tools/paths.js';
+import { repoPath } from '../../tools/paths.ts';
 
 export const INBOX_CONFIG_PATH = repoPath('config', 'inbox.json');
 

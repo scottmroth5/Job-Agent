@@ -6,9 +6,9 @@
 //   - moves untouched pipeline jobs with no description back to Discovered, where the UI flags them
 //   npm run cleanup -- --dry-run    list what would change
 //   npm run cleanup                 change it
-import { createJobTracer } from '../tools/trace.js';
+import { createJobTracer } from '../tools/trace.ts';
 import { openJobStore } from '../db/index.js';
-import { loadConfig } from '../tools/config.js';
+import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.js';
 import { OWNER_ID } from '../db/users.js';
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';

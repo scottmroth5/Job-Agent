@@ -4,9 +4,9 @@
 // The settings and attachments are written to a "restored" folder next to the database.
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { createBackupDrive } from '../tools/backup/drive.js';
-import { DRIVE_FOLDER, isBackupName, restoreBackup } from '../tools/backup/run.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
+import { createBackupDrive } from '../tools/backup/drive.ts';
+import { DRIVE_FOLDER, isBackupName, restoreBackup } from '../tools/backup/run.ts';
+import { getGoogleAuth } from '../tools/google/auth.ts';
 
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);

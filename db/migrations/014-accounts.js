@@ -1,9 +1,9 @@
 // Multi-user, phase 2: accounts. users gains what registration and AI access need: a 'rejected' status, the request
 // (name, note, when the terms were accepted), the decision (when, by whom), the user's own Claude key (sealed by
-// tools/secret-box.js, never plain), and how their AI is paid for (their own key, or the owner's key with a monthly
+// tools/secret-box.ts, never plain), and how their AI is paid for (their own key, or the owner's key with a monthly
 // cap). users is rebuilt (its status CHECK changes) with foreign keys off, like 013. runs (agent-core's table) gains a
 // user_id so run history and Claude spend are per user; it stays nullable because agent-core writes the row first and
-// tools/trace.js stamps the user right after.
+// tools/trace.ts stamps the user right after.
 
 export const id = '014-accounts';
 export const foreignKeys = false;

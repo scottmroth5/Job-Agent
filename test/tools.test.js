@@ -3,10 +3,10 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { normalizeUrl, companyTitleKey } from '../tools/urls.js';
-import { parseSheetDate, parsePostedDate } from '../tools/dates.js';
-import { fillTemplate } from '../tools/template.js';
-import { loadConfig, validateConfig, homeAreaText } from '../tools/config.js';
+import { normalizeUrl, companyTitleKey } from '../tools/urls.ts';
+import { parseSheetDate, parsePostedDate } from '../tools/dates.ts';
+import { fillTemplate } from '../tools/template.ts';
+import { loadConfig, validateConfig, homeAreaText } from '../tools/config.ts';
 
 test('normalizeUrl drops tracking, fragments, www and trailing slashes', () => {
   assert.equal(

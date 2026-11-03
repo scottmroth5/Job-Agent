@@ -1,13 +1,13 @@
 // Help (multi-user, phase 6): short guides from help/*.md, and Ask, which answers a question about the app from those
-// guides only. Ask runs on the asker's own AI (their key, or the owner's allowance for them; tools/claude.js) and is
+// guides only. Ask runs on the asker's own AI (their key, or the owner's allowance for them; tools/claude.ts) and is
 // traced so the caps see it. Neither the question nor the answer is logged or stored.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { repoPath } from '../tools/paths.js';
-import { createJobTracer } from '../tools/trace.js';
+import { repoPath } from '../tools/paths.ts';
+import { createJobTracer } from '../tools/trace.ts';
 import { currentUserId } from '../db/scope.js';
 import { OWNER_ID } from '../db/users.js';
-import { withSupport } from '../tools/support.js';
+import { withSupport } from '../tools/support.ts';
 
 export const HELP_MODEL = 'claude-haiku-4-5';
 export const MAX_QUESTION_CHARS = 500;

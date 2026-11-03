@@ -4,7 +4,7 @@ import { storedKey } from '../identity.js';
 import { logDecision, linkThread, upsertContact, addReminder } from './store.js';
 import { lookups } from '../lookups.js';
 import { adoptNotesText } from '../notes.js';
-import { localDay } from '../../tools/dates.js';
+import { localDay } from '../../tools/dates.ts';
 
 // The built-in statuses the inbox moves jobs to; ranks and closed statuses come from status groups (agents/lookups.js).
 const TARGET = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };

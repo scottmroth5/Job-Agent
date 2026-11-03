@@ -2,10 +2,10 @@
 // output schema (schemas/score.json); the Candidate Knowledge doc is the cached system prompt.
 // Deterministic rules run first and after the call, so a clear location conflict can never be
 // overridden by role-fit enthusiasm (v1's principle).
-import { fillTemplate } from '../../tools/template.js';
-import { homeAreaText } from '../../tools/config.js';
-import { sanitizeDashes, truncate } from '../../tools/text.js';
-import { skipReason } from '../../tools/listings.js';
+import { fillTemplate } from '../../tools/template.ts';
+import { homeAreaText } from '../../tools/config.ts';
+import { sanitizeDashes, truncate } from '../../tools/text.ts';
+import { skipReason } from '../../tools/listings.ts';
 import { getPrompt } from '../prompts.js';
 import { lookups, sqlList } from '../lookups.js';
 

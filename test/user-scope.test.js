@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
-import { repoPath } from '../tools/paths.js';
+import { repoPath } from '../tools/paths.ts';
 import { USER_TABLES } from '../db/user-tables.js';
 
 const FOLDERS = ['agents', 'server', 'tools', 'demo', 'scripts', 'db', 'evals'];
@@ -60,7 +60,7 @@ export function stringLiterals(src) {
 const files = (dir) => readdirSync(dir).flatMap((name) => {
   const path = join(dir, name);
   if (name === 'node_modules' || name === 'public' || name === 'fixtures') return [];
-  return statSync(path).isDirectory() ? files(path) : name.endsWith('.js') || name.endsWith('.mjs') ? [path] : [];
+  return statSync(path).isDirectory() ? files(path) : /\.(m?js|ts)$/.test(name) && !name.endsWith('.d.ts') ? [path] : [];
 });
 
 // runs and run_calls (agent-core's) stay app-wide in phase 1; the Activity tab and spending become per user with phase 2.

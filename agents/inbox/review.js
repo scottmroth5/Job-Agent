@@ -3,7 +3,7 @@
 // (bodyEnc), never written in the clear; scripts/inbox-seal-cases.js seals cases written before that.
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { dataPath } from '../../tools/paths.js';
+import { dataPath } from '../../tools/paths.ts';
 import { applyActions, createOpportunity } from './actions.js';
 import { updateEmail, logDecision } from './store.js';
 import { encrypt } from './crypto.js';

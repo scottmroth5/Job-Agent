@@ -5,7 +5,7 @@
 // (the source is worked out here; the address, referrer, and utm text never leave the page). A browser sending
 // Global Privacy Control gets nothing sent. Only the demo starts it (App, from /api/me), so the app itself sends
 // nothing. A blocked or failing request never affects the page.
-import { hostIs } from '../../tools/urls.js';
+import { hostIs } from '../../tools/urls.ts';
 
 // Screens (App's VIEWS plus home), the demo's sample AI features, and what a stopped change was about.
 export const SECTIONS = ['home', 'jobs', 'inbox', 'funnel', 'activity', 'settings', 'help'];

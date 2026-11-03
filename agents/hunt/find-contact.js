@@ -3,9 +3,9 @@
 // voice from the knowledge doc (plus the job's resume) as the system prompt. The result is Markdown, saved as a note
 // on the job (source agent), so it stays with the job and shows in its notes. It never contacts anyone. Logs hold
 // counts only, never names or text.
-import { fillTemplate } from '../../tools/template.js';
-import { truncate } from '../../tools/text.js';
-import { localDay } from '../../tools/dates.js';
+import { fillTemplate } from '../../tools/template.ts';
+import { truncate } from '../../tools/text.ts';
+import { localDay } from '../../tools/dates.ts';
 import { getPrompt } from '../prompts.js';
 import { formatAnalysis } from './letters.js';
 import { HUNT_MODEL } from './generate.js';

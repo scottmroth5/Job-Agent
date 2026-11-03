@@ -6,7 +6,7 @@ import { openJobStore } from '../db/index.js';
 import { buildApp } from '../server/app.js';
 import { LAYOUT_AREAS } from '../server/layout.js';
 import { arranged, moved } from '../web/src/layout.js';
-import { repoPath } from '../tools/paths.js';
+import { repoPath } from '../tools/paths.ts';
 
 const HOME = LAYOUT_AREAS.home;
 

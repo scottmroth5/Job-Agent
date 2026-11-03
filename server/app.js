@@ -5,7 +5,7 @@ import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import { createJobTracer } from '../tools/trace.js';
+import { createJobTracer } from '../tools/trace.ts';
 import { listPostings, getPosting, updatePosting, summary } from './queries.js';
 import { registerLookupRoutes } from './lookups-routes.js';
 import { lookups } from '../agents/lookups.js';
@@ -17,7 +17,7 @@ import { createScheduler } from './scheduler.js';
 import { BLOCKED_PAGE, geoBlocker } from './geo.js';
 import { registerUsageTotals } from './usage-totals.js';
 import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.js';
-import { timeZone } from '../tools/dates.js';
+import { timeZone } from '../tools/dates.ts';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
 import { currentUserId, runAsUser } from '../db/scope.js';
@@ -39,7 +39,7 @@ import { backgroundFor, scheduledUsers, userConfigView } from '../agents/user-co
 
 // Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
 // of the restricted Gmail scopes), and the lists and the spending cap are shared by everyone. Everything else runs
-// for the signed-in user with their own settings, background, and Claude key (agents/user-config.js, tools/claude.js).
+// for the signed-in user with their own settings, background, and Claude key (agents/user-config.js, tools/claude.ts).
 export const OWNER_ONLY = new Set([
   'POST /api/inbox/check', 'POST /api/inbox/emails/:id/review',
   'PUT /api/admin/budget', 'POST /api/admin/lookups/:list', 'PATCH /api/admin/lookups/:list/:id', 'PUT /api/admin/lookups/:list/roles',
@@ -49,7 +49,7 @@ import { registerAccountRoutes } from './account-routes.js';
 import { registerResumeRoutes } from './resume-routes.js';
 import { registerPages } from './pages.js';
 import { registerUserRoutes } from './users-routes.js';
-import { claudeKeyWorks } from '../tools/claude.js';
+import { claudeKeyWorks } from '../tools/claude.ts';
 import { getLayout, registerLayoutRoutes } from './layout.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
 import { registerExcludedSiteRoutes } from './excluded-sites-routes.js';
@@ -62,9 +62,9 @@ import { generateForPostings } from '../agents/hunt/generate.js';
 import { resolveDetails } from '../agents/discovery/details.js';
 import { jobIdFromUrl } from '../agents/discovery/sources/linkedin.js';
 import * as fractionaljobs from '../agents/discovery/sources/fractionaljobs.js';
-import { isOnSite } from '../tools/urls.js';
-import { checkLocation } from '../tools/location.js';
-import { assertNoRunningRun } from '../tools/runs.js';
+import { isOnSite } from '../tools/urls.ts';
+import { checkLocation } from '../tools/location.ts';
+import { assertNoRunningRun } from '../tools/runs.ts';
 
 const ACTIONS = ['score', 'write-materials', 'regenerate', 'refetch'];
 const nullableString = { type: ['string', 'null'] };

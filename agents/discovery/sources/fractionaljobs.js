@@ -1,9 +1,9 @@
 // Fractional Jobs (fractionaljobs.io): public listing of fractional roles; robots.txt allows crawling.
 // The home page lists the latest ~64 roles with hours, pay, and location on each card; the job page
 // adds company stage, industry, notes such as "convert full-time", and the description.
-import { decodeEntities, htmlToText } from '../../../tools/html.js';
-import { RateLimitedError } from '../../../tools/http.js';
-import { parseRate, parseHours } from '../../../tools/rates.js';
+import { decodeEntities, htmlToText } from '../../../tools/html.ts';
+import { RateLimitedError } from '../../../tools/http.ts';
+import { parseRate, parseHours } from '../../../tools/rates.ts';
 
 export const SOURCE = 'Fractional Jobs';
 const BASE = 'https://www.fractionaljobs.io';

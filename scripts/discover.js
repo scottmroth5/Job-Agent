@@ -2,15 +2,15 @@
 //   npm run discover                              full run
 //   npm run discover -- --dry-run --limit=20      preview, writes nothing
 //   npm run discover -- --sources=himalayas,linkedin --no-details
-import { createJobTracer } from '../tools/trace.js';
-import { loadConfig } from '../tools/config.js';
+import { createJobTracer } from '../tools/trace.ts';
+import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.js';
 import { OWNER_ID } from '../db/users.js';
-import { createHttp } from '../tools/http.js';
-import { createBrowser } from '../tools/browser.js';
+import { createHttp } from '../tools/http.ts';
+import { createBrowser } from '../tools/browser.ts';
 import { openJobStore } from '../db/index.js';
-import { exitWhenDone } from '../tools/exit.js';
-import { assertNoRunningRun } from '../tools/runs.js';
+import { exitWhenDone } from '../tools/exit.ts';
+import { assertNoRunningRun } from '../tools/runs.ts';
 import { runDiscovery, SOURCES } from '../agents/discovery/discover.js';
 
 function parseArgs(argv) {

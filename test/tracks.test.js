@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseRate, parseHours, annualize } from '../tools/rates.js';
-import { detectTrack } from '../tools/track.js';
+import { parseRate, parseHours, annualize } from '../tools/rates.ts';
+import { detectTrack } from '../tools/track.ts';
 import { openJobStore } from '../db/index.js';
 
 test('parseRate reads the formats fractional boards use', () => {
@@ -51,7 +51,7 @@ test('005 migration adds track, rate and hours columns defaulting to full-time',
 });
 
 test('findPayInText finds a salary or an explicit hourly range, and skips funding figures', async () => {
-  const { findPayInText } = await import('../tools/rates.js');
+  const { findPayInText } = await import('../tools/rates.ts');
   assert.deepEqual(findPayInText('The base salary range is $170,000 - $210,000 plus equity.'), { min: 170000, max: 210000, unit: 'year', text: '$170,000 - $210,000' });
   assert.equal(findPayInText('Pay: $150K–$200K per year').max, 200000);
   assert.deepEqual(findPayInText('Contract at $80 to $95/hr').unit, 'hour');

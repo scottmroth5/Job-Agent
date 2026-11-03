@@ -10,7 +10,7 @@ import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { usageByWeek } from '../server/admin-queries.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
-import { localDay } from '../tools/dates.js';
+import { localDay } from '../tools/dates.ts';
 
 const SITE = 'http://localhost:5178';
 const OWNER = 'owner@example.com';

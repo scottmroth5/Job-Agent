@@ -3,7 +3,7 @@
 // It returns account facts and counts only, never a user's jobs, notes, emails, background, or key.
 import { MIN_PROFILE_CHARS, scheduledForUser, userConfig, userProfile } from '../agents/user-config.js';
 import { currentTimeZone, currentUserId, runAsUser } from '../db/scope.js';
-import { appDay, dayOf, localDay } from '../tools/dates.js';
+import { appDay, dayOf, localDay } from '../tools/dates.ts';
 
 /**
  * Every account with this month's Claude spend, how many jobs it has, when it was last here, its last pipeline run, and

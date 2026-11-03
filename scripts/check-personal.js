@@ -6,8 +6,8 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { CONFIG_PATH } from '../tools/config.js';
-import { repoPath } from '../tools/paths.js';
+import { CONFIG_PATH } from '../tools/config.ts';
+import { repoPath } from '../tools/paths.ts';
 
 const ENV_MIN_LENGTH = 8; // shorter .env values (flags, small numbers) would only produce noise
 

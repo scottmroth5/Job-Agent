@@ -11,7 +11,7 @@ import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
 import { draftContent, validateDraft, DRAFT_MODEL, DRAFT_SCHEMA, MAX_FILES } from '../agents/draft-profile.js';
 import { DRAFTS_PER_DAY } from '../server/draft-routes.js';
 import { saveUserConfig, saveUserProfile } from '../agents/user-config.js';
-import { createJobClaude } from '../tools/claude.js';
+import { createJobClaude } from '../tools/claude.ts';
 
 const SITE = 'http://localhost:5178';
 const pdf = Buffer.from('%PDF-1.4\nMade-up resume for tests\n%%EOF').toString('base64');

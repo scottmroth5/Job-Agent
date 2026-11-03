@@ -12,8 +12,8 @@
 // the day, the dimension, a fixed value ("Chrome 130" is a fixed name and a number) or "City, State, Country", and a
 // count. Nothing is logged.
 import { isPrivateAddress } from './geo.js';
-import { appDay } from '../tools/dates.js';
-import { hostIs } from '../tools/urls.js';
+import { appDay } from '../tools/dates.ts';
+import { hostIs } from '../tools/urls.ts';
 
 export const DEVICES = ['phone', 'tablet', 'computer'];
 export const SOURCES = ['linkedin', 'github', 'site', 'demo', 'other', 'direct'];

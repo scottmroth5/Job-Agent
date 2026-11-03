@@ -1,7 +1,7 @@
 // The one report email per run (replaces v1's discovery report and daily summary).
 // collectReport() reads the database; renderReport() is pure. Every value is HTML-escaped.
-import { escapeHtml as e } from '../../tools/html.js';
-import { sendEmail } from '../../tools/google/gmail.js';
+import { escapeHtml as e } from '../../tools/html.ts';
+import { sendEmail } from '../../tools/google/gmail.ts';
 import { PROMOTE_AT } from '../discovery/score.js';
 import { lookups, sqlList } from '../lookups.js';
 

@@ -4,8 +4,8 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { CONFIG_PATH, validateConfig } from '../tools/config.js';
-import { dataPath } from '../tools/paths.js';
+import { CONFIG_PATH, validateConfig } from '../tools/config.ts';
+import { dataPath } from '../tools/paths.ts';
 
 const EXPORT_DIR = dataPath('v1-export', 'prompts');
 

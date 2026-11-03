@@ -6,7 +6,7 @@ import { OWNER_ID } from '../db/users.js';
 import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote, MAX_NOTE } from '../agents/excluded-sites.js';
 import { clearConfigViews, userConfig } from '../agents/user-config.js';
 import { archiveSiteJobs, findListings } from '../agents/hunt/archive.js';
-import { excludedSite } from '../tools/listings.js';
+import { excludedSite } from '../tools/listings.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const siteParams = { type: 'object', required: ['site'], properties: { site: { type: 'string', minLength: 3, maxLength: 253, pattern: '^[a-z0-9.-]+$' } } };

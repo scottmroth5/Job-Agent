@@ -5,20 +5,20 @@
 //   npm run pipeline -- --no-email   skip the email (prints its subject instead)
 //   node scripts/pipeline.js --user=5  as user 5: their search settings, background, and Claude key. Google results
 //                                    (the owner's paid search), Google Docs, and the report email are the owner's only.
-import { createJobTracer } from '../tools/trace.js';
-import { createJobClaude } from '../tools/claude.js';
-import { loadConfig } from '../tools/config.js';
-import { ownerBackground } from '../tools/knowledge.js';
-import { createHttp } from '../tools/http.js';
-import { createBrowser } from '../tools/browser.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
-import { createDriveClient } from '../tools/google/drive.js';
-import { assertNoRunningRun } from '../tools/runs.js';
+import { createJobTracer } from '../tools/trace.ts';
+import { createJobClaude } from '../tools/claude.ts';
+import { loadConfig } from '../tools/config.ts';
+import { ownerBackground } from '../tools/knowledge.ts';
+import { createHttp } from '../tools/http.ts';
+import { createBrowser } from '../tools/browser.ts';
+import { getGoogleAuth } from '../tools/google/auth.ts';
+import { createDriveClient } from '../tools/google/drive.ts';
+import { assertNoRunningRun } from '../tools/runs.ts';
 import { openJobStore } from '../db/index.js';
 import { runAsUser } from '../db/scope.js';
 import { OWNER_ID } from '../db/users.js';
 import { configFor, profileForAI } from '../agents/user-config.js';
-import { exitWhenDone } from '../tools/exit.js';
+import { exitWhenDone } from '../tools/exit.ts';
 import { runDiscovery, SOURCES } from '../agents/discovery/discover.js';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { generateForPostings } from '../agents/hunt/generate.js';

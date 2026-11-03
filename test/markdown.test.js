@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderInline, renderMarkdown } from '../tools/markdown.js';
+import { renderInline, renderMarkdown } from '../tools/markdown.ts';
 
 test('inline: bold, italic, code, links, and bare URLs', () => {
   assert.equal(renderInline('**Bold** and *italic* and _also_ and `x*y*`'), '<strong>Bold</strong> and <em>italic</em> and <em>also</em> and <code>x*y*</code>');

@@ -3,8 +3,8 @@
 // (the knowledge doc plus the job's resume) is the system prompt, as for the letter itself; the posting is data from
 // the web, there only so claims about the company are not taken for claims about the candidate. The check never blocks
 // a letter: callers save a failed check and keep going. Logs hold counts only, never a claim's text.
-import { fillTemplate } from '../../tools/template.js';
-import { truncate } from '../../tools/text.js';
+import { fillTemplate } from '../../tools/template.ts';
+import { truncate } from '../../tools/text.ts';
 import { getPrompt } from '../prompts.js';
 
 // Haiku 4.5 from the letter eval (EVALS.md, 2026-11-03): the same recall as Sonnet 5.5 with fewer extra flags, at

@@ -3,7 +3,7 @@
 // Cases contain personal job-search data, so they live in gitignored data/evals/.
 import { resolveDetails } from '../../agents/discovery/details.js';
 import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.js';
-import { checkLocation } from '../../tools/location.js';
+import { checkLocation } from '../../tools/location.ts';
 import { lookups, sqlList } from '../../agents/lookups.js';
 
 export const MIN_CASE_TEXT = 500;
