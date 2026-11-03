@@ -2,7 +2,7 @@
 //   npm run archive -- --dry-run    list what would move
 //   npm run archive                 move them
 import { createJobTracer } from '../tools/trace.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { archivePostings } from '../agents/hunt/archive.js';
 
 const dryRun = process.argv.includes('--dry-run');

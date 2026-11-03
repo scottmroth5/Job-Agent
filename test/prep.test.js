@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { buildPrepRequest, extractDocument, normalizePrepInput, prepDocName, prepHtml, PREP_MODEL } from '../agents/hunt/prep.js';
 import { getPrompt } from '../agents/prompts.js';

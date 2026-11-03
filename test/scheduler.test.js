@@ -117,7 +117,7 @@ test('tasks: wait resolves when the task ends, without polling', async () => {
 });
 
 test('API: /api/schedule lists the jobs, and a missed backup runs as a task when the server starts', async () => {
-  const { openJobStore } = await import('../db/index.js');
+  const { openJobStore } = await import('../db/index.ts');
   const { buildApp } = await import('../server/app.js');
   const store = openJobStore(':memory:');
   const scripts = [];

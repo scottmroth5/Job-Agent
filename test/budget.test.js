@@ -2,11 +2,11 @@
 // Claude is faked, and keys are made up.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { budgetLimit, budgetStatus, setBudgetLimit, spendByLabel, BudgetExceededError, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.js';
-import { runAsUser } from '../db/scope.js';
-import { addUser, OWNER_ID, setAiAccess, setClaudeKey } from '../db/users.js';
+import { runAsUser } from '../db/scope.ts';
+import { addUser, OWNER_ID, setAiAccess, setClaudeKey } from '../db/users.ts';
 import { createJobClaude, NoClaudeKeyError } from '../tools/claude.ts';
 import { boxKey, seal } from '../tools/secret-box.ts';
 

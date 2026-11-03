@@ -74,6 +74,7 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `npm test` | Run the tests (no network or keys needed). GitHub runs them on every push, in a US time zone and in UTC |
 | `npm run typecheck` | Type check (TypeScript, strict; no output files) |
 | `npm run lint` | Lint for promise mistakes (a missed `await`) and type-only imports |
+| `npm run db:types` | Regenerate `db/types.ts`, the row type for each table, after adding a migration |
 
 ## Settings in .env
 

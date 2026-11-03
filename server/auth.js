@@ -1,7 +1,7 @@
 // Access control.
 //   AUTH_MODE=none    (default) no login; the server refuses to listen anywhere but localhost.
 //   AUTH_MODE=google  "Sign in with Google". Any verified Google account can sign in; what it may do depends on its
-//                     account (db/users.js): the addresses in AUTH_ALLOWED_EMAILS are the owner's; anyone else
+//                     account (db/users.ts): the addresses in AUTH_ALLOWED_EMAILS are the owner's; anyone else
 //                     requests access (/auth/register) and waits for the owner's approval (/auth/waiting), or is
 //                     told it was not approved (/auth/not-approved). Every page and API route needs the signed session
 //                     cookie and an active (or paused, read-only) account, except /auth/*, /healthz, /privacy,
@@ -14,7 +14,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { escapeHtml } from '../tools/html.ts';
 import { supportEmail } from '../tools/support.ts';
-import { accountFor, getUser, MAX_NAME, MAX_NOTE, requestAccess } from '../db/users.js';
+import { accountFor, getUser, MAX_NAME, MAX_NOTE, requestAccess } from '../db/users.ts';
 import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, cookie } from './session.js';
 import { DEMO_CONFIG, DEMO_EMAIL } from '../demo/sample-data.js';
 import { demoAnalytics } from './demo-analytics.js';

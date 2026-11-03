@@ -5,8 +5,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { repoPath } from '../tools/paths.ts';
 import { createJobTracer } from '../tools/trace.ts';
-import { currentUserId } from '../db/scope.js';
-import { OWNER_ID } from '../db/users.js';
+import { currentUserId } from '../db/scope.ts';
+import { OWNER_ID } from '../db/users.ts';
 import { withSupport } from '../tools/support.ts';
 
 export const HELP_MODEL = 'claude-haiku-4-5';

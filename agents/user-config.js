@@ -2,9 +2,9 @@
 // Settings. The owner's search settings stay in data/config/job-search.json; everyone else keeps theirs here too. What a user may set is a fixed list of plain text fields: their own cover letter checks (which are
 // regular expressions), Google site search, and private terms stay the owner's, so no user text ever becomes a pattern.
 // Code that runs for a user reads the right settings without knowing whose they are: userConfigView (the server) and
-// configFor (scripts) pick by the user the request or job runs as (db/scope.js).
-import { currentUserId } from '../db/scope.js';
-import { OWNER_ID } from '../db/users.js';
+// configFor (scripts) pick by the user the request or job runs as (db/scope.ts).
+import { currentUserId } from '../db/scope.ts';
+import { OWNER_ID } from '../db/users.ts';
 import { validateConfig } from '../tools/config.ts';
 import { withExcludedSites } from './excluded-sites.js';
 

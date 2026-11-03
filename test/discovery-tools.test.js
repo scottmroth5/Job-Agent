@@ -4,7 +4,7 @@ import { createHttp, RateLimitedError, HttpError } from '../tools/http.ts';
 import { htmlToText, extractJobPosting, decodeEntities } from '../tools/html.ts';
 import { keywordMatcher, detectJobType } from '../tools/titles.ts';
 import { checkLocation, matchesHome, statesIn, hasRemoteSignal } from '../tools/location.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 
 // ---------- http ----------
 const response = (status, text = '') => ({ status, url: '', text: async () => text });

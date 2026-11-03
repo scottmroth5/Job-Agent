@@ -5,7 +5,7 @@
 // Output is counts, notices, and job titles only; email content is never printed.
 import { createJobTracer } from '../tools/trace.ts';
 import { createJobClaude } from '../tools/claude.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { assertNoRunningRun } from '../tools/runs.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { getInboxAuth } from '../tools/google/auth.ts';

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersions, validateTemplate, placeholdersIn } from '../agents/prompts.js';
 import { scorePostings } from '../agents/discovery/score.js';
 

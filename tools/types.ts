@@ -4,7 +4,7 @@ import type { Store } from '@scottmroth5/agent-core';
 
 export type { Database };
 
-/** openJobStore's result (db/index.js): db is scoped to the current user (db/scope.js), raw is not. */
+/** openJobStore's result (db/index.ts): db is scoped to the current user (db/scope.ts), raw is not. */
 export interface JobStore extends Store {
   raw: Database;
 }

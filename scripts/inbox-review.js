@@ -3,7 +3,7 @@
 //   npm run inbox:review
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { getInboxAuth } from '../tools/google/auth.ts';
 import { createGmail } from '../agents/inbox/gmail.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';

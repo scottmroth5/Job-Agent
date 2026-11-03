@@ -13,15 +13,15 @@ import { loadInboxConfig } from '../agents/inbox/config.js';
 import { loadKey } from '../agents/inbox/crypto.js';
 import { createDriveClient } from '../tools/google/drive.ts';
 import { repoPath, ROOT } from '../tools/paths.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { buildApp } from './app.js';
 import { schedulesFromEnv } from './scheduler.js';
 import { timeZone } from '../tools/dates.ts';
 import { geoAllowFromEnv, openGeo } from './geo.js';
 import { createAlerts } from './alerts.js';
 import { createNotices } from './notices.js';
-import { getSetting, setSetting } from '../db/settings.js';
-import { getUser, OWNER_ID, syncOwnerEmail } from '../db/users.js';
+import { getSetting, setSetting } from '../db/settings.ts';
+import { getUser, OWNER_ID, syncOwnerEmail } from '../db/users.ts';
 import { sendEmail } from '../tools/google/gmail.ts';
 import { assertSafeBinding, authSettings } from './auth.js';
 import { SAMPLE_TASKS } from '../demo/sample-data.js';
@@ -33,7 +33,7 @@ const authMode = authConfig.mode;
 assertSafeBinding({ host, mode: authMode, settings: authConfig });
 
 const config = loadConfig();
-// No fallback user: a query on a user table outside a request or scheduled job throws (db/scope.js).
+// No fallback user: a query on a user table outside a request or scheduled job throws (db/scope.ts).
 const store = openJobStore(undefined, { fallbackUid: null });
 // The demo runs on sample data with no accounts: no Google sign-in, Claude client, browser, or schedule, so a
 // visitor can never reach a real account or spend money, even through a route the read-only check missed.

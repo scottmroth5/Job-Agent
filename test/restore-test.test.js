@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { runBackup } from '../tools/backup/run.ts';
 import { restoreTest, EMPTY_TABLE_MIN_ROWS } from '../tools/backup/restore-check.ts';
 import { restoreTestJob } from '../scripts/backup-verify.js';

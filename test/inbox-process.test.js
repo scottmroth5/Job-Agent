@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
-import { openJobStore } from '../db/index.js';
-import { getUserSetting as getSetting } from '../db/settings.js';
+import { openJobStore } from '../db/index.ts';
+import { getUserSetting as getSetting } from '../db/settings.ts';
 import { storedKey } from '../agents/identity.js';
 import { createGmail } from '../agents/inbox/gmail.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';

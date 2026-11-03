@@ -2,7 +2,7 @@
 // sign-off name, and links, in user_settings. Until a user saves one it is built from their settings (the owner's file,
 // or their saved search) by tools/letter-header.ts fromCandidate, so nothing changes until they edit it. Every letter
 // document (Word, PDF, the Google Doc, the pipeline's letters) reads it through letterHeader.
-import { getUserSetting, setUserSetting } from '../db/settings.js';
+import { getUserSetting, setUserSetting } from '../db/settings.ts';
 import { fromCandidate, hrefOf, isEmail } from '../tools/letter-header.ts';
 
 const KEY = 'letter.header';

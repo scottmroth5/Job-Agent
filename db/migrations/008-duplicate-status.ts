@@ -7,19 +7,21 @@
 // It also turns copies that npm run cleanup archived as "passed" (with a "duplicate of #N" note) into
 // 'duplicate', so the status says what they are.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '008-duplicate-status';
 
 const OLD = "'passed', 'closed', 'rejected')";
 const NEW = "'passed', 'closed', 'rejected', 'duplicate')";
 
-export function up(db) {
-  const createSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'postings'").pluck().get();
+export function up(db: Database) {
+  const createSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'postings'").pluck().get() as string | undefined;
   if (createSql?.includes(NEW)) return;
   if (!createSql?.includes(OLD) || createSql.split(OLD).length !== 2) {
     throw new Error('008: the postings status constraint is not in the expected form; nothing was changed.');
   }
 
-  const version = db.pragma('schema_version', { simple: true });
+  const version = db.pragma('schema_version', { simple: true }) as number;
   db.unsafeMode(true);
   try {
     db.pragma('writable_schema = ON');

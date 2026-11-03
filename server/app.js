@@ -20,8 +20,8 @@ import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHea
 import { timeZone } from '../tools/dates.ts';
 import { createTaskRunner } from './tasks.js';
 import { registerAuth } from './auth.js';
-import { currentUserId, runAsUser } from '../db/scope.js';
-import { OWNER_ID, touchLastSeen } from '../db/users.js';
+import { currentUserId, runAsUser } from '../db/scope.ts';
+import { OWNER_ID, touchLastSeen } from '../db/users.ts';
 import { registerFeedbackRoutes } from './feedback-routes.js';
 import { registerHelpRoutes } from './help-routes.js';
 import { registerDraftRoutes } from './draft-routes.js';
@@ -149,7 +149,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   if (authMode === 'google') {
     registerUsageTotals(app, { db: store.raw ?? store.db, location: usage.location, ownOrigin: new URL(auth.settings.publicUrl).origin, siteHost: usage.siteHost, demoHost: usage.demoHost, now: usage.now });
   }
-  // Multi-user (db/scope.js): each route handler, and every task it starts, runs as the signed-in user; with no sign-in
+  // Multi-user (db/scope.ts): each route handler, and every task it starts, runs as the signed-in user; with no sign-in
   // (AUTH_MODE none, and the demo) that is the owner. The user is decided, and refused if inactive or not allowed this
   // route, as soon as auth has run (onRequest, before the body is read); the handler runs as them from preHandler, after
   // the body, which arrives in socket events that would not carry the context. A signed-out request on an open path

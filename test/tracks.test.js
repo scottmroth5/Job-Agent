@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseRate, parseHours, annualize } from '../tools/rates.ts';
 import { detectTrack } from '../tools/track.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 
 test('parseRate reads the formats fractional boards use', () => {
   assert.deepEqual(parseRate('$5K - $6K / mo'), { min: 5000, max: 6000, unit: 'month' });

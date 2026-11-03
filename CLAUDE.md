@@ -17,7 +17,8 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
 /agents/notes.js    a job's notes are separate entries (posting_notes: body, source user/agent/earlier, created_at, updated_at).
                     Change notes only through this module: it keeps postings.notes as every entry's text, oldest first, for
                     code that reads notes as one text. Code that inserts a job with notes text calls adoptNotesText
-/db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.js, applied in id order), openJobStore, v1 import.
+/db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.ts, applied in id order), openJobStore, v1 import.
+                    db/types.ts is generated (npm run db:types after a new migration): a row type per table, for query results.
                     Rebuild a table only in a migration that exports foreignKeys = false (agent-core runs it with foreign keys off,
                     then foreign_key_check and integrity_check must pass before it commits); in any other migration a drop cascades.
                     013 shows a rebuild (indexes, triggers, and views made again); 008 loosens a CHECK in place (writable_schema).
@@ -51,6 +52,7 @@ npm test                          run all unit tests (no network, no real data)
 node --test test/db.test.js       run one suite
 npm run typecheck                 tsc --noEmit, strict (tsconfig.json for the server side, web/tsconfig.json for the page)
 npm run lint                      the promise rules (no-floating-promises, await-thenable, no-misused-promises) and import type
+npm run db:types                  regenerate db/types.ts (a row type per table) from the migrations; CI runs -- --check
 npm run check:personal -- --all   scan every tracked file for personal data (the pre-commit hook checks staged files)
 npm run hooks:install             enable the pre-commit guard in a fresh clone
 npm run config:from-v1            build data/config/job-search.json from the v1 export
@@ -101,11 +103,11 @@ powershell -ExecutionPolicy Bypass -File scripts\register-backup-task.ps1   nigh
 npm run evals                     inbox eval (about $0.06); -- --all adds the scoring eval. Record results in EVALS.md
 
 ## Users (multi-user, phases 1 to 6)
-db/users.js: users table, the owner is user 1 (admin); every row before 013 is theirs. Every user table (USER_TABLES in
-db/migrations/013-users.js) has user_id NOT NULL, and keys that were unique app-wide are unique per user. Every query on a
+db/users.ts: users table, the owner is user 1 (admin); every row before 013 is theirs. Every user table (USER_TABLES in
+db/migrations/013-users.ts) has user_id NOT NULL, and keys that were unique app-wide are unique per user. Every query on a
 user table says "user_id = @uid" (joins and subqueries too: "s.user_id = p.user_id"); inserts give user_id @uid, or copy it
 from the job row (INSERT ... SELECT ... FROM postings WHERE id = ? AND user_id = @uid) so another user's job gets nothing.
-store.db is scoped (db/scope.js): @uid is the user of the current request or job (runAsUser, AsyncLocalStorage), else
+store.db is scoped (db/scope.ts): @uid is the user of the current request or job (runAsUser, AsyncLocalStorage), else
 fallbackUid: the owner for scripts and tests; the server has none, so a user-table query outside a request or job throws.
 store.raw is unscoped: migrations, backups, and server/admin-queries.js (the admin's cross-user reads: counts and account
 facts, never anyone's jobs or key) only.
@@ -134,7 +136,7 @@ test/user-search.test.js covers per-user settings, the config view, the pipeline
 Phase 4: Admin > Users shows last seen (users.last_seen_at, touchLastSeen at most every 15 minutes), last pipeline run, and
 setup chips (search ready, About you, key, schedule; never the text). Putting a user on the owner's key needs their address
 typed (confirmEmail) and emails them; so does taking them off it or changing the cap. Feedback (server/feedback-routes.js,
-feedback table, db/user-tables.js lists the user tables since 013): any user writes to the owner from Settings, at most
+feedback table, db/user-tables.ts lists the user tables since 013): any user writes to the owner from Settings, at most
 FEEDBACK_PER_DAY a day; it is emailed to the owner with the sender as Reply-To (buildRawEmail allows one plain address) and
 listed on Users with Mark done. ADMIN_ONLY prefixes in server/app.js: /api/admin/users, /api/admin/feedback. The Home Admin
 tile counts waiting requests and open feedback (summary.adminWaiting, admins only). test/feedback.test.js covers these.
@@ -142,7 +144,7 @@ Phase 5 (per-user lists) was skipped: the status, stage, and track lists stay sh
 Phase 6 (agents/account-data.js): Settings > Your data and account. Download my data (GET /api/account/export: every
 user-table row plus the account and runs; never the sealed key or email bodies). Pause (and resume, only when self-paused:
 decided_by = self; PAUSED_MAY in server/app.js lets a paused account resume or delete). Delete my account (typed address):
-every user-table row (db/user-tables.js order), attached file folders, the account; runs on their own key are deleted, runs
+every user-table row (db/user-tables.ts order), attached file folders, the account; runs on their own key are deleted, runs
 on the owner's key are kept for the owner's cap with meta and summary cleared. The owner deletes an account the same way
 (POST /api/admin/users/:id/delete). Both email the person; a self-delete also tells the owner. test/account-data.test.js.
 Help (#/help, server/help-routes.js): guides in help/*.md (generic, rendered with tools/markdown.ts) and Ask, answered from

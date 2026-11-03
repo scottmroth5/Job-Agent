@@ -10,8 +10,8 @@ import { addNote, listNotes } from '../agents/notes.js';
 import { localDay } from '../tools/dates.ts';
 import { describeVersion } from '../agents/prompts.js';
 import { budgetStatus } from '../agents/budget.js';
-import { currentUserId } from '../db/scope.js';
-import { OWNER_ID } from '../db/users.js';
+import { currentUserId } from '../db/scope.ts';
+import { OWNER_ID } from '../db/users.ts';
 
 /** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
 const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);

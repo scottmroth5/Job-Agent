@@ -3,7 +3,7 @@
 // added values work everywhere the built-in ones do. Values are archived, never deleted: an archived value
 // stays valid on the jobs that have it, and drops out of menus and automation targets.
 
-import { BUILT_INS, BUILT_IN_ROLES } from '../db/migrations/009-lookups.js';
+import { BUILT_INS, BUILT_IN_ROLES } from '../db/migrations/009-lookups.ts';
 
 export const LISTS = ['status', 'stage', 'track'];
 

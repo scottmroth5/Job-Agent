@@ -3,9 +3,11 @@
 // prep read. titles are plain words matched against a job title to pick the resume for that job; one may be the
 // default. Artifacts and meeting preps record which resume they were written from.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '017-resumes';
 
-export function up(db) {
+export function up(db: Database) {
   db.exec(`CREATE TABLE resumes (
       id TEXT PRIMARY KEY,
       user_id INTEGER NOT NULL REFERENCES users(id),

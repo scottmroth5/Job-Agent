@@ -1,5 +1,5 @@
 // A user's own data, whole (multi-user, phase 6): export it, or delete it with the account. Both walk every user
-// table (db/user-tables.js), so a table added later is covered without changing this file.
+// table (db/user-tables.ts), so a table added later is covered without changing this file.
 //   Export: every row that is theirs, plus their account (never their sealed Claude key) and their runs' spending. Email
 //   bodies are left out (they are encrypted with the server's key and only exist for the owner's inbox anyway).
 //   Delete: every row and attached file, then the account. Runs paid with their own key go too; runs paid with the
@@ -7,8 +7,8 @@
 // The owner's account is never exported through here as "deleted", and can never be deleted.
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { USER_TABLES } from '../db/user-tables.js';
-import { OWNER_ID } from '../db/users.js';
+import { USER_TABLES } from '../db/user-tables.ts';
+import { OWNER_ID } from '../db/users.ts';
 
 // Columns never exported: encrypted with keys the user does not hold.
 const HIDDEN = { emails: ['body_enc'], resumes: ['file'] }; // a resume's text is exported; the file itself downloads from Settings

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { collectReport, renderReport } from '../agents/hunt/report.js';
 import { archivePostings, findArchivable } from '../agents/hunt/archive.js';
 

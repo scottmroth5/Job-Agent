@@ -2,7 +2,7 @@
 // agents/hunt/generate.js). Synthetic data; Claude is a stand-in.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { generateForPostings } from '../agents/hunt/generate.js';
 import { CHECKS_PER_DAY } from '../server/letter-routes.js';

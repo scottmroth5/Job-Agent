@@ -4,7 +4,7 @@
 import Database from 'better-sqlite3';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { runAsUser, scopeDb } from '../db/scope.js';
+import { runAsUser, scopeDb } from '../db/scope.ts';
 import { applications } from '../server/funnel.js';
 import { waitingApplications } from '../agents/follow-ups.js';
 

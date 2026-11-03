@@ -2,8 +2,8 @@
 // so a long run never blocks the server, and its step lines become task progress. Each user runs their own pipeline
 // (scripts/pipeline.js --user=<id>); one runs at a time across the app, since they share the browser and the sources.
 import { assertNoRunningRun } from '../tools/runs.ts';
-import { currentUserId } from '../db/scope.js';
-import { OWNER_ID } from '../db/users.js';
+import { currentUserId } from '../db/scope.ts';
+import { OWNER_ID } from '../db/users.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const LOCKS = ['pipeline', 'inbox', 'discover', 'score', 'hunt'];

@@ -2,7 +2,7 @@
 // (agents/excluded-sites.js). The owner's settings file can list sites too; those show here as from the file and are
 // changed there. Skipping a site affects jobs found from then on; the saved ones from it are removed only when asked
 // (POST .../remove-jobs), and never a job already applied to.
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID } from '../db/users.ts';
 import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote, MAX_NOTE } from '../agents/excluded-sites.js';
 import { clearConfigViews, userConfig } from '../agents/user-config.js';
 import { archiveSiteJobs, findListings } from '../agents/hunt/archive.js';

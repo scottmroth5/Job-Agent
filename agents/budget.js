@@ -5,8 +5,8 @@
 //   toward the owner's cap: Admin > Spending (app_settings), else MONTHLY_CLAUDE_BUDGET_USD in .env, else the default.
 //   A user on the owner's key also has their own monthly cap (users.ai_cap_usd, set on Admin > Users).
 //   A user with their own key pays for it themselves; their spend is shown, with no cap here.
-import { getSetting, setSetting } from '../db/settings.js';
-import { OWNER_ID } from '../db/users.js';
+import { getSetting, setSetting } from '../db/settings.ts';
+import { OWNER_ID } from '../db/users.ts';
 
 export const DEFAULT_MONTHLY_BUDGET_USD = 50;
 export const WARN_AT = 0.8;

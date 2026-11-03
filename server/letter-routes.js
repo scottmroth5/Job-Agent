@@ -4,7 +4,7 @@
 // overwritten, and the newest is the letter the panel, the report, and meeting prep use. Each version can carry a fact
 // check (agents/letter-checks.js): the panel asks for one after a save, and the user dismisses claims one at a time.
 import { createJobTracer } from '../tools/trace.ts';
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID } from '../db/users.ts';
 import { reviseLetter, MAX_TURNS } from '../agents/hunt/revise-letter.js';
 import { checksFor, copyCheck, dismissClaim, runCheck } from '../agents/letter-checks.js';
 import { finishLetter, HUNT_MODEL } from '../agents/hunt/generate.js';

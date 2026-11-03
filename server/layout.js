@@ -1,6 +1,6 @@
 // Screen layouts each user arranges: today the Home page's tile order. Saved on the server (user_settings
 // layout:<area>) so the order follows you to every device. The UI applies it with web/src/layout.js arranged().
-import { deleteUserSetting, getUserSetting, setUserSetting } from '../db/settings.js';
+import { deleteUserSetting, getUserSetting, setUserSetting } from '../db/settings.ts';
 
 /** Each area's items in their default order. web/src/components/HomePage.jsx draws a tile for each home key. */
 export const LAYOUT_AREAS = { home: ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'] };

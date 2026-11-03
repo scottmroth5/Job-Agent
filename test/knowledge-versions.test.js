@@ -3,9 +3,9 @@
 // version downloads as Word. Synthetic text only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
-import { addUser, OWNER_ID } from '../db/users.js';
+import { addUser, OWNER_ID } from '../db/users.ts';
 import { MAX_PROFILE_VERSIONS, profileVersions, saveUserProfile, userProfile } from '../agents/user-config.js';
 import { documentText } from '../tools/doc-text.ts';
 

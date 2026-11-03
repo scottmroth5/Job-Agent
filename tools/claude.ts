@@ -1,5 +1,5 @@
 // The one way to make a Claude client in this app. Scripts and the server use this instead of createClaude().
-// Each call is paid for by the user it runs as (db/scope.js; scripts run as the owner):
+// Each call is paid for by the user it runs as (db/scope.ts; scripts run as the owner):
 //   the owner, and users the owner put on their key: ANTHROPIC_API_KEY;
 //   anyone else: their own key, sealed in users.claude_key_enc (tools/secret-box.ts) and opened only in memory here.
 // No key means no AI (NoClaudeKeyError). Before every call the caps are checked (agents/budget.js checkBudget); the
@@ -8,8 +8,8 @@ import { createHash } from 'node:crypto';
 import { createClaude } from '@scottmroth5/agent-core';
 import type { Claude, SendOptions } from '@scottmroth5/agent-core';
 import { BudgetExceededError, checkBudget } from '../agents/budget.js';
-import { currentUserId } from '../db/scope.js';
-import { OWNER_ID, sealedClaudeKey } from '../db/users.js';
+import { currentUserId } from '../db/scope.ts';
+import { OWNER_ID, sealedClaudeKey } from '../db/users.ts';
 import { open } from './secret-box.ts';
 import type { Database } from './types.ts';
 

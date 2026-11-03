@@ -1,12 +1,12 @@
 // Multi-user guard (phase 1): every SQL statement in the code that reads or writes a user table names user_id, so it is
-// scoped to one user (db/scope.js binds @uid). Only server/admin-queries.js and the migrations may query across users.
+// scoped to one user (db/scope.ts binds @uid). Only server/admin-queries.js and the migrations may query across users.
 // A false alarm (a string that only looks like SQL) is fixed by rewording the string, never by an exemption here.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { repoPath } from '../tools/paths.ts';
-import { USER_TABLES } from '../db/user-tables.js';
+import { USER_TABLES } from '../db/user-tables.ts';
 
 const FOLDERS = ['agents', 'server', 'tools', 'demo', 'scripts', 'db', 'evals'];
 // Migrations shape every user's rows at once; admin queries are the reviewed cross-user reads.

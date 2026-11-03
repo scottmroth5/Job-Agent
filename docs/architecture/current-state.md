@@ -49,7 +49,7 @@ flowchart LR
   - Chromium for pages that need JavaScript.
 - **The demo container:** the same image with `AUTH_MODE=demo`. It has its own sample database, no secrets, and no Claude.
 - **Storage:** one SQLite file through synchronous `better-sqlite3`, plus attachment files.
-  - Every user table carries `user_id`, and queries are scoped by `db/scope.js`.
+  - Every user table carries `user_id`, and queries are scoped by `db/scope.ts`.
 
 ## Outside services
 

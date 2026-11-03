@@ -3,7 +3,7 @@
 // and any version downloads as Word or PDF. Synthetic data; Claude is a stand-in.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { reviseMessage } from '../agents/hunt/revise-letter.js';
 import { documentText } from '../tools/doc-text.ts';

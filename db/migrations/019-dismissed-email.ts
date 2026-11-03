@@ -2,19 +2,21 @@
 // about off the review list with no action and no eval case. Loosens the CHECK in place like 008 (every existing
 // row already satisfies the new list), so the table is not rebuilt.
 
+import type { Database } from '../../tools/types.ts';
+
 export const id = '019-dismissed-email';
 
 const OLD = "'not_job', 'new_opportunity')";
 const NEW = "'not_job', 'new_opportunity', 'dismissed')";
 
-export function up(db) {
-  const createSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'emails'").pluck().get();
+export function up(db: Database) {
+  const createSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'emails'").pluck().get() as string | undefined;
   if (createSql?.includes(NEW)) return;
   if (!createSql?.includes(OLD) || createSql.split(OLD).length !== 2) {
     throw new Error('019: the emails review_status constraint is not in the expected form; nothing was changed.');
   }
 
-  const version = db.pragma('schema_version', { simple: true });
+  const version = db.pragma('schema_version', { simple: true }) as number;
   db.unsafeMode(true);
   try {
     db.pragma('writable_schema = ON');

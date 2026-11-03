@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openStore } from '@scottmroth5/agent-core';
-import { openJobStore, loadMigrations } from '../db/index.js';
+import { openJobStore, loadMigrations } from '../db/index.ts';
 
 // Synthetic data only.
 // Used before 013 (no user_id yet) and after it (the owner's job).

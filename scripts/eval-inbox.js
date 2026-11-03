@@ -5,7 +5,7 @@ import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { createJobTracer } from '../tools/trace.ts';
 import { createJobClaude } from '../tools/claude.ts';
 import { repoPath, dataPath } from '../tools/paths.ts';
-import { openJobStore } from '../db/index.js';
+import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { loadInboxConfig } from '../agents/inbox/config.js';
 import { getPrompt } from '../agents/prompts.js';

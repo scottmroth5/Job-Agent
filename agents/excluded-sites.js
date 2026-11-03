@@ -3,7 +3,7 @@
 // and manual add drop them, scoring gives 1, and cleanup removes saved ones (tools/listings.ts). The list is added to
 // search.excludedSites from the settings file (the owner's) or the user's saved search, so every caller of
 // config.search.excludedSites sees both (agents/user-config.js configFor).
-import { OWNER_ID } from '../db/users.js';
+import { OWNER_ID } from '../db/users.ts';
 
 const KEY = 'search.excludedSites';
 export const MAX_SITES = 100;
