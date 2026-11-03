@@ -68,7 +68,8 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `npm run inbox:backfill` | Process the last 180 days of job email (`-- --days=30 --dry-run` to preview the count and cost) |
 | `npm run inbox:review` | Confirm, reassign, or dismiss emails the inbox was unsure about (also on the web page's Inbox screen) |
 | `scripts\register-schedule.ps1` | Run the pipeline and inbox automatically (default Monday and Thursday at 6:00 AM; `-Time`, `-Days`, `-Remove`). Logs in `data\logs` |
-| `npm run evals` | Run the inbox eval (`-- --all` adds the scoring eval; both cost money) |
+| `npm run eval:letters` | Run the cover letter fact check eval on synthetic letters (`-- --dry-run` for the cost estimate; costs money) |
+| `npm run evals` | Run the inbox eval (`-- --all` adds the letter and scoring evals; all cost money) |
 | `npm run eval:score` | Compare scoring models on jobs you applied to vs. passed on (costs money) |
 | `npm test` | Run the tests (no network or keys needed). GitHub runs them on every push, in a US time zone and in UTC |
 

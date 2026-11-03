@@ -61,6 +61,8 @@ npx playwright install chromium   optional: without it, pages that need JavaScri
 npm run score                     score unscored postings (-- --dry-run for count and cost estimate; --model, --limit, --ids)
 npm run eval:score -- --build     build scoring eval cases in data/evals/score (applied vs passed postings)
 npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=2   compare models; costs real money
+npm run eval:letters -- --dry-run   letter fact check eval on synthetic cases (evals/letters): recall on planted errors, false
+                                  flags on clean letters; --models=..., --max-usd=1; without --dry-run it costs real money
 npm run hunt                      resume tweaks + cover letters (Google Docs) for promoted jobs (-- --dry-run, --ids, --regenerate, --no-docs)
 npm run archive -- --dry-run      preview archiving; without --dry-run it moves them
 npm run cleanup -- --dry-run      after a rule change: rekey duplicates, archive list-of-jobs pages, search.excludedSites jobs, and duplicate copies (the acted-on copy is kept);
@@ -246,6 +248,14 @@ from config.candidate (tools/letter-header.js fromCandidate), and every letter d
 headerLines (shared by Word, PDF, and the Google Doc) puts email, phone, and location on one line and the links as many
 to a line as fit; each email or web address is a clickable link (PDF link annotations). Every document's text goes through tools/text.js withoutPictographs (emoji show as pictures in Word and "?"
 in a PDF), and discovery and manual add save titles and companies without them. test/letter-header.test.js.
+Letter fact check (v3 Phase 1; agents/hunt/verify-letter.js, prompt verify-letter with agents/hunt/schemas/verify-letter.json,
+VERIFY_MODEL at low effort): each claim a letter makes about the candidate, supported, unsupported, or contradicted by the
+knowledge doc plus the job's resume (system); the posting is data. letter_checks (022, a user table) holds one row per
+version (agents/letter-checks.js: claims_json with dismissed flags; failed = could not run). generateForPostings checks
+each letter it writes on the same trace; the panel checks a version after a save (POST /api/postings/:id/letters/:versionId/check,
+CHECKS_PER_DAY) and dismisses claims (.../claims/:index/dismiss); restore copies the check. It never blocks a letter, a
+save, or a download; logs hold counts only. The demo seeds SAMPLE_CHECK_CLAIMS and answers Check again with sampleCheck.
+test/verify-letter.test.js, test/letter-check-routes.test.js.
 Meeting prep (agents/hunt/prep.js, server/prep-routes.js, Prepare for a meeting in the job panel): Opus 5.5 at high effort,
 streamed, with server-side refusal fallbacks; with research on it uses web_search_20260209 (max 15) and web_fetch (max 5).
 Input is the people (name, role, firm, link, what the user knows), meeting kind, format, time, and free context, plus the
