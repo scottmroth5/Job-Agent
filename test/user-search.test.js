@@ -13,7 +13,7 @@ import { addUser, OWNER_ID } from '../db/users.ts';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
-import { cleanConfig, configFor, saveUserConfig, saveUserProfile, scheduledUsers, setScheduledForUser, userConfigView } from '../agents/user-config.js';
+import { cleanConfig, configFor, saveUserConfig, saveUserProfile, scheduledUsers, setScheduledForUser, userConfigView } from '../agents/user-config.ts';
 import { repoPath } from '../tools/paths.ts';
 
 const SITE = 'http://localhost:5178';

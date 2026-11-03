@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
 import { addUser } from '../db/users.ts';
 import { USER_TABLES } from '../db/user-tables.ts';
-import { deleteAccount, exportAccount } from '../agents/account-data.js';
+import { deleteAccount, exportAccount } from '../agents/account-data.ts';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';

@@ -1,7 +1,7 @@
 // Build a draft (Settings > About you): the user's materials in, a draft About you and starting search out, on their own
-// AI (agents/draft-profile.js). Nothing is saved: the user reviews the draft and saves what they keep. The files are
+// AI (agents/draft-profile.ts). Nothing is saved: the user reviews the draft and saves what they keep. The files are
 // read in memory and dropped; the request body is never logged.
-import { draftProfile, MAX_FILE_BYTES, MAX_FILES } from '../agents/draft-profile.js';
+import { draftProfile, MAX_FILE_BYTES, MAX_FILES } from '../agents/draft-profile.ts';
 import { createJobTracer } from '../tools/trace.ts';
 import { OWNER_ID } from '../db/users.ts';
 

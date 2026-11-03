@@ -18,17 +18,17 @@ export const KNOWLEDGE_SECTIONS = [
 ];
 
 /** The headings in the form the prompts name them: "## 5. Job Targets". */
-export const sectionHeading = (s) => `## ${s.n}. ${s.title}`;
+export const sectionHeading = (s: { n: number; title: string }) => `## ${s.n}. ${s.title}`;
 
 /** A blank knowledge doc to fill in: every heading with a line saying what goes there. */
 export function knowledgeTemplate() {
   return KNOWLEDGE_SECTIONS.map((s) => `${sectionHeading(s)}\n[${s.hint}]`).join('\n\n');
 }
 
-const norm = (s) => String(s).toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+const norm = (s: string) => String(s).toLowerCase().replace(/[^a-z]+/g, ' ').trim();
 
 /** A numbered section heading's number: "SECTION 5: ..." or "## 5. ...", else null. Plain "5. ..." list items are not. */
-export function headingNumber(line) {
+export function headingNumber(line: string) {
   const m = /^section\s+(\d+)\b/i.exec(line) ?? /^#+\s*(?:section\s+)?(\d+)\s*[.:)\-]/i.exec(line);
   return m ? Number(m[1]) : null;
 }
@@ -38,7 +38,7 @@ export function headingNumber(line) {
  * ("SECTION 5: TARGET ROLES" is section 5, as the prompts read it); an unnumbered heading counts by the standard
  * title ("## Job Targets", or "Job Targets" on a line of its own). Returns [{ n, title, found }].
  */
-export function sectionCheck(text) {
+export function sectionCheck(text: string | null | undefined) {
   const lines = String(text ?? '')
     .split(/\r?\n/)
     .map((l) => l.trim())

@@ -1,4 +1,4 @@
-// The knowledge doc in the app for everyone, the owner included (agents/user-config.js backgroundFor,
+// The knowledge doc in the app for everyone, the owner included (agents/user-config.ts backgroundFor,
 // server/account-routes.js); a document can fill the box for review. Synthetic data only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { Document, Packer, Paragraph } from 'docx';
 import { openJobStore } from '../db/index.ts';
 import { addUser, OWNER_ID } from '../db/users.ts';
-import { backgroundFor, saveUserProfile, userProfile } from '../agents/user-config.js';
+import { backgroundFor, saveUserProfile, userProfile } from '../agents/user-config.ts';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';

@@ -6,7 +6,7 @@
 import { createJobTracer } from '../tools/trace.ts';
 import { createJobClaude } from '../tools/claude.ts';
 import { loadConfig } from '../tools/config.ts';
-import { configFor } from '../agents/user-config.js';
+import { configFor } from '../agents/user-config.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { ownerBackground } from '../tools/knowledge.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';

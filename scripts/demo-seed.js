@@ -15,14 +15,14 @@ import { openJobStore } from '../db/index.ts';
 import { localDay } from '../tools/dates.ts';
 import Database from 'better-sqlite3';
 import { setSetting } from '../db/settings.ts';
-import { addNote } from '../agents/notes.js';
+import { addNote } from '../agents/notes.ts';
 import { companyTitleKey } from '../tools/urls.ts';
 import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
-import { pickResume } from '../agents/resumes.js';
+import { pickResume } from '../agents/resumes.ts';
 import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
-import { saveCheck } from '../agents/letter-checks.js';
+import { saveCheck } from '../agents/letter-checks.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.js';
-import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.js';
+import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.ts';
 
 const MARKER = 'demo_database';
 const LETTER_MODEL = 'claude-sonnet-5-5';

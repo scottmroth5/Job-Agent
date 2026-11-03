@@ -1,4 +1,4 @@
-// Onboarding: Build a draft (agents/draft-profile.js, POST /api/account/draft) and the Home checklist (summary.setup).
+// Onboarding: Build a draft (agents/draft-profile.ts, POST /api/account/draft) and the Home checklist (summary.setup).
 // Claude is faked; the "resume" is a made-up two-line PDF-looking file.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,9 +8,9 @@ import { addUser } from '../db/users.ts';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
-import { draftContent, validateDraft, DRAFT_MODEL, DRAFT_SCHEMA, MAX_FILES } from '../agents/draft-profile.js';
+import { draftContent, validateDraft, DRAFT_MODEL, DRAFT_SCHEMA, MAX_FILES } from '../agents/draft-profile.ts';
 import { DRAFTS_PER_DAY } from '../server/draft-routes.js';
-import { saveUserConfig, saveUserProfile } from '../agents/user-config.js';
+import { saveUserConfig, saveUserProfile } from '../agents/user-config.ts';
 import { createJobClaude } from '../tools/claude.ts';
 
 const SITE = 'http://localhost:5178';

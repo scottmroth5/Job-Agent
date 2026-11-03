@@ -9,7 +9,7 @@ import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { addUser } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
-import { letterHeader, saveLetterHeader } from '../agents/letter-header.js';
+import { letterHeader, saveLetterHeader } from '../agents/letter-header.ts';
 import { documentText } from '../tools/doc-text.ts';
 import { letterPdf, winAnsi } from '../tools/pdf-writer.ts';
 import { letterDocx } from '../server/word-docs.js';

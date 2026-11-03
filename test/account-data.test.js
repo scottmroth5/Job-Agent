@@ -13,7 +13,7 @@ import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { createNotices } from '../server/notices.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
-import { saveUserProfile } from '../agents/user-config.js';
+import { saveUserProfile } from '../agents/user-config.ts';
 
 const SITE = 'http://localhost:5178';
 const OWNER = 'owner@example.com';

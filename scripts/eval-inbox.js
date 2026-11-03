@@ -8,7 +8,7 @@ import { repoPath, dataPath } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { loadInboxConfig } from '../agents/inbox/config.js';
-import { getPrompt } from '../agents/prompts.js';
+import { getPrompt } from '../agents/prompts.ts';
 import { runInboxEval, estimateInboxEval } from '../evals/inbox/run.js';
 import { inboxMetrics } from '../evals/inbox/metrics.js';
 

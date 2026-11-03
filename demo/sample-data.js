@@ -319,7 +319,7 @@ export const SAMPLE_TASKS = [
 ];
 
 // The sample candidate's knowledge doc, shown read-only on the demo's Settings (server/account-routes.js): a full worked
-// example of the seven sections (agents/knowledge-sections.js) that Help teaches. Invented, like everything here.
+// example of the seven sections (agents/knowledge-sections.ts) that Help teaches. Invented, like everything here.
 export const DEMO_ABOUT_YOU = `## 1. Summary
 Engineering leader with 15 years in software and 8 leading teams, mostly in healthcare and other regulated industries. I am at my best when a product works, customers depend on it, and the platform and the team now have to grow faster than they were built to. Known for scaling teams without slowing releases, and for passing audits on the first try.
 

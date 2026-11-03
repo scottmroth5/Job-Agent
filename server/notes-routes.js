@@ -1,5 +1,5 @@
-// A job's notes, one entry at a time: add, edit, delete (agents/notes.js keeps postings.notes in step).
-import { addNote, deleteNote, listNotes, updateNote, MAX_NOTE_CHARS } from '../agents/notes.js';
+// A job's notes, one entry at a time: add, edit, delete (agents/notes.ts keeps postings.notes in step).
+import { addNote, deleteNote, listNotes, updateNote, MAX_NOTE_CHARS } from '../agents/notes.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };

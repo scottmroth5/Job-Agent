@@ -3,14 +3,14 @@
 // saved as Google Docs. Nothing existing is ever overwritten.
 import { fillTemplate } from '../../tools/template.ts';
 import { sanitizeDashes, truncate } from '../../tools/text.ts';
-import { letterHeader } from '../letter-header.js';
+import { letterHeader } from '../letter-header.ts';
 import { ensureLetterFolder } from '../../tools/google/drive.ts';
-import { getPrompt } from '../prompts.js';
+import { getPrompt } from '../prompts.ts';
 import { PROMOTE_AT } from '../discovery/score.js';
-import { runCheck } from '../letter-checks.js';
+import { runCheck } from '../letter-checks.ts';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
-import { lookups, sqlList } from '../lookups.js';
-import { pickResume, withResume } from '../resumes.js';
+import { lookups, sqlList } from '../lookups.ts';
+import { pickResume, withResume } from '../resumes.ts';
 
 export const HUNT_MODEL = 'claude-sonnet-5-5';
 // Writing quality matters more here than in scoring, so medium effort; thinking counts toward maxTokens.
@@ -140,7 +140,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
     const analysis = JSON.parse(p.analysis_json);
     const nowIso = new Date().toISOString();
     const tag = `#${p.id} (${i + 1}/${postings.length})`;
-    // The user's resume for this job (agents/resumes.js), read with the background; none uploaded means the background alone.
+    // The user's resume for this job (agents/resumes.ts), read with the background; none uploaded means the background alone.
     const resume = pickResume(db, p.title);
     const background = withResume(knowledge, resume);
     try {
@@ -161,7 +161,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
         );
         summary.letters += 1;
         if (flags.length) summary.flagged.push({ id: p.id, flags });
-        // The fact check (agents/letter-checks.js) never throws: a failure is saved as not checked and the letter stays.
+        // The fact check (agents/letter-checks.ts) never throws: a failure is saved as not checked and the letter stays.
         const check = await runCheck({ db, claude, background, posting: p, artifactId, letter: body, config, trace: run });
         if (check.check?.status === 'checked') {
           summary.checked += 1;

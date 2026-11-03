@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { getUserSetting as getSetting } from '../db/settings.ts';
-import { storedKey } from '../agents/identity.js';
+import { storedKey } from '../agents/identity.ts';
 import { createGmail } from '../agents/inbox/gmail.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';
 import { loadKey, newKey, decrypt } from '../agents/inbox/crypto.js';

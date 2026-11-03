@@ -4,7 +4,7 @@
 // checked in code before anything acts on it.
 import { fillTemplate } from '../../tools/template.ts';
 import { sanitizeDashes } from '../../tools/text.ts';
-import { getPrompt } from '../prompts.js';
+import { getPrompt } from '../prompts.ts';
 
 export const EMAIL_TYPES = ['confirmation', 'rejection', 'recruiter_outreach', 'interview_request', 'assessment', 'offer', 'follow_up', 'other'];
 export const CLASSIFY_MAX_TOKENS = 800;

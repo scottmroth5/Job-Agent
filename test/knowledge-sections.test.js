@@ -1,11 +1,11 @@
-// The knowledge doc's seven sections (agents/knowledge-sections.js) stay in step with the prompts that name them by
+// The knowledge doc's seven sections (agents/knowledge-sections.ts) stay in step with the prompts that name them by
 // number, the template, the draft builder, the demo's sample, and every example in Help.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { KNOWLEDGE_SECTIONS, knowledgeTemplate, sectionCheck } from '../agents/knowledge-sections.js';
-import { DRAFT_SYSTEM } from '../agents/draft-profile.js';
-import { defaultPrompt } from '../agents/prompts.js';
+import { KNOWLEDGE_SECTIONS, knowledgeTemplate, sectionCheck } from '../agents/knowledge-sections.ts';
+import { DRAFT_SYSTEM } from '../agents/draft-profile.ts';
+import { defaultPrompt } from '../agents/prompts.ts';
 import { DEMO_ABOUT_YOU } from '../demo/sample-data.js';
 import { repoPath } from '../tools/paths.ts';
 

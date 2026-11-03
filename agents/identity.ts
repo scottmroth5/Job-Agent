@@ -4,12 +4,19 @@
 // rekeyPostings after the key rules change (npm run cleanup does).
 import { companyTitleKey } from '../tools/urls.ts';
 import { parseResultTitle } from './discovery/sources/serper.js';
-import { lookups, sqlList } from './lookups.js';
+import { lookups, sqlList } from './lookups.ts';
+import type { Database } from '../tools/types.ts';
+
+/** What identifies a posting: its company and title. */
+interface Named {
+  company?: string | null;
+  title?: string | null;
+}
 
 const PLACEHOLDER_COMPANY = /^\(?(unknown|see posting|confidential|stealth|stealth startup|n\/?a|tbd|none|undisclosed|company)\)?$/i;
 
 /** False for empty or placeholder company names, which cannot tell two jobs apart. */
-export function isRealCompany(company) {
+export function isRealCompany(company: string | null | undefined) {
   const c = String(company ?? '').trim();
   return c.length > 0 && !PLACEHOLDER_COMPANY.test(c);
 }
@@ -18,18 +25,18 @@ export function isRealCompany(company) {
  * The company+title that identifies a posting, reading it from a Google page title when the company is a
  * placeholder ("Job Application for X at Acme"). Null when the company cannot be told.
  */
-export function identityKey(p) {
+export function identityKey(p: Named) {
   if (isRealCompany(p.company)) return companyTitleKey(p.company, p.title);
   const parsed = parseResultTitle(p.title);
   return isRealCompany(parsed.company) ? companyTitleKey(parsed.company, parsed.title) : null;
 }
 
 /** The key to store in company_title_key: the identity key, else the raw company and title. */
-export const storedKey = (p) => identityKey(p) ?? companyTitleKey(p.company, p.title);
+export const storedKey = (p: Named) => identityKey(p) ?? companyTitleKey(p.company, p.title);
 
 /** Recomputes company_title_key for every posting (after the key rules change). Returns how many changed. */
-export function rekeyPostings(db) {
-  const rows = db.prepare('SELECT id, company, title, company_title_key FROM postings WHERE user_id = @uid').all();
+export function rekeyPostings(db: Database) {
+  const rows = db.prepare('SELECT id, company, title, company_title_key FROM postings WHERE user_id = @uid').all() as Array<{ id: number; company: string; title: string; company_title_key: string | null }>;
   const update = db.prepare('UPDATE postings SET company_title_key = ? WHERE id = ? AND user_id = @uid');
   let changed = 0;
   db.transaction(() => {
@@ -48,18 +55,18 @@ export function rekeyPostings(db) {
  * SQL condition (on alias q) for a copy worth pointing out: still in play, or one the user acted on.
  * Copies already archived as duplicates or skipped (status new, or changed by the agent) are left out.
  */
-export function liveCopySql(db) {
+export function liveCopySql(db: Database) {
   const lk = lookups(db);
   return `q.status != 'duplicate' AND (q.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR (q.status NOT IN ${sqlList(lk.ids('status', 'evaluate'))}
   AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = q.id AND h.user_id = q.user_id ORDER BY h.id DESC LIMIT 1), '') != 'agent'))`;
 }
 
 /** Other postings that are the same job as this one (same identity key) and still matter, oldest first. */
-export function findCopies(db, posting) {
+export function findCopies(db: Database, posting: Named & { id: number }) {
   const key = identityKey(posting);
   if (!key) return [];
   return db
     .prepare(`SELECT id, company, title, stage, status, applied_on AS appliedOn, discovered_on AS discoveredOn FROM postings q
       WHERE user_id = @uid AND company_title_key = ? AND id != ? AND ${liveCopySql(db)} ORDER BY id`)
-    .all(key, posting.id);
+    .all(key, posting.id) as Array<{ id: number; company: string; title: string; stage: string; status: string; appliedOn: string | null; discoveredOn: string }>;
 }

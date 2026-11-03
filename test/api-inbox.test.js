@@ -4,7 +4,7 @@ import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { progressLine } from '../server/pipeline-routes.js';
-import { storedKey } from '../agents/identity.js';
+import { storedKey } from '../agents/identity.ts';
 import { insertEmail, addReminder } from '../agents/inbox/store.js';
 import { createGmail } from '../agents/inbox/gmail.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';

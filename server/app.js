@@ -8,7 +8,7 @@ import fastifyStatic from '@fastify/static';
 import { createJobTracer } from '../tools/trace.ts';
 import { listPostings, getPosting, updatePosting, summary } from './queries.js';
 import { registerLookupRoutes } from './lookups-routes.js';
-import { lookups } from '../agents/lookups.js';
+import { lookups } from '../agents/lookups.ts';
 import { funnel } from './funnel.js';
 import { registerAttachmentRoutes } from './attachments.js';
 import { registerPrepRoutes } from './prep-routes.js';
@@ -27,7 +27,7 @@ import { registerHelpRoutes } from './help-routes.js';
 import { registerDraftRoutes } from './draft-routes.js';
 import { registerDocumentRoutes } from './document-routes.js';
 import { registerLetterRoutes } from './letter-routes.js';
-import { MIN_PROFILE_CHARS, userConfig, userProfile } from '../agents/user-config.js';
+import { MIN_PROFILE_CHARS, userConfig, userProfile } from '../agents/user-config.ts';
 import { adminWaiting } from './admin-queries.js';
 import { today } from './today.js';
 
@@ -35,11 +35,11 @@ import { today } from './today.js';
 const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback', '/api/admin/usage'];
 // What a paused account may still change: resume itself (when it paused itself) or delete itself.
 const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
-import { backgroundFor, scheduledUsers, userConfigView } from '../agents/user-config.js';
+import { backgroundFor, scheduledUsers, userConfigView } from '../agents/user-config.ts';
 
 // Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
 // of the restricted Gmail scopes), and the lists and the spending cap are shared by everyone. Everything else runs
-// for the signed-in user with their own settings, background, and Claude key (agents/user-config.js, tools/claude.ts).
+// for the signed-in user with their own settings, background, and Claude key (agents/user-config.ts, tools/claude.ts).
 export const OWNER_ONLY = new Set([
   'POST /api/inbox/check', 'POST /api/inbox/emails/:id/review',
   'PUT /api/admin/budget', 'POST /api/admin/lookups/:list', 'PATCH /api/admin/lookups/:list/:id', 'PUT /api/admin/lookups/:list/roles',
@@ -54,9 +54,9 @@ import { getLayout, registerLayoutRoutes } from './layout.js';
 import { registerPipelineRoutes } from './pipeline-routes.js';
 import { registerExcludedSiteRoutes } from './excluded-sites-routes.js';
 import { registerFollowUpRoutes } from './follow-up-routes.js';
-import { staleDays } from '../agents/follow-ups.js';
+import { staleDays } from '../agents/follow-ups.ts';
 import { registerInboxRoutes, registerReminderRoutes } from './inbox-routes.js';
-import { addPosting } from '../agents/manual.js';
+import { addPosting } from '../agents/manual.ts';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { generateForPostings } from '../agents/hunt/generate.js';
 import { resolveDetails } from '../agents/discovery/details.js';
@@ -87,7 +87,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const app = Fastify({ logger, trustProxy });
   // US-only access (server/geo.js, GEO_ALLOW): refused before anything else runs; the health check always passes.
   const blocked = geoBlocker({ ...geo, log: geo.log ?? services.log ?? console });
-  // Each user's own settings, background, and documents (agents/user-config.js): routes keep using config and services,
+  // Each user's own settings, background, and documents (agents/user-config.ts): routes keep using config and services,
   // which answer for whoever the request runs as. The owner's are the settings file, the Google Doc, and their Drive.
   const ownerConfig = config;
   if (config) config = userConfigView(config, store.raw ?? store.db);

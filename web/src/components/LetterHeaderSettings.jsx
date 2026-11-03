@@ -6,7 +6,7 @@ const MAX_LINKS = 6;
 const EMPTY = { name: '', email: '', phone: '', location: '', signoffName: '', links: [] };
 
 /**
- * Settings: the cover letter header (agents/letter-header.js): name, email, phone, an optional location, the sign-off
+ * Settings: the cover letter header (agents/letter-header.ts): name, email, phone, an optional location, the sign-off
  * name, and links, shown on every letter's Word, PDF, and Google Doc. Until saved it is filled in from your settings.
  */
 export default function LetterHeaderSettings() {

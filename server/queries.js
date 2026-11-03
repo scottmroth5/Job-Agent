@@ -2,14 +2,14 @@
 import { annualize, parseRate, parseHours, findPayInText } from '../tools/rates.ts';
 import { checkLocation } from '../tools/location.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
-import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.js';
-import { lookups, sqlList } from '../agents/lookups.js';
+import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.ts';
+import { lookups, sqlList } from '../agents/lookups.ts';
 import { listAttachments } from './attachments.js';
 import { listPreps } from '../agents/hunt/prep.js';
-import { addNote, listNotes } from '../agents/notes.js';
+import { addNote, listNotes } from '../agents/notes.ts';
 import { localDay } from '../tools/dates.ts';
-import { describeVersion } from '../agents/prompts.js';
-import { budgetStatus } from '../agents/budget.js';
+import { describeVersion } from '../agents/prompts.ts';
+import { budgetStatus } from '../agents/budget.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
 
@@ -38,7 +38,7 @@ const awaitingDescription = (lk) => `(${NO_TEXT} AND p.status IN ${sqlList(lk.id
   AND p.discovered_on >= date('now', '-${DESCRIPTION_DAYS} days')
   AND COALESCE(CASE WHEN json_valid(ls.analysis_json) THEN json_extract(ls.analysis_json, '$.uncappedScore') END, ls.score) >= ${PROMOTE_AT})`;
 
-// The row query; db supplies the lists (agents/lookups.js) the status and stage conditions use. p is the current
+// The row query; db supplies the lists (agents/lookups.ts) the status and stage conditions use. p is the current
 // user's postings only (a subquery SQLite flattens, so callers add their own WHERE and indexes still apply).
 const base = (db, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
     ls.model AS score_model, ls.prompt_version AS score_prompt_version, ls.created_at AS scored_at,
@@ -177,7 +177,7 @@ export function getPosting(db, id, config = {}) {
 
 /**
  * How the current score was made, for the job panel: when, by which model, from the posting text or the title alone
- * (capped), with which prompt (agents/prompts.js describeVersion), and whether text has arrived since a capped score.
+ * (capped), with which prompt (agents/prompts.ts describeVersion), and whether text has arrived since a capped score.
  */
 function scoreDetails(db, r) {
   if (r.score == null) return null;
@@ -196,7 +196,7 @@ function scoreDetails(db, r) {
 }
 
 /**
- * Applies an edit from the UI. notes adds a new note (agents/notes.js); notes are edited one by one through their own routes.
+ * Applies an edit from the UI. notes adds a new note (agents/notes.ts); notes are edited one by one through their own routes.
  * patch: { status, notes, appliedOn, stage, track, title, company, location,
  * description, rateText, hoursText, duplicateOf }. Status changes are recorded in status_history as the user's.
  * A company or title edit recomputes the duplicate key; duplicateOf marks this copy duplicate and archives it, with a note

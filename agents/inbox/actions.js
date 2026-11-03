@@ -1,12 +1,12 @@
 // What a classified email does: link it (or send it to review), move the application forward, and record
 // why. Status only ever moves forward automatically; anything else is flagged for review instead.
-import { storedKey } from '../identity.js';
+import { storedKey } from '../identity.ts';
 import { logDecision, linkThread, upsertContact, addReminder } from './store.js';
-import { lookups } from '../lookups.js';
-import { adoptNotesText } from '../notes.js';
+import { lookups } from '../lookups.ts';
+import { adoptNotesText } from '../notes.ts';
 import { localDay } from '../../tools/dates.ts';
 
-// The built-in statuses the inbox moves jobs to; ranks and closed statuses come from status groups (agents/lookups.js).
+// The built-in statuses the inbox moves jobs to; ranks and closed statuses come from status groups (agents/lookups.ts).
 const TARGET = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };
 // Types that are about an application; without a confident link they need a person to place them.
 const APPLICATION_TYPES = ['confirmation', 'rejection', 'interview_request', 'assessment', 'offer', 'follow_up'];

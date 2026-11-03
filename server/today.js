@@ -1,12 +1,12 @@
 // Home's Today list: the work waiting on the user, soonest first. Open reminders (assessments and interviews, from
 // the inbox) due in the next REMINDER_DAYS or already past; jobs at an offer (the status group "decision", not
-// archived); applications with no reply worth a follow-up (agents/follow-ups.js: from FOLLOW_UP_DAYS until the user's
+// archived); applications with no reply worth a follow-up (agents/follow-ups.ts: from FOLLOW_UP_DAYS until the user's
 // stale days, not archived; the same rule as the Funnel's list); and stale ones to close as no response: on Home one
 // item for all of them, in a job's Next step box that job.
 // Each item opens its job. Built from status groups, so statuses added later count automatically.
 // With jobId it is one job's next steps (the job panel's Next step box): every open reminder, however far out.
-import { lookups, sqlList } from '../agents/lookups.js';
-import { waitingApplications } from '../agents/follow-ups.js';
+import { lookups, sqlList } from '../agents/lookups.ts';
+import { waitingApplications } from '../agents/follow-ups.ts';
 
 export const REMINDER_DAYS = 14;
 const DAY = 24 * 3600 * 1000;

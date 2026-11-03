@@ -1,7 +1,7 @@
 // Settings > Resumes: upload (the raw file as the body, its name in X-Filename), list, label and match titles, default,
-// replace the file, delete, and download your own. Files and text live in the resumes table (agents/resumes.js); a
+// replace the file, delete, and download your own. Files and text live in the resumes table (agents/resumes.ts); a
 // download is always an attachment with nosniff and a sandbox policy, like job attachments.
-import { addResume, deleteResume, listResumes, replaceResumeFile, resumeFile, updateResume } from '../agents/resumes.js';
+import { addResume, deleteResume, listResumes, replaceResumeFile, resumeFile, updateResume } from '../agents/resumes.ts';
 import { MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { uploadName } from './account-routes.js';
 import { disposition } from './attachments.js';

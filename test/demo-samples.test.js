@@ -5,9 +5,9 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
 import { samplePrep, sampleLetter, sampleTweaks, sampleScore, sampleRevision, sampleHelpAnswer, sampleDraft } from '../demo/samples.js';
 import { DEMO_CONFIG, JOBS } from '../demo/sample-data.js';
-import { validateDraft } from '../agents/draft-profile.js';
+import { validateDraft } from '../agents/draft-profile.ts';
 import { finishLetter } from '../agents/hunt/generate.js';
-import { sectionCheck } from '../agents/knowledge-sections.js';
+import { sectionCheck } from '../agents/knowledge-sections.ts';
 
 const job = { company: JOBS[0].company, title: JOBS[0].title, score: 9, analysis: { reason: 'Strong match.', strengths: ['Scaled a platform team'], watchOuts: ['Team is offshore'] } };
 

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
-import { addPosting, validateManualInput, isRealCompany } from '../agents/manual.js';
+import { addPosting, validateManualInput, isRealCompany } from '../agents/manual.ts';
 
 // Synthetic config, knowledge, and postings only.
 const config = {

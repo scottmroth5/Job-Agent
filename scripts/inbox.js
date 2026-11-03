@@ -13,7 +13,7 @@ import { createGmail } from '../agents/inbox/gmail.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';
 import { loadKey } from '../agents/inbox/crypto.js';
 import { runInbox } from '../agents/inbox/process.js';
-import { getPrompt } from '../agents/prompts.js';
+import { getPrompt } from '../agents/prompts.ts';
 
 const argv = process.argv.slice(2);
 const get = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];

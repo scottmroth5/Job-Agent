@@ -1,4 +1,4 @@
-// Job sites to skip (agents/excluded-sites.js, server/excluded-sites-routes.js): each user's own list with notes, added
+// Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.js): each user's own list with notes, added
 // to the settings file's search.excludedSites for everything that reads it; removing a site's saved jobs keeps the ones
 // you applied to. Synthetic data on example domains only.
 import { test } from 'node:test';
@@ -7,8 +7,8 @@ import { openJobStore } from '../db/index.ts';
 import { runAsUser } from '../db/scope.ts';
 import { addUser, OWNER_ID } from '../db/users.ts';
 import { buildApp } from '../server/app.js';
-import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote, siteOf, withExcludedSites } from '../agents/excluded-sites.js';
-import { configFor, saveUserConfig } from '../agents/user-config.js';
+import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote, siteOf, withExcludedSites } from '../agents/excluded-sites.ts';
+import { configFor, saveUserConfig } from '../agents/user-config.ts';
 
 const config = { candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { terms: ['VP Engineering'], homeLocations: [], excludedSites: ['filesite.example'] }, fractional: {} };
 

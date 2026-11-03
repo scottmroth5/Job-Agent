@@ -6,12 +6,12 @@
 import { fillTemplate } from '../../tools/template.ts';
 import { truncate } from '../../tools/text.ts';
 import { localDay } from '../../tools/dates.ts';
-import { getPrompt } from '../prompts.js';
+import { getPrompt } from '../prompts.ts';
 import { formatAnalysis } from './letters.js';
 import { HUNT_MODEL } from './generate.js';
 import { extractDocument } from './prep.js';
-import { addNote, listNotes, notesForPrompt } from '../notes.js';
-import { pickResume, withResume } from '../resumes.js';
+import { addNote, listNotes, notesForPrompt } from '../notes.ts';
+import { pickResume, withResume } from '../resumes.ts';
 
 // Searching and a short answer: medium effort, streamed, a few searches and page reads (about 10 to 30 cents).
 export const CONTACT_SETTINGS = { maxTokens: 16000, effort: 'medium', stream: true };

@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { getPrompt, validateTemplate, defaultPrompt } from '../agents/prompts.js';
+import { getPrompt, validateTemplate, defaultPrompt } from '../agents/prompts.ts';
 import { buildVerifyRequest, cleanClaims, flagged, verifyLetter, MAX_CLAIMS } from '../agents/hunt/verify-letter.js';
-import { checkFor, checksFor, copyCheck, dismissClaim, runCheck, saveCheck } from '../agents/letter-checks.js';
+import { checkFor, checksFor, copyCheck, dismissClaim, runCheck, saveCheck } from '../agents/letter-checks.ts';
 
 // Synthetic data only: an invented candidate, company, and letter.
 const config = { candidate: { name: 'Pat Example' } };

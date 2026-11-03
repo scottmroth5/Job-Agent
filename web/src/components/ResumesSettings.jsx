@@ -107,7 +107,7 @@ function ResumeRow({ r, demo, onChanged, onError }) {
 
 /**
  * Settings > Resumes: the resumes letters, resume tweaks, and meeting prep are written from. Each job uses the resume
- * whose titles match its title, else the default (agents/resumes.js pickResume).
+ * whose titles match its title, else the default (agents/resumes.ts pickResume).
  */
 export default function ResumesSettings() {
   const demo = useDemo();
