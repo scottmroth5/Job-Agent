@@ -57,3 +57,15 @@ test('the sample draft is a valid draft with all seven knowledge doc sections an
   assert.ok(sectionCheck(d.aboutYou).every((s) => s.found));
   assert.equal(d.questions.length, 3);
 });
+
+test('the sample fact check reads like the real one: valid claims, one contradicted and one unsupported, evidence quoted from the knowledge doc', async () => {
+  const { sampleCheck } = await import('../demo/samples.js');
+  const { DEMO_ABOUT_YOU } = await import('../demo/sample-data.js');
+  const { cleanClaims } = await import('../agents/hunt/verify-letter.js');
+  const c = sampleCheck();
+  assert.equal(c.status, 'checked');
+  const claims = c.claims.map(({ dismissed, ...rest }) => rest);
+  assert.deepEqual(cleanClaims({ claims }), claims, 'already within the schema');
+  assert.deepEqual(['contradicted', 'unsupported'].map((v) => claims.filter((x) => x.verdict === v).length), [1, 1]);
+  for (const x of claims.filter((x) => x.evidence)) assert.ok(DEMO_ABOUT_YOU.includes(x.evidence), x.evidence);
+});

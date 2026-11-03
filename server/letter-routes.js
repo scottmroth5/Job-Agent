@@ -1,10 +1,12 @@
 // A job's cover letter, worked on in the job panel: its versions, a back-and-forth revision with Claude (nothing saved
 // until the user keeps a draft), saving a version (a Claude revision or the user's own, pasted or from a file), making an
 // older version current again, and Word or PDF downloads of any version. Every save is a new artifact, so nothing is
-// overwritten, and the newest is the letter the panel, the report, and meeting prep use.
+// overwritten, and the newest is the letter the panel, the report, and meeting prep use. Each version can carry a fact
+// check (agents/letter-checks.js): the panel asks for one after a save, and the user dismisses claims one at a time.
 import { createJobTracer } from '../tools/trace.js';
 import { OWNER_ID } from '../db/users.js';
 import { reviseLetter, MAX_TURNS } from '../agents/hunt/revise-letter.js';
+import { checksFor, copyCheck, dismissClaim, runCheck } from '../agents/letter-checks.js';
 import { finishLetter, HUNT_MODEL } from '../agents/hunt/generate.js';
 import { letterDocName, letterHtml, userLetterBody } from '../agents/hunt/letters.js';
 import { pickResume, withResume } from '../agents/resumes.js';
@@ -16,8 +18,29 @@ import { uploadName } from './account-routes.js';
 import { letterDocx, docxName } from './word-docs.js';
 
 export const REVISIONS_PER_DAY = 40;
+export const CHECKS_PER_DAY = 60;
 const anyObject = { type: 'object', additionalProperties: true };
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };
+const versionParams = { type: 'object', required: ['id', 'versionId'], properties: { id: { type: 'integer', minimum: 1 }, versionId: { type: 'integer', minimum: 1 } } };
+const checkReply = {
+  type: ['object', 'null'],
+  additionalProperties: false,
+  required: ['status', 'claims', 'checkedAt'],
+  properties: {
+    status: { type: 'string', enum: ['checked', 'failed'] },
+    checkedAt: { type: 'string' },
+    claims: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['claim', 'kind', 'verdict', 'evidence', 'dismissed'],
+        properties: { claim: { type: 'string' }, kind: { type: 'string' }, verdict: { type: 'string' }, evidence: { type: 'string' }, dismissed: { type: 'boolean' } },
+      },
+    },
+  },
+};
+const publicCheck = (c) => (c ? { status: c.status, claims: c.claims, checkedAt: c.checkedAt } : null);
 const SOURCES = { v2: 'Written by Job Hunt', 'v2-revision': 'Revised with Claude', user: 'Your version', v1: 'From the old spreadsheet' };
 const longDate = (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 const MAX_LETTER_CHARS = 8000;
@@ -25,8 +48,9 @@ const MAX_LETTER_CHARS = 8000;
 export function registerLetterRoutes(app, { store, config, services }) {
   const { db } = store;
   const revisions = new Map(); // uid -> timestamps in the last day
+  const checks = new Map(); // uid -> fact check timestamps in the last day
   const job = (id) => db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id);
-  const versions = (postingId) =>
+  const versions = (postingId) => withChecks(
     db
       .prepare(`SELECT a.id, a.content, a.source, a.flags_json, a.doc_url, a.created_at, r.label AS resume FROM artifacts a
           LEFT JOIN resumes r ON r.id = a.resume_id AND r.user_id = a.user_id
@@ -43,7 +67,14 @@ export function registerLetterRoutes(app, { store, config, services }) {
         docUrl: v.doc_url,
         resume: v.resume,
         content: v.content,
-      }));
+      })),
+  );
+  const withChecks = (list) => {
+    const found = checksFor(db, list.map((v) => v.id));
+    return list.map((v) => ({ ...v, check: publicCheck(found.get(v.id) ?? null) }));
+  };
+  const version = (postingId, versionId) =>
+    db.prepare("SELECT id, content FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(versionId, postingId);
   const latestAnalysis = (postingId) => {
     const a = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId);
     return a ? JSON.parse(a) : null;
@@ -168,6 +199,46 @@ export function registerLetterRoutes(app, { store, config, services }) {
     },
   );
 
+  // The fact check on one version: run (or run again) on the user's AI, then shown in the panel. Never touches the letter.
+  app.post(
+    '/api/postings/:id/letters/:versionId/check',
+    { schema: { summary: "Check a letter version's claims about you against your knowledge doc and resume (uses your AI); the letter is unchanged", params: versionParams, response: { 200: checkReply } } },
+    async (req, reply) => {
+      if (!services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
+      const posting = job(req.params.id);
+      const v = posting && version(posting.id, req.params.versionId);
+      if (!v) return reply.code(404).send({ error: 'Version not found' });
+      const uid = req.uid ?? OWNER_ID;
+      const day = Date.now() - 24 * 3600 * 1000;
+      const recent = (checks.get(uid) ?? []).filter((t) => t > day);
+      if (recent.length >= CHECKS_PER_DAY) return reply.code(429).send({ error: 'That is a lot of fact checks for one day. Try again tomorrow.' });
+      checks.set(uid, [...recent, Date.now()]);
+      const background = withResume(await services.knowledge(), pickResume(db, posting.title));
+      const run = createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-check', { posting: posting.id });
+      const r = await runCheck({ db, claude: services.claude, background, posting, artifactId: v.id, letter: v.content, config, trace: run });
+      run.finish(r.check?.status === 'checked' ? 'ok' : 'failed', { flagged: r.flagged, ...(r.error ? { error: r.error.name } : {}) });
+      return publicCheck(r.check);
+    },
+  );
+
+  app.post(
+    '/api/postings/:id/letters/:versionId/claims/:index/dismiss',
+    {
+      schema: {
+        summary: 'Dismiss one claim the fact check flagged on a letter version',
+        params: { type: 'object', required: ['id', 'versionId', 'index'], properties: { ...versionParams.properties, index: { type: 'integer', minimum: 0, maximum: 100 } } },
+        response: { 200: checkReply },
+      },
+    },
+    async (req, reply) => {
+      const posting = job(req.params.id);
+      const v = posting && version(posting.id, req.params.versionId);
+      const check = v && dismissClaim(db, v.id, req.params.index);
+      if (!check) return reply.code(404).send({ error: 'Claim not found' });
+      return publicCheck(check);
+    },
+  );
+
   app.post(
     '/api/postings/:id/letter/restore',
     {
@@ -178,6 +249,7 @@ export function registerLetterRoutes(app, { store, config, services }) {
       const old = posting && db.prepare("SELECT content, source, flags_json, resume_id FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.body.versionId, posting.id);
       if (!old) return reply.code(404).send({ error: 'Version not found' });
       const saved = await saveVersion(posting, { content: old.content, source: old.source, flags: old.flags_json ? JSON.parse(old.flags_json) : [], resumeId: old.resume_id });
+      copyCheck(db, req.body.versionId, saved.id); // the same text, so the same check
       return { versions: versions(posting.id), docError: saved.docError };
     },
   );

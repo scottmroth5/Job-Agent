@@ -96,7 +96,8 @@ test('generateForPostings writes tweaks and a letter Doc for promoted jobs only,
 
   const summary = await generateForPostings({ store, config, claude, knowledge: KNOWLEDGE, drive, now: new Date(2026, 8, 30) });
   assert.deepEqual([summary.selected, summary.tweaks, summary.letters, summary.docs], [1, 1, 1, 1]);
-  assert.equal(requests.length, 2);
+  assert.equal(requests.length, 3, 'tweaks, a letter, and its fact check');
+  assert.ok(JSON.stringify(requests[2]).includes('THE LETTER (check this)'), 'the third call checks the letter');
   assert.deepEqual(summary.flagged, [{ id: eligible, flags: ['confident'] }]);
   assert.equal(drive.calls.docs[0].name, 'Pat Example VP Engineering at Example Co Cover Letter');
   assert.match(drive.calls.docs[0].html, /September 30, 2026/);

@@ -83,7 +83,7 @@ test("each job's letter and tweaks are written from its resume, and the artifact
   const vp = job('VP Engineering');
   const { systems, claude } = fakeClaude();
   await generateForPostings({ store, config: { candidate: { name: 'Pat Example' }, coverLetterChecks: [] }, claude, knowledge: 'Background text.', options: { ids: [vp] } });
-  assert.equal(systems.length, 2, 'tweaks and a letter');
+  assert.equal(systems.length, 3, 'tweaks, a letter, and its fact check, all from the resume');
   for (const s of systems) assert.ok(s.includes('EXEC-MARKER') && !s.includes('IC-MARKER') && s.includes('Background text.'));
   const used = db.prepare('SELECT DISTINCT resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid').pluck().all(vp);
   assert.deepEqual(used, [exec.id]);

@@ -7,6 +7,7 @@ import { letterHeader } from '../letter-header.js';
 import { ensureLetterFolder } from '../../tools/google/drive.js';
 import { getPrompt } from '../prompts.js';
 import { PROMOTE_AT } from '../discovery/score.js';
+import { runCheck } from '../letter-checks.js';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
 import { lookups, sqlList } from '../lookups.js';
 import { pickResume, withResume } from '../resumes.js';
@@ -103,7 +104,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
   const setDoc = db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid');
   const letterById = db.prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid');
 
-  const summary = { selected: postings.length, tweaks: 0, letters: 0, docs: 0, docFailures: [], flagged: [], skipped: [], failures: [], aborted: false };
+  const summary = { selected: postings.length, tweaks: 0, letters: 0, checked: 0, claimFlags: 0, docs: 0, docFailures: [], flagged: [], skipped: [], failures: [], aborted: false };
   let consecutive = 0;
   let folderId = null;
 
@@ -160,6 +161,13 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
         );
         summary.letters += 1;
         if (flags.length) summary.flagged.push({ id: p.id, flags });
+        // The fact check (agents/letter-checks.js) never throws: a failure is saved as not checked and the letter stays.
+        const check = await runCheck({ db, claude, background, posting: p, artifactId, letter: body, config, trace: run });
+        if (check.check?.status === 'checked') {
+          summary.checked += 1;
+          summary.claimFlags += check.flagged;
+          log(`${tag}: letter fact check: ${check.flagged} to look at`);
+        }
         await saveDoc(p, artifactId, body);
       }
     } catch (err) {

@@ -120,6 +120,13 @@ export const api = {
   },
   saveLetter: (id, content, source) => request('POST', `/api/postings/${id}/letter`, { content, source }),
   restoreLetter: (id, versionId) => request('POST', `/api/postings/${id}/letter/restore`, { versionId }),
+  // The fact check on a letter version; in the demo, a canned sample (nothing is saved or counted).
+  checkLetter: async (id, versionId) => {
+    if (!demoMode) return request('POST', `/api/postings/${id}/letters/${versionId}/check`);
+    const [{ sampleCheck }] = await Promise.all([demoSamples(), pause(1200)]);
+    return sampleCheck();
+  },
+  dismissClaim: (id, versionId, index) => request('POST', `/api/postings/${id}/letters/${versionId}/claims/${index}/dismiss`),
   letterFromFile: (id, file) => uploadFile(`/api/postings/${id}/letter/from-file`, file, '5 MB'),
   // Settings > Resumes (server/resume-routes.js).
   resumes: () => request('GET', '/api/resumes'),

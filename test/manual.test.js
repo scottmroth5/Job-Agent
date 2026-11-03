@@ -50,7 +50,7 @@ test('a pasted fractional job is saved, scored, promoted, and gets materials; ad
 
   assert.equal(result.created, true);
   assert.deepEqual([result.score, result.promoted], [8, true]);
-  assert.deepEqual(labels, ['score', 'writing', 'writing']);
+  assert.deepEqual(labels, ['score', 'writing', 'writing', 'score'], 'score, tweaks, letter, then the fact check (structured, like a score)');
   const row = store.db.prepare('SELECT source, track, stage, jd_text IS NOT NULL AS pasted, rate_unit, hours_max, notes FROM postings WHERE id = ?').get(result.id);
   assert.deepEqual(row, { source: 'manual', track: 'fractional', stage: 'pipeline', pasted: 1, rate_unit: 'hour', hours_max: 15, notes: 'Referred by a friend' });
   assert.ok(steps.some((s) => /Scored 8 of 10, moved to your pipeline/.test(s)));

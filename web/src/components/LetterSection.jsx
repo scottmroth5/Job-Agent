@@ -24,6 +24,103 @@ function LetterDownload({ jobId, versionId = null, label = 'Download' }) {
   );
 }
 
+const VERDICT = { contradicted: 'Contradicts your knowledge doc or resume', unsupported: 'Not found in your knowledge doc or resume' };
+const KIND = { employer: 'Employer', title: 'Title', date: 'Date', number: 'Number', credential: 'Credential', other: 'Claim' };
+/** The claims worth a look, contradicted first, each with its index in the saved list (dismissing uses it). */
+const toReview = (check) =>
+  ['contradicted', 'unsupported'].flatMap((verdict) => (check?.claims ?? []).map((c, index) => ({ ...c, index })).filter((c) => c.verdict === verdict));
+/** A one-line summary of a version's fact check, for the Versions list. */
+const checkSummary = (check) => {
+  if (!check) return 'not fact checked';
+  if (check.status === 'failed') return 'fact check could not run';
+  const open = toReview(check).filter((c) => !c.dismissed).length;
+  return open ? `fact check: ${open} to look at` : 'fact check: no problems';
+};
+
+/**
+ * The fact check on the current letter (agents/hunt/verify-letter.js): each claim about you that your knowledge doc and
+ * resume contradict or do not mention, with the evidence, to dismiss one at a time. It never blocks Copy, Download, or a
+ * save. autoRun checks a version that has none yet (just after you save one).
+ */
+function FactCheck({ job, version, autoRun, onChecked }) {
+  const [check, setCheck] = useState(version.check);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    setCheck(version.check);
+    setError(null);
+  }, [version.id, version.check]);
+  const run = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const c = await api.checkLetter(job.id, version.id);
+      setCheck(c);
+      onChecked?.();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  useEffect(() => {
+    if (autoRun && !version.check) run();
+  }, [autoRun, version.id]);
+  const dismiss = async (index) => {
+    setError(null);
+    try {
+      setCheck(await api.dismissClaim(job.id, version.id, index));
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const review = toReview(check);
+  const open = review.filter((c) => !c.dismissed);
+  const dismissed = review.length - open.length;
+  let status;
+  if (busy) status = 'Checking the facts in this letter (about 15 seconds)…';
+  else if (!check) status = 'Not fact checked yet.';
+  else if (check.status === 'failed') status = 'The fact check could not run. The letter is fine to use.';
+  else if (!open.length) status = `No problems found in ${check.claims.length} claim${check.claims.length === 1 ? '' : 's'} about you${dismissed ? ` (${dismissed} dismissed)` : ''}.`;
+  else status = `${open.length} to look at before you send it${dismissed ? ` (${dismissed} dismissed)` : ''}.`;
+  return (
+    <div className="fact-check">
+      <div className="row">
+        <b>Fact check</b>
+        <span className="muted small" role="status" aria-live="polite">
+          {status}
+        </span>
+        {!busy && (!check || check.status === 'failed') && (
+          <button type="button" className="link" onClick={run}>
+            {check ? 'Check again' : 'Check now'}
+          </button>
+        )}
+      </div>
+      {open.length > 0 && (
+        <ul className="fact-claims">
+          {open.map((c) => (
+            <li key={c.index} className={c.verdict}>
+              <div>
+                <span className={`badge ${c.verdict === 'contradicted' ? 'warn' : ''}`}>{KIND[c.kind] ?? 'Claim'}</span> {c.claim}
+              </div>
+              <div className="muted small">
+                {VERDICT[c.verdict]}
+                {c.evidence ? `: "${c.evidence}"` : '.'}
+              </div>
+              <button type="button" className="link small" onClick={() => dismiss(c.index)} aria-label={`Dismiss: ${c.claim}`}>
+                Dismiss
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {check?.status === 'checked' && <p className="muted small">Uses your AI, about 2 cents a check. It only compares the letter with your knowledge doc and resume; it never changes the letter.</p>}
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+}
+
 /**
  * Revise with Claude: say what to change, get a revised draft and a note on what changed, and keep going; edit the draft
  * by hand too. Nothing is saved until Use this version, which makes it the current letter (a new version).
@@ -197,6 +294,7 @@ function Versions({ job, versions, onRestored }) {
                 {v.how} · {day(v.createdAt)}
                 {v.resume ? ` · resume: ${v.resume}` : ''}
                 {v.flags.length ? ` · check: ${v.flags.join('; ')}` : ''}
+                {` · ${checkSummary(v.check)}`}
               </span>
             </div>
             <div className="row">
@@ -240,6 +338,7 @@ export default function LetterSection({ job, onChanged }) {
   const [versions, setVersions] = useState([]);
   const [copied, setCopied] = useState(false);
   const [note, setNote] = useState(null);
+  const [autoCheck, setAutoCheck] = useState(false); // a version you just saved gets checked
   const loadVersions = () => api.letters(job.id).then(setVersions, () => setVersions([]));
   useEffect(() => {
     loadVersions();
@@ -247,6 +346,7 @@ export default function LetterSection({ job, onChanged }) {
   useEffect(() => {
     setMode(null);
     setNote(null);
+    setAutoCheck(false);
   }, [job.id]);
 
   const letter = job.letter;
@@ -255,6 +355,7 @@ export default function LetterSection({ job, onChanged }) {
   const saved = async (message) => {
     setMode(null);
     setNote(message);
+    setAutoCheck(true);
     await onChanged();
   };
   const toggle = (m) => setMode(mode === m ? null : m);
@@ -299,6 +400,7 @@ export default function LetterSection({ job, onChanged }) {
       {mode === 'revise' && <Reviser job={job} current={letter.content} onSaved={saved} onClose={() => setMode(null)} />}
       {mode === 'own' && <OwnVersion job={job} current={letter.content} onSaved={saved} onClose={() => setMode(null)} />}
       {mode === 'versions' && <Versions job={job} versions={versions} onRestored={saved} />}
+      {current && mode !== 'revise' && mode !== 'own' && <FactCheck job={job} version={current} autoRun={autoCheck} onChecked={loadVersions} />}
       {mode !== 'revise' && mode !== 'own' && <pre className="tweaks">{letter.content}</pre>}
     </section>
   );

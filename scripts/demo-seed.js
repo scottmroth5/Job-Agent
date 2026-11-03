@@ -19,7 +19,9 @@ import { addNote } from '../agents/notes.js';
 import { companyTitleKey } from '../tools/urls.js';
 import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { pickResume } from '../agents/resumes.js';
-import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
+import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
+import { saveCheck } from '../agents/letter-checks.js';
+import { VERIFY_MODEL } from '../agents/hunt/verify-letter.js';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.js';
 
 const MARKER = 'demo_database';
@@ -143,7 +145,8 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
 
     if (job.letter) {
       const flags = i % 5 === 2 ? ['over the word limit'] : [];
-      insertArtifact.run(id, 'cover_letter', letter(job), `Cover letter: ${job.company}, ${job.title}`, JSON.stringify(flags), LETTER_MODEL, run, discoveredAt);
+      const letterId = Number(insertArtifact.run(id, 'cover_letter', letter(job), `Cover letter: ${job.company}, ${job.title}`, JSON.stringify(flags), LETTER_MODEL, run, discoveredAt).lastInsertRowid);
+      saveCheck(db, letterId, { status: 'checked', claims: SAMPLE_CHECK_CLAIMS, model: VERIFY_MODEL, promptVersion: versionOf('verify-letter', defaultPrompt('verify-letter').template), runId: run }, new Date(discoveredAt));
     }
     if (job.tweaks) insertArtifact.run(id, 'resume_tweaks', tweaks(job, i), null, null, LETTER_MODEL, run, discoveredAt);
 

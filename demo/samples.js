@@ -2,12 +2,15 @@
 // sample job and the fictional candidate's knowledge doc (demo/sample-data.js). The web app loads this file only in the
 // demo (web/src/api.js) and calls no model, so the demo never spends anything; nothing here is saved. Every person and
 // company is invented.
-import { CANDIDATE, DEMO_ABOUT_YOU, DEMO_CONFIG, companyBlurb } from './sample-data.js';
+import { CANDIDATE, DEMO_ABOUT_YOU, DEMO_CONFIG, SAMPLE_CHECK_CLAIMS, companyBlurb } from './sample-data.js';
 
 const first = (s) => String(s ?? '').trim().split(/\s+/)[0] ?? '';
 const cap = (s) => (s ? `${s[0].toUpperCase()}${s.slice(1)}` : s);
 const senior = (title) => /\b(cto|chief|vp|vice president|head|svp)\b/i.test(String(title));
 const list = (items) => items.filter(Boolean).map((x) => `- ${x}`).join('\n');
+
+/** The letter fact check (Check again): the seeded letter's claims, as the real route answers. */
+export const sampleCheck = (now = new Date()) => ({ status: 'checked', claims: SAMPLE_CHECK_CLAIMS.map((c) => ({ ...c, dismissed: false })), checkedAt: now.toISOString(), sample: true });
 
 /** Meeting prep: the real prompt's ten sections, for the people and meeting the visitor entered. */
 export function samplePrep(job, input = {}) {

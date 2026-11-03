@@ -636,6 +636,9 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 .letter-work { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin: 10px 0; display: grid; gap: 8px; }
 .letter-work h4 { margin: 0; }
 .letter-work label { display: grid; gap: 4px; }
+.fact-check { margin: 8px 0; display: grid; gap: 6px; }
+.fact-claims { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.fact-claims li { background: var(--warn-bg); border-radius: 6px; padding: 6px 10px; display: grid; gap: 2px; justify-items: start; overflow-wrap: anywhere; }
 .letter-draft { width: 100%; font: inherit; line-height: 1.45; }
 .letter-turns { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .letter-versions { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

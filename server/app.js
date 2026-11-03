@@ -378,7 +378,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
           const g = await generateForPostings({ store, config, claude: services.claude, knowledge, drive: services.drive, run, options: { ids: [id], regenerate: action === 'regenerate' } });
           if (g.failures.length) throw new Error(g.failures[0].error);
           step(g.docs ? 'Cover letter saved as a Google Doc' : 'Done');
-          return { tweaks: g.tweaks, letters: g.letters, docs: g.docs, flagged: g.flagged };
+          return { tweaks: g.tweaks, letters: g.letters, checked: g.checked, claimFlags: g.claimFlags, docs: g.docs, flagged: g.flagged };
         }
         // refetch
         step('Fetching the posting text');

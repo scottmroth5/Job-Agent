@@ -228,6 +228,19 @@ export const WATCH_OUTS = [
   'Team is entirely offshore',
 ];
 
+// The fact check on every sample letter (scripts/demo-seed.js seeds it; demo/samples.js sampleCheck answers Check again):
+// the claims the seeded letter makes, checked against DEMO_ABOUT_YOU. One is contradicted (the letter says a decade;
+// the knowledge doc says 8 years leading teams) and one is unsupported, so the demo shows both.
+export const SAMPLE_CHECK_CLAIMS = [
+  { claim: 'has done this work for the last decade', kind: 'date', verdict: 'contradicted', evidence: '15 years in software and 8 leading teams' },
+  { claim: "at their best translating an executive team's goals into milestones", kind: 'other', verdict: 'unsupported', evidence: '' },
+  { claim: 'grew a platform team from 6 engineers to 45', kind: 'number', verdict: 'supported', evidence: 'Grew the platform team from 6 engineers to 45' },
+  { claim: 'kept releases weekly', kind: 'other', verdict: 'supported', evidence: 'releases stayed weekly' },
+  { claim: 'cut claims processing time by 60 percent', kind: 'number', verdict: 'supported', evidence: 'processing time down 60 percent' },
+  { claim: 'led the technology side of an accreditation with no findings', kind: 'credential', verdict: 'supported', evidence: 'led the technology side of a lab accreditation that closed with no findings' },
+  { claim: 'ran teams across the United States, Poland, and Colombia', kind: 'other', verdict: 'supported', evidence: 'across the United States, Poland, and Colombia' },
+];
+
 // Sample prompt edits for the Admin screen: each is the repo default plus one tuning line, saved as a version so
 // the demo shows version history. scripts/demo-seed.js builds them from the current defaults.
 export const PROMPT_EDITS = [

@@ -65,7 +65,7 @@ async function main() {
         options: { ids: args.ids, regenerate: args.regenerate },
       });
       const totals = run.finish(summary.aborted ? 'aborted' : summary.failures.length || summary.docFailures.length ? 'partial' : 'ok', summary);
-      console.log(`\n${summary.selected} postings: ${summary.tweaks} resume tweaks, ${summary.letters} cover letters, ${summary.docs} Google Docs.`);
+      console.log(`\n${summary.selected} postings: ${summary.tweaks} resume tweaks, ${summary.letters} cover letters (${summary.checked} fact checked, ${summary.claimFlags} claims to look at), ${summary.docs} Google Docs.`);
       for (const f of summary.flagged) console.log(`  #${f.id} letter needs review: ${f.flags.join('; ')}`);
       for (const f of summary.docFailures) console.log(`  #${f.id} Doc not saved (${f.error}); the next run retries it.`);
       for (const f of summary.failures) console.log(`  #${f.id} failed: ${f.error}`);
