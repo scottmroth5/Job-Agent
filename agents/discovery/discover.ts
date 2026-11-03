@@ -10,40 +10,72 @@ import { detectTrack } from '../../tools/track.ts';
 import { parseRate, parseHours } from '../../tools/rates.ts';
 import { skipReason } from '../../tools/listings.ts';
 import { withoutPictographs } from '../../tools/text.ts';
-import { resolveDetails, RETRYABLE } from './details.js';
-import * as himalayas from './sources/himalayas.js';
-import * as remoteok from './sources/remoteok.js';
-import * as fractionaljobs from './sources/fractionaljobs.js';
-import * as linkedin from './sources/linkedin.js';
-import * as serper from './sources/serper.js';
+import { resolveDetails, RETRYABLE } from './details.ts';
+import * as himalayas from './sources/himalayas.ts';
+import * as remoteok from './sources/remoteok.ts';
+import * as fractionaljobs from './sources/fractionaljobs.ts';
+import * as linkedin from './sources/linkedin.ts';
+import * as serper from './sources/serper.ts';
 import { lookups, sqlList } from '../lookups.ts';
+import type { Http } from '../../tools/http.ts';
+import type { JobSearchConfig } from '../../tools/config.ts';
+import type { LocationCheck } from '../../tools/location.ts';
+import type { JobStore } from '../../tools/types.ts';
+import type { DetailsState } from './details.ts';
+import type { JobItem, PageRenderer, SourceContext, SourceResult } from './types.ts';
+
+/** A job source module: its name and its search. */
+export interface Source {
+  SOURCE: string;
+  search(ctx: SourceContext): Promise<SourceResult>;
+}
+
+/** An item during one run: the track and location check are added here; id is set on earlier postings retried. */
+type RunItem = JobItem & { track?: string; locationCheck?: LocationCheck; id?: number };
+
+/** Per-source counts for the run summary. */
+interface SourceStats {
+  requests: number;
+  found: number;
+  relevant: number;
+  fresh: number;
+  duplicates: number;
+  new: number;
+  detailsOk: number;
+  detailsFailed: number;
+  errors: string[];
+  rateLimited: boolean;
+}
+
+/** What a stored posting this run found again looks like. */
+type Existing = { id: number; source: string | null; stage: string };
 
 /** Sources in priority order: when the same job appears in several, the earlier source wins. */
-export const SOURCES = { himalayas, remoteok, fractionaljobs, linkedin, serper };
+export const SOURCES: Record<string, Source> = { himalayas, remoteok, fractionaljobs, linkedin, serper };
 export const PRIORITY = [himalayas.SOURCE, remoteok.SOURCE, fractionaljobs.SOURCE, linkedin.SOURCE, serper.GO_FRACTIONAL, serper.SOURCE];
 
 /** Fills track, rate and hours on an item from what the source and details gave. */
-function applyTrack(item) {
+function applyTrack(item: RunItem) {
   item.rate ??= parseRate(item.rateText);
   item.hours ??= parseHours(item.hoursText);
   item.track = detectTrack({ ...item, hoursMax: item.hours?.max });
   return item;
 }
-const rank = (source) => {
-  const i = PRIORITY.indexOf(source);
+const rank = (source: string | null) => {
+  const i = PRIORITY.indexOf(source as string);
   return i === -1 ? PRIORITY.length : i;
 };
 
 const UNKNOWN_COMPANY = '(unknown)';
-const knownCompany = (c) => c && c !== UNKNOWN_COMPANY && c.toLowerCase() !== 'see posting';
+const knownCompany = (c: string | null | undefined): c is string => Boolean(c && c !== UNKNOWN_COMPANY && c.toLowerCase() !== 'see posting');
 
 
 /** Runs async tasks with a concurrency limit and a pause after each task. */
-async function mapLimit(items, limit, pauseMs, sleep, fn) {
+async function mapLimit<T>(items: T[], limit: number, pauseMs: number, sleep: (ms: number) => Promise<unknown>, fn: (item: T) => Promise<void>) {
   let next = 0;
   const worker = async () => {
     while (next < items.length) {
-      const item = items[next++];
+      const item = items[next++] as T;
       await fn(item);
       if (pauseMs) await sleep(pauseMs);
     }
@@ -55,10 +87,21 @@ async function mapLimit(items, limit, pauseMs, sleep, fn) {
  * Resolves details for many items. LinkedIn's endpoint rate-limits quickly, so its requests run
  * one at a time with a longer pause, alongside the other sites at normal concurrency.
  */
-async function resolveAll(items, { http, browser, state, concurrency, pauseMs, linkedinPauseMs, onDone }) {
+async function resolveAll(
+  items: RunItem[],
+  { http, browser, state, concurrency, pauseMs, linkedinPauseMs, onDone }: {
+    http: Http;
+    browser: PageRenderer | null;
+    state: DetailsState;
+    concurrency: number;
+    pauseMs: number;
+    linkedinPauseMs: number;
+    onDone: (item: RunItem) => void;
+  },
+) {
   const viaLinkedIn = items.filter((i) => i.linkedinJobId);
   const others = items.filter((i) => !i.linkedinJobId);
-  const run = async (item) => {
+  const run = async (item: RunItem) => {
     await resolveDetails(item, { http, browser, state });
     onDone(item);
   };
@@ -71,18 +114,28 @@ async function resolveAll(items, { http, browser, state, concurrency, pauseMs, l
 const MAX_FETCH_ATTEMPTS = 3;
 
 /**
- * @param {object} ctx
- * @param {{db, tx}} ctx.store
- * @param {object} ctx.config               loaded job-search config
- * @param {object} ctx.http                 from createHttp()
- * @param {object|null} [ctx.browser]       from createBrowser(), or null
- * @param {object} [ctx.sources]            name -> source module; defaults to SOURCES
- * @param {Date}   [ctx.now]
- * @param {object} [ctx.options]            { dryRun, limit, details = true, maxAgeDays = 7, concurrency = 3, pauseMs = 1000,
- *                                            linkedinPauseMs = 3000, retryPending = true, log }
- * @returns {Promise<object>} summary with per-source counts, location results and inserted postings
+ * One run. http is from createHttp(), browser from createBrowser() or null, sources maps a name to a source module
+ * (SOURCES by default). Returns a summary with per-source counts, location results, and the inserted postings.
  */
-export async function runDiscovery({ store, config, http, browser = null, sources = SOURCES, now = new Date(), options = {} }) {
+export async function runDiscovery({ store, config, http, browser = null, sources = SOURCES, now = new Date(), options = {} }: {
+  store: Pick<JobStore, 'db' | 'tx'>;
+  config: JobSearchConfig;
+  http: Http;
+  browser?: PageRenderer | null;
+  sources?: Record<string, Source>;
+  now?: Date;
+  options?: {
+    dryRun?: boolean;
+    limit?: number;
+    details?: boolean;
+    maxAgeDays?: number;
+    concurrency?: number;
+    pauseMs?: number;
+    linkedinPauseMs?: number;
+    retryPending?: boolean;
+    log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
+  };
+}) {
   const {
     dryRun = false,
     limit = Infinity,
@@ -100,15 +153,15 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const fullTimeRelevant = keywordMatcher(config.search.relevantTitleKeywords);
   const fractionalRelevant = keywordMatcher(config.search.fractionalTitleKeywords ?? []);
   // Fractional items also pass on the fractional keywords (e.g. CISO), which full-time searches do not target.
-  const relevant = (item) => fullTimeRelevant(item.title) || (detectTrack(item) === 'fractional' && fractionalRelevant(item.title));
+  const relevant = (item: JobItem) => fullTimeRelevant(item.title) || (detectTrack(item) === 'fractional' && fractionalRelevant(item.title));
   const noise = keywordMatcher(config.search.noiseTitleKeywords ?? []);
 
-  const bySource = {};
-  const stat = (source) =>
+  const bySource: Record<string, SourceStats> = {};
+  const stat = (source: string) =>
     (bySource[source] ??= { requests: 0, found: 0, relevant: 0, fresh: 0, duplicates: 0, new: 0, detailsOk: 0, detailsFailed: 0, errors: [], rateLimited: false });
 
   // 1. Collect, in priority order
-  const collected = [];
+  const collected: RunItem[] = [];
   const ordered = Object.values(sources).sort((a, b) => rank(a.SOURCE) - rank(b.SOURCE));
   for (const source of ordered) {
     const s = stat(source.SOURCE);
@@ -118,8 +171,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
       collected.push(...res.items);
       log('info', `${source.SOURCE}: ${res.items.length} found in ${res.requests} requests${res.rateLimited ? ' (rate limited)' : ''}`);
     } catch (err) {
-      s.errors.push(err.message);
-      log('warn', `${source.SOURCE} failed: ${err.message}`);
+      s.errors.push((err as Error).message);
+      log('warn', `${source.SOURCE} failed: ${(err as Error).message}`);
     }
   }
 
@@ -136,19 +189,19 @@ export async function runDiscovery({ store, config, http, browser = null, source
   // 4. Dedupe against the database and within this run
   const byUrl = db.prepare('SELECT id, source, stage FROM postings WHERE url_key = ? AND user_id = @uid');
   const byCompanyTitle = db.prepare('SELECT id, source, stage FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1');
-  const sightings = []; // { postingId, source, url }
-  const upgrades = []; // existing discovered postings that a higher-priority source found again
-  const seenUrl = new Set();
-  const seenCt = new Set();
-  const fresh = [];
+  const sightings: Array<{ postingId: number; source: string; url: string | null }> = [];
+  const upgrades: Array<{ id: number; item: RunItem }> = []; // existing discovered postings that a higher-priority source found again
+  const seenUrl = new Set<string>();
+  const seenCt = new Set<string>();
+  const fresh: RunItem[] = [];
 
-  const findExisting = (item) => {
+  const findExisting = (item: RunItem) => {
     const urlKey = normalizeUrl(item.url);
     const ctKey = identityKey(item);
-    const existing = (urlKey && byUrl.get(urlKey)) || (ctKey && byCompanyTitle.get(ctKey)) || null;
+    const existing = ((urlKey && byUrl.get(urlKey)) || (ctKey && byCompanyTitle.get(ctKey)) || null) as Existing | null;
     return { urlKey, ctKey, existing };
   };
-  const recordDuplicate = (item, existing) => {
+  const recordDuplicate = (item: RunItem, existing: Existing) => {
     stat(item.source).duplicates += 1;
     sightings.push({ postingId: existing.id, source: item.source, url: item.url });
     if (lookups(db).groupOf('stage', existing.stage) === 'found' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
@@ -171,7 +224,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const selected = fresh.slice(0, limit);
 
   // 5. Full text for new postings
-  const state = {};
+  const state: DetailsState = {};
   if (details) {
     if (selected.length) log('info', `Fetching full text for ${selected.length} new postings`);
     let done = 0;
@@ -193,8 +246,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
   }
 
   // Details can reveal the company (Serper results); drop jobs that turn out to be duplicates.
-  const toInsert = [];
-  const seenAfter = new Set();
+  const toInsert: RunItem[] = [];
+  const seenAfter = new Set<string>();
   for (const item of selected) {
     if (skipReason(item, config)) continue; // a Google redirect resolved to a skipped site or a list of jobs
     const { ctKey, existing } = findExisting(item);
@@ -214,11 +267,12 @@ export async function runDiscovery({ store, config, http, browser = null, source
     toInsert.push(item);
   }
 
-  const locationChecks = {};
-  for (const item of toInsert) locationChecks[item.locationCheck] = (locationChecks[item.locationCheck] ?? 0) + 1;
+  const locationChecks: Record<string, number> = {};
+  // Every item in toInsert has its location check (step 6).
+  for (const item of toInsert) locationChecks[item.locationCheck as string] = (locationChecks[item.locationCheck as string] ?? 0) + 1;
 
   // 7. Store
-  const insertedIds = [];
+  const insertedIds: number[] = [];
   if (!dryRun) {
     const nowIso = now.toISOString();
     const found = sqlList(lookups(db).ids('stage', 'found'));
@@ -309,7 +363,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
         WHERE user_id = @uid AND stage IN ${sqlList(lookups(db).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
           AND fetch_attempts < ? AND discovered_on >= ?
           ${insertedIds.length ? `AND id NOT IN (${insertedIds.map(() => '?').join(', ')})` : ''}`)
-      .all(...RETRYABLE, MAX_FETCH_ATTEMPTS, since, ...insertedIds);
+      .all(...RETRYABLE, MAX_FETCH_ATTEMPTS, since, ...insertedIds) as Array<{ id: number; url: string | null; company: string; title: string; location: string | null; workplace: string | null }>;
+    // These need no source: resolveDetails and the update below do not read it.
     const items = pending.map((p) => ({
       id: p.id,
       url: p.url,
@@ -319,7 +374,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
       workplace: p.workplace,
       linkedinJobId: linkedin.jobIdFromUrl(p.url),
       description: null,
-    }));
+    })) as RunItem[];
     if (items.length) log('info', `Retrying full text for ${items.length} earlier postings`);
     const update = db.prepare(`UPDATE postings SET fetched_text = @text, fetched_at = @fetchedAt, fetch_status = @status,
         fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),

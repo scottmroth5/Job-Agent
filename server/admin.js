@@ -1,7 +1,7 @@
 // Admin routes: view and edit the prompts (stored in the database with history), and preview
 // a prompt filled with a real job. Output schemas are shown read-only.
 import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersions, validateTemplate } from '../agents/prompts.ts';
-import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
+import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.js';
 import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.js';
 import { buildContactRequest } from '../agents/hunt/find-contact.js';

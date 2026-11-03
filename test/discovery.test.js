@@ -1,11 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import * as himalayas from '../agents/discovery/sources/himalayas.js';
-import * as remoteok from '../agents/discovery/sources/remoteok.js';
-import * as linkedin from '../agents/discovery/sources/linkedin.js';
-import * as serper from '../agents/discovery/sources/serper.js';
-import { resolveDetails } from '../agents/discovery/details.js';
-import { runDiscovery } from '../agents/discovery/discover.js';
+import * as himalayas from '../agents/discovery/sources/himalayas.ts';
+import * as remoteok from '../agents/discovery/sources/remoteok.ts';
+import * as linkedin from '../agents/discovery/sources/linkedin.ts';
+import * as serper from '../agents/discovery/sources/serper.ts';
+import { resolveDetails } from '../agents/discovery/details.ts';
+import { runDiscovery } from '../agents/discovery/discover.ts';
 import { openJobStore } from '../db/index.ts';
 import { RateLimitedError, HttpError } from '../tools/http.ts';
 

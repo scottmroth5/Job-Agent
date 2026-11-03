@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { listingReason, isListingPage, excludedSite, skipReason } from '../tools/listings.ts';
-import { interpretResult, ruleScore, isRuleScored, NO_TEXT_CAP } from '../agents/discovery/score.js';
+import { interpretResult, ruleScore, isRuleScored, NO_TEXT_CAP } from '../agents/discovery/score.ts';
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';
 import { validateManualInput, addPosting } from '../agents/manual.ts';
 import { listPostings, summary } from '../server/queries.js';

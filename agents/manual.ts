@@ -7,10 +7,10 @@ import { checkLocation } from '../tools/location.ts';
 import { detectTrack } from '../tools/track.ts';
 import { parseRate, parseHours } from '../tools/rates.ts';
 import { listingReason, excludedSite } from '../tools/listings.ts';
-import { resolveDetails } from './discovery/details.js';
-import { jobIdFromUrl } from './discovery/sources/linkedin.js';
-import * as fractionaljobs from './discovery/sources/fractionaljobs.js';
-import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/score.js';
+import { resolveDetails } from './discovery/details.ts';
+import { jobIdFromUrl } from './discovery/sources/linkedin.ts';
+import * as fractionaljobs from './discovery/sources/fractionaljobs.ts';
+import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/score.ts';
 import { generateForPostings } from './hunt/generate.js';
 import { lookups } from './lookups.ts';
 import { adoptNotesText } from './notes.ts';
@@ -20,6 +20,7 @@ import type { Claude, Run } from '@scottmroth5/agent-core';
 import type { JobStore } from '../db/index.ts';
 import type { Http } from '../tools/http.ts';
 import type { UserConfig } from './user-config.ts';
+import type { JobItem, PageRenderer } from './discovery/types.ts';
 
 /** What the Add job dialog and npm run add send. */
 export interface ManualInput {
@@ -39,8 +40,8 @@ export interface ManualInput {
 export interface ManualContext {
   store: JobStore;
   config: UserConfig;
-  http?: Http;
-  browser?: unknown;
+  http: Http;
+  browser?: PageRenderer | null;
   claude: Claude;
   /** The knowledge doc (with the chosen resume), the system prompt for scoring and writing. */
   knowledge: string;
@@ -51,22 +52,7 @@ export interface ManualContext {
 }
 
 /** The job as it is read before saving: what was typed in, then what the page or its source added. */
-interface ManualItem {
-  source: string;
-  url: string | null;
-  title: string;
-  company: string | null;
-  location: string | null;
-  description: string | null;
-  rateText: string | null;
-  hoursText: string | null;
-  linkedinJobId: string | null;
-  workplace?: string | null;
-  extra?: Record<string, unknown>;
-  fetchStatus?: string;
-  fetchMethod?: string;
-  fetchDetails?: (http: unknown) => unknown;
-}
+type ManualItem = JobItem;
 
 export const MANUAL_SOURCE = 'manual';
 export { isRealCompany };
@@ -173,8 +159,7 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
     hoursText: input.hoursText?.trim() || null,
     linkedinJobId: jobIdFromUrl(url),
   };
-  // http is the same client resolveDetails was given (tools/http.ts).
-  if (url && isOnSite(url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h as Http, url);
+  if (url && isOnSite(url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, url);
   if (pasted) {
     Object.assign(item, { fetchStatus: 'ok', fetchMethod: 'pasted' });
     // Still read the page for title/company/terms when they were not typed in.
@@ -261,8 +246,7 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
 
   // 5. Score
   step('Scoring');
-  // The shape scorePostings returns (agents/discovery/score.js, typed when discovery is converted).
-  const scored = (await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], concurrency: 1 } })) as { failures: Array<{ error: string }>; promoted: number[] };
+  const scored = await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], concurrency: 1 } });
   if (scored.failures.length) throw new Error(`Saved as job #${id}, but scoring failed: ${scored.failures[0]?.error}`);
   const score = db.prepare("SELECT score FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(id) as number | undefined;
   const promoted = scored.promoted.includes(id);

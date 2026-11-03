@@ -11,7 +11,7 @@ import {
   scorePostings,
   selectPostings,
   estimateCost,
-} from '../agents/discovery/score.js';
+} from '../agents/discovery/score.ts';
 
 // Synthetic config and knowledge; no real data.
 const config = {

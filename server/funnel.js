@@ -5,7 +5,7 @@
 // date, not the real one, so it counts a milestone but not its timing.
 import { lookups } from '../agents/lookups.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
-import { PROMOTE_AT } from '../agents/discovery/score.js';
+import { PROMOTE_AT } from '../agents/discovery/score.ts';
 
 export const NO_REPLY_DAYS = 21;
 // Applications with no reply are worth a follow-up from FOLLOW_UP_DAYS until the stale days (agents/follow-ups.ts).

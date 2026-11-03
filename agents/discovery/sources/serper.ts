@@ -1,8 +1,24 @@
 // Google results via Serper.dev (v1's "Google Jobs" source). Results link to other job sites,
 // so company and description usually come later from the linked page's JobPosting data.
 import { RateLimitedError } from '../../../tools/http.ts';
-import { jobIdFromUrl } from './linkedin.js';
+import { jobIdFromUrl } from './linkedin.ts';
 import { isOnSite } from '../../../tools/urls.ts';
+import type { JobSearchConfig } from '../../../tools/config.ts';
+import type { JobItem, SourceContext, SourceResult } from '../types.ts';
+
+/** The fields read from one Serper result, organic or jobs (JSON from the web: each is checked before use). */
+interface ApiResult {
+  title?: string;
+  link?: string;
+  applyLink?: string;
+  apply_link?: string;
+  company_name?: string;
+  companyName?: string;
+  company?: string;
+  location?: string;
+  salary?: string;
+  employment_type?: string;
+}
 
 export const SOURCE = 'Google Jobs';
 const API = 'https://google.serper.dev/search';
@@ -15,7 +31,7 @@ const SITE_NAMES = /^(linkedin|indeed(\.com)?|glassdoor|ziprecruiter|monster|sim
  *   "Acme hiring VP of Engineering in Denver, CO | LinkedIn"
  *   "VP of Engineering - Acme - Remote Rocketship"
  */
-export function parseResultTitle(raw) {
+export function parseResultTitle(raw: string | null | undefined): { title: string; company: string | null; location: string | null } {
   // Search result titles come from the web, so this parses with linear steps only (whitespace collapsed first,
   // then plain string searches); a crafted title can never make it slow.
   // Page-title wrappers such as Greenhouse's "Job Application for <title> at <company>".
@@ -36,27 +52,27 @@ export function parseResultTitle(raw) {
   }
 
   const parts = s.split(/ [-|–] /).map((p) => p.trim()).filter(Boolean);
-  while (parts.length > 1 && SITE_NAMES.test(parts[parts.length - 1])) parts.pop();
+  while (parts.length > 1 && SITE_NAMES.test(parts[parts.length - 1] as string)) parts.pop();
   const first = parts[0] ?? '';
   const at = first.toLowerCase().indexOf(' at ');
   if (at > 0 && at + ' at '.length < first.length) return { title: first.slice(0, at).trim(), company: first.slice(at + ' at '.length).trim(), location: null };
-  return { title: parts[0] ?? s, company: parts.length > 1 ? parts[1] : null, location: null };
+  return { title: parts[0] ?? s, company: parts.length > 1 ? (parts[1] as string) : null, location: null };
 }
 
 // Search results from these sites are posts or profiles, never job postings.
 const NOT_JOB_SITES = /(^|\.)(instagram|facebook|twitter|x|tiktok|youtube|reddit|pinterest|medium|quora)\.com$/i;
 
 /** True when a result links to a site that never hosts job postings. */
-export function isNonJobSite(url) {
+export function isNonJobSite(url: string | null | undefined) {
   try {
-    return NOT_JOB_SITES.test(new URL(url).hostname);
+    return NOT_JOB_SITES.test(new URL(url as string).hostname);
   } catch {
     return false;
   }
 }
 
 /** Maps one Serper result (organic or jobs) to the common item shape. */
-export function parseResult(r, term) {
+export function parseResult(r: ApiResult, term: string): JobItem {
   const parsed = parseResultTitle(r.title);
   const url = r.link || r.applyLink || r.apply_link || null;
   const linkedinJobId = jobIdFromUrl(url);
@@ -85,7 +101,7 @@ export const GO_FRACTIONAL = 'Go Fractional';
  * terms, and, when search.siteSearch is true, a Google site search of Go Fractional per fractional term.
  * Serper's free plan rejects site: queries ("Query pattern not allowed for free accounts"), so it is off by default.
  */
-export function buildQueries(config) {
+export function buildQueries(config: Pick<JobSearchConfig, 'search'>): Array<{ term: string; q: string; searchTrack?: string; source?: string }> {
   const fractional = config.search.fractionalTerms ?? [];
   return [
     ...config.search.terms.map((term) => ({ term, q: `${term} remote jobs` })),
@@ -96,8 +112,8 @@ export function buildQueries(config) {
   ];
 }
 
-export async function search({ http, config, apiKey = process.env.SERPER_API_KEY, delayMs = 1200 }) {
-  const out = { items: [], requests: 0, errors: [], rateLimited: false };
+export async function search({ http, config, apiKey = process.env.SERPER_API_KEY, delayMs = 1200 }: SourceContext & { apiKey?: string }): Promise<SourceResult> {
+  const out: SourceResult = { items: [], requests: 0, errors: [], rateLimited: false };
   if (!apiKey) {
     out.errors.push('SERPER_API_KEY is not set; skipped');
     return out;
@@ -107,7 +123,7 @@ export async function search({ http, config, apiKey = process.env.SERPER_API_KEY
       out.requests += 1;
       const data = await http.postJson(API, { q, gl: 'us', hl: 'en', tbs: 'qdr:w', num: 20 }, { headers: { 'X-API-KEY': apiKey } });
       out.items.push(
-        ...(data.jobs ?? data.organic ?? [])
+        ...((data.jobs ?? data.organic ?? []) as ApiResult[])
           .map((r) => ({ ...parseResult(r, term), ...(searchTrack ? { searchTrack } : {}), ...(source ? { source } : {}) }))
           .filter((i) => !isNonJobSite(i.url))
           .filter((i) => source !== GO_FRACTIONAL || isOnSite(i.url, 'gofractional.com', '/jobs/')),
@@ -117,7 +133,7 @@ export async function search({ http, config, apiKey = process.env.SERPER_API_KEY
         out.rateLimited = true;
         break;
       }
-      out.errors.push(`${term}: ${err.message}`);
+      out.errors.push(`${term}: ${(err as Error).message}`);
     }
     await http.sleep(delayMs);
   }
