@@ -3,7 +3,7 @@
 // whose words match the job title best, else the default, else the only one. withResume adds its text to the
 // background those calls read. Every query names user_id (db/user-tables.js lists resumes).
 import { randomUUID } from 'node:crypto';
-import { documentText } from '../tools/doc-text.js';
+import { documentText } from '../tools/doc-text.ts';
 
 export const MAX_RESUMES = 10;
 const MAX_LABEL = 60;

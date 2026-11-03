@@ -12,8 +12,8 @@
 //                     or Drive (server/index.js), so nothing a visitor does can spend money or reach an account.
 import { createHash, randomBytes } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
-import { escapeHtml } from '../tools/html.js';
-import { supportEmail } from '../tools/support.js';
+import { escapeHtml } from '../tools/html.ts';
+import { supportEmail } from '../tools/support.ts';
 import { accountFor, getUser, MAX_NAME, MAX_NOTE, requestAccess } from '../db/users.js';
 import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, cookie } from './session.js';
 import { DEMO_CONFIG, DEMO_EMAIL } from '../demo/sample-data.js';

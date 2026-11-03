@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:f
 import { dirname, join } from 'node:path';
 import Database from 'better-sqlite3';
 import { openStore } from '@scottmroth5/agent-core';
-import { repoPath, dataPath } from '../tools/paths.js';
+import { repoPath, dataPath } from '../tools/paths.ts';
 import * as duplicateStatus from './migrations/008-duplicate-status.js';
 import * as lookups from './migrations/009-lookups.js';
 import * as postingNotes from './migrations/012-posting-notes.js';

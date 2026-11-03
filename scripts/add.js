@@ -4,18 +4,18 @@
 //   npm run add -- --title="Fractional CTO" --company="Acme" --description-file=jd.txt --track=fractional
 //   options: --notes="..." --location="..." --rate="$150-$200/hr" --hours="10-15 hrs" --write-materials
 import { readFileSync } from 'node:fs';
-import { createJobTracer } from '../tools/trace.js';
-import { createJobClaude } from '../tools/claude.js';
-import { loadConfig } from '../tools/config.js';
+import { createJobTracer } from '../tools/trace.ts';
+import { createJobClaude } from '../tools/claude.ts';
+import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.js';
 import { OWNER_ID } from '../db/users.js';
-import { ownerBackground } from '../tools/knowledge.js';
-import { createHttp } from '../tools/http.js';
-import { createBrowser } from '../tools/browser.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
-import { createDriveClient } from '../tools/google/drive.js';
+import { ownerBackground } from '../tools/knowledge.ts';
+import { createHttp } from '../tools/http.ts';
+import { createBrowser } from '../tools/browser.ts';
+import { getGoogleAuth } from '../tools/google/auth.ts';
+import { createDriveClient } from '../tools/google/drive.ts';
 import { openJobStore } from '../db/index.js';
-import { exitWhenDone } from '../tools/exit.js';
+import { exitWhenDone } from '../tools/exit.ts';
 import { addPosting } from '../agents/manual.js';
 
 function parseArgs(argv) {

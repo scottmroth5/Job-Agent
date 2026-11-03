@@ -3,16 +3,16 @@
 // older version current again, and Word or PDF downloads of any version. Every save is a new artifact, so nothing is
 // overwritten, and the newest is the letter the panel, the report, and meeting prep use. Each version can carry a fact
 // check (agents/letter-checks.js): the panel asks for one after a save, and the user dismisses claims one at a time.
-import { createJobTracer } from '../tools/trace.js';
+import { createJobTracer } from '../tools/trace.ts';
 import { OWNER_ID } from '../db/users.js';
 import { reviseLetter, MAX_TURNS } from '../agents/hunt/revise-letter.js';
 import { checksFor, copyCheck, dismissClaim, runCheck } from '../agents/letter-checks.js';
 import { finishLetter, HUNT_MODEL } from '../agents/hunt/generate.js';
 import { letterDocName, letterHtml, userLetterBody } from '../agents/hunt/letters.js';
 import { pickResume, withResume } from '../agents/resumes.js';
-import { ensureLetterFolder } from '../tools/google/drive.js';
-import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.js';
-import { letterPdf } from '../tools/pdf-writer.js';
+import { ensureLetterFolder } from '../tools/google/drive.ts';
+import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';
+import { letterPdf } from '../tools/pdf-writer.ts';
 import { letterHeader, saveLetterHeader, MAX_LINKS } from '../agents/letter-header.js';
 import { uploadName } from './account-routes.js';
 import { letterDocx, docxName } from './word-docs.js';

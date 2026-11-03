@@ -4,14 +4,14 @@
 //   npm run backup                          back up now and upload
 //   npm run backup -- --to E:\JobBackups     write the encrypted file to a folder (e.g. a USB drive), no upload
 //   npm run backup -- --check-passphrase    check JOB_BACKUP_PASSPHRASE in .env, then stop
-import { createJobTracer } from '../tools/trace.js';
+import { createJobTracer } from '../tools/trace.ts';
 import { openJobStore } from '../db/index.js';
 import { ATTACHMENTS_DIR } from '../server/attachments.js';
-import { checkPassphrase } from '../tools/backup/crypto.js';
-import { createBackupDrive } from '../tools/backup/drive.js';
-import { localDate, runBackup } from '../tools/backup/run.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
-import { dataPath } from '../tools/paths.js';
+import { checkPassphrase } from '../tools/backup/crypto.ts';
+import { createBackupDrive } from '../tools/backup/drive.ts';
+import { localDate, runBackup } from '../tools/backup/run.ts';
+import { getGoogleAuth } from '../tools/google/auth.ts';
+import { dataPath } from '../tools/paths.ts';
 
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);

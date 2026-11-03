@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import { ROOT } from '../tools/paths.js';
+import { ROOT } from '../tools/paths.ts';
 
 // DATA_DIR is read once at startup, so each case runs in its own process.
 const pathsWith = (env) =>
@@ -10,11 +10,11 @@ const pathsWith = (env) =>
     execFileSync(
       process.execPath,
       ['--input-type=module', '-e', `
-        const { dataPath } = await import('./tools/paths.js');
+        const { dataPath } = await import('./tools/paths.ts');
         const { DB_PATH } = await import('./db/index.js');
-        const { CONFIG_PATH } = await import('./tools/config.js');
+        const { CONFIG_PATH } = await import('./tools/config.ts');
         const { ATTACHMENTS_DIR } = await import('./server/attachments.js');
-        const { TOKEN_PATH } = await import('./tools/google/auth.js');
+        const { TOKEN_PATH } = await import('./tools/google/auth.ts');
         console.log(JSON.stringify({ db: DB_PATH, config: CONFIG_PATH, attachments: ATTACHMENTS_DIR, token: TOKEN_PATH, logs: dataPath('logs') }));
       `],
       { cwd: ROOT, env: { ...process.env, DATA_DIR: '', ...env }, encoding: 'utf8' },

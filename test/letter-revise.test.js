@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.js';
 import { buildApp } from '../server/app.js';
 import { reviseMessage } from '../agents/hunt/revise-letter.js';
-import { documentText } from '../tools/doc-text.js';
+import { documentText } from '../tools/doc-text.ts';
 
 const config = { candidate: { name: 'Pat Example', signoffName: 'Pat', contactLine: 'Anytown, ST | pat@example.com' }, coverLetterChecks: [{ label: 'confident', text: '\\bi am confident\\b' }], search: { homeLocations: [] }, fractional: {} };
 const LETTER = `When I read that Example Co is building a care platform, I recognized the stage you are in and the work ahead of you.\n\nI grew a platform team from 6 to 45 engineers while releases stayed weekly, and I led the technology side of an accreditation with no findings.\n\nI would welcome a conversation about where Example Co is headed.`;

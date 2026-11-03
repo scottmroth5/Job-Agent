@@ -1,10 +1,10 @@
 // Resume tweaks and cover letters for promoted jobs. Sonnet 5.5 writes both with the Candidate
 // Knowledge doc as the cached system prompt; letters get v1's cleanup and rule checks, then are
 // saved as Google Docs. Nothing existing is ever overwritten.
-import { fillTemplate } from '../../tools/template.js';
-import { sanitizeDashes, truncate } from '../../tools/text.js';
+import { fillTemplate } from '../../tools/template.ts';
+import { sanitizeDashes, truncate } from '../../tools/text.ts';
 import { letterHeader } from '../letter-header.js';
-import { ensureLetterFolder } from '../../tools/google/drive.js';
+import { ensureLetterFolder } from '../../tools/google/drive.ts';
 import { getPrompt } from '../prompts.js';
 import { PROMOTE_AT } from '../discovery/score.js';
 import { runCheck } from '../letter-checks.js';

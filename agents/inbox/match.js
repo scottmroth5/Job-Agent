@@ -3,7 +3,7 @@
 //   2 contact      the sender is a contact linked to an application
 //   3 domain       the sender's domain is the company domain of exactly one open application
 //   4 ats_subject  company (and title) parsed from an ATS email identify exactly one open application
-import { companyTitleKey } from '../../tools/urls.js';
+import { companyTitleKey } from '../../tools/urls.ts';
 import { identityKey } from '../identity.js';
 import { domainIn } from './prefilter.js';
 import { parseAtsEmail } from './atsParse.js';

@@ -2,15 +2,15 @@
 //   npm run score                         score every unscored v2 posting
 //   npm run score -- --dry-run            list what would be scored and an estimated cost
 //   npm run score -- --model=claude-sonnet-5-5 --limit=10 --ids=12,15 --all-unscored
-import { createJobTracer } from '../tools/trace.js';
-import { createJobClaude } from '../tools/claude.js';
-import { loadConfig } from '../tools/config.js';
+import { createJobTracer } from '../tools/trace.ts';
+import { createJobClaude } from '../tools/claude.ts';
+import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.js';
 import { OWNER_ID } from '../db/users.js';
-import { ownerBackground } from '../tools/knowledge.js';
-import { assertNoRunningRun } from '../tools/runs.js';
+import { ownerBackground } from '../tools/knowledge.ts';
+import { assertNoRunningRun } from '../tools/runs.ts';
 import { openJobStore } from '../db/index.js';
-import { exitWhenDone } from '../tools/exit.js';
+import { exitWhenDone } from '../tools/exit.ts';
 import {
   DEFAULT_SCORE_MODEL,
   MODEL_SETTINGS,

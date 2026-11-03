@@ -1,7 +1,7 @@
 // RemoteOK (remote-only job board). One request returns the latest ~100 jobs with descriptions.
-import { htmlToText } from '../../../tools/html.js';
-import { detectJobType } from '../../../tools/titles.js';
-import { RateLimitedError } from '../../../tools/http.js';
+import { htmlToText } from '../../../tools/html.ts';
+import { detectJobType } from '../../../tools/titles.ts';
+import { RateLimitedError } from '../../../tools/http.ts';
 
 export const SOURCE = 'RemoteOK';
 const API = 'https://remoteok.com/api';

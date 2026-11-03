@@ -1,12 +1,12 @@
 // Manually added jobs: a link you found and/or a pasted description. Dedupe, get the text if
 // you did not paste it, check location and track, score, and write materials when it scores
 // well (or when asked). Used by the UI's Add job and by npm run add.
-import { normalizeUrl, isOnSite } from '../tools/urls.js';
+import { normalizeUrl, isOnSite } from '../tools/urls.ts';
 import { identityKey, storedKey, isRealCompany } from './identity.js';
-import { checkLocation } from '../tools/location.js';
-import { detectTrack } from '../tools/track.js';
-import { parseRate, parseHours } from '../tools/rates.js';
-import { listingReason, excludedSite } from '../tools/listings.js';
+import { checkLocation } from '../tools/location.ts';
+import { detectTrack } from '../tools/track.ts';
+import { parseRate, parseHours } from '../tools/rates.ts';
+import { listingReason, excludedSite } from '../tools/listings.ts';
 import { resolveDetails } from './discovery/details.js';
 import { jobIdFromUrl } from './discovery/sources/linkedin.js';
 import * as fractionaljobs from './discovery/sources/fractionaljobs.js';
@@ -14,8 +14,8 @@ import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/scor
 import { generateForPostings } from './hunt/generate.js';
 import { lookups } from './lookups.js';
 import { adoptNotesText } from './notes.js';
-import { localDay } from '../tools/dates.js';
-import { withoutPictographs } from '../tools/text.js';
+import { localDay } from '../tools/dates.ts';
+import { withoutPictographs } from '../tools/text.ts';
 
 export const MANUAL_SOURCE = 'manual';
 export { isRealCompany };

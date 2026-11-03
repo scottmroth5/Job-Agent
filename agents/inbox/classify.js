@@ -2,8 +2,8 @@
 // application). The email is untrusted: it is wrapped in <email> tags, the code-owned system prompt says
 // to ignore instructions inside it, the model gets no tools (structured output only), and every field is
 // checked in code before anything acts on it.
-import { fillTemplate } from '../../tools/template.js';
-import { sanitizeDashes } from '../../tools/text.js';
+import { fillTemplate } from '../../tools/template.ts';
+import { sanitizeDashes } from '../../tools/text.ts';
 import { getPrompt } from '../prompts.js';
 
 export const EMAIL_TYPES = ['confirmation', 'rejection', 'recruiter_outreach', 'interview_request', 'assessment', 'offer', 'follow_up', 'other'];

@@ -3,7 +3,7 @@
 //   npm run report -- --hours=72         a longer window
 //   npm run report -- --no-email         print the subject and summary instead of sending
 import { openJobStore } from '../db/index.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
+import { getGoogleAuth } from '../tools/google/auth.ts';
 import { collectReport, renderReport, sendReport } from '../agents/hunt/report.js';
 
 const hours = Number(process.argv.find((a) => a.startsWith('--hours='))?.split('=')[1] ?? 24);

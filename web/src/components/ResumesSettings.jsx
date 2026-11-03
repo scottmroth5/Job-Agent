@@ -9,7 +9,7 @@ const KIND_NAMES = { pdf: 'PDF', docx: 'Word', text: 'text' };
 
 /**
  * Download as the user prefers: the file as uploaded, or its text laid out as PDF or Word, or plain text. The PDF and Word
- * versions use a clean one-column layout (tools/resume-format.js); the original keeps the user's own design.
+ * versions use a clean one-column layout (tools/resume-format.ts); the original keeps the user's own design.
  */
 function DownloadMenu({ r }) {
   const href = (format) => `/api/resumes/${r.id}/file?format=${format}`;

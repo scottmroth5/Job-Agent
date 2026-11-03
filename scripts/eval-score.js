@@ -3,15 +3,15 @@
 //   npm run eval:score -- --rebuild                   recreate the cases
 //   npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 [--max-usd=2] [--limit=N]
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { createJobTracer } from '../tools/trace.js';
-import { createJobClaude } from '../tools/claude.js';
-import { loadConfig } from '../tools/config.js';
-import { createHttp } from '../tools/http.js';
-import { createBrowser } from '../tools/browser.js';
-import { ownerBackground } from '../tools/knowledge.js';
-import { dataPath } from '../tools/paths.js';
+import { createJobTracer } from '../tools/trace.ts';
+import { createJobClaude } from '../tools/claude.ts';
+import { loadConfig } from '../tools/config.ts';
+import { createHttp } from '../tools/http.ts';
+import { createBrowser } from '../tools/browser.ts';
+import { ownerBackground } from '../tools/knowledge.ts';
+import { dataPath } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.js';
-import { exitWhenDone } from '../tools/exit.js';
+import { exitWhenDone } from '../tools/exit.ts';
 import { MODEL_SETTINGS, MIN_KNOWLEDGE_CHARS, PROMOTE_AT } from '../agents/discovery/score.js';
 import { buildCases } from '../evals/score/build-cases.js';
 import { runEval, estimateEval } from '../evals/score/run.js';

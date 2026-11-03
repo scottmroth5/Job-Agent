@@ -4,7 +4,7 @@
 //   npm run auth:setup
 //   npm run auth:setup -- --rotate
 import { randomBytes } from 'node:crypto';
-import { setEnvValues, hasEnvValue, ENV_PATH } from '../tools/env-file.js';
+import { setEnvValues, hasEnvValue, ENV_PATH } from '../tools/env-file.ts';
 
 const rotate = process.argv.includes('--rotate');
 if (rotate || !hasEnvValue('SESSION_SECRET')) {

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
 import { useDemo } from '../demo.jsx';
-import { renderMarkdown } from '../../../tools/markdown.js';
+import { renderMarkdown } from '../../../tools/markdown.ts';
 
 /** Help: the guides (help/*.md, through the app's one safe Markdown renderer) and Ask, answered from them by AI. */
 export default function HelpPage() {

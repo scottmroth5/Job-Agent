@@ -3,18 +3,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { inflateRawSync } from 'node:zlib';
-import { withoutPictographs } from '../tools/text.js';
-import { fromCandidate, headerLines, hrefOf } from '../tools/letter-header.js';
+import { withoutPictographs } from '../tools/text.ts';
+import { fromCandidate, headerLines, hrefOf } from '../tools/letter-header.ts';
 import { openJobStore } from '../db/index.js';
 import { buildApp } from '../server/app.js';
 import { addUser } from '../db/users.js';
 import { runAsUser } from '../db/scope.js';
 import { letterHeader, saveLetterHeader } from '../agents/letter-header.js';
-import { documentText } from '../tools/doc-text.js';
-import { letterPdf, winAnsi } from '../tools/pdf-writer.js';
+import { documentText } from '../tools/doc-text.ts';
+import { letterPdf, winAnsi } from '../tools/pdf-writer.ts';
 import { letterDocx } from '../server/word-docs.js';
 import { letterHtml } from '../agents/hunt/letters.js';
-import { validateConfig } from '../tools/config.js';
+import { validateConfig } from '../tools/config.ts';
 
 const candidate = { name: 'Pat Example', signoffName: 'Pat', contactLine: 'pat@example.com | 555-0100', linkedin: 'https://www.linkedin.com/in/example/', website: 'https://example.com/', github: 'github.com/example' };
 const letter = { candidate, company: 'Example Co', title: '🧪 Vice President, Engineering 🚀', date: 'October 29, 2026', body: 'First paragraph ✨ here.\n\nSecond paragraph.' };

@@ -7,7 +7,7 @@ import * as serper from '../agents/discovery/sources/serper.js';
 import { resolveDetails } from '../agents/discovery/details.js';
 import { runDiscovery } from '../agents/discovery/discover.js';
 import { openJobStore } from '../db/index.js';
-import { RateLimitedError, HttpError } from '../tools/http.js';
+import { RateLimitedError, HttpError } from '../tools/http.ts';
 
 // All data below is made up; only the response shapes mirror the real sources.
 const LONG = 'Lead a platform engineering organization of forty engineers. '.repeat(10);

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.js';
 import { addUser } from '../db/users.js';
-import { baselineReport, renderBaseline } from '../tools/baseline.js';
+import { baselineReport, renderBaseline } from '../tools/baseline.ts';
 
 // Synthetic data only. "now" is fixed so waiting days are stable.
 const now = new Date('2026-10-05T12:00:00Z');

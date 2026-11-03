@@ -2,9 +2,9 @@
 // Markdown renderer. Open without sign-in: the request-access page links to them, and Google's consent screen needs
 // the privacy policy.
 import { readFileSync } from 'node:fs';
-import { renderMarkdown } from '../tools/markdown.js';
-import { repoPath } from '../tools/paths.js';
-import { withSupport } from '../tools/support.js';
+import { renderMarkdown } from '../tools/markdown.ts';
+import { repoPath } from '../tools/paths.ts';
+import { withSupport } from '../tools/support.ts';
 
 const PAGES = { '/privacy': ['Privacy policy', 'PRIVACY.md'], '/terms': ['Terms', 'TERMS.md'] };
 

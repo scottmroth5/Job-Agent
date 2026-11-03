@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createScheduler, lastRun, nextRun, parseSchedule, schedulesFromEnv, CATCH_UP_HOURS } from '../server/scheduler.js';
 import { createTaskRunner } from '../server/tasks.js';
-import { dayOf, localDay, localDaysAgo } from '../tools/dates.js';
+import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 
 const local = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi);
 

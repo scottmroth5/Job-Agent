@@ -5,9 +5,9 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFil
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
-import { decrypt, encrypt, pack, unpack } from '../tools/backup/crypto.js';
-import { createBackupDrive } from '../tools/backup/drive.js';
-import { backupName, localDate, restoreBackup, retention, runBackup, DRIVE_FOLDER } from '../tools/backup/run.js';
+import { decrypt, encrypt, pack, unpack } from '../tools/backup/crypto.ts';
+import { createBackupDrive } from '../tools/backup/drive.ts';
+import { backupName, localDate, restoreBackup, retention, runBackup, DRIVE_FOLDER } from '../tools/backup/run.ts';
 
 const PASS = 'correct horse battery staple';
 const FAST = { logN: 14, r: 8, p: 1 }; // test speed only; real backups use the default (2^17)

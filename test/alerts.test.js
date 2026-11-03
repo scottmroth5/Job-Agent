@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.js';
 import { createAlerts } from '../server/alerts.js';
 import { createScheduler, parseSchedule } from '../server/scheduler.js';
-import { buildRawEmail } from '../tools/google/gmail.js';
+import { buildRawEmail } from '../tools/google/gmail.ts';
 
 const local = (y, mo, d, h = 12) => new Date(y, mo - 1, d, h);
 

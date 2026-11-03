@@ -1,19 +1,19 @@
 // The monthly backup restore test: downloads the newest encrypted backup from the "Job Agent Backups" Drive folder (or
 // reads a file), decrypts it into the OS temp folder, checks the database's integrity, compares table row counts with the
-// live database, and deletes the copy (tools/backup/restore-check.js). Records a 'restore-test' run. Prints the file name
+// live database, and deletes the copy (tools/backup/restore-check.ts). Records a 'restore-test' run. Prints the file name
 // and counts only; never contents or the passphrase. A failure exits 1, so the scheduler emails the owner.
 //   npm run backup:test                       test the newest backup in Google Drive
 //   npm run backup:test -- --file <path>      test a backup file instead
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { createJobTracer } from '../tools/trace.js';
+import { createJobTracer } from '../tools/trace.ts';
 import { openJobStore } from '../db/index.js';
-import { checkPassphrase } from '../tools/backup/crypto.js';
-import { createBackupDrive } from '../tools/backup/drive.js';
-import { DRIVE_FOLDER } from '../tools/backup/run.js';
-import { newestBackup, restoreTest } from '../tools/backup/restore-check.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
-import { exitWhenDone } from '../tools/exit.js';
+import { checkPassphrase } from '../tools/backup/crypto.ts';
+import { createBackupDrive } from '../tools/backup/drive.ts';
+import { DRIVE_FOLDER } from '../tools/backup/run.ts';
+import { newestBackup, restoreTest } from '../tools/backup/restore-check.ts';
+import { getGoogleAuth } from '../tools/google/auth.ts';
+import { exitWhenDone } from '../tools/exit.ts';
 
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);

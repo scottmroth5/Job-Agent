@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createHttp, RateLimitedError, HttpError } from '../tools/http.js';
-import { htmlToText, extractJobPosting, decodeEntities } from '../tools/html.js';
-import { keywordMatcher, detectJobType } from '../tools/titles.js';
-import { checkLocation, matchesHome, statesIn, hasRemoteSignal } from '../tools/location.js';
+import { createHttp, RateLimitedError, HttpError } from '../tools/http.ts';
+import { htmlToText, extractJobPosting, decodeEntities } from '../tools/html.ts';
+import { keywordMatcher, detectJobType } from '../tools/titles.ts';
+import { checkLocation, matchesHome, statesIn, hasRemoteSignal } from '../tools/location.ts';
 import { openJobStore } from '../db/index.js';
 
 // ---------- http ----------

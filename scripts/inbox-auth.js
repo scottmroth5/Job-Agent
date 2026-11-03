@@ -1,9 +1,9 @@
 // One-time Gmail sign-in for the inbox (read mail; modify only to add labels). Saves the refresh token
 // to .env as GMAIL_REFRESH_TOKEN, and creates EMAIL_ENC_KEY there if it is missing. Prints neither.
 // Uses the same Google Cloud OAuth client as npm run google:login.
-import { INBOX_SCOPES } from '../tools/google/auth.js';
-import { signIn } from '../tools/google/oauth-flow.js';
-import { setEnvValues, hasEnvValue, ENV_PATH } from '../tools/env-file.js';
+import { INBOX_SCOPES } from '../tools/google/auth.ts';
+import { signIn } from '../tools/google/oauth-flow.ts';
+import { setEnvValues, hasEnvValue, ENV_PATH } from '../tools/env-file.ts';
 import { newKey } from '../agents/inbox/crypto.js';
 
 async function main() {

@@ -5,7 +5,7 @@
 // configFor (scripts) pick by the user the request or job runs as (db/scope.js).
 import { currentUserId } from '../db/scope.js';
 import { OWNER_ID } from '../db/users.js';
-import { validateConfig } from '../tools/config.js';
+import { validateConfig } from '../tools/config.ts';
 import { withExcludedSites } from './excluded-sites.js';
 
 const CONFIG_KEY = 'search.config';

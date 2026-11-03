@@ -1,9 +1,9 @@
-// Resume downloads as the user prefers (tools/resume-format.js, server/resume-routes.js): the original file, plain text,
+// Resume downloads as the user prefers (tools/resume-format.ts, server/resume-routes.js): the original file, plain text,
 // Word, or PDF laid out from the text. Synthetic resumes only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resumeBlocks, resumeDocx, resumePdf } from '../tools/resume-format.js';
-import { documentText } from '../tools/doc-text.js';
+import { resumeBlocks, resumeDocx, resumePdf } from '../tools/resume-format.ts';
+import { documentText } from '../tools/doc-text.ts';
 import { openJobStore } from '../db/index.js';
 import { addResume } from '../agents/resumes.js';
 import { buildApp } from '../server/app.js';

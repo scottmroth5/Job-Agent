@@ -4,7 +4,7 @@
 // Timing uses only dated events (your changes, the agent's, and emails); v1-imported history has the import
 // date, not the real one, so it counts a milestone but not its timing.
 import { lookups } from '../agents/lookups.js';
-import { dayOf, localDay, localDaysAgo } from '../tools/dates.js';
+import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 
 export const NO_REPLY_DAYS = 21;

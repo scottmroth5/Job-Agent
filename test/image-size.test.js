@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { repoPath } from '../tools/paths.js';
+import { repoPath } from '../tools/paths.ts';
 
 test('the image leaves out the scan cache, and a deploy removes unused images whatever their age', () => {
   const ignore = readFileSync(repoPath('.dockerignore'), 'utf8');

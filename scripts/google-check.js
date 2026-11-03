@@ -2,8 +2,8 @@
 // token and prints only whether that worked. The knowledge doc lives in the app now, not in Google.
 //   npm run google:check                       check the sign-in
 //   npm run google:check -- --send-test-email  also send a test email to EMAIL_ADDRESS
-import { getGoogleAuth } from '../tools/google/auth.js';
-import { sendEmail } from '../tools/google/gmail.js';
+import { getGoogleAuth } from '../tools/google/auth.ts';
+import { sendEmail } from '../tools/google/gmail.ts';
 
 async function main() {
   const auth = getGoogleAuth();

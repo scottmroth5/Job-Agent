@@ -1,13 +1,13 @@
 // Database reads and edits behind the API. Rows come back in the shape the UI uses (camelCase).
-import { annualize, parseRate, parseHours, findPayInText } from '../tools/rates.js';
-import { checkLocation } from '../tools/location.js';
+import { annualize, parseRate, parseHours, findPayInText } from '../tools/rates.ts';
+import { checkLocation } from '../tools/location.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.js';
 import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.js';
 import { lookups, sqlList } from '../agents/lookups.js';
 import { listAttachments } from './attachments.js';
 import { listPreps } from '../agents/hunt/prep.js';
 import { addNote, listNotes } from '../agents/notes.js';
-import { localDay } from '../tools/dates.js';
+import { localDay } from '../tools/dates.ts';
 import { describeVersion } from '../agents/prompts.js';
 import { budgetStatus } from '../agents/budget.js';
 import { currentUserId } from '../db/scope.js';

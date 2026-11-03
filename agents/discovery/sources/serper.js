@@ -1,8 +1,8 @@
 // Google results via Serper.dev (v1's "Google Jobs" source). Results link to other job sites,
 // so company and description usually come later from the linked page's JobPosting data.
-import { RateLimitedError } from '../../../tools/http.js';
+import { RateLimitedError } from '../../../tools/http.ts';
 import { jobIdFromUrl } from './linkedin.js';
-import { isOnSite } from '../../../tools/urls.js';
+import { isOnSite } from '../../../tools/urls.ts';
 
 export const SOURCE = 'Google Jobs';
 const API = 'https://google.serper.dev/search';

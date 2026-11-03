@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { OAuth2Client } from 'google-auth-library';
-import { buildAuthUrl } from '../tools/google/oauth-flow.js';
-import { INBOX_SCOPES, getInboxAuth } from '../tools/google/auth.js';
+import { buildAuthUrl } from '../tools/google/oauth-flow.ts';
+import { INBOX_SCOPES, getInboxAuth } from '../tools/google/auth.ts';
 
 test('the inbox asks for exactly gmail.readonly and gmail.modify, offline, with PKCE', () => {
   const client = new OAuth2Client({ clientId: 'test-client.apps.example', clientSecret: 'x', redirectUri: 'http://127.0.0.1:5555' });

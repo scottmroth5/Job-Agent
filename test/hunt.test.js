@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.js';
 import { getUserSetting as getSetting } from '../db/settings.js';
-import { ensureLetterFolder } from '../tools/google/drive.js';
+import { ensureLetterFolder } from '../tools/google/drive.ts';
 import { generateForPostings, selectForHunt, buildLetterRequest, loadHuntPrompts, finishLetter, estimateHuntCost } from '../agents/hunt/generate.js';
 
 // Synthetic config, knowledge and postings only.

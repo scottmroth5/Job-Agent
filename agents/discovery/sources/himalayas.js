@@ -1,7 +1,7 @@
 // Himalayas (remote-only job board). Free search API, one request per search term.
 // The API includes the full description and a unix-seconds pubDate.
-import { htmlToText } from '../../../tools/html.js';
-import { RateLimitedError } from '../../../tools/http.js';
+import { htmlToText } from '../../../tools/html.ts';
+import { RateLimitedError } from '../../../tools/http.ts';
 
 export const SOURCE = 'Himalayas';
 const API = 'https://himalayas.app/jobs/api/search';

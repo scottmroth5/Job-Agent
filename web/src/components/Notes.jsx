@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
 import { api } from '../api.js';
-import { renderMarkdown } from '../../../tools/markdown.js';
+import { renderMarkdown } from '../../../tools/markdown.ts';
 import { DashIcon } from './DashIcon.jsx';
 
-/** Formatted Markdown, rendered safely (tools/markdown.js escapes everything first). */
+/** Formatted Markdown, rendered safely (tools/markdown.ts escapes everything first). */
 export function Markdown({ text, className = 'md' }) {
   return <div className={className} dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />;
 }

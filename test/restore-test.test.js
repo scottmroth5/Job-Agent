@@ -1,4 +1,4 @@
-// The monthly backup restore test (tools/backup/restore-check.js, scripts/backup-verify.js): a real encrypted backup of
+// The monthly backup restore test (tools/backup/restore-check.ts, scripts/backup-verify.js): a real encrypted backup of
 // a made-up database is restored into a scratch copy and compared with the live one. Fast key settings; no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,8 +6,8 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openJobStore } from '../db/index.js';
-import { runBackup } from '../tools/backup/run.js';
-import { restoreTest, EMPTY_TABLE_MIN_ROWS } from '../tools/backup/restore-check.js';
+import { runBackup } from '../tools/backup/run.ts';
+import { restoreTest, EMPTY_TABLE_MIN_ROWS } from '../tools/backup/restore-check.ts';
 import { restoreTestJob } from '../scripts/backup-verify.js';
 
 const PASS = 'a made-up passphrase for these tests';

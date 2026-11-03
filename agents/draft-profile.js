@@ -2,7 +2,7 @@ import { sectionsForInstructions } from './knowledge-sections.js';
 // Build a draft (Settings > About you): from the materials a user shares (their resume and LinkedIn profile saved as
 // PDFs, pasted text such as their LinkedIn About section or a job ad they liked, and notes), Claude drafts their About you
 // text and a starting search, for them to review, edit, and save. Nothing is saved here, the files are never kept, and
-// neither the materials nor the draft are logged. Runs on the user's own AI (tools/claude.js) and is traced, so it counts
+// neither the materials nor the draft are logged. Runs on the user's own AI (tools/claude.ts) and is traced, so it counts
 // toward their spend. The materials are untrusted: the system prompt says to treat them as data only.
 
 export const DRAFT_MODEL = 'claude-sonnet-5-5';

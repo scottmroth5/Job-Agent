@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildRawEmail } from '../tools/google/gmail.js';
-import { getGoogleAuth, loadClientCredentials } from '../tools/google/auth.js';
+import { buildRawEmail } from '../tools/google/gmail.ts';
+import { getGoogleAuth, loadClientCredentials } from '../tools/google/auth.ts';
 
 test('buildRawEmail produces a decodable base64url message', () => {
   const raw = buildRawEmail({ to: 'someone@example.com', subject: 'Résumé update', text: 'Hello $200k' });

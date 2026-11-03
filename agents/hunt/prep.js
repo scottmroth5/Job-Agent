@@ -4,10 +4,10 @@
 // search. The result is Markdown, kept in meeting_preps and saved as a Google Doc. Nothing is overwritten:
 // each request makes a new prep. Logs hold counts only, never names or text.
 import { randomUUID } from 'node:crypto';
-import { fillTemplate } from '../../tools/template.js';
-import { fileTitle, truncate } from '../../tools/text.js';
-import { renderMarkdown } from '../../tools/markdown.js';
-import { ensurePrepFolder } from '../../tools/google/drive.js';
+import { fillTemplate } from '../../tools/template.ts';
+import { fileTitle, truncate } from '../../tools/text.ts';
+import { renderMarkdown } from '../../tools/markdown.ts';
+import { ensurePrepFolder } from '../../tools/google/drive.ts';
 import { getPrompt } from '../prompts.js';
 import { formatAnalysis } from './letters.js';
 import { listNotes, notesForPrompt } from '../notes.js';

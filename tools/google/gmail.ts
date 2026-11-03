@@ -1,0 +1,49 @@
+import { gmail } from '@googleapis/gmail';
+import type { OAuth2Client } from 'google-auth-library';
+
+/** One message: exactly one of text or html. */
+export interface Email {
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+  replyTo?: string | null;
+}
+
+// RFC 2047 encoding keeps non-ASCII subjects intact.
+const encodeHeader = (s: string) => (/^[\x20-\x7e]*$/.test(s) ? s : `=?UTF-8?B?${Buffer.from(s, 'utf8').toString('base64')}?=`);
+
+/**
+ * Builds the base64url RFC 822 message the Gmail API expects. Exactly one of text or html. replyTo (optional) is one
+ * plain address: feedback from a user is sent to the owner with the user as the reply-to.
+ */
+export function buildRawEmail({ to, subject, text, html, replyTo = null }: Email) {
+  if (!to || !subject) throw new TypeError('buildRawEmail: to and subject are required');
+  if (!text === !html) throw new TypeError('buildRawEmail: pass exactly one of text or html');
+  // Headers can never gain a line: an address with control characters is refused, and a subject loses them.
+  if (/[\u0000-\u001f\u007f]/.test(String(to))) throw new TypeError('buildRawEmail: the address has control characters');
+  if (replyTo != null && !/^[^@\s,;<>"\u0000-\u001f\u007f]+@[^@\s,;<>"\u0000-\u001f\u007f]+$/.test(String(replyTo))) {
+    throw new TypeError('buildRawEmail: replyTo must be one plain address');
+  }
+  const cleanSubject = String(subject).replace(/[\u0000-\u001f\u007f]+/g, ' ').trim();
+  const message = [
+    `To: ${to}`,
+    ...(replyTo ? [`Reply-To: ${replyTo}`] : []),
+    `Subject: ${encodeHeader(cleanSubject)}`,
+    'MIME-Version: 1.0',
+    `Content-Type: ${html ? 'text/html' : 'text/plain'}; charset=UTF-8`,
+    'Content-Transfer-Encoding: base64',
+    '',
+    Buffer.from((html ?? text) as string, 'utf8').toString('base64'),
+  ].join('\r\n');
+  return Buffer.from(message, 'utf8').toString('base64url');
+}
+
+/** Sends an email as the signed-in user. Returns the Gmail message id. */
+export async function sendEmail(auth: OAuth2Client, email: Email) {
+  const { data } = await gmail({ version: 'v1', auth }).users.messages.send({
+    userId: 'me',
+    requestBody: { raw: buildRawEmail(email) },
+  });
+  return data.id;
+}

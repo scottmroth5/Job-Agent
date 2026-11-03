@@ -10,7 +10,7 @@ const context = new AsyncLocalStorage();
 
 /**
  * Runs fn (and everything it starts) as user uid; returns what fn returns. timeZone is that user's own zone (an IANA
- * name), which tools/dates.js uses for their calendar days; without it, the app's zone.
+ * name), which tools/dates.ts uses for their calendar days; without it, the app's zone.
  */
 export function runAsUser(uid, fn, { timeZone = null } = {}) {
   if (!Number.isInteger(uid) || uid < 1) throw new TypeError(`runAsUser: "${uid}" is not a user id`);

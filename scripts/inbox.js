@@ -3,12 +3,12 @@
 //   npm run inbox:backfill                           the last 180 days (config/inbox.json backfillDays)
 //   npm run inbox:backfill -- --days=30 --dry-run    count what would be classified and estimate the cost
 // Output is counts, notices, and job titles only; email content is never printed.
-import { createJobTracer } from '../tools/trace.js';
-import { createJobClaude } from '../tools/claude.js';
+import { createJobTracer } from '../tools/trace.ts';
+import { createJobClaude } from '../tools/claude.ts';
 import { openJobStore } from '../db/index.js';
-import { assertNoRunningRun } from '../tools/runs.js';
-import { exitWhenDone } from '../tools/exit.js';
-import { getInboxAuth } from '../tools/google/auth.js';
+import { assertNoRunningRun } from '../tools/runs.ts';
+import { exitWhenDone } from '../tools/exit.ts';
+import { getInboxAuth } from '../tools/google/auth.ts';
 import { createGmail } from '../agents/inbox/gmail.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';
 import { loadKey } from '../agents/inbox/crypto.js';

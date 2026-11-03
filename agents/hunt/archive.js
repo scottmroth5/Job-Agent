@@ -7,12 +7,12 @@
 // Cleanup after a rule change (npm run cleanup), separate from the pipeline's archive step:
 //   archiveListings     removes skipped postings (list-of-jobs pages, excluded sites) and duplicates
 //   demoteWithoutText   moves untouched active jobs with no description back to the default stage
-import { skipReason } from '../../tools/listings.js';
+import { skipReason } from '../../tools/listings.ts';
 import { parseResultTitle } from '../discovery/sources/serper.js';
 import { identityKey, isRealCompany } from '../identity.js';
 import { lookups, sqlList } from '../lookups.js';
 import { addNote } from '../notes.js';
-import { localDay, localDaysAgo } from '../../tools/dates.js';
+import { localDay, localDaysAgo } from '../../tools/dates.ts';
 
 export const ARCHIVE_AFTER_DAYS = 30;
 
@@ -35,7 +35,7 @@ export function findArchivable(db, { now = new Date(), days = ARCHIVE_AFTER_DAYS
 }
 
 /**
- * Postings that are never kept (see tools/listings.js: list-of-jobs pages, excluded sites) and are not
+ * Postings that are never kept (see tools/listings.ts: list-of-jobs pages, excluded sites) and are not
  * yet archived, or archived but still to evaluate. Jobs in progress are left alone.
  */
 export function findListings(db, config) {

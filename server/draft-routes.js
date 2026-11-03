@@ -2,7 +2,7 @@
 // AI (agents/draft-profile.js). Nothing is saved: the user reviews the draft and saves what they keep. The files are
 // read in memory and dropped; the request body is never logged.
 import { draftProfile, MAX_FILE_BYTES, MAX_FILES } from '../agents/draft-profile.js';
-import { createJobTracer } from '../tools/trace.js';
+import { createJobTracer } from '../tools/trace.ts';
 import { OWNER_ID } from '../db/users.js';
 
 export const DRAFTS_PER_DAY = 10;

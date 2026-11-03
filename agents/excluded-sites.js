@@ -1,6 +1,6 @@
 // Job sites each user skips (Settings > Job sites to skip, or Skip this site in the job panel): a domain such as
 // "example-jobs.com" with the user's note on why, in user_settings. A skipped site's links are never kept: discovery
-// and manual add drop them, scoring gives 1, and cleanup removes saved ones (tools/listings.js). The list is added to
+// and manual add drop them, scoring gives 1, and cleanup removes saved ones (tools/listings.ts). The list is added to
 // search.excludedSites from the settings file (the owner's) or the user's saved search, so every caller of
 // config.search.excludedSites sees both (agents/user-config.js configFor).
 import { OWNER_ID } from '../db/users.js';

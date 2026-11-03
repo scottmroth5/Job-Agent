@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBrowser } from '../tools/browser.js';
+import { createBrowser } from '../tools/browser.ts';
 
 function fakeChromium({ failChannels = [] } = {}) {
   const state = { launches: [], closed: 0 };

@@ -5,7 +5,7 @@ import { openJobStore } from '../db/index.js';
 import { buildApp } from '../server/app.js';
 import { page } from '../server/auth.js';
 import { loadGuides } from '../server/help-routes.js';
-import { supportEmail, withSupport } from '../tools/support.js';
+import { supportEmail, withSupport } from '../tools/support.ts';
 
 test('the address: a plain address or nothing; the placeholder becomes a link or the fallback', () => {
   assert.equal(supportEmail({ SUPPORT_EMAIL: ' support@example.com ' }), 'support@example.com');

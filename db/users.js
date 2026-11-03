@@ -1,7 +1,7 @@
 // The people who use the app (multi-user). The owner is user 1, an admin; migration 013 gave every existing row to them,
 // and the addresses in AUTH_ALLOWED_EMAILS are always the owner's. Anyone else signs in with Google, requests access
 // (pending), and the owner approves (active) or rejects them; an active account can be paused. How a user's Claude calls
-// are paid for is ai_source: 'own' (their key, sealed in claude_key_enc by tools/secret-box.js) or 'owner' (the owner's
+// are paid for is ai_source: 'own' (their key, sealed in claude_key_enc by tools/secret-box.ts) or 'owner' (the owner's
 // key, up to ai_cap_usd a month). Cross-user reads for the admin's Users screen are in server/admin-queries.js.
 
 export const OWNER_ID = 1;
@@ -110,7 +110,7 @@ export function setClaudeKey(db, id, sealed, now = new Date()) {
   db.prepare('UPDATE users SET claude_key_enc = ?, updated_at = ? WHERE id = ?').run(sealed ?? null, now.toISOString(), id);
 }
 
-/** The sealed key, for the one call that opens it (tools/claude.js). */
+/** The sealed key, for the one call that opens it (tools/claude.ts). */
 export const sealedClaudeKey = (db, id) => db.prepare('SELECT claude_key_enc FROM users WHERE id = ?').pluck().get(id) ?? null;
 
 const SEEN_EVERY_MS = 15 * 60 * 1000;

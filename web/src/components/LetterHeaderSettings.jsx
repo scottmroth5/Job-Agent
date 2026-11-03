@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.js';
-import { headerLines, SEPARATOR } from '../../../tools/letter-header.js';
+import { headerLines, SEPARATOR } from '../../../tools/letter-header.ts';
 
 const MAX_LINKS = 6;
 const EMPTY = { name: '', email: '', phone: '', location: '', signoffName: '', links: [] };

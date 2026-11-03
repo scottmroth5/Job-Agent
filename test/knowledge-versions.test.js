@@ -7,7 +7,7 @@ import { openJobStore } from '../db/index.js';
 import { buildApp } from '../server/app.js';
 import { addUser, OWNER_ID } from '../db/users.js';
 import { MAX_PROFILE_VERSIONS, profileVersions, saveUserProfile, userProfile } from '../agents/user-config.js';
-import { documentText } from '../tools/doc-text.js';
+import { documentText } from '../tools/doc-text.ts';
 
 const doc = (n) => `## 1. Summary\nEngineering leader, version ${n}.\n\n## 2. Experience\n- Grew a platform team from 6 to 45 engineers.`;
 

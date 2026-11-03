@@ -1,15 +1,15 @@
 // One discovery run: collect from every source, filter, dedupe against the database and
 // within the run, fetch full text for new postings, check location, and store them.
 // Scoring is a separate step (Phase 2c).
-import { normalizeUrl } from '../../tools/urls.js';
-import { localDay, localDaysAgo } from '../../tools/dates.js';
+import { normalizeUrl } from '../../tools/urls.ts';
+import { localDay, localDaysAgo } from '../../tools/dates.ts';
 import { identityKey, storedKey } from '../identity.js';
-import { keywordMatcher } from '../../tools/titles.js';
-import { checkLocation } from '../../tools/location.js';
-import { detectTrack } from '../../tools/track.js';
-import { parseRate, parseHours } from '../../tools/rates.js';
-import { skipReason } from '../../tools/listings.js';
-import { withoutPictographs } from '../../tools/text.js';
+import { keywordMatcher } from '../../tools/titles.ts';
+import { checkLocation } from '../../tools/location.ts';
+import { detectTrack } from '../../tools/track.ts';
+import { parseRate, parseHours } from '../../tools/rates.ts';
+import { skipReason } from '../../tools/listings.ts';
+import { withoutPictographs } from '../../tools/text.ts';
 import { resolveDetails, RETRYABLE } from './details.js';
 import * as himalayas from './sources/himalayas.js';
 import * as remoteok from './sources/remoteok.js';

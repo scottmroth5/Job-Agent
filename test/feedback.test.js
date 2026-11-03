@@ -11,7 +11,7 @@ import { createNotices } from '../server/notices.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
 import { FEEDBACK_PER_DAY } from '../server/feedback-routes.js';
 import { saveUserConfig, saveUserProfile } from '../agents/user-config.js';
-import { buildRawEmail } from '../tools/google/gmail.js';
+import { buildRawEmail } from '../tools/google/gmail.ts';
 
 const SITE = 'http://localhost:5178';
 const OWNER = 'owner@example.com';

@@ -3,8 +3,8 @@
 // Run again any time the sign-in is revoked or the token file is lost.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { SCOPES, TOKEN_PATH } from '../tools/google/auth.js';
-import { signIn } from '../tools/google/oauth-flow.js';
+import { SCOPES, TOKEN_PATH } from '../tools/google/auth.ts';
+import { signIn } from '../tools/google/oauth-flow.ts';
 
 async function main() {
   await signIn({

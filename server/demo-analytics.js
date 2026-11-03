@@ -2,7 +2,7 @@
 // (AUTH_MODE=demo) ever has a configuration, so the app itself sends nothing to anyone. The browser builds every
 // event from fixed names and values (web/src/analytics.js); /api/me hands it the project key and host, and the
 // page's Content-Security-Policy lets it reach that host and no other.
-import { hostIs } from '../tools/urls.js';
+import { hostIs } from '../tools/urls.ts';
 
 export const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 

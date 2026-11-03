@@ -1,9 +1,9 @@
-// Prints the v3 baseline (tools/baseline.js): counts and sizes only, never text. Read-only: no migrations, no copy.
+// Prints the v3 baseline (tools/baseline.ts): counts and sizes only, never text. Read-only: no migrations, no copy.
 //   npm run report:baseline             plain text
 //   npm run report:baseline -- --json   the same as JSON, to keep privately (never in the repo)
 import { DB_PATH } from '../db/index.js';
-import { dataPath } from '../tools/paths.js';
-import { baselineReport, renderBaseline } from '../tools/baseline.js';
+import { dataPath } from '../tools/paths.ts';
+import { baselineReport, renderBaseline } from '../tools/baseline.ts';
 
 try {
   const report = baselineReport(DB_PATH, { attachmentsDir: dataPath('attachments') });

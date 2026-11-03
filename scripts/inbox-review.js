@@ -4,7 +4,7 @@
 import { createInterface } from 'node:readline/promises';
 import { stdin, stdout } from 'node:process';
 import { openJobStore } from '../db/index.js';
-import { getInboxAuth } from '../tools/google/auth.js';
+import { getInboxAuth } from '../tools/google/auth.ts';
 import { createGmail } from '../agents/inbox/gmail.js';
 import { loadInboxConfig } from '../agents/inbox/config.js';
 import { loadKey } from '../agents/inbox/crypto.js';

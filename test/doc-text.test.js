@@ -1,9 +1,9 @@
-// Text from uploaded documents (tools/doc-text.js): PDF, Word .docx, and plain text are read with no AI call; other
+// Text from uploaded documents (tools/doc-text.ts): PDF, Word .docx, and plain text are read with no AI call; other
 // files get a message saying what to upload. Synthetic files only, made here.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Document, Packer, Paragraph } from 'docx';
-import { documentText, tidy, MAX_DOC_BYTES } from '../tools/doc-text.js';
+import { documentText, tidy, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 
 /** A minimal one-page PDF with real text, built by hand with its byte offsets. */
 export function tinyPdf(lines) {

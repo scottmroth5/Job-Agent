@@ -3,17 +3,17 @@
 //   npm run hunt -- --dry-run            what would be written, with an estimated cost
 //   npm run hunt -- --ids=12,15          specific postings (scored first if needed); add --regenerate for new versions
 //   npm run hunt -- --no-docs            store letters without creating Google Docs
-import { createJobTracer } from '../tools/trace.js';
-import { createJobClaude } from '../tools/claude.js';
-import { loadConfig } from '../tools/config.js';
+import { createJobTracer } from '../tools/trace.ts';
+import { createJobClaude } from '../tools/claude.ts';
+import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.js';
 import { OWNER_ID } from '../db/users.js';
-import { ownerBackground } from '../tools/knowledge.js';
-import { getGoogleAuth } from '../tools/google/auth.js';
-import { createDriveClient } from '../tools/google/drive.js';
-import { assertNoRunningRun } from '../tools/runs.js';
+import { ownerBackground } from '../tools/knowledge.ts';
+import { getGoogleAuth } from '../tools/google/auth.ts';
+import { createDriveClient } from '../tools/google/drive.ts';
+import { assertNoRunningRun } from '../tools/runs.ts';
 import { openJobStore } from '../db/index.js';
-import { exitWhenDone } from '../tools/exit.js';
+import { exitWhenDone } from '../tools/exit.ts';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.js';
 import { generateForPostings, selectForHunt, estimateHuntCost } from '../agents/hunt/generate.js';
 

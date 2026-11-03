@@ -1,7 +1,7 @@
 // Run the pipeline from the UI. It runs as its own process (the same scripts/pipeline.js as npm run pipeline),
 // so a long run never blocks the server, and its step lines become task progress. Each user runs their own pipeline
 // (scripts/pipeline.js --user=<id>); one runs at a time across the app, since they share the browser and the sources.
-import { assertNoRunningRun } from '../tools/runs.js';
+import { assertNoRunningRun } from '../tools/runs.ts';
 import { currentUserId } from '../db/scope.js';
 import { OWNER_ID } from '../db/users.js';
 
