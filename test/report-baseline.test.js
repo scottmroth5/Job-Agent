@@ -65,6 +65,7 @@ test('baseline: counts, sizes, spend, and outcome data across users, read-only a
     for (const out of [renderBaseline(r), JSON.stringify(r)]) {
       assert.ok(!out.includes(SECRET) && !out.includes('example.com') && !out.includes('CTO'), 'no text from any row');
     }
+    assert.deepEqual(baselineReport(path, { attachmentsDir: join(dir, 'none'), now }).attachments, { files: 0, bytes: 0 }, 'no attachments folder yet');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

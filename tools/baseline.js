@@ -2,7 +2,7 @@
 // data is. Opens the database read-only (no migrations, no pre-migration copy) and reads no text columns: table row counts,
 // file and attachment sizes, Claude spend by month, accounts by status, and per-user outcome counts summed over users.
 import Database from 'better-sqlite3';
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { runAsUser, scopeDb } from '../db/scope.js';
 import { applications } from '../server/funnel.js';
@@ -12,10 +12,16 @@ const LINKED = "('auto', 'confirmed', 'reassigned')";
 
 /** Files and bytes under a folder (0 and 0 when it does not exist). */
 function folderSize(dir) {
-  if (!existsSync(dir)) return { files: 0, bytes: 0 };
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true, recursive: true });
+  } catch (err) {
+    if (err.code === 'ENOENT') return { files: 0, bytes: 0 };
+    throw err;
+  }
   let files = 0;
   let bytes = 0;
-  for (const entry of readdirSync(dir, { withFileTypes: true, recursive: true })) {
+  for (const entry of entries) {
     if (!entry.isFile()) continue;
     files += 1;
     bytes += statSync(join(entry.parentPath ?? entry.path, entry.name)).size;
