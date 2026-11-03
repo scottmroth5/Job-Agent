@@ -4,6 +4,8 @@ agent-core comes from the public Agent-Core repo as a git dependency pinned to a
 ("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.3"; meeting prep needs 0.2.2's tools, streaming, and pause_turn resume;
 migration 013 needs 0.2.3's foreignKeys: false table rebuilds). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
 Job specific logic stays in this repo; never add it to agent-core.
+v3: docs/v3/PLAN.md is the phased plan (one phase at a time, plan mode first, its stop-and-ask list applies); docs/architecture/
+holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-final tags the last v2 commit.
 
 ## Structure
 /agents/discovery   finds, researches, and scores postings: sources/ (one module per job source, parse functions exported for tests),
@@ -82,6 +84,9 @@ npm run inbox:review              resolve needs_review emails; each choice but D
 npm run backup                    encrypted backup (database, data/config/job-search.json, data/attachments) to the "Job Agent
                                   Backups" Drive folder; -- --to <folder> writes it to a folder; -- --check-passphrase checks .env
 npm run db:pending                migrations a database open would apply, tried on a throwaway copy (deploy.sh runs it first)
+npm run report:baseline           v3 baseline (tools/baseline.js): rows per table, database and attachment sizes, Claude spend by
+                                  month, accounts by status, outcome data gaps; counts only, opened read-only (no migrations).
+                                  -- --json; output stays out of the repo
 npm run backup:restore -- --file latest --out data/restore/job-agent.db   decrypt into NEW files (never over the live database)
 npm run backup:test               restore test: the newest Drive backup (or -- --file <path>) decrypted into the OS temp folder,
                                   integrity-checked, table counts compared with the live database, then deleted. Counts only.

@@ -62,6 +62,7 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `npm run add -- --url=...` | Add a job you found yourself |
 | `npm run cleanup` | Remove list-of-jobs pages, excluded-site jobs, and duplicate copies; move jobs without a description back to Discovered (`-- --dry-run` to preview) |
 | `npm run report` | Email the summary for the last 24 hours |
+| `npm run report:baseline` | Print counts and sizes only (rows per table, database and attachment size, Claude spend by month, outcome data gaps); read-only. `-- --json` for JSON |
 | `npm run inbox:auth` | One-time Gmail sign-in for the inbox |
 | `npm run inbox` | Check Gmail for new job email once |
 | `npm run inbox:backfill` | Process the last 180 days of job email (`-- --days=30 --dry-run` to preview the count and cost) |

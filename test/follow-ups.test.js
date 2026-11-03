@@ -10,8 +10,10 @@ import { runAsUser } from '../db/scope.js';
 import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_STALE_DAYS } from '../agents/follow-ups.js';
 import { buildContactRequest } from '../agents/hunt/find-contact.js';
 import { getPrompt } from '../agents/prompts.js';
+import { localDaysAgo } from '../tools/dates.js';
 
-const daysAgo = (n, from = new Date()) => new Date(from.getTime() - n * 864e5).toISOString().slice(0, 10);
+// Local calendar days, as the app counts them: a UTC date (toISOString) is already tomorrow on a US evening.
+const daysAgo = (n, from = new Date()) => localDaysAgo(from, n);
 const config = { candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { homeLocations: [] }, fractional: {} };
 
 function setup() {
