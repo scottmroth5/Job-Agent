@@ -86,7 +86,7 @@ function PostingLink({ url, demo, onChanged }) {
   };
   const skip = (e) => {
     e.preventDefault();
-    act(async () => {
+    void act(async () => {
       const r = await api.skipSite(url, note.trim());
       setMode({ site: r.site, savedJobs: r.sites.find((s) => s.site === r.site)?.savedJobs ?? 0 });
     });
@@ -237,7 +237,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
     setPaste('');
     setShowText(false);
     setIdent(null);
-    load();
+    void load();
     const onKey = (e) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

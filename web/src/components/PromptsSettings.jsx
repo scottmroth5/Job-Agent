@@ -211,7 +211,7 @@ export default function PromptsSettings() {
   const [error, setError] = useState(null);
   const refresh = () => api.prompts().then(setPrompts).catch((err) => setError(err.message));
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
   return (
     <>

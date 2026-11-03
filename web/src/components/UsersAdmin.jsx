@@ -133,7 +133,7 @@ function Feedback() {
   const [error, setError] = useState(null);
   const refresh = () => api.adminFeedback().then(setItems, (err) => setError(err.message));
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
   if (!items) return error ? <div className="error">{error}</div> : null;
   const open = items.filter((f) => f.status === 'open');
@@ -171,7 +171,7 @@ export default function UsersAdmin() {
   const [error, setError] = useState(null);
   const refresh = () => api.users().then(setUsers, (err) => setError(err.message));
   useEffect(() => {
-    refresh();
+    void refresh();
   }, []);
 
   const decide = async (user, decision, confirmFirst) => {

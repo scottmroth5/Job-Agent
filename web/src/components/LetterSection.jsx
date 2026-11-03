@@ -64,7 +64,7 @@ function FactCheck({ job, version, autoRun, onChecked }) {
     }
   };
   useEffect(() => {
-    if (autoRun && !version.check) run();
+    if (autoRun && !version.check) void run();
   }, [autoRun, version.id]);
   const dismiss = async (index) => {
     setError(null);
@@ -341,7 +341,7 @@ export default function LetterSection({ job, onChanged }) {
   const [autoCheck, setAutoCheck] = useState(false); // a version you just saved gets checked
   const loadVersions = () => api.letters(job.id).then(setVersions, () => setVersions([]));
   useEffect(() => {
-    loadVersions();
+    void loadVersions();
   }, [job.id, job.letter?.createdAt]);
   useEffect(() => {
     setMode(null);

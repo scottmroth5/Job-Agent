@@ -1,0 +1,7 @@
+// Checks the hand-written declarations here, which skipLibCheck in the main configs would otherwise skip
+// (it has to stay on there: some dependencies ship declaration files that do not compile).
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": { "skipLibCheck": false },
+  "include": ["."]
+}

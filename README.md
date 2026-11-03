@@ -30,7 +30,7 @@ discover ─► score ─► promote (7+) ─► write materials ─► archive 
 
 In short, you need:
 
-- Node.js 22+ and Git (on Windows, use PowerShell rather than WSL)
+- Node.js 22.18+ and Git (on Windows, use PowerShell rather than WSL)
 - An [Anthropic API](https://console.anthropic.com) key (typically a few dollars a week)
 - A [Serper.dev](https://serper.dev) key (the free tier is enough)
 - A Google account, with a small Google Cloud app for Docs, Drive, and Gmail access
@@ -72,6 +72,8 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 | `npm run evals` | Run the inbox eval (`-- --all` adds the letter and scoring evals; all cost money) |
 | `npm run eval:score` | Compare scoring models on jobs you applied to vs. passed on (costs money) |
 | `npm test` | Run the tests (no network or keys needed). GitHub runs them on every push, in a US time zone and in UTC |
+| `npm run typecheck` | Type check (TypeScript, strict; no output files) |
+| `npm run lint` | Lint for promise mistakes (a missed `await`) and type-only imports |
 
 ## Settings in .env
 

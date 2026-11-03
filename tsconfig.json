@@ -1,0 +1,21 @@
+// Type checking for the server side (v3 Phase 2, docs/architecture/decisions/0002). Nothing is emitted: Node runs
+// the .ts files itself by stripping their types, so only erasable syntax is allowed (no enums, parameter
+// properties, or decorators), imports name the .ts file, and type-only imports use import type.
+// JavaScript files are allowed but not checked here; tsconfig.checkjs.json checks them directory by directory.
+// The web page has its own config (web/tsconfig.json).
+{
+  "compilerOptions": {
+    "noEmit": true,
+    "target": "esnext",
+    "module": "nodenext",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "types": ["node"],
+    "skipLibCheck": true
+  },
+  "include": ["tools", "db", "agents", "server", "scripts", "evals", "test", "demo", "types"]
+}

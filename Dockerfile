@@ -1,4 +1,4 @@
-# Job Agent server image: Node 22, the built web page, and Playwright's Chromium.
+# Job Agent server image: Node 22 (22.18 or newer), the built web page, and Playwright's Chromium.
 # Holds code only. Personal data (.env, data/) never enters the image: .dockerignore keeps it out, and the
 # server mounts the data folder at /data and reads its settings from an env file at run time.
 #
@@ -52,6 +52,8 @@ ENV NODE_ENV=production \
     PORT=5178 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 WORKDIR /app
+# Node runs the .ts source by stripping its types, which needs 22.18 or newer (package.json engines).
+RUN node -e "const [a, b] = process.versions.node.split('.').map(Number); if (a < 22 || (a === 22 && b < 18)) { console.error('Node ' + process.version + ' is older than 22.18'); process.exit(1); }"
 COPY --from=deps /app/node_modules ./node_modules
 # Chromium and its system libraries, matching the installed Playwright version; tzdata for the TZ setting.
 # Then npm, npx, yarn, and corepack are removed: only node runs here, and their bundled dependencies would fail the

@@ -68,7 +68,7 @@ function NoteEditor({ initial = '', saveLabel, onSave, onCancel }) {
     if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); bold(); }
     else if (mod && e.key.toLowerCase() === 'i') { e.preventDefault(); italic(); }
     else if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); link(); }
-    else if (mod && e.key === 'Enter') { e.preventDefault(); save(); }
+    else if (mod && e.key === 'Enter') { e.preventDefault(); void save(); }
     else if (e.key === 'Escape') { e.stopPropagation(); onCancel(); }
   };
 

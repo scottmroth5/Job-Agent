@@ -10,7 +10,7 @@ export function LookupsProvider({ children }) {
   const [data, setData] = useState(EMPTY);
   const refresh = useCallback(() => api.lookups().then(setData).catch(() => {}), []);
   useEffect(() => {
-    refresh();
+    void refresh();
   }, [refresh]);
 
   const value = useMemo(() => {

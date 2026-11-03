@@ -145,7 +145,7 @@ export default function ListsAdmin() {
         onSubmit={(e) => {
           e.preventDefault();
           if (!newLabel.trim()) return;
-          run(async () => {
+          void run(async () => {
             const r = await api.addLookup(list, { label: newLabel, ...(list === 'track' ? { settings: { scorePrompt: 'score', terms: false } } : { group: groupKey }) });
             setNewLabel('');
             return r;

@@ -129,7 +129,7 @@ export default function SearchSettings() {
   };
   const saveSearch = (e) => {
     e.preventDefault();
-    run(
+    void run(
       () =>
         api.saveAccountSearch({
           candidate: { name: form.name, signoffName: form.signoffName, contactLine: form.contactLine, linkedin: form.linkedin, website: form.website, github: form.github },
@@ -188,7 +188,7 @@ export default function SearchSettings() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            run(() => api.saveAccountProfile(profile, profileSource), 'Saved. The earlier version is kept under Versions.').then(() => {
+            void run(() => api.saveAccountProfile(profile, profileSource), 'Saved. The earlier version is kept under Versions.').then(() => {
               setProfileSource('typed');
               setVersionsKey((k) => k + 1);
             });

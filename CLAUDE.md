@@ -49,6 +49,8 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
 ## Commands
 npm test                          run all unit tests (no network, no real data)
 node --test test/db.test.js       run one suite
+npm run typecheck                 tsc --noEmit, strict (tsconfig.json for the server side, web/tsconfig.json for the page)
+npm run lint                      the promise rules (no-floating-promises, await-thenable, no-misused-promises) and import type
 npm run check:personal -- --all   scan every tracked file for personal data (the pre-commit hook checks staged files)
 npm run hooks:install             enable the pre-commit guard in a fresh clone
 npm run config:from-v1            build data/config/job-search.json from the v1 export
@@ -275,6 +277,14 @@ The job panel's score details (server/queries.js scoreDetails) say when, by whic
 which prompt (agents/prompts.js describeVersion matches the stored version hash: default, a saved edit, or earlier).
 Sonnet 5.5 and Opus 5.5 always think: keep effort low and maxTokens generous for scoring (MODEL_SETTINGS).
 Scripts that need secrets load .env through node --env-file.
+
+## TypeScript (v3 Phase 2, decision 0002)
+Every new file is TypeScript (.ts, .tsx on the page). Node 22.18 or newer runs .ts files by stripping their types, so there is
+no build step for the server: only erasable syntax (no enums, parameter properties, or decorators; tsconfig erasableSyntaxOnly),
+imports name the .ts file, and type-only imports use import type. Typecheck and lint run in CI and fail it.
+`void call()` marks a deliberate fire-and-forget call whose function catches its own errors; a lint finding that is a real
+bug is fixed as a bug, never hidden. Each any or @ts-expect-error has its reason beside it. types/agent-core.d.ts types the
+agent-core exports until Agent-Core ships its own; keep it in step on an upgrade.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.js localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
