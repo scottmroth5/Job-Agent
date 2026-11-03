@@ -40,6 +40,14 @@ export const PROMPTS = {
     allowed: HUNT_PLACEHOLDERS,
     required: ['company', 'roleTitle', 'analysis'],
   },
+  'verify-letter': {
+    label: 'Cover letter fact check',
+    usedBy: 'Checking each claim a cover letter makes about you against your knowledge doc and resume (after a letter is written or saved)',
+    file: ['agents', 'hunt', 'prompts', 'verify-letter.md'],
+    schemaFile: ['agents', 'hunt', 'schemas', 'verify-letter.json'],
+    allowed: ['candidateName', 'company', 'roleTitle', 'letterBlock', 'jobContentBlock'],
+    required: ['letterBlock'],
+  },
   'meeting-prep': {
     label: 'Meeting prep',
     usedBy: 'Writing meeting prep documents from a job (Prepare for a meeting in the job panel)',

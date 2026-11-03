@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["claims"],
+  "properties": {
+    "claims": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["claim", "kind", "verdict", "evidence"],
+        "properties": {
+          "claim": { "type": "string", "description": "The claim in a few words, close to the letter's wording" },
+          "kind": { "type": "string", "enum": ["employer", "title", "date", "number", "credential", "other"] },
+          "verdict": { "type": "string", "enum": ["supported", "unsupported", "contradicted"] },
+          "evidence": { "type": "string", "description": "The shortest passage from the knowledge doc or resume that shows it, quoted exactly; empty when unsupported" }
+        }
+      }
+    }
+  }
+}
