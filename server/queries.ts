@@ -328,6 +328,9 @@ export function updatePosting(db: Database, id: number, patch: PostingPatch, con
 /** Counts and spend for the header. */
 export function summary(db: Database, config: QueryConfig = {}, now = new Date()) {
   const lk = lookups(db);
+  const uid = currentUserId() ?? OWNER_ID;
+  // runs is not a user table (agent-core writes the row first): the user's runs, and for the owner the ones from before runs had a user.
+  const mine = '(user_id = @me OR (@me = 1 AND user_id IS NULL))';
   const since = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
   const counts = db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all() as Array<{
     track: string;
@@ -344,9 +347,9 @@ export function summary(db: Database, config: QueryConfig = {}, now = new Date()
     needsDescription: db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id WHERE p.user_id = @uid AND ${awaitingDescription(lk)}`).pluck().get(),
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
-    spend30Days: db.prepare('SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= ?').pluck().get(since),
-    budget: budgetStatus(db, { now, uid: currentUserId() ?? OWNER_ID }),
+    spend30Days: db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= @since AND ${mine}`).pluck().get({ since, me: uid }),
+    budget: budgetStatus(db, { now, uid }),
     inboxNeedsReview: db.prepare("SELECT COUNT(*) FROM emails WHERE user_id = @uid AND review_status = 'needs_review'").pluck().get(),
-    lastRun: db.prepare("SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') ORDER BY id DESC LIMIT 1").get() ?? null,
+    lastRun: db.prepare(`SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') AND ${mine} ORDER BY id DESC LIMIT 1`).get({ me: uid }) ?? null,
   };
 }

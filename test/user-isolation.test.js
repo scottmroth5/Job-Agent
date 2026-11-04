@@ -82,6 +82,26 @@ test('isolation: B sees none of A\'s jobs on any GET route; A sees them', async 
   store.close();
 });
 
+test("the summary's spend and last run are each user's own; the owner's include runs from before runs had a user", async () => {
+  const { store, app, B, asA, asB } = await setup();
+  const at = new Date().toISOString();
+  const run = (uid, cost) => store.raw.prepare("INSERT INTO runs (name, status, started_at, cost_usd, user_id) VALUES ('pipeline', 'ok', ?, ?, ?)").run(at, cost, uid);
+  const summary = async (cookie) => (await app.inject({ url: '/api/summary', headers: { cookie } })).json();
+  const before = await summary(asA);
+  assert.deepEqual([(await summary(asB)).spend30Days, (await summary(asB)).lastRun], [0, null], 'B has no runs yet');
+  run(OWNER_ID, 2);
+  run(null, 1);
+  assert.deepEqual([(await summary(asB)).spend30Days, (await summary(asB)).lastRun], [0, null], "A's runs are not B's");
+  assert.equal((await summary(asA)).spend30Days, before.spend30Days + 3);
+  run(B, 0.5);
+  const b = await summary(asB);
+  assert.equal(b.spend30Days, 0.5);
+  assert.equal(b.lastRun.name, 'pipeline');
+  assert.equal((await summary(asA)).spend30Days, before.spend30Days + 3, "B's run is not A's");
+  await app.close();
+  store.close();
+});
+
 test('isolation: no write route sent by B changes any of A\'s rows', async () => {
   const { store, app, asB } = await setup();
   const before = snapshot(store.raw, OWNER_ID);
