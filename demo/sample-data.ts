@@ -74,7 +74,7 @@ const C = {
   'Yarrow Health Data': 'a health information exchange operator',
 };
 
-export const companyBlurb = (company) => C[company] ?? 'a growing technology company';
+export const companyBlurb = (company: string) => (C as Record<string, string>)[company] ?? 'a growing technology company';
 
 // The jobs. days = discovered this many days ago; applied = applied this many days ago.
 // history: later statuses with days ago. emails: messages linked to the job. Scores follow the real scale:
@@ -228,7 +228,7 @@ export const WATCH_OUTS = [
   'Team is entirely offshore',
 ];
 
-// The fact check on every sample letter (scripts/demo-seed.js seeds it; demo/samples.js sampleCheck answers Check again):
+// The fact check on every sample letter (scripts/demo-seed.js seeds it; demo/samples.ts sampleCheck answers Check again):
 // the claims the seeded letter makes, checked against DEMO_ABOUT_YOU. One is contradicted (the letter says a decade;
 // the knowledge doc says 8 years leading teams) and one is unsupported, so the demo shows both.
 export const SAMPLE_CHECK_CLAIMS = [
@@ -256,9 +256,9 @@ export const PROMPT_EDITS = [
   },
 ];
 
-// Finished runs for the Activity tab, replayed when the demo server starts (server/app.js). The output follows the
+// Finished runs for the Activity tab, replayed when the demo server starts (server/app.ts). The output follows the
 // shape of a real run's: step lines, then job titles and counts, never email content.
-const pipelineStep = (n, name) => ({ step: `[pipeline] Step ${n}/5: ${name}` });
+const pipelineStep = (n: number, name: string) => ({ step: `[pipeline] Step ${n}/5: ${name}` });
 export const SAMPLE_TASKS = [
   {
     kind: 'pipeline',
@@ -372,9 +372,8 @@ Engineering leader with 15 years in software and 8 leading teams, mostly in heal
 
 // The demo's Find someone to contact: a canned answer in the real one's shape, built from the sample job. The people are
 // invented and their links are example.com pages; no model is called and nothing is saved.
-const slug = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('-');
-/** @param {{ company: string, title: string, appliedOn?: string | null }} job */
-export function demoContactResult({ company, title, appliedOn = null }) {
+const slug = (s: string | null | undefined) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('-');
+export function demoContactResult({ company, title, appliedOn = null }: { company: string; title: string; appliedOn?: string | null }) {
   const site = `https://${slug(company) || 'example'}.example.com`;
   const reportsTo = /\b(vp|vice president|head|svp|chief|cto)\b/i.test(title) ? 'Chief Technology Officer' : 'VP of Engineering';
   return `## Who to contact at ${company}

@@ -43,8 +43,8 @@ flowchart LR
 - **Caddy** terminates TLS and is the only service with published ports. It keeps no access log.
 - **The app container** is one Node process:
   - Fastify routes with JSON schemas (`/api/openapi.json`) and the built React UI;
-  - the in-process scheduler (`server/scheduler.js`, set in `.env`);
-  - long actions as in-memory tasks (`server/tasks.js`), lost on restart;
+  - the in-process scheduler (`server/scheduler.ts`, set in `.env`);
+  - long actions as in-memory tasks (`server/tasks.ts`), lost on restart;
   - the pipeline and other scripts as child processes, one pipeline at a time across the app;
   - Chromium for pages that need JavaScript.
 - **The demo container:** the same image with `AUTH_MODE=demo`. It has its own sample database, no secrets, and no Claude.

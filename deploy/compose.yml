@@ -22,7 +22,7 @@ services:
       HOST: 0.0.0.0
       PORT: "5178"
       TRUST_PROXY: loopback,linklocal,uniquelocal
-      # US-only access (server/geo.js); the health check always passes.
+      # US-only access (server/geo.ts); the health check always passes.
       GEO_ALLOW: US
     volumes:
       # The database, config, Google tokens, attachments, and logs. Survives every deploy.
@@ -58,7 +58,7 @@ services:
       REQUEST_ACCESS_URL: https://${SITE_ADDRESS:?set SITE_ADDRESS in .env}
       # Where to ask for help (shown on the banner); the same SUPPORT_EMAIL as the app's .env, or nothing.
       SUPPORT_EMAIL: ${SUPPORT_EMAIL:-}
-      # Optional usage counts for the demo only (server/demo-analytics.js): a PostHog project key (phc_..., meant for
+      # Optional usage counts for the demo only (server/demo-analytics.ts): a PostHog project key (phc_..., meant for
       # browser code) and its host. Left empty, the demo sends nothing. The app never reads these.
       DEMO_POSTHOG_KEY: ${DEMO_POSTHOG_KEY:-}
       DEMO_POSTHOG_HOST: ${DEMO_POSTHOG_HOST:-}

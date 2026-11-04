@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
+import { buildApp } from '../server/app.ts';
 import { LAYOUT_AREAS } from '../server/layout.ts';
 import { arranged, moved } from '../web/src/layout.js';
 import { repoPath } from '../tools/paths.ts';

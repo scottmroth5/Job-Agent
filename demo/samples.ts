@@ -1,21 +1,28 @@
 // The demo's AI answers: canned samples, written to read like what Claude returns for the real prompts, built from the
-// sample job and the fictional candidate's knowledge doc (demo/sample-data.js). The web app loads this file only in the
+// sample job and the fictional candidate's knowledge doc (demo/sample-data.ts). The web app loads this file only in the
 // demo (web/src/api.js) and calls no model, so the demo never spends anything; nothing here is saved. Every person and
 // company is invented.
-import { CANDIDATE, DEMO_ABOUT_YOU, DEMO_CONFIG, SAMPLE_CHECK_CLAIMS, companyBlurb } from './sample-data.js';
+import { CANDIDATE, DEMO_ABOUT_YOU, DEMO_CONFIG, SAMPLE_CHECK_CLAIMS, companyBlurb } from './sample-data.ts';
 
-const first = (s) => String(s ?? '').trim().split(/\s+/)[0] ?? '';
-const cap = (s) => (s ? `${s[0].toUpperCase()}${s.slice(1)}` : s);
-const senior = (title) => /\b(cto|chief|vp|vice president|head|svp)\b/i.test(String(title));
-const list = (items) => items.filter(Boolean).map((x) => `- ${x}`).join('\n');
+/** The sample job as the page has it: the fields these samples read. */
+type SampleJob = { company: string; title: string; score?: number | null; analysis?: { score?: number; reason?: string; strengths?: string[]; watchOuts?: string[] } | null };
+/** What the prep dialog sends. */
+type PrepInput = { attendees?: Array<{ name: string; role?: string; about?: string }>; kind?: string | null; format?: string | null; meetingAt?: string | null };
+/** A Help guide: its title and Markdown. */
+type Guide = { title: string; markdown?: string };
+
+const first = (s: string | null | undefined) => String(s ?? '').trim().split(/\s+/)[0] ?? '';
+const cap = (s: string) => (s ? `${s[0].toUpperCase()}${s.slice(1)}` : s);
+const senior = (title: string) => /\b(cto|chief|vp|vice president|head|svp)\b/i.test(String(title));
+const list = (items: Array<string | null | undefined | false>) => items.filter(Boolean).map((x) => `- ${x}`).join('\n');
 
 /** The letter fact check (Check again): the seeded letter's claims, as the real route answers. */
 export const sampleCheck = (now = new Date()) => ({ status: 'checked', claims: SAMPLE_CHECK_CLAIMS.map((c) => ({ ...c, dismissed: false })), checkedAt: now.toISOString(), sample: true });
 
 /** Meeting prep: the real prompt's ten sections, for the people and meeting the visitor entered. */
-export function samplePrep(job, input = {}) {
+export function samplePrep(job: SampleJob, input: PrepInput = {}) {
   const people = (input.attendees ?? []).filter((p) => p.name?.trim());
-  const who = people.length ? people : [{ name: 'Morgan Lee', role: senior(job.title) ? 'CEO' : 'VP of Engineering' }];
+  const who: Array<{ name: string; role?: string; about?: string }> = people.length ? people : [{ name: 'Morgan Lee', role: senior(job.title) ? 'CEO' : 'VP of Engineering' }];
   const lead = who[0];
   const blurb = companyBlurb(job.company);
   const a = job.analysis ?? {};
@@ -79,7 +86,7 @@ ${gaps.length ? gaps.map((g) => `- **${g}.** Say it plainly, then bridge to the 
 }
 
 /** The letter for Write resume tweaks and cover letter, or a fresh one for Regenerate (a different opening). */
-export function sampleLetter(job, { regenerate = false } = {}) {
+export function sampleLetter(job: SampleJob, { regenerate = false } = {}) {
   const blurb = companyBlurb(job.company);
   const open = regenerate
     ? `${job.company} is ${blurb}, and it has reached the point every growing platform does: the product has outgrown the systems and the team that built it. That is the problem I have spent the last eight years solving.`
@@ -93,7 +100,7 @@ For the ${job.title} role, I would start by listening to customers, the team, an
 I would welcome a conversation about where ${job.company} is headed and how I can help it get there.`;
 }
 
-export function sampleTweaks(job) {
+export function sampleTweaks(job: SampleJob) {
   return `Summary: lead with regulated platform scaling and team growth; name ${job.company}'s market in the first line.
 
 1. Move "Grew the platform team from 6 engineers to 45; releases stayed weekly" into the top three bullets.
@@ -103,7 +110,7 @@ export function sampleTweaks(job) {
 }
 
 /** Re-score: the same analysis from the posting text, as a re-score of an unchanged posting gives. */
-export function sampleScore(job) {
+export function sampleScore(job: SampleJob) {
   const a = job.analysis ?? {};
   return {
     score: job.score ?? a.score ?? null,
@@ -114,9 +121,9 @@ export function sampleScore(job) {
 
 // Revise with Claude: the change the visitor asked for, made the way Claude makes it, with a note on what changed.
 // Paragraphs line by line (no pattern runs over the visitor's text): blank lines separate them.
-const paragraphs = (text) => {
-  const out = [];
-  let cur = [];
+const paragraphs = (text: string | null | undefined) => {
+  const out: string[] = [];
+  let cur: string[] = [];
   for (const line of String(text ?? '').split('\n')) {
     if (line.trim()) cur.push(line.trim());
     else if (cur.length) (out.push(cur.join(' ')), (cur = []));
@@ -124,11 +131,11 @@ const paragraphs = (text) => {
   if (cur.length) out.push(cur.join(' '));
   return out;
 };
-const sentences = (p) => p.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((s) => s.trim()) ?? [p];
-export function sampleRevision({ letter, feedback, company, title }) {
+const sentences = (p: string) => p.match(/[^.!?]+[.!?]+(\s|$)/g)?.map((s) => s.trim()) ?? [p];
+export function sampleRevision({ letter, feedback, company, title }: { letter: string; feedback: string; company: string; title: string }) {
   const ask = String(feedback ?? '').toLowerCase();
   let paras = paragraphs(letter);
-  const changes = [];
+  const changes: string[] = [];
   if (/short|tight|concise|trim|cut|brief/.test(ask)) {
     const before = paras.join(' ').split(/\s+/).length;
     paras = paras.map((p) => sentences(p).slice(0, 2).join(' '));
@@ -158,10 +165,10 @@ export function sampleRevision({ letter, feedback, company, title }) {
 
 // Help's Ask: the guide section that best matches the question, quoted the way the real answer cites the guides.
 const STOP = new Set(['what', 'when', 'where', 'which', 'with', 'that', 'this', 'there', 'their', 'have', 'does', 'from', 'your', 'about', 'into', 'would', 'should', 'could', 'make', 'only', 'them', 'they', 'will', 'just', 'some', 'more', 'then', 'than', 'each', 'how']);
-const words = (s) => String(s ?? '').toLowerCase().match(/[a-z]{4,}/g)?.filter((w) => !STOP.has(w)) ?? [];
-export function sampleHelpAnswer(question, guides = []) {
+const words = (s: string | null | undefined) => String(s ?? '').toLowerCase().match(/[a-z]{4,}/g)?.filter((w) => !STOP.has(w)) ?? [];
+export function sampleHelpAnswer(question: string, guides: Guide[] = []) {
   const ask = new Set(words(question));
-  let best = null;
+  let best: { hits: number; guide: string; heading: string; text: string } | null = null;
   for (const g of guides) {
     for (const part of String(g.markdown ?? '').split(/\n(?=## )/)) {
       const heading = /^##\s+(.+)$/m.exec(part)?.[1] ?? g.title;

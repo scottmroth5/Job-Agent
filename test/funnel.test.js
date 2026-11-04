@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
 import { addValue } from '../agents/lookups.ts';
-import { funnel, applications, NO_REPLY_DAYS } from '../server/funnel.js';
+import { funnel, applications, NO_REPLY_DAYS } from '../server/funnel.ts';
 
 // Synthetic data only. "now" is fixed so ages and weeks are stable.
 const now = new Date('2026-10-05T12:00:00Z');
@@ -96,7 +96,7 @@ test('filters, by-source results, weekly counts, and the follow-up list', () => 
 });
 
 test('GET /api/funnel applies the window and track, and rejects bad values', async () => {
-  const { buildApp } = await import('../server/app.js');
+  const { buildApp } = await import('../server/app.ts');
   const { store, job } = setup();
   job({ applied: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10) });
   job({ applied: '2025-01-01' });

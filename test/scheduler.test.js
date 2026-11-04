@@ -1,8 +1,8 @@
 // The in-app scheduler and the time zone helpers. Times are built in local time, so these pass in any zone.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createScheduler, lastRun, nextRun, parseSchedule, schedulesFromEnv, CATCH_UP_HOURS } from '../server/scheduler.js';
-import { createTaskRunner } from '../server/tasks.js';
+import { createScheduler, lastRun, nextRun, parseSchedule, schedulesFromEnv, CATCH_UP_HOURS } from '../server/scheduler.ts';
+import { createTaskRunner } from '../server/tasks.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 
 const local = (y, mo, d, h = 0, mi = 0) => new Date(y, mo - 1, d, h, mi);
@@ -118,7 +118,7 @@ test('tasks: wait resolves when the task ends, without polling', async () => {
 
 test('API: /api/schedule lists the jobs, and a missed backup runs as a task when the server starts', async () => {
   const { openJobStore } = await import('../db/index.ts');
-  const { buildApp } = await import('../server/app.js');
+  const { buildApp } = await import('../server/app.ts');
   const store = openJobStore(':memory:');
   const scripts = [];
   const app = await buildApp({

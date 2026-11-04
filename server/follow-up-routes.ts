@@ -4,7 +4,7 @@
 import { OWNER_ID } from '../db/users.ts';
 import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_STALE_DAYS, FOLLOW_UP_FROM, MAX_STALE_DAYS, MIN_STALE_DAYS } from '../agents/follow-ups.ts';
 import { findContact } from '../agents/hunt/find-contact.ts';
-import { demoContactResult } from '../demo/sample-data.js';
+import { demoContactResult } from '../demo/sample-data.ts';
 import type { Claude } from '@scottmroth5/agent-core';
 import type { JobStore } from '../tools/types.ts';
 import type { UserConfig } from '../agents/user-config.ts';

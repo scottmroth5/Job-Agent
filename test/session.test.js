@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { sessionKey, sign, verify, parseCookies, cookie } from '../server/session.js';
+import { sessionKey, sign, verify, parseCookies, cookie } from '../server/session.ts';
 
 const key = sessionKey(randomBytes(48).toString('base64'));
 const later = Date.now() + 60_000;

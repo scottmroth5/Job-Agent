@@ -28,7 +28,7 @@ RUN npm ci
 COPY . .
 RUN npm run web:build && rm -rf node_modules
 
-# The location database for US-only access and the admin's usage totals (server/geo.js): DB-IP's free IP to City Lite
+# The location database for US-only access and the admin's usage totals (server/geo.ts): DB-IP's free IP to City Lite
 # (CC BY 4.0, https://db-ip.com), this month's file or last month's. A failed download leaves no file, and the app then
 # blocks nothing, counts locations as unknown, and says so in its log; the weekly rebuild tries again.
 FROM debian:bookworm-slim AS geo
@@ -43,7 +43,7 @@ RUN echo "location database for build $GEO_STAMP" && mkdir -p /geo \
          && gunzip -c /tmp/city.mmdb.gz > /geo/city.mmdb && [ -s /geo/city.mmdb ]; then echo "location database $m"; break; fi; \
       rm -f /geo/city.mmdb; \
     done; rm -f /tmp/city.mmdb.gz; true
-# Apple's iCloud Private Relay addresses with the country each stands for (server/geo.js checks it before DB-IP). A failed
+# Apple's iCloud Private Relay addresses with the country each stands for (server/geo.ts checks it before DB-IP). A failed
 # download leaves no file: blocking stays on with DB-IP alone, the app alerts the owner, and the weekly rebuild tries again.
 RUN echo "relay list for build $GEO_STAMP" \
  && if curl -fsSL --max-time 300 -o /geo/relay.csv "https://mask-api.icloud.com/egress-ip-ranges.csv" && [ -s /geo/relay.csv ]; \

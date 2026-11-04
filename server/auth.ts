@@ -9,15 +9,25 @@
 //                     PUBLIC_URL (and the client's redirect URI) change.
 //   AUTH_MODE=demo    A public, read-only showcase over a sample database (npm run demo:seed): no login, every
 //                     request that would change data is refused, and the server starts without Claude, Gmail,
-//                     or Drive (server/index.js), so nothing a visitor does can spend money or reach an account.
+//                     or Drive (server/main.ts), so nothing a visitor does can spend money or reach an account.
 import { createHash, randomBytes } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { escapeHtml } from '../tools/html.ts';
 import { supportEmail } from '../tools/support.ts';
 import { accountFor, getUser, MAX_NAME, MAX_NOTE, requestAccess } from '../db/users.ts';
-import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, cookie } from './session.js';
-import { DEMO_CONFIG, DEMO_EMAIL } from '../demo/sample-data.js';
-import { demoAnalytics } from './demo-analytics.js';
+import type { User } from '../db/users.ts';
+import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, cookie } from './session.ts';
+import { DEMO_CONFIG, DEMO_EMAIL } from '../demo/sample-data.ts';
+import { demoAnalytics } from './demo-analytics.ts';
+import type { TokenPayload } from 'google-auth-library';
+import type { Database } from '../tools/types.ts';
+import type { App, FastifyReply, FastifyRequest, Notices } from './types.ts';
+
+export type AuthSettings = ReturnType<typeof authSettings>;
+/** The Google exchange: code -> the verified ID token's claims (tests pass a fake). */
+export type Exchange = (args: { code: string; codeVerifier: string; redirectUri: string }) => Promise<TokenPayload | undefined>;
+type Session = { email: string; exp: number; v?: number };
+type Login = { state: string; nonce: string; codeVerifier: string; next: string; exp: number };
 
 export const LOOPBACK = ['127.0.0.1', '::1', 'localhost'];
 export const MODES = ['none', 'google', 'demo'];
@@ -49,13 +59,13 @@ export function authSettings(env = process.env) {
     secret: env.SESSION_SECRET || '',
     // The demo's "Request access" link: the real app's address.
     requestAccessUrl: env.REQUEST_ACCESS_URL || '',
-    // The demo's usage counts (server/demo-analytics.js); null outside the demo.
+    // The demo's usage counts (server/demo-analytics.ts); null outside the demo.
     analytics: demoAnalytics(env),
   };
 }
 
 /** Throws unless the settings are complete and safe for this host. Never includes secret values. */
-export function assertSafeBinding({ host, mode = 'none', settings = {} }) {
+export function assertSafeBinding({ host, mode = 'none', settings = {} }: { host: string; mode?: string; settings?: Partial<AuthSettings> }) {
   if (!MODES.includes(mode)) throw new Error(`AUTH_MODE "${mode}" is not supported. Use none or google.`);
   const loopback = LOOPBACK.includes(host);
   if (mode === 'none') {
@@ -65,7 +75,7 @@ export function assertSafeBinding({ host, mode = 'none', settings = {} }) {
   if (mode === 'demo') {
     if (loopback) return;
     if (!settings.publicUrl) throw new Error('AUTH_MODE=demo needs PUBLIC_URL in .env when the server is reachable from other computers.');
-    let demoUrl;
+    let demoUrl: URL;
     try {
       demoUrl = new URL(settings.publicUrl);
     } catch {
@@ -74,18 +84,22 @@ export function assertSafeBinding({ host, mode = 'none', settings = {} }) {
     if (demoUrl.protocol !== 'https:') throw new Error(`PUBLIC_URL must use https when the server listens on ${host}.`);
     return;
   }
-  const missing = [
-    ['GOOGLE_WEB_CLIENT_ID', settings.clientId],
+  const missing = (
+    [
+      ['GOOGLE_WEB_CLIENT_ID', settings.clientId],
     ['GOOGLE_WEB_CLIENT_SECRET', settings.clientSecret],
-    ['AUTH_ALLOWED_EMAILS', settings.allowed?.length],
-    ['SESSION_SECRET', settings.secret],
-    ['PUBLIC_URL', settings.publicUrl],
-  ].filter(([, v]) => !v).map(([k]) => k);
+      ['AUTH_ALLOWED_EMAILS', settings.allowed?.length],
+      ['SESSION_SECRET', settings.secret],
+      ['PUBLIC_URL', settings.publicUrl],
+    ] as Array<[string, unknown]>
+  )
+    .filter(([, v]) => !v)
+    .map(([k]) => k);
   if (missing.length) throw new Error(`AUTH_MODE=google needs ${missing.join(', ')} in .env (npm run auth:setup lists them).`);
   sessionKey(settings.secret);
-  let url;
+  let url: URL;
   try {
-    url = new URL(settings.publicUrl);
+    url = new URL(settings.publicUrl as string); // checked above
   } catch {
     throw new Error('PUBLIC_URL must be a full URL such as https://jobs.example.com or http://localhost:5178.');
   }
@@ -93,7 +107,7 @@ export function assertSafeBinding({ host, mode = 'none', settings = {} }) {
 }
 
 /** The real Google exchange: code -> verified ID token payload (signature, audience, issuer, expiry). */
-export function googleExchange(settings) {
+export function googleExchange(settings: { clientId?: string; clientSecret?: string }): Exchange {
   return async ({ code, codeVerifier, redirectUri }) => {
     const client = new OAuth2Client({ clientId: settings.clientId, clientSecret: settings.clientSecret, redirectUri });
     const { tokens } = await client.getToken({ code, codeVerifier, redirect_uri: redirectUri });
@@ -103,8 +117,8 @@ export function googleExchange(settings) {
   };
 }
 
-const b64url = (buf) => Buffer.from(buf).toString('base64url');
-export const page = (title, body) =>
+const b64url = (buf: Buffer) => Buffer.from(buf).toString('base64url');
+export const page = (title: string, body: string) =>
   `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${escapeHtml(title)}</title>` +
   `<style>body{font:16px/1.5 system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#f6f7f9;color:#1d2330}` +
   `*{box-sizing:border-box}input,textarea,button{font:inherit}input,textarea{border:1px solid #c9ced8;border-radius:8px}` +
@@ -121,25 +135,30 @@ const supportLine = () => {
  * so "/\evil.example" would mean "//evil.example" (another site): backslashes, control characters, and anything that
  * is not a single leading slash are refused, as are the sign-in pages themselves.
  */
-export const safeNext = (next) =>
+export const safeNext = (next: unknown) =>
   typeof next === 'string' && next.length <= 2000 && /^\/(?![/\\])/.test(next) && !/[\\\u0000-\u001f\u007f]/.test(next) && !next.startsWith('/auth/')
     ? next
     : '/';
 
 /**
  * Registers the auth hook and routes. In google mode, req.user is the signed-in email and req.account its account
- * ({ uid, status, role }) on every request that gets through.
- * @param {object} opts
- * @param {string} opts.mode
- * @param {object} [opts.settings]
- * @param {Function} [opts.exchange]  googleExchange(settings) (tests pass a fake)
- * @param {() => number} [opts.now]
- * @param {import('better-sqlite3').Database} [opts.db]  the job database (accounts)
- * @param {{ accessRequested?: Function }} [opts.notices]  server/notices.js
+ * ({ uid, status, role }) on every request that gets through. exchange is googleExchange(settings) unless a test passes
+ * a fake; db is the job database (accounts); notices are server/notices.ts.
  */
-export function registerAuth(app, { mode = 'none', settings = {}, exchange, now = () => Date.now(), db = null, notices = {} } = {}) {
+export function registerAuth(
+  app: App,
+  {
+    mode = 'none',
+    settings = {},
+    exchange,
+    now = () => Date.now(),
+    db = null,
+    notices = {},
+  }: { mode?: string; settings?: Partial<AuthSettings>; exchange?: Exchange; now?: () => number; db?: Database | null; notices?: Notices } = {},
+) {
   app.get('/api/me', { schema: { summary: 'The signed-in user and their account (google mode), or the open mode', response: { 200: { type: 'object', additionalProperties: true } } } }, async (req) => {
-    const user = req.account ? getUser(db, req.account.uid) : null;
+    // An account comes only with google mode, which always has the database.
+    const user = req.account ? getUser(db as Database, req.account.uid) : null;
     return {
       authMode: mode,
       email: req.user ?? (mode === 'demo' ? DEMO_EMAIL : null),
@@ -159,17 +178,20 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
     return;
   }
   if (mode !== 'google') throw new Error(`AUTH_MODE "${mode}" is not supported.`);
+  // Google mode always has these (assertSafeBinding and server/app.ts).
+  const users = db as Database;
+  const publicUrl = settings.publicUrl as string;
 
   const key = sessionKey(settings.secret);
-  const origin = new URL(settings.publicUrl).origin;
-  const secure = settings.publicUrl.startsWith('https://');
-  const redirectUri = `${settings.publicUrl}/auth/google/callback`;
+  const origin = new URL(publicUrl).origin;
+  const secure = publicUrl.startsWith('https://');
+  const redirectUri = `${publicUrl}/auth/google/callback`;
   const signIn = exchange ?? googleExchange(settings);
-  const sessionOf = (req) => verify(parseCookies(req.headers.cookie)[SESSION_COOKIE], key, now());
-  const sameSite = (req) => req.headers.origin === origin;
+  const sessionOf = (req: FastifyRequest) => verify<Session>(parseCookies(req.headers.cookie)[SESSION_COOKIE], key, now());
+  const sameSite = (req: FastifyRequest) => req.headers.origin === origin;
   // Where an address without a usable account goes, and what an API call is told.
-  const WAITING = { none: '/auth/register', pending: '/auth/waiting', rejected: '/auth/not-approved' };
-  const REFUSED = { none: 'Request access to use this app.', pending: 'Your request for access is waiting for approval.', rejected: 'Your request for access was not approved.' };
+  const WAITING: Record<string, string> = { none: '/auth/register', pending: '/auth/waiting', rejected: '/auth/not-approved' };
+  const REFUSED: Record<string, string> = { none: 'Request access to use this app.', pending: 'Your request for access is waiting for approval.', rejected: 'Your request for access was not approved.' };
 
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0];
@@ -180,7 +202,7 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
       return reply.redirect(`/auth/login?next=${encodeURIComponent(req.url)}`);
     }
     // The account is read on every request, so approving, pausing, or removing an address takes effect at once.
-    const account = accountFor(db, session.email, settings.allowed);
+    const account = accountFor(users, session.email, settings.allowed);
     const state = account?.status ?? 'none';
     if (WAITING[state]) {
       if (path.startsWith('/api/')) return reply.code(403).send({ error: REFUSED[state], account: state });
@@ -194,7 +216,7 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
     req.account = account;
   });
 
-  app.get('/auth/login', { schema: { hide: true } }, async (req, reply) => {
+  app.get<{ Querystring: { next?: string } }>('/auth/login', { schema: { hide: true } }, async (req, reply) => {
     const state = b64url(randomBytes(24));
     const nonce = b64url(randomBytes(24));
     const codeVerifier = b64url(randomBytes(32));
@@ -211,28 +233,29 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
       code_challenge: challenge,
       code_challenge_method: 'S256',
       prompt: 'select_account',
-    })) url.searchParams.set(k, v);
+    })) url.searchParams.set(k, v as string); // google mode always has a client id (assertSafeBinding)
     reply.header('Set-Cookie', cookie(LOGIN_COOKIE, login, { maxAge: LOGIN_MINUTES * 60, secure }));
     return reply.redirect(url.toString());
   });
 
-  app.get('/auth/google/callback', { schema: { hide: true } }, async (req, reply) => {
-    const fail = (status, title, body) => reply.code(status).type('text/html').header('Set-Cookie', cookie(LOGIN_COOKIE, '', { maxAge: 0, secure })).send(page(title, body));
+  app.get<{ Querystring: { error?: string; state?: string; code?: string } }>('/auth/google/callback', { schema: { hide: true } }, async (req, reply) => {
+    const fail = (status: number, title: string, body: string) => reply.code(status).type('text/html').header('Set-Cookie', cookie(LOGIN_COOKIE, '', { maxAge: 0, secure })).send(page(title, body));
     const again = '<p><a href="/auth/login">Try again</a></p>';
-    const login = verify(parseCookies(req.headers.cookie)[LOGIN_COOKIE], key, now());
+    const login = verify<Login>(parseCookies(req.headers.cookie)[LOGIN_COOKIE], key, now());
     if (req.query?.error) return fail(400, 'Sign-in cancelled', `<p>Google returned: ${escapeHtml(req.query.error)}.</p>${again}`);
     if (!login || !req.query?.state || req.query.state !== login.state || !req.query?.code) {
       return fail(400, 'Sign-in expired', `<p>The sign-in link was used already or took too long.</p>${again}`);
     }
-    let claims;
+    let claims: TokenPayload | undefined;
     try {
       claims = await signIn({ code: req.query.code, codeVerifier: login.codeVerifier, redirectUri });
     } catch (err) {
-      req.log?.warn?.({ err: err.name }, 'Google sign-in failed');
+      req.log?.warn?.({ err: (err as Error).name }, 'Google sign-in failed');
       return fail(502, 'Sign-in failed', `<p>Google could not confirm the sign-in.</p>${again}`);
     }
     if (claims?.nonce !== login.nonce) return fail(400, 'Sign-in failed', `<p>The sign-in response did not match this request.</p>${again}`);
-    if (!claims.email || claims.email_verified !== true) return fail(403, 'Email not verified', `<p>That Google account's email address is not verified.</p>${again}`);
+    // A matching nonce means there are claims.
+    if (!claims?.email || claims.email_verified !== true) return fail(403, 'Email not verified', `<p>That Google account's email address is not verified.</p>${again}`);
     // Any verified address gets a session; the account decides what it may do (the onRequest hook above).
     const session = sign({ email: claims.email.toLowerCase(), exp: now() + SESSION_DAYS * 86_400_000, v: 1 }, key);
     reply.header('Set-Cookie', [cookie(SESSION_COOKIE, session, { maxAge: SESSION_DAYS * 86_400, secure }), cookie(LOGIN_COOKIE, '', { maxAge: 0, secure })]);
@@ -251,16 +274,16 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
 
   // Requesting access: a form (no script; the page's CSP allows none inline), posted as a URL-encoded body.
   app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string', bodyLimit: 8192 }, (req, body, done) => {
-    done(null, Object.fromEntries(new URLSearchParams(body)));
+    done(null, Object.fromEntries(new URLSearchParams(body as string))); // parseAs: 'string'
   });
   const signOut = '<form method="post" action="/auth/logout-form"><button type="submit">Sign out</button></form>';
-  const html = (reply, title, body, status = 200) => reply.code(status).type('text/html').header('Cache-Control', 'no-store').send(page(title, body));
+  const html = (reply: FastifyReply, title: string, body: string, status = 200) => reply.code(status).type('text/html').header('Cache-Control', 'no-store').send(page(title, body));
   // Each page is for one account state: { session } when the visitor is in it, else { go } (where they belong instead:
   // sign in, another of these pages, or the app). Callers redirect on go and never read the session then.
-  const statePage = (req, want) => {
+  const statePage = (req: FastifyRequest, want: string): { session?: Session; go?: string } => {
     const session = sessionOf(req);
     if (!session?.email) return { go: '/auth/login' };
-    const state = accountFor(db, session.email, settings.allowed)?.status ?? 'none';
+    const state = accountFor(users, session.email, settings.allowed)?.status ?? 'none';
     if (state !== want) return { go: WAITING[state] ?? '/' };
     return { session };
   };
@@ -268,12 +291,13 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
   app.get('/auth/register', { schema: { hide: true } }, async (req, reply) => {
     const { session, go } = statePage(req, 'none');
     if (go) return reply.redirect(go);
-    const closed = db.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() >= MAX_PENDING;
+    const email = (session as Session).email; // no go, so there is a session
+    const closed = (users.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING;
     if (closed) return html(reply, 'Requests are closed', '<p>Job Hunt is not taking new requests for access right now. Please try again later.</p>' + signOut);
     return html(
       reply,
       'Request access',
-      `<p>You are signed in as <strong>${escapeHtml(session.email)}</strong>. Job Hunt is invite-only: tell the owner who you are, and you will get an email when your account is ready.</p>
+      `<p>You are signed in as <strong>${escapeHtml(email)}</strong>. Job Hunt is invite-only: tell the owner who you are, and you will get an email when your account is ready.</p>
       <form method="post" action="/auth/register" style="display:grid;gap:10px">
         <label>Your name<br><input name="name" required maxlength="${MAX_NAME}" autocomplete="name" style="width:100%;padding:6px"></label>
         <label>A note for the owner (optional)<br><textarea name="note" maxlength="${MAX_NOTE}" rows="4" style="width:100%;padding:6px"></textarea></label>
@@ -288,19 +312,21 @@ export function registerAuth(app, { mode = 'none', settings = {}, exchange, now 
     if (!sameSite(req)) return reply.code(403).send({ error: 'Requests that change data must come from this site.' });
     const { session, go } = statePage(req, 'none');
     if (go) return reply.code(303).redirect(go);
-    const body = req.body && typeof req.body === 'object' ? req.body : {};
+    const email = (session as Session).email; // no go, so there is a session
+    const body: { age?: string; terms?: string; name?: string; note?: string } = req.body && typeof req.body === 'object' ? req.body : {};
     // The terms require it (TERMS.md); the browser enforces the box too, but a hand-made post is refused here.
     if (body.age !== 'yes') return html(reply, 'Request access', '<p>You must be 18 or older to use Job Hunt.</p><p><a href="/auth/register">Back</a></p>', 400);
     if (body.terms !== 'yes') return html(reply, 'Request access', '<p>Please accept the terms and privacy policy.</p><p><a href="/auth/register">Back</a></p>', 400);
-    if (db.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() >= MAX_PENDING) return reply.redirect('/auth/register');
-    let result;
+    if ((users.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING) return reply.redirect('/auth/register');
+    let result: { id: number; created: boolean };
     try {
-      result = requestAccess(db, { email: session.email, name: body.name, note: body.note });
+      result = requestAccess(users, { email, name: body.name, note: body.note });
     } catch (err) {
-      if (err.statusCode === 400) return html(reply, 'Request access', `<p>${escapeHtml(err.message)}</p><p><a href="/auth/register">Back</a></p>`, 400);
+      const e = err as Error & { statusCode?: number };
+      if (e.statusCode === 400) return html(reply, 'Request access', `<p>${escapeHtml(e.message)}</p><p><a href="/auth/register">Back</a></p>`, 400);
       throw err;
     }
-    if (result.created) await notices.accessRequested?.(getUser(db, result.id));
+    if (result.created) await notices.accessRequested?.(getUser(users, result.id) as User); // the row was just made
     return reply.code(303).redirect('/auth/waiting');
   });
 

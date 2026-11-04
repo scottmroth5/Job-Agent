@@ -10,9 +10,9 @@ import { runAsUser } from '../db/scope.ts';
 import { addResume, deleteResume, listResumes, MAX_RESUMES, pickResume, replaceResumeFile, updateResume, withResume } from '../agents/resumes.ts';
 import { generateForPostings } from '../agents/hunt/generate.ts';
 import { exportAccount } from '../agents/account-data.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
-import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
+import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 
 const SITE = 'http://localhost:5178';
 const text = (who, extra = '') => Buffer.from(`${who} resume. Led platform teams at Example Co. ${extra}`.padEnd(120, '.'));

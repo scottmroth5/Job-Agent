@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { openJobStore, loadMigrations } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
+import { buildApp } from '../server/app.ts';
 import { addNote, adoptNotesText, deleteNote, listNotes, notesForPrompt, updateNote } from '../agents/notes.ts';
 
 const config = { candidate: { name: 'Pat Example' }, search: { homeLocations: [] }, fractional: {}, coverLetterChecks: [] };

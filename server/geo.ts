@@ -2,7 +2,7 @@
 // app and the demo. The health check (/healthz, used by the deploy and Docker) always passes, as do private and
 // loopback addresses (inside the server). The country comes from DB-IP's free IP to City Lite database (CC BY 4.0,
 // https://db-ip.com), downloaded into the image at build time (Dockerfile) and refreshed by the weekly rebuild; the
-// same file gives the approximate city and state for the admin's usage totals (server/usage-totals.js). Lookups are
+// same file gives the approximate city and state for the admin's usage totals (server/usage-totals.ts). Lookups are
 // local: no address ever goes to an outside service.
 // GEO_ALLOW (comma-separated country codes) turns it on; unset, nothing is blocked (local runs, tests). Without the
 // database it fails open and says so in the server log. An address the database does not know is let through: iPhones
@@ -13,10 +13,17 @@
 // which DB-IP often places in the wrong country. Apple publishes those addresses with the country each one stands for
 // (https://mask-api.icloud.com/egress-ip-ranges.csv, downloaded into the image next to DB-IP's file), so the country
 // comes from that list first and from DB-IP only for addresses it does not list. A relay address Apple lists outside the
-// allowed countries is still refused. Without the list, blocking stays on with DB-IP alone (server/index.js alerts).
+// allowed countries is still refused. Without the list, blocking stays on with DB-IP alone (server/main.ts alerts).
 import { existsSync, readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import maxmind from 'maxmind';
+import type { CityResponse } from 'maxmind';
+
+/** A relay range: first and last address (numbers for IPv4, the top 64 bits as BigInts for IPv6) and its country. */
+type Range<N extends number | bigint> = [N, N, string];
+export type RelayRanges = { v4: Range<number>[]; v6: Range<bigint>[] };
+/** ip -> country code, or null when unknown. */
+export type CountryOf = (ip: string) => string | null;
 
 export const GEO_DB_PATH = process.env.GEO_DB || '/app/geo/city.mmdb';
 export const RELAY_PATH = process.env.GEO_RELAY || '/app/geo/relay.csv';
@@ -30,7 +37,7 @@ export const geoAllowFromEnv = (env = process.env) =>
     .filter((c) => /^[A-Z]{2}$/.test(c));
 
 /** Whether an address is private, loopback, link-local or shared (inside the server or its network). */
-export function isPrivateAddress(ip) {
+export function isPrivateAddress(ip: string | null | undefined) {
   let a = String(ip ?? '').trim().toLowerCase();
   if (a.startsWith('::ffff:') && isIP(a.slice(7)) === 4) a = a.slice(7);
   if (isIP(a) === 4) {
@@ -47,10 +54,10 @@ export function isPrivateAddress(ip) {
  */
 export async function openGeo(path = GEO_DB_PATH) {
   if (!existsSync(path)) return null;
-  const reader = await maxmind.open(path);
+  const reader = await maxmind.open<CityResponse>(path);
   return {
-    country: (ip) => reader.get(ip)?.country?.iso_code ?? null,
-    location: (ip) => {
+    country: (ip: string) => reader.get(ip)?.country?.iso_code ?? null,
+    location: (ip: string) => {
       const r = reader.get(ip);
       if (!r?.country) return null;
       return { city: r.city?.names?.en ?? null, state: r.subdivisions?.[0]?.names?.en ?? null, country: r.country.names?.en ?? r.country.iso_code ?? null };
@@ -58,26 +65,27 @@ export async function openGeo(path = GEO_DB_PATH) {
   };
 }
 
-const ipv4Number = (a) => a.split('.').reduce((n, octet) => n * 256 + Number(octet), 0);
+const ipv4Number = (a: string) => a.split('.').reduce((n, octet) => n * 256 + Number(octet), 0);
 
 /** The top 64 bits of an IPv6 address (already checked with isIP) as a BigInt; an IPv4 tail is in the low bits. */
-function ipv6High(a) {
+function ipv6High(a: string) {
   const [head, tail] = a.split('::');
-  const groups = (s) => (s ? s.split(':').flatMap((g) => (g.includes('.') ? ['0', '0'] : [g])) : []);
+  const groups = (s: string | undefined) => (s ? s.split(':').flatMap((g) => (g.includes('.') ? ['0', '0'] : [g])) : []);
   const before = groups(head);
   const after = tail === undefined ? [] : groups(tail);
   const all = [...before, ...Array(8 - before.length - after.length).fill('0'), ...after];
   return all.slice(0, 4).reduce((n, g) => (n << 16n) + BigInt(`0x${g}`), 0n);
 }
 
-const byStart = (x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0);
+const byStart = <N extends number | bigint>(x: Range<N>, y: Range<N>) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0);
 
 // Sorted ranges, with neighbouring or overlapping ranges of the same country joined into one.
-function merged(ranges, one) {
-  const out = [];
+function merged<N extends number | bigint>(ranges: Range<N>[], one: N) {
+  const out: Range<N>[] = [];
   for (const r of ranges.sort(byStart)) {
     const last = out[out.length - 1];
-    if (last && last[2] === r[2] && r[0] <= last[1] + one) {
+    // One kind per list (numbers or BigInts), so the sum is the same kind.
+    if (last && last[2] === r[2] && r[0] <= (last[1] as number) + (one as number)) {
       if (r[1] > last[1]) last[1] = r[1];
     } else out.push(r);
   }
@@ -89,10 +97,10 @@ function merged(ranges, one) {
  * IPv6 by the top 64 bits as BigInts (exact: Apple lists no prefix longer than /64, and a longer one is skipped).
  * Malformed lines are skipped.
  */
-export function parseRelayRanges(text) {
-  const v4 = [];
-  const v6 = [];
-  const countries = new Map(); // one string per country code, not one per line
+export function parseRelayRanges(text: string | null | undefined): RelayRanges {
+  const v4: Range<number>[] = [];
+  const v6: Range<bigint>[] = [];
+  const countries = new Map<string, string>(); // one string per country code, not one per line
   for (const line of String(text ?? '').split('\n')) {
     const [prefix = '', code = ''] = line.split(',', 2);
     const cc = code.trim().toUpperCase();
@@ -104,7 +112,7 @@ export function parseRelayRanges(text) {
     if (!/^\d{1,3}$/.test(bits)) continue;
     const len = Number(bits);
     if (!countries.has(cc)) countries.set(cc, cc);
-    const country = countries.get(cc);
+    const country = countries.get(cc) as string;
     const kind = isIP(addr);
     if (kind === 4 && len <= 32) {
       const size = 2 ** (32 - len);
@@ -121,7 +129,7 @@ export function parseRelayRanges(text) {
 }
 
 // The country of the last range starting at or before x, when x is inside it.
-function find(ranges, x) {
+function find<N extends number | bigint>(ranges: Range<N>[], x: N) {
   let lo = 0;
   let hi = ranges.length - 1;
   let hit = -1;
@@ -136,7 +144,7 @@ function find(ranges, x) {
 }
 
 /** ip -> the country Apple lists for it, or null when it is not a relay address. */
-export function relayLookup({ v4, v6 }) {
+export function relayLookup({ v4, v6 }: RelayRanges): CountryOf {
   return (ip) => {
     let a = String(ip ?? '').trim().toLowerCase();
     if (a.startsWith('::ffff:') && isIP(a.slice(7)) === 4) a = a.slice(7);
@@ -156,10 +164,10 @@ export function openRelay(path = RELAY_PATH) {
 }
 
 /** The country for the check: Apple's relay list first, then DB-IP for addresses it does not list. */
-export const countryLookup = ({ relay = null, dbip = null } = {}) => (ip) => relay?.(ip) ?? dbip?.(ip) ?? null;
+export const countryLookup = ({ relay = null, dbip = null }: { relay?: CountryOf | null; dbip?: CountryOf | null } = {}): CountryOf => (ip) => relay?.(ip) ?? dbip?.(ip) ?? null;
 
 /** The first half of an address, for logs: 203.0.113.x or 2001:db8:1:: (a /24 or /48). */
-export function shortAddress(ip) {
+export function shortAddress(ip: string | null | undefined) {
   const a = String(ip ?? '');
   if (isIP(a) === 4) return `${a.split('.').slice(0, 3).join('.')}.x`;
   if (isIP(a) === 6) return `${a.split(':').slice(0, 3).join(':')}::`;
@@ -170,17 +178,22 @@ export function shortAddress(ip) {
  * The request check: returns true when the request must be refused. allow: country codes; lookup: ip -> country.
  * With no allow list, or no lookup (fail open), it never refuses. log.warn hears about refusals (see above).
  */
-export function geoBlocker({ allow = [], lookup = null, log = null, now = () => Date.now() } = {}) {
+export function geoBlocker({
+  allow = [],
+  lookup = null,
+  log = null,
+  now = () => Date.now(),
+}: { allow?: string[]; lookup?: CountryOf | null; log?: { warn?: (text: string) => void } | null; now?: () => number } = {}) {
   if (!allow.length || !lookup) return () => false;
-  const logged = new Map(); // short address -> when last logged
-  return (req) => {
+  const logged = new Map<string, number>(); // short address -> when last logged
+  return (req: { url: string; ip: string }) => {
     if (ALWAYS_OPEN.some((re) => re.test(req.url))) return false;
     const ip = req.ip;
     if (!ip || isPrivateAddress(ip)) return false;
     const country = lookup(ip);
     if (!country || allow.includes(country)) return false; // unknown addresses pass (see above)
     const short = shortAddress(ip);
-    if (log?.warn && !(logged.has(short) && now() - logged.get(short) <= 3600_000)) {
+    if (log?.warn && !(logged.has(short) && now() - (logged.get(short) as number) <= 3600_000)) {
       if (logged.size > 1000) logged.clear();
       logged.set(short, now());
       log.warn(`[geo] refused ${country} ${short}`);

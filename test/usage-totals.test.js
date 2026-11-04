@@ -1,4 +1,4 @@
-// The admin's device, location, and source totals (server/usage-totals.js, usage_totals): counted once per account per
+// The admin's device, location, and source totals (server/usage-totals.ts, usage_totals): counted once per account per
 // day for visits, per page arrival for sources, with nothing that leads back to a person. Made-up accounts, addresses
 // (documentation ranges), and hosts; a fake location lookup; no network.
 import { test } from 'node:test';
@@ -11,14 +11,14 @@ import { openJobStore } from '../db/index.ts';
 import { addUser } from '../db/users.ts';
 import { USER_TABLES } from '../db/user-tables.ts';
 import { deleteAccount, exportAccount } from '../agents/account-data.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
-import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
-import { GOOGLE_SIGNIN_RETURN, SOURCES, browserOf, deviceOf, locationValue, sourceOf } from '../server/usage-totals.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
+import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
+import { GOOGLE_SIGNIN_RETURN, SOURCES, browserOf, deviceOf, locationValue, sourceOf } from '../server/usage-totals.ts';
 import * as usageBrowser from '../db/migrations/021-usage-browser.ts';
 import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
-import { DEMO_CONFIG } from '../demo/sample-data.js';
+import { DEMO_CONFIG } from '../demo/sample-data.ts';
 
 const SITE = 'https://jobs.example.com';
 const OWNER = 'owner@example.com';

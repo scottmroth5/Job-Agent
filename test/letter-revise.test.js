@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
+import { buildApp } from '../server/app.ts';
 import { reviseMessage } from '../agents/hunt/revise-letter.ts';
 import { documentText } from '../tools/doc-text.ts';
 

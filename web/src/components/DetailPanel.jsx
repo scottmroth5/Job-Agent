@@ -23,7 +23,7 @@ function List({ items }) {
   );
 }
 
-// How the current score was made (server/queries.js scoreDetails): when, by which model, from the posting text or the
+// How the current score was made (server/queries.ts scoreDetails): when, by which model, from the posting text or the
 // title alone, and with which prompt, so a reader can judge it and knows when a re-score would change it.
 const modelName = (id) => {
   const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/.exec(id ?? '');
@@ -52,7 +52,7 @@ function ScoreDetails({ d }) {
   );
 }
 
-// The job's next steps (server/today.js, the same rules as Home's Today list): open reminders with their due dates, an
+// The job's next steps (server/today.ts, the same rules as Home's Today list): open reminders with their due dates, an
 // offer to answer, or a follow-up due. Opening a job from Today or the Inbox lands here, on the task.
 const STEP_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up', stale: 'Stale' };
 const dueText = (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });

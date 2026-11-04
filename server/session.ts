@@ -6,7 +6,7 @@ export const SESSION_COOKIE = 'ja_session';
 export const LOGIN_COOKIE = 'ja_login';
 
 /** The secret's bytes from SESSION_SECRET (base64 or plain text); at least 32 bytes. */
-export function sessionKey(secret) {
+export function sessionKey(secret: string | null | undefined) {
   const raw = String(secret ?? '');
   const b64 = /^[A-Za-z0-9+/=_-]+$/.test(raw) ? Buffer.from(raw, 'base64') : null;
   const key = b64 && b64.length >= 32 ? b64 : Buffer.from(raw, 'utf8');
@@ -14,17 +14,17 @@ export function sessionKey(secret) {
   return key;
 }
 
-const mac = (key, data) => createHmac('sha256', key).update(data).digest('base64url');
+const mac = (key: Buffer, data: string) => createHmac('sha256', key).update(data).digest('base64url');
 
 /** A signed token for payload; exp (ms since epoch) is required. */
-export function sign(payload, key) {
+export function sign(payload: { exp: number; [field: string]: unknown }, key: Buffer) {
   if (!payload?.exp) throw new Error('sign: payload.exp is required');
   const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
   return `${data}.${mac(key, data)}`;
 }
 
 /** The payload when the signature is valid and it has not expired, else null. */
-export function verify(token, key, now = Date.now()) {
+export function verify<T extends { exp: number } = { exp: number; [field: string]: unknown }>(token: string | null | undefined, key: Buffer, now = Date.now()): T | null {
   const [data, sig, extra] = String(token ?? '').split('.');
   if (!data || !sig || extra !== undefined) return null;
   const expected = Buffer.from(mac(key, data));
@@ -43,8 +43,8 @@ export function verify(token, key, now = Date.now()) {
  * characters) and never __proto__, constructor, or prototype, so a crafted cookie can never reach an object's
  * prototype; a value that does not decode is dropped rather than failing the request.
  */
-export function parseCookies(header) {
-  const found = new Map();
+export function parseCookies(header: string | null | undefined): Record<string, string> {
+  const found = new Map<string, string>();
   for (const part of String(header ?? '').split(';')) {
     const i = part.indexOf('=');
     if (i <= 0) continue;
@@ -62,6 +62,6 @@ export function parseCookies(header) {
 }
 
 /** A Set-Cookie value. maxAge in seconds (0 clears the cookie). */
-export function cookie(name, value, { maxAge, secure = false, path = '/', sameSite = 'Lax' } = {}) {
+export function cookie(name: string, value: string, { maxAge, secure = false, path = '/', sameSite = 'Lax' }: { maxAge?: number; secure?: boolean; path?: string; sameSite?: string } = {}) {
   return [`${name}=${encodeURIComponent(value)}`, `Path=${path}`, 'HttpOnly', `SameSite=${sameSite}`, ...(secure ? ['Secure'] : []), ...(maxAge != null ? [`Max-Age=${maxAge}`] : [])].join('; ');
 }

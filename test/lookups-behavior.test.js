@@ -6,7 +6,7 @@ import { archivePostings } from '../agents/hunt/archive.ts';
 import { selectPostings } from '../agents/discovery/score.ts';
 import { planStatus } from '../agents/inbox/actions.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
-import { listPostings, summary, updatePosting } from '../server/queries.js';
+import { listPostings, summary, updatePosting } from '../server/queries.ts';
 import { buildScoreRequest, loadScorePrompts } from '../agents/discovery/score.ts';
 
 // Synthetic data only.

@@ -6,11 +6,11 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { assertSafeBinding, authSettings, DEMO_REFUSAL } from '../server/auth.js';
-import { registerRateLimits } from '../server/security.js';
+import { buildApp } from '../server/app.ts';
+import { assertSafeBinding, authSettings, DEMO_REFUSAL } from '../server/auth.ts';
+import { registerRateLimits } from '../server/security.ts';
 import { seedDemo, isDemoDatabase } from '../scripts/demo-seed.js';
-import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.js';
+import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.ts';
 import Fastify from 'fastify';
 
 const NOW = new Date('2026-10-23T15:00:00Z');

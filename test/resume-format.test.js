@@ -6,8 +6,8 @@ import { resumeBlocks, resumeDocx, resumePdf } from '../tools/resume-format.ts';
 import { documentText } from '../tools/doc-text.ts';
 import { openJobStore } from '../db/index.ts';
 import { addResume } from '../agents/resumes.ts';
-import { buildApp } from '../server/app.js';
-import { DEMO_RESUMES } from '../demo/sample-data.js';
+import { buildApp } from '../server/app.ts';
+import { DEMO_RESUMES } from '../demo/sample-data.ts';
 
 const RESUME = `Pat Example
 Anytown, ST | pat@example.com | 555-0100

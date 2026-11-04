@@ -6,6 +6,32 @@
 import { lookups } from '../agents/lookups.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.ts';
+import type { Database } from '../tools/types.ts';
+import type { EmailsRow, PostingsRow, StatusHistoryRow } from '../db/types.ts';
+
+/** A milestone of an application: whether it was reached, and its day when a dated event shows it. */
+export type Milestone = { reached: boolean; date: string | null };
+export type Application = {
+  id: number;
+  company: string;
+  title: string;
+  source: string;
+  track: string;
+  status: string;
+  stage: string;
+  appliedOn: string;
+  responded: Milestone;
+  interview: Milestone;
+  offer: Milestone;
+  rejected: Milestone;
+  closed: boolean;
+  waitingDays: number;
+  noReply: boolean;
+};
+type MilestoneKey = 'responded' | 'interview' | 'offer' | 'rejected';
+type HistoryRow = Pick<StatusHistoryRow, 'posting_id' | 'to_status' | 'changed_by' | 'changed_at'>;
+type EmailRow = Pick<EmailsRow, 'posting_id' | 'type' | 'sent_at'>;
+type PostingRow = Pick<PostingsRow, 'id' | 'company' | 'title' | 'source' | 'track' | 'status' | 'stage' | 'applied_on' | 'discovered_on'>;
 
 export const NO_REPLY_DAYS = 21;
 // Applications with no reply are worth a follow-up from FOLLOW_UP_DAYS until the stale days (agents/follow-ups.ts).
@@ -18,59 +44,60 @@ const LINKED = "('auto', 'confirmed', 'reassigned')";
 const DAY = 24 * 3600 * 1000;
 // Calendar days in the app time zone: stored dates pass through, event timestamps are converted.
 const day = dayOf;
-const earliest = (dates) => dates.filter(Boolean).sort()[0] ?? null;
-const daysBetween = (a, b) => Math.max(0, Math.round((Date.parse(day(b)) - Date.parse(day(a))) / DAY));
-const median = (xs) => {
+const earliest = (dates: Array<string | null>) => dates.filter(Boolean).sort()[0] ?? null;
+// A missing day parses as NaN, as it always has.
+const daysBetween = (a: string | null, b: string | null) => Math.max(0, Math.round((Date.parse(day(b) as string) - Date.parse(day(a) as string)) / DAY));
+const median = (xs: number[]) => {
   if (!xs.length) return null;
   const s = [...xs].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 };
-const rate = (n, d) => (d ? n / d : null);
+const rate = (n: number, d: number) => (d ? n / d : null);
 
 /** Monday of the week containing the date (YYYY-MM-DD). */
-function weekStart(iso) {
+function weekStart(iso: string | null) {
   const d = new Date(`${day(iso)}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
   return d.toISOString().slice(0, 10);
 }
 
 /** One record per application, with each milestone: { reached, date } (date null when only undated evidence). */
-export function applications(db, { now = new Date() } = {}) {
+export function applications(db: Database, { now = new Date() } = {}): Application[] {
   const lk = lookups(db);
-  const group = (status) => lk.groupOf('status', status);
-  const history = new Map();
-  for (const h of db.prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history WHERE user_id = @uid ORDER BY changed_at, id').all()) {
+  const group = (status: string | null) => lk.groupOf('status', status);
+  const history = new Map<number, HistoryRow[]>();
+  for (const h of db.prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history WHERE user_id = @uid ORDER BY changed_at, id').all() as HistoryRow[]) {
     history.set(h.posting_id, [...(history.get(h.posting_id) ?? []), h]);
   }
-  const emails = new Map();
-  for (const e of db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).all()) {
-    emails.set(e.posting_id, [...(emails.get(e.posting_id) ?? []), e]);
+  const emails = new Map<number, EmailRow[]>();
+  for (const e of db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).all() as EmailRow[]) {
+    emails.set(e.posting_id as number, [...(emails.get(e.posting_id as number) ?? []), e]);
   }
 
-  const rows = db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid').all();
-  const out = [];
+  const rows = db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid').all() as PostingRow[];
+  const out: Application[] = [];
   for (const p of rows) {
     const hist = history.get(p.id) ?? [];
     const mail = emails.get(p.id) ?? [];
-    const into = (pred) => hist.filter((h) => pred(h.to_status));
-    const dated = (hs) => hs.filter((h) => h.changed_by !== 'import').map((h) => day(h.changed_at));
-    const progressed = (s) => ['waiting', 'conversation', 'decision'].includes(group(s));
+    const into = (pred: (status: string) => boolean) => hist.filter((h) => pred(h.to_status));
+    const dated = (hs: HistoryRow[]) => hs.filter((h) => h.changed_by !== 'import').map((h) => day(h.changed_at));
+    const progressed = (s: string | null) => (['waiting', 'conversation', 'decision'] as Array<string | null>).includes(group(s));
     const everProgressed = progressed(p.status) || hist.some((h) => progressed(h.to_status));
     const applied = Boolean(p.applied_on) || everProgressed || p.status === 'rejected' || hist.some((h) => h.to_status === 'rejected');
     if (!applied) continue;
 
-    const appliedOn = day(p.applied_on) ?? earliest(dated(into((s) => group(s) === 'waiting'))) ?? earliest(dated(into(progressed))) ?? day(p.discovered_on);
-    const milestone = (statusPred, emailTypes) => {
+    const appliedOn = day(p.applied_on) ?? earliest(dated(into((s) => group(s) === 'waiting'))) ?? earliest(dated(into(progressed))) ?? (day(p.discovered_on) as string); // discovered_on is always set
+    const milestone = (statusPred: (status: string) => boolean, emailTypes: string[]): Milestone => {
       const hs = into(statusPred);
-      const ms = mail.filter((e) => emailTypes.includes(e.type));
+      const ms = mail.filter((e) => emailTypes.includes(e.type as string));
       const reached = statusPred(p.status) || hs.length > 0 || ms.length > 0;
       return { reached, date: reached ? earliest([...dated(hs), ...ms.map((e) => day(e.sent_at))]) : null };
     };
     const interview = milestone((s) => group(s) === 'conversation', ['interview_request']);
     const offer = milestone((s) => group(s) === 'decision', ['offer']);
     const rejected = milestone((s) => s === 'rejected', ['rejection']);
-    const responded = milestone((s) => ['conversation', 'decision'].includes(group(s)) || s === 'rejected', RESPONSE_EMAILS);
+    const responded = milestone((s) => (['conversation', 'decision'] as Array<string | null>).includes(group(s)) || s === 'rejected', RESPONSE_EMAILS);
     const closed = lk.isClosed(p.status);
     const waitingDays = daysBetween(appliedOn, now.toISOString());
     out.push({
@@ -94,22 +121,19 @@ export function applications(db, { now = new Date() } = {}) {
   return out;
 }
 
-/**
- * The funnel for applications in the window.
- * @param {{ days?: number | null, track?: string | null, now?: Date }} opts  days: applied within the last N days (null: all)
- */
-export function funnel(db, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS } = {}) {
+/** The funnel for applications in the window. days: applied within the last N days (null: all). */
+export function funnel(db: Database, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS }: { days?: number | null; track?: string | null; now?: Date; staleDays?: number } = {}) {
   const since = days ? localDaysAgo(now, days) : null;
-  const inWindow = (a) => (!since || a.appliedOn >= since) && (!track || a.track === track);
+  const inWindow = (a: Application) => (!since || a.appliedOn >= since) && (!track || a.track === track);
   const apps = applications(db, { now }).filter(inWindow);
 
   const found = db
     .prepare(`SELECT COUNT(*) AS n,
         SUM(CASE WHEN (SELECT s.score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id ORDER BY CASE WHEN s.source IN ('v2', 'v2-rule') THEN 0 ELSE 1 END, s.id DESC LIMIT 1) >= ? THEN 1 ELSE 0 END) AS strong
       FROM postings p WHERE p.user_id = @uid AND (? IS NULL OR p.discovered_on >= ?) AND (? IS NULL OR p.track = ?)`)
-    .get(PROMOTE_AT, since, since, track, track);
+    .get(PROMOTE_AT, since, since, track, track) as { n: number; strong: number | null };
 
-  const count = (key) => apps.filter((a) => a[key].reached).length;
+  const count = (key: MilestoneKey) => apps.filter((a) => a[key].reached).length;
   const totals = {
     found: found.n,
     scored7: found.strong ?? 0,
@@ -120,11 +144,11 @@ export function funnel(db, { days = null, track = null, now = new Date(), staleD
     rejected: count('rejected'),
     noReply: apps.filter((a) => a.noReply).length,
   };
-  const timing = (key) => apps.filter((a) => a[key].date && a.appliedOn).map((a) => daysBetween(a.appliedOn, a[key].date));
+  const timing = (key: MilestoneKey) => apps.filter((a) => a[key].date && a.appliedOn).map((a) => daysBetween(a.appliedOn, a[key].date));
   const toResponse = timing('responded');
   const toInterview = timing('interview');
 
-  const bySource = new Map();
+  const bySource = new Map<string, { source: string; applied: number; responded: number; interview: number; offer: number }>();
   for (const a of apps) {
     // Sources group case-insensitively ("manual" and "Manual" are one source).
     const key = a.source.trim().toLowerCase();
@@ -136,7 +160,7 @@ export function funnel(db, { days = null, track = null, now = new Date(), staleD
     bySource.set(key, s);
   }
 
-  const weeks = [];
+  const weeks: Array<{ weekStart: string; applied: number }> = [];
   const thisWeek = weekStart(localDay(now));
   for (let i = WEEKS - 1; i >= 0; i -= 1) {
     const w = new Date(`${thisWeek}T00:00:00Z`);

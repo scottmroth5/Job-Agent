@@ -63,7 +63,7 @@ function WeekBars({ field, weeks }) {
   );
 }
 
-// Device, browser, location, and source totals (server/usage-totals.js): each shown on its own, never combined.
+// Device, browser, location, and source totals (server/usage-totals.ts): each shown on its own, never combined.
 const DEVICE_ORDER = [
   ['phone', 'Phone'],
   ['tablet', 'Tablet'],

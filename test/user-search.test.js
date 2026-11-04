@@ -10,9 +10,9 @@ import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
 import { runAsUser } from '../db/scope.ts';
 import { addUser, OWNER_ID } from '../db/users.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
-import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
+import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { cleanConfig, configFor, saveUserConfig, saveUserProfile, scheduledUsers, setScheduledForUser, userConfigView } from '../agents/user-config.ts';
 import { repoPath } from '../tools/paths.ts';
 

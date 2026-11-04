@@ -6,13 +6,13 @@ import { inflateRawSync } from 'node:zlib';
 import { withoutPictographs } from '../tools/text.ts';
 import { fromCandidate, headerLines, hrefOf } from '../tools/letter-header.ts';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
+import { buildApp } from '../server/app.ts';
 import { addUser } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
 import { letterHeader, saveLetterHeader } from '../agents/letter-header.ts';
 import { documentText } from '../tools/doc-text.ts';
 import { letterPdf, winAnsi } from '../tools/pdf-writer.ts';
-import { letterDocx } from '../server/word-docs.js';
+import { letterDocx } from '../server/word-docs.ts';
 import { letterHtml } from '../agents/hunt/letters.ts';
 import { validateConfig } from '../tools/config.ts';
 

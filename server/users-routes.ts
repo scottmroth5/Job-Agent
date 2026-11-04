@@ -1,12 +1,13 @@
 // Admin > Users (multi-user, phase 2): the accounts, approving and rejecting requests for access, pausing and resuming,
-// and how each user's AI is paid for. Admin only (server/app.js refuses anyone else on /api/admin/users*), and never
-// registered in the demo. Each decision emails the person about their own account (server/notices.js).
+// and how each user's AI is paid for. Admin only (server/app.ts refuses anyone else on /api/admin/users*), and never
+// registered in the demo. Each decision emails the person about their own account (server/notices.ts).
 import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.ts';
-import { listUsers, usageByWeek, usagePeriodStart, usageTotals } from './admin-queries.js';
-import { BROWSER_NAMES, DEVICES, SOURCES } from './usage-totals.js';
+import { listUsers, usageByWeek, usagePeriodStart, usageTotals } from './admin-queries.ts';
+import { BROWSER_NAMES, DEVICES, SOURCES } from './usage-totals.ts';
 import { deleteAccount } from '../agents/account-data.ts';
 import { ATTACHMENTS_DIR } from './attachments.ts';
 import type { Database } from '../tools/types.ts';
+import type { User } from '../db/users.ts';
 import type { App, IdParams, Notices } from './types.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
@@ -46,7 +47,7 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
       claudeSpendUsd: { type: 'number' },
     },
   };
-  // Device, browser, location, and source totals over the same weeks (server/usage-totals.js): app-wide, never per account.
+  // Device, browser, location, and source totals over the same weeks (server/usage-totals.ts): app-wide, never per account.
   const total = (values: string[] | null, pattern?: string) => ({
     type: 'object',
     additionalProperties: false,
@@ -99,7 +100,8 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
     },
     async (req) => {
       // Admin routes always run as a signed-in admin, so uid is set.
-      const user = decide(db, req.params.id, req.params.decision, { by: req.uid as number });
+      // decide throws unless the user exists, so it returns their row.
+      const user = decide(db, req.params.id, req.params.decision, { by: req.uid as number }) as User;
       // The person hears about their own account (resuming needs no email).
       switch (req.params.decision) {
         case 'approve':

@@ -5,13 +5,13 @@ import { budgetStatus } from '../agents/budget.ts';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.ts';
 import { boxKey, seal } from '../tools/secret-box.ts';
 import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, PROFILE_SOURCES, profileVersions, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.ts';
-import { docxName, prepDocx } from './word-docs.js';
+import { docxName, prepDocx } from './word-docs.ts';
 import { fileTitle } from '../tools/text.ts';
 import { validateConfig } from '../tools/config.ts';
 import { deleteAccount, exportAccount } from '../agents/account-data.ts';
 import { ATTACHMENTS_DIR } from './attachments.ts';
 import { isTimeZone, localDay } from '../tools/dates.ts';
-import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.js';
+import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.ts';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { KNOWLEDGE_SECTIONS, knowledgeTemplate } from '../agents/knowledge-sections.ts';
 import type { Database } from '../tools/types.ts';
@@ -156,7 +156,7 @@ export function registerAccountRoutes(
 
   // Phase 3: each user's own search settings, background, and schedule. The owner's live in their settings file and
   // Google Doc, so these answer the owner with where to change them instead.
-  // The demo shows the sample candidate's About you and search (demo/sample-data.js), read-only, so visitors see what
+  // The demo shows the sample candidate's About you and search (demo/sample-data.ts), read-only, so visitors see what
   // scoring works from; nothing is read from or saved to the database.
   const search = (uid: number) => {
     if (demo) {

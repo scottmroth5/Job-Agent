@@ -1,5 +1,5 @@
 // Adds the browser dimension to usage_totals (020): browser and major version ("Chrome 130"), counted once per
-// account a day like device and location (server/usage-totals.js). The CHECK on dimension changes, so the table is
+// account a day like device and location (server/usage-totals.ts). The CHECK on dimension changes, so the table is
 // rebuilt the way SQLite documents it (new table, rows copied, old dropped, new renamed). Nothing references it,
 // but the rule for rebuilds still applies: foreign keys off, checks before commit.
 

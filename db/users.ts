@@ -2,7 +2,7 @@
 // and the addresses in AUTH_ALLOWED_EMAILS are always the owner's. Anyone else signs in with Google, requests access
 // (pending), and the owner approves (active) or rejects them; an active account can be paused. How a user's Claude calls
 // are paid for is ai_source: 'own' (their key, sealed in claude_key_enc by tools/secret-box.ts) or 'owner' (the owner's
-// key, up to ai_cap_usd a month). Cross-user reads for the admin's Users screen are in server/admin-queries.js.
+// key, up to ai_cap_usd a month). Cross-user reads for the admin's Users screen are in server/admin-queries.ts.
 
 import type { Database } from '../tools/types.ts';
 import type { UsersRow } from './types.ts';

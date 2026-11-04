@@ -37,7 +37,7 @@ test('007 adds the inbox tables and the company domain column; 013 drops its fun
   const store = openJobStore(':memory:');
   const names = store.db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").pluck().all();
   for (const n of ['contacts', 'email_threads', 'emails', 'decision_log', 'reminders']) assert.ok(names.includes(n), n);
-  assert.ok(!names.includes('application_funnel'), 'server/funnel.js computes the funnel per user instead');
+  assert.ok(!names.includes('application_funnel'), 'server/funnel.ts computes the funnel per user instead');
   assert.ok(store.db.prepare('PRAGMA table_info(postings)').all().some((c) => c.name === 'company_domain'));
   store.close();
 });

@@ -15,7 +15,7 @@ import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { letterPdf } from '../tools/pdf-writer.ts';
 import { letterHeader, saveLetterHeader, MAX_LINKS } from '../agents/letter-header.ts';
 import { uploadName } from './account-routes.ts';
-import { letterDocx, docxName } from './word-docs.js';
+import { letterDocx, docxName } from './word-docs.ts';
 import type { JobStore } from '../tools/types.ts';
 import type { UserConfig } from '../agents/user-config.ts';
 import type { PostingsRow } from '../db/types.ts';

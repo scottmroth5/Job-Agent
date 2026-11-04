@@ -1,11 +1,11 @@
-// Home's Today list (server/today.js): reminders due, offers, and follow-ups, in order, for the current user only.
+// Home's Today list (server/today.ts): reminders due, offers, and follow-ups, in order, for the current user only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { today, REMINDER_DAYS } from '../server/today.js';
-import { FOLLOW_UP_DAYS } from '../server/funnel.js';
+import { buildApp } from '../server/app.ts';
+import { today, REMINDER_DAYS } from '../server/today.ts';
+import { FOLLOW_UP_DAYS } from '../server/funnel.ts';
 import { addUser } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
 

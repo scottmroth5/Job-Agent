@@ -1,5 +1,5 @@
 // Multi-user guard (phase 1): every SQL statement in the code that reads or writes a user table names user_id, so it is
-// scoped to one user (db/scope.ts binds @uid). Only server/admin-queries.js and the migrations may query across users.
+// scoped to one user (db/scope.ts binds @uid). Only server/admin-queries.ts and the migrations may query across users.
 // A false alarm (a string that only looks like SQL) is fixed by rewording the string, never by an exemption here.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +10,7 @@ import { USER_TABLES } from '../db/user-tables.ts';
 
 const FOLDERS = ['agents', 'server', 'tools', 'demo', 'scripts', 'db', 'evals'];
 // Migrations shape every user's rows at once; admin queries are the reviewed cross-user reads.
-const isExempt = (rel) => rel.startsWith('db/migrations/') || rel === 'server/admin-queries.js';
+const isExempt = (rel) => rel.startsWith('db/migrations/') || rel === 'server/admin-queries.ts';
 
 /** Every string literal in JavaScript source (template literals whole, with their ${} expressions). */
 export function stringLiterals(src) {

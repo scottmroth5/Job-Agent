@@ -5,8 +5,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
 
 const compose = readFileSync(new URL('../deploy/compose.yml', import.meta.url), 'utf8');
 const values = [...compose.matchAll(/TRUST_PROXY: (\S+)/g)].map((m) => m[1]);

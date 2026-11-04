@@ -109,14 +109,14 @@ user table says "user_id = @uid" (joins and subqueries too: "s.user_id = p.user_
 from the job row (INSERT ... SELECT ... FROM postings WHERE id = ? AND user_id = @uid) so another user's job gets nothing.
 store.db is scoped (db/scope.ts): @uid is the user of the current request or job (runAsUser, AsyncLocalStorage), else
 fallbackUid: the owner for scripts and tests; the server has none, so a user-table query outside a request or job throws.
-store.raw is unscoped: migrations, backups, and server/admin-queries.js (the admin's cross-user reads: counts and account
+store.raw is unscoped: migrations, backups, and server/admin-queries.ts (the admin's cross-user reads: counts and account
 facts, never anyone's jobs or key) only.
-Accounts (phase 2): any verified Google address signs in (server/auth.js); AUTH_ALLOWED_EMAILS are the owner's addresses
+Accounts (phase 2): any verified Google address signs in (server/auth.ts); AUTH_ALLOWED_EMAILS are the owner's addresses
 (accountFor; syncOwnerEmail gives user 1 the first). Anyone else: no row goes to /auth/register (name, note, 18 or older, terms; a form
 post, no script; MAX_PENDING open requests at most), pending to /auth/waiting, rejected to /auth/not-approved; API calls get
 403 with { account }. Paused accounts get in read-only (no writes, no AI). Admin > Users (server/users-routes.ts, admin role,
-never in the demo): approve, reject, pause, resume, and AI setup. server/notices.js sends the account emails (see Hard rules).
-Requests run as their user (server/app.js: decided in onRequest, run as them from preHandler). OWNER_ONLY routes: the inbox
+never in the demo): approve, reject, pause, resume, and AI setup. server/notices.ts sends the account emails (see Hard rules).
+Requests run as their user (server/app.ts: decided in onRequest, run as them from preHandler). OWNER_ONLY routes: the inbox
 (the owner's own Gmail; another person's needs Google's restricted-scope review) and what everyone shares (lists, the owner's cap).
 Each user's own search (phase 3, agents/user-config.ts): the owner's settings file and Google Doc stay theirs; anyone else saves
 search settings (plain text fields only, so no user text becomes a regex: cover letter checks, site search, and private terms
@@ -138,12 +138,12 @@ setup chips (search ready, About you, key, schedule; never the text). Putting a 
 typed (confirmEmail) and emails them; so does taking them off it or changing the cap. Feedback (server/feedback-routes.ts,
 feedback table, db/user-tables.ts lists the user tables since 013): any user writes to the owner from Settings, at most
 FEEDBACK_PER_DAY a day; it is emailed to the owner with the sender as Reply-To (buildRawEmail allows one plain address) and
-listed on Users with Mark done. ADMIN_ONLY prefixes in server/app.js: /api/admin/users, /api/admin/feedback. The Home Admin
+listed on Users with Mark done. ADMIN_ONLY prefixes in server/app.ts: /api/admin/users, /api/admin/feedback. The Home Admin
 tile counts waiting requests and open feedback (summary.adminWaiting, admins only). test/feedback.test.js covers these.
 Phase 5 (per-user lists) was skipped: the status, stage, and track lists stay shared and the owner's to edit.
 Phase 6 (agents/account-data.ts): Settings > Your data and account. Download my data (GET /api/account/export: every
 user-table row plus the account and runs; never the sealed key or email bodies). Pause (and resume, only when self-paused:
-decided_by = self; PAUSED_MAY in server/app.js lets a paused account resume or delete). Delete my account (typed address):
+decided_by = self; PAUSED_MAY in server/app.ts lets a paused account resume or delete). Delete my account (typed address):
 every user-table row (db/user-tables.ts order), attached file folders, the account; runs on their own key are deleted, runs
 on the owner's key are kept for the owner's cap with meta and summary cleared. The owner deletes an account the same way
 (POST /api/admin/users/:id/delete). Both email the person; a self-delete also tells the owner. test/account-data.test.js.
@@ -178,17 +178,17 @@ background for letters, tweaks, and meeting prep (never scoring), and artifacts/
 tools/resume-format.ts lays the text out as Word (docx) and as a PDF it writes itself (Helvetica, WinAnsi; no library). Guides with a template and made-up examples: help/about-you.md,
 help/search-settings.md, help/prompts.md. tools/markdown.ts renders fenced blocks (escaped). test/onboarding.test.js.
 Letters and preps in the app: the job panel shows a letter's text (always without a Google Doc, on request with one) with
-Copy and Download Word; the prep reader has Download Word too. server/word-docs.js builds the .docx (the letter in the
+Copy and Download Word; the prep reader has Download Word too. server/word-docs.ts builds the .docx (the letter in the
 Google Doc's layout from the current user's settings; the prep from its Markdown), server/document-routes.ts serves your
 own only. test/word-docs.test.js. Each user's own Gmail and Drive
 wait on Google's verification of those scopes.
 
 ## UI and API
-The Home page (#/) opens with Today and upcoming (server/today.js, summary.today: open reminders due within 14 days or
+The Home page (#/) opens with Today and upcoming (server/today.ts, summary.today: open reminders due within 14 days or
 past due, jobs at an offer, applications worth a follow-up, and one item for all stale ones; each opens its job), then a tile per screen.
 The job panel's Next step box is the same list for one job (GET /api/postings/:id nextSteps; every open reminder, however
 far out), with Prepare for a meeting and Done (registerReminderRoutes, registered with or without Gmail).
-Follow-ups (agents/follow-ups.ts, server/follow-up-routes.ts): no reply from FOLLOW_UP_DAYS (7, server/funnel.js) until
+Follow-ups (agents/follow-ups.ts, server/follow-up-routes.ts): no reply from FOLLOW_UP_DAYS (7, server/funnel.ts) until
 the user's stale days (Settings > Follow-ups, user_settings followUp.staleDays, default 45; never archived jobs) is a
 follow-up with Find someone to contact (agents/hunt/find-contact.ts: Sonnet with web search on the user's AI, prompt
 find-contact, the result saved as an agent note) and Close: no response; from the stale days on it is stale, closed one at
@@ -198,22 +198,22 @@ test/follow-ups.test.js. Arrange tiles saves the order (server/layout.ts, PUT /a
 with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
 icons in web/public (install icons full-bleed, favicons as drawn) made from assets/app-icon-1024.png (kept out of the image);
 test/icons.test.js checks their sizes and that they load before sign-in.
-AUTH_MODE=none (default) binds to 127.0.0.1 with no login. AUTH_MODE=google (server/auth.js) is "Sign in with Google":
+AUTH_MODE=none (default) binds to 127.0.0.1 with no login. AUTH_MODE=google (server/auth.ts) is "Sign in with Google":
 any verified address gets a session and its account decides the rest (Users above); the session is a signed cookie
-(server/session.js, SESSION_SECRET); every route but /auth/*, /healthz, /privacy and /terms (server/pages.js, from
+(server/session.ts, SESSION_SECRET); every route but /auth/*, /healthz, /privacy and /terms (server/pages.ts, from
 PRIVACY.md and TERMS.md), and the Add to Home Screen files (manifest.webmanifest, icon-180/192/512.png) needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
-server/app.js holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
+server/app.ts holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
 The Run pipeline button (server/pipeline-routes.ts) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.ts) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.ts, and closes reminders.
-Every task keeps its output (server/tasks.js: steps plus log lines; pass the task's logger to createJobTracer so run logs land there);
+Every task keeps its output (server/tasks.ts: steps plus log lines; pass the task's logger to createJobTracer so run logs land there);
 the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
 Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
 while a pipeline step is running. web/dist is build output (gitignored).
-A failed scheduled job emails the owner (server/alerts.js: EMAIL_ADDRESS only, once per kind a day, cleared by the next success).
+A failed scheduled job emails the owner (server/alerts.ts: EMAIL_ADDRESS only, once per kind a day, cleared by the next success).
 deploy.sh: when the new image has pending migrations, it backs up to Drive with the current image first and, if the deploy
 fails, restores the pre-migration copy before restarting the old image (--no-backup, --skip-db-check for old tags).
-The in-app scheduler (server/scheduler.js) runs SCHEDULE_PIPELINE (then the inbox), SCHEDULE_INBOX, and SCHEDULE_BACKUP from .env
+The in-app scheduler (server/scheduler.ts) runs SCHEDULE_PIPELINE (then the inbox), SCHEDULE_INBOX, and SCHEDULE_BACKUP from .env
 while the server runs, through the same task starters as the buttons (pipeline-routes start, inbox-routes startCheck); it
 catches up a run missed in the last 12 hours. GET /api/schedule lists the jobs. It replaces the Windows tasks in the cloud;
 never enable both. Child scripts run through services.runScript.
@@ -275,7 +275,7 @@ link): each user's own list with a note per site in user_settings; configFor add
 file entries stay, shown as from the file), so scripts read config through configFor(store.raw, OWNER_ID, loadConfig()).
 Saved jobs from a site are removed only on request (archiveSiteJobs; never one applied to). test/excluded-sites.test.js.
 Without posting text a score is capped at 5 (analysis.uncappedScore keeps the original) and the job is never promoted; the UI flags 7+ ones.
-The job panel's score details (server/queries.js scoreDetails) say when, by which model, from text or title, and with
+The job panel's score details (server/queries.ts scoreDetails) say when, by which model, from text or title, and with
 which prompt (agents/prompts.ts describeVersion matches the stored version hash: default, a saved edit, or earlier).
 Sonnet 5.5 and Opus 5.5 always think: keep effort low and maxTokens generous for scoring (MODEL_SETTINGS).
 Scripts that need secrets load .env through node --env-file.
@@ -288,7 +288,9 @@ imports name the .ts file, and type-only imports use import type. Typecheck and 
 bug is fixed as a bug, never hidden. Each any or @ts-expect-error has its reason beside it. types/agent-core.d.ts types the
 agent-core exports until Agent-Core ships its own; keep it in step on an upgrade.
 Routes type their request with Fastify's generics (app.post<{ Params: IdParams; Body: {...} }>, matching the JSON schema);
-server/types.ts holds App, RouteServices, StartTask, Notices, and declares req.uid. Query results are cast to db/types.ts rows.
+server/types.ts holds App, RouteServices, StartTask, Notices, and declares req.uid, user, account, role, and timeZone. Query
+results are cast to db/types.ts rows. server/index.js is a one-line launcher for server/main.ts (npm run ui, the Dockerfile,
+and compose.yml run index.js); buildApp's options and services are BuildAppOptions and AppServices in server/app.ts.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
@@ -309,9 +311,9 @@ host, user, key, and known_hosts; app secrets live in the server's .env. A new r
 deploy/cloud.env.example.
 
 ## Demo
-AUTH_MODE=demo (server/auth.js): no sign-in; every non-read request gets 403 except POST /api/prompts/:name/preview,
-which writes nothing; server/index.js starts with demo services (no Google auth, Claude, browser, or schedule) and replays
-demo/sample-data.js SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI shows every
+AUTH_MODE=demo (server/auth.ts): no sign-in; every non-read request gets 403 except POST /api/prompts/:name/preview,
+which writes nothing; server/main.ts starts with demo services (no Google auth, Claude, browser, or schedule) and replays
+demo/sample-data.ts SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI shows every
 control: web/src/api.js (setDemoMode from /api/me) stops every non-GET request before it is sent (prompt preview aside),
 rejects with DEMO_NOT_SAVED, and fires demo-blocked, which DemoNotice (web/src/demo.jsx) shows; the server's refusal is
 what protects it. Only Open posting (sample links) and the admin pages stay hidden.
@@ -319,15 +321,15 @@ The demo's /api/me names the sample candidate (DEMO_EMAIL, an example.com addres
 Demo Settings shows the sample candidate's About you and search, editable but never saved (DEMO_ABOUT_YOU and DEMO_CONFIG, served by
 server/account-routes.ts in demo mode; nothing stored). A sample watch-out about location comes only from that job's workplace.
 scripts/demo-seed.js builds the sample database (marked with the demo_database setting; it refuses any other database,
-checked read-only) from demo/sample-data.js; sample prompt edits are the repo defaults plus one line (PROMPT_EDITS) and must
+checked read-only) from demo/sample-data.ts; sample prompt edits are the repo defaults plus one line (PROMPT_EDITS) and must
 validate. Sample data is invented and on example.com domains; never copy the user's data, wording, or history into it.
 npm run demo previews it locally (demo-data/, gitignored); test/demo.test.js walks every route to prove it is read-only.
 A new route that changes data is refused in the demo automatically; a new read route must not call an outside service.
 The demo never calls Claude (no client, no key). Its AI actions answer with canned samples in the real response shapes,
-labeled as samples and never saved: demo/samples.js (prep, letter, tweaks, re-score, revision, Help answer, draft; loaded
+labeled as samples and never saved: demo/samples.ts (prep, letter, tweaks, re-score, revision, Help answer, draft; loaded
 by api.js only in the demo, its own chunk) through local stand-in tasks, and Find someone to contact from the demo-only
 GET /api/postings/:id/find-contact/sample (demoContactResult). test/demo-samples.test.js holds them to the real rules.
-Demo usage counts (optional): DEMO_POSTHOG_KEY/HOST on the demo container only (server/demo-analytics.js returns null outside
+Demo usage counts (optional): DEMO_POSTHOG_KEY/HOST on the demo container only (server/demo-analytics.ts returns null outside
 AUTH_MODE=demo); /api/me hands them to the page and the CSP's connect-src adds that host. web/src/analytics.js sends
 to PostHog's capture endpoint itself (no SDK, cookies, storage, referrer, or URLs): fixed event names and property values
 from its lists only, anything else dropped; never text, job details, or paths; nothing at all when the browser sends
@@ -336,16 +338,16 @@ host in the browser; the URL, referrer, and utm text are never sent); the person
 demo's PUBLIC_URL (DEMO_SITE_ADDRESS), never written in the repo. A new event goes on its EVENTS list and in PRIVACY.md's demo section. The demo banner links
 /privacy. test/demo-analytics.test.js.
 Usage (Admin > Usage, web/src/components/UsageAdmin.jsx; GET /api/admin/usage?weeks=4..52, ADMIN_ONLY, never in the
-demo): server/admin-queries.js usageByWeek gives one row per Sunday to Saturday week in the app's zone (never the asking
+demo): server/admin-queries.ts usageByWeek gives one row per Sunday to Saturday week in the app's zone (never the asking
 admin's own), newest first, the first being this week so far: weekEnding, accounts seen (this week: users.last_seen_at;
 earlier weeks: distinct users with a run or added job), pipeline runs completed (ok, partial) and failed, jobs added,
 letters (v2, v2-revision, user), preps, Claude spend (run_calls.cost_usd, priced calls only), and feedback received.
 The response schema allows those fields only. Tiles show the latest full week; bar charts carry .sr-only tables. Totals
 only, kept in the app: nothing logged, emailed, or sent to any analytics service. test/usage.test.js.
-Usage totals (server/usage-totals.js, usage_totals from 020 and 021, AUTH_MODE=google only): per app day (tools/dates.ts appDay),
+Usage totals (server/usage-totals.ts, usage_totals from 020 and 021, AUTH_MODE=google only): per app day (tools/dates.ts appDay),
 visits by device (phone, tablet, computer from the user agent), by browser and major version (browserOf: a fixed
 name and a number, "Chrome 130", or Other), and by location ("City, State, Country" or unknown, from
-req.ip in the local DB-IP City Lite file, server/geo.js openGeo), once per account a day (an in-memory set, never stored);
+req.ip in the local DB-IP City Lite file, server/geo.ts openGeo), once per account a day (an in-memory set, never stored);
 a visit is a signed-in Mozilla/ browser's successful / or /api/* request. Arrivals by source (linkedin, github, site, demo,
 other, direct): document loads of / and of /auth/login without next; Google sign-in returns and own-origin referrers are
 not counted; SOURCE_SITE_HOST and SOURCE_DEMO_HOST name site and demo. The table has day, dimension, value, count only:
@@ -363,11 +365,11 @@ checkBudget, from run_calls joined to runs.user_id): everything on the owner's k
 else MONTHLY_CLAUDE_BUDGET_USD, else $50), and each user on it against their own monthly cap (Admin > Users); the first
 refusal of a month emails that user and the owner. Every Claude call must pass a trace (a createJobTracer run) so its cost
 lands in run_calls with its user, or the caps cannot see it.
-server/security.js: security headers on every response (strict CSP: scripts only from 'self'; a route that sets its own CSP keeps
+server/security.ts: security headers on every response (strict CSP: scripts only from 'self'; a route that sets its own CSP keeps
 it), rate limits in google mode (sign-in 30 per 15 minutes per address; 100 refused requests blocks the address for the window;
 TRUST_PROXY behind a proxy), and errorReply (5xx bodies are generic; details go to the server log, never request bodies).
 test/security.test.js walks app.routeList: a new route is covered automatically and must need sign-in unless it is /auth/* or /healthz.
-US-only access (server/geo.js, GEO_ALLOW; the app only, never the demo): the country comes from Apple's iCloud Private Relay list
+US-only access (server/geo.ts, GEO_ALLOW; the app only, never the demo): the country comes from Apple's iCloud Private Relay list
 (/app/geo/relay.csv, downloaded at build time) first, then DB-IP; unknown addresses pass, no DB-IP file fails open, a missing
 relay list keeps blocking on and alerts the owner (geo-relay). test/geo.test.js, documentation addresses only.
 
@@ -394,7 +396,7 @@ the OS temp folder. Never back up .env or data/google. Kept: 7 nightly, 3 weekly
 SUPPORT_EMAIL (tools/support.ts) is the published help address: Settings, Help ({{supportContact}} in help/*.md, PRIVACY.md,
 TERMS.md), the sign-in pages, the demo banner, /api/me. It is configuration, never written in the repo.
 Email goes only to the owner (the run report, failure alerts, access requests) and to a person about their own account
-(approved, not approved, paused, allowance reached), through server/notices.js, which picks each recipient itself: names,
+(approved, not approved, paused, allowance reached), through server/notices.ts, which picks each recipient itself: names,
 addresses, and links only, never job data. Never send anything else, or to anyone else.
 Run npm install from PowerShell, never WSL: node_modules holds Windows builds of native modules (better-sqlite3).
 Output JSON schemas must avoid minimum/maximum/minLength/maxLength and complex array constraints (the API rejects them); use enum or validate in code.

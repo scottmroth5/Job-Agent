@@ -12,11 +12,63 @@ import { describeVersion } from '../agents/prompts.ts';
 import { budgetStatus } from '../agents/budget.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
+import type { Database } from '../tools/types.ts';
+import type { JobSearchConfig } from '../tools/config.ts';
+import type { Rate, RateUnit } from '../tools/rates.ts';
+import type { PostingsRow } from '../db/types.ts';
+
+type Lookups = ReturnType<typeof lookups>;
+/** The parts of the user's config these reads use. */
+type QueryConfig = Partial<Pick<JobSearchConfig, 'fractional' | 'search'>>;
+/** A posting row from base(): the job with its latest score and letter, and counts. */
+type JobRow = PostingsRow & {
+  score: number | null;
+  score_source: string | null;
+  score_reason: string | null;
+  analysis_json: string | null;
+  score_model: string | null;
+  score_prompt_version: string | null;
+  scored_at: string | null;
+  awaiting_description: number;
+  shares_key: number;
+  letter_url: string | null;
+  letter_name: string | null;
+  letter_flags: string | null;
+  letter_id: number | null;
+  has_tweaks: number;
+  attachment_count: number;
+};
+/** The Jobs page's filters ('all' or empty means no filter). */
+export type PostingFilters = {
+  track?: string;
+  stage?: string;
+  status?: string;
+  needsDescription?: string | boolean;
+  discoveredAfter?: string;
+  q?: string;
+  minScore?: number | string | null;
+  limit?: number | string;
+};
+/** An edit from the UI (updatePosting). */
+export type PostingPatch = {
+  status?: string;
+  notes?: string | null;
+  appliedOn?: string | null;
+  stage?: string;
+  track?: string;
+  title?: string;
+  company?: string;
+  location?: string | null;
+  description?: string | null;
+  rateText?: string | null;
+  hoursText?: string | null;
+  duplicateOf?: number;
+};
 
 /** Status filters that group statuses: 'active' (Needs action) and 'progress' (In progress), by status group. */
-const statusFilter = (lk, name) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
+const statusFilter = (lk: Lookups, name: string | undefined) => (name === 'active' ? lk.needsAction() : name === 'progress' ? lk.inProgress() : null);
 
-const parse = (s) => {
+const parse = (s: string | null | undefined) => {
   try {
     return s ? JSON.parse(s) : null;
   } catch {
@@ -34,13 +86,13 @@ const LATEST_LETTER = `(SELECT a.id FROM artifacts a WHERE a.posting_id = p.id A
 // original is analysis.uncappedScore). They stay in Discovered and the UI highlights them.
 export const DESCRIPTION_DAYS = 30;
 const NO_TEXT = "TRIM(COALESCE(p.jd_text, '') || COALESCE(p.fetched_text, '')) = ''";
-const awaitingDescription = (lk) => `(${NO_TEXT} AND p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND p.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))}
+const awaitingDescription = (lk: Lookups) => `(${NO_TEXT} AND p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND p.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))}
   AND p.discovered_on >= date('now', '-${DESCRIPTION_DAYS} days')
   AND COALESCE(CASE WHEN json_valid(ls.analysis_json) THEN json_extract(ls.analysis_json, '$.uncappedScore') END, ls.score) >= ${PROMOTE_AT})`;
 
 // The row query; db supplies the lists (agents/lookups.ts) the status and stage conditions use. p is the current
 // user's postings only (a subquery SQLite flattens, so callers add their own WHERE and indexes still apply).
-const base = (db, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
+const base = (db: Database, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
     ls.model AS score_model, ls.prompt_version AS score_prompt_version, ls.created_at AS scored_at,
     ${awaitingDescription(lk)} AS awaiting_description,
     -- flagged only while this job still waits on the user (new) and another live copy exists
@@ -56,7 +108,7 @@ const base = (db, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source
  * The pay to show: the job's own terms (fractional rate, or what the user typed), then the salary the
  * source listed, then the first pay range in the description. from says which.
  */
-function payFor(r, rate) {
+function payFor(r: JobRow, rate: Rate | null) {
   if (rate) return { ...rate, text: r.rate_text ?? null, from: 'terms' };
   const listed = r.salary ? parseRate(r.salary) : null;
   if (listed?.unit) return { ...listed, text: r.salary, from: 'source' };
@@ -64,9 +116,10 @@ function payFor(r, rate) {
   return found ? { ...found, from: 'description' } : null;
 }
 
-function toRow(r, config) {
+function toRow(r: JobRow, config: QueryConfig) {
   const analysis = parse(r.analysis_json);
-  const rate = r.rate_min != null ? { min: r.rate_min, max: r.rate_max ?? r.rate_min, unit: r.rate_unit } : null;
+  // rate_unit holds one of the units parseRate gives.
+  const rate = r.rate_min != null ? { min: r.rate_min, max: r.rate_max ?? r.rate_min, unit: r.rate_unit as RateUnit | null } : null;
   const hours = r.hours_min != null ? { min: r.hours_min, max: r.hours_max ?? r.hours_min } : null;
   const pay = payFor(r, rate);
   return {
@@ -104,10 +157,10 @@ function toRow(r, config) {
 }
 
 /** Filtered list. filters: { track, stage, status, needsDescription, discoveredAfter, q, minScore, limit } ('all' or empty means no filter; status 'active' (Needs action) or 'progress' (In progress) means those status groups). */
-export function listPostings(db, filters = {}, config = {}) {
+export function listPostings(db: Database, filters: PostingFilters = {}, config: QueryConfig = {}) {
   const lk = lookups(db);
-  const where = [];
-  const params = {};
+  const where: string[] = [];
+  const params: Record<string, string | number> = {};
   if (filters.track && filters.track !== 'all') {
     where.push('p.track = @track');
     params.track = filters.track;
@@ -117,7 +170,7 @@ export function listPostings(db, filters = {}, config = {}) {
     params.stage = filters.stage;
   }
   if (statusFilter(lk, filters.status)) {
-    where.push(`p.status IN ${sqlList(statusFilter(lk, filters.status))}`);
+    where.push(`p.status IN ${sqlList(statusFilter(lk, filters.status) as string[])}`);
   } else if (filters.status && filters.status !== 'all') {
     where.push('p.status = @status');
     params.status = filters.status;
@@ -138,19 +191,23 @@ export function listPostings(db, filters = {}, config = {}) {
   const limit = Math.min(Number(filters.limit) || 500, 2000);
   const sql = `${base(db)} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY COALESCE(ls.score, 0) DESC, p.discovered_on DESC, p.id DESC LIMIT ${limit}`;
-  return db.prepare(sql).all(params).map((r) => toRow(r, config));
+  return (db.prepare(sql).all(params) as JobRow[]).map((r) => toRow(r, config));
 }
 
 /** Full detail for one posting, or null. */
-export function getPosting(db, id, config = {}) {
-  const r = db.prepare(`${base(db)} WHERE p.id = ?`).get(id);
+export function getPosting(db: Database, id: number, config: QueryConfig = {}) {
+  const r = db.prepare(`${base(db)} WHERE p.id = ?`).get(id) as JobRow | undefined;
   if (!r) return null;
   const tweaks = db
     .prepare("SELECT content, model, created_at, resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
-    .get(id);
-  const letter = r.letter_id ? db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at, resume_id FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) : null;
+    .get(id) as { content: string; model: string | null; created_at: string; resume_id: string | null } | undefined;
+  const letter = r.letter_id
+    ? (db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at, resume_id FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) as
+        | { content: string; doc_url: string | null; doc_name: string | null; flags_json: string | null; created_at: string; resume_id: string | null }
+        | undefined)
+    : null;
   // Which of the user's resumes a letter or tweaks were written from (null: none, or since deleted).
-  const resumeLabel = (rid) => (rid ? (db.prepare('SELECT label FROM resumes WHERE id = ? AND user_id = @uid').pluck().get(rid) ?? null) : null);
+  const resumeLabel = (rid: string | null) => (rid ? (db.prepare('SELECT label FROM resumes WHERE id = ? AND user_id = @uid').pluck().get(rid) ?? null) : null);
   return {
     ...toRow(r, config),
     copies: findCopies(db, r),
@@ -179,7 +236,7 @@ export function getPosting(db, id, config = {}) {
  * How the current score was made, for the job panel: when, by which model, from the posting text or the title alone
  * (capped), with which prompt (agents/prompts.ts describeVersion), and whether text has arrived since a capped score.
  */
-function scoreDetails(db, r) {
+function scoreDetails(db: Database, r: JobRow) {
   if (r.score == null) return null;
   const analysis = parse(r.analysis_json) ?? {};
   const capped = analysis.uncappedScore != null;
@@ -203,15 +260,15 @@ function scoreDetails(db, r) {
  * pointing at the other.
  * Marking a job applied without a date sets today's date. Returns the updated detail, or null if not found.
  */
-export function updatePosting(db, id, patch, config = {}, now = new Date()) {
+export function updatePosting(db: Database, id: number, patch: PostingPatch, config: QueryConfig = {}, now = new Date()) {
   const lk = lookups(db);
-  const current = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id);
+  const current = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
   if (!current) return null;
-  const set = {};
+  const set: Partial<PostingsRow> = {};
   const nowIso = now.toISOString();
   // A new choice must be a value in its list that is not archived; a job keeps an archived value it already has.
-  for (const list of ['status', 'stage', 'track']) {
-    if (patch[list] !== undefined && patch[list] !== current[list] && !lk.selectable(list, patch[list])) {
+  for (const list of ['status', 'stage', 'track'] as const) {
+    if (patch[list] !== undefined && patch[list] !== current[list] && !lk.selectable(list, patch[list] as string)) {
       throw Object.assign(new Error(`"${patch[list]}" is not an available ${list}. Choose one from the list.`), { statusCode: 400 });
     }
   }
@@ -220,7 +277,7 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
     if (lk.groupOf('status', patch.status) === 'waiting' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = localDay(now);
   }
   if (patch.appliedOn !== undefined) set.applied_on = patch.appliedOn || null;
-  const newNotes = [];
+  const newNotes: Array<{ body: string; source: string }> = [];
   if (patch.notes?.trim()) newNotes.push({ body: patch.notes, source: 'user' });
   if (patch.stage !== undefined) set.stage = patch.stage;
   if (patch.track !== undefined) set.track = patch.track;
@@ -230,10 +287,12 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
     set.company_title_key = storedKey({ company: set.company ?? current.company, title: set.title ?? current.title });
   }
   if (patch.duplicateOf !== undefined) {
-    const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf);
+    const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf) as
+      | Pick<PostingsRow, 'id' | 'company' | 'title' | 'stage' | 'status'>
+      | undefined;
     if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
     const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${localDay(now)}.`;
-    set.stage = lk.role('stage', 'archive');
+    set.stage = lk.role('stage', 'archive') as string; // the stage list always has an archive role
     if (current.status !== 'duplicate') set.status = 'duplicate';
     newNotes.push({ body: note, source: 'agent' });
   }
@@ -267,10 +326,15 @@ export function updatePosting(db, id, patch, config = {}, now = new Date()) {
 }
 
 /** Counts and spend for the header. */
-export function summary(db, config = {}, now = new Date()) {
+export function summary(db: Database, config: QueryConfig = {}, now = new Date()) {
   const lk = lookups(db);
   const since = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
-  const counts = db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all();
+  const counts = db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all() as Array<{
+    track: string;
+    stage: string;
+    status: string;
+    n: number;
+  }>;
   return {
     counts,
     pipeline: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active').reduce((s, c) => s + c.n, 0),

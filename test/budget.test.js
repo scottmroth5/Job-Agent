@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
+import { buildApp } from '../server/app.ts';
 import { budgetLimit, budgetStatus, setBudgetLimit, spendByLabel, BudgetExceededError, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.ts';
 import { runAsUser } from '../db/scope.ts';
 import { addUser, OWNER_ID, setAiAccess, setClaudeKey } from '../db/users.ts';

@@ -5,10 +5,10 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
 import { getUser, OWNER_ID } from '../db/users.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings, MAX_PENDING } from '../server/auth.js';
-import { createNotices } from '../server/notices.js';
-import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings, MAX_PENDING } from '../server/auth.ts';
+import { createNotices } from '../server/notices.ts';
+import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { boxKey, open, seal } from '../tools/secret-box.ts';
 
 const SITE = 'http://localhost:5178';

@@ -3,8 +3,9 @@
 // done. A user may send FEEDBACK_PER_DAY a day, so the form can never be used to flood the owner's inbox.
 import { randomUUID } from 'node:crypto';
 import { getUser, OWNER_ID } from '../db/users.ts';
-import { listFeedback, markFeedbackDone } from './admin-queries.js';
+import { listFeedback, markFeedbackDone } from './admin-queries.ts';
 import type { Database } from '../tools/types.ts';
+import type { User } from '../db/users.ts';
 import type { App, Notices } from './types.ts';
 
 export const FEEDBACK_PER_DAY = 10;
@@ -36,7 +37,7 @@ export function registerFeedbackRoutes(app: App, { db, notices = {}, admin = tru
       const page = req.body.page?.replace(/[^\w#/ -]/g, '').slice(0, 100) || null;
       db.prepare('INSERT INTO feedback (user_id, id, body, page, created_at) VALUES (@uid, ?, ?, ?, ?)').run(id, body, page, new Date().toISOString());
       // The owner's own feedback is a note to self: saved, not emailed.
-      if ((req.uid ?? OWNER_ID) !== OWNER_ID) await notices.feedback?.(getUser(db, req.uid as number), body, page);
+      if ((req.uid ?? OWNER_ID) !== OWNER_ID) await notices.feedback?.(getUser(db, req.uid as number) as User, body, page); // a signed-in user has a row
       return reply.code(201).send({ id, sent: true });
     },
   );

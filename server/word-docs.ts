@@ -4,14 +4,16 @@
 import { Document, ExternalHyperlink, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 import { headerLines, SEPARATOR } from '../tools/letter-header.ts';
 import { fileTitle, paragraphsOf, withoutPictographs } from '../tools/text.ts';
+import type { IRunOptions } from 'docx';
+import type { HeaderPart, LetterHeader } from '../tools/letter-header.ts';
 
 // Every run of text, without emoji or pictographs (Word shows them as pictures).
-const textRun = (opts) => new TextRun({ ...opts, text: withoutPictographs(opts.text ?? '') });
+const textRun = (opts: IRunOptions & { text?: string }) => new TextRun({ ...opts, text: withoutPictographs(opts.text ?? '') });
 
 const FONT = { font: 'Calibri', size: 22 }; // 11 pt
 
 /** "**bold** and plain" as runs. */
-function runs(text) {
+function runs(text: string) {
   return String(text)
     .split(/(\*\*[^*]+\*\*)/)
     .filter(Boolean)
@@ -19,7 +21,7 @@ function runs(text) {
 }
 
 /** A header line's parts as runs: plain text, or a clickable link (an email opens a new message). */
-function linkRuns(parts) {
+function linkRuns(parts: HeaderPart[]) {
   return parts.flatMap((p, i) => [
     ...(i ? [textRun({ text: SEPARATOR, italics: true })] : []),
     p.url ? new ExternalHyperlink({ link: p.url, children: [textRun({ text: p.text, italics: true, color: '0563C1', underline: {} })] }) : textRun({ text: p.text, italics: true }),
@@ -27,8 +29,8 @@ function linkRuns(parts) {
 }
 
 /** The cover letter: name and contact lines, date, the role, greeting, body paragraphs, and sign-off. */
-export async function letterDocx({ candidate, company, title, date, body }) {
-  const para = (text, opts = {}) => new Paragraph({ children: [textRun({ text, ...opts })], spacing: { after: 160 } });
+export async function letterDocx({ candidate, company, title, date, body }: { candidate: LetterHeader; company: string; title: string; date: string; body: string }) {
+  const para = (text: string, opts: IRunOptions = {}) => new Paragraph({ children: [textRun({ text, ...opts })], spacing: { after: 160 } });
   const paragraphs = paragraphsOf(body);
   const doc = new Document({
     styles: { default: { document: { run: FONT } } },
@@ -54,8 +56,8 @@ export async function letterDocx({ candidate, company, title, date, body }) {
 }
 
 /** A meeting prep from its Markdown: # headings, - and * bullets (nested by indent), numbered lines, **bold**. */
-export async function prepDocx(markdown) {
-  const children = [];
+export async function prepDocx(markdown: string | null | undefined) {
+  const children: Paragraph[] = [];
   for (const line of String(markdown ?? '').replace(/\r\n?/g, '\n').split('\n')) {
     if (!line.trim() || /^\s*(-{3,}|\*{3,})\s*$/.test(line)) continue;
     const heading = /^(#{1,4})\s+(.*)$/.exec(line);
@@ -74,4 +76,4 @@ export async function prepDocx(markdown) {
 }
 
 /** A file name with only plain characters, for the download. */
-export const docxName = (name) => `${fileTitle(name) || 'Document'}.docx`;
+export const docxName = (name: string) => `${fileTitle(name) || 'Document'}.docx`;

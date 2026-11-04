@@ -1,6 +1,6 @@
-// Word downloads of a meeting prep (server/word-docs.js), for whoever's job it is. A cover letter's Word and PDF
+// Word downloads of a meeting prep (server/word-docs.ts), for whoever's job it is. A cover letter's Word and PDF
 // downloads are in server/letter-routes.ts, with its versions.
-import { prepDocx, docxName } from './word-docs.js';
+import { prepDocx, docxName } from './word-docs.ts';
 import { prepDocName } from '../agents/hunt/prep.ts';
 import { letterHeader } from '../agents/letter-header.ts';
 import type { Database } from '../tools/types.ts';
