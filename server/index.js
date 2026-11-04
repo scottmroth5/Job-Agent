@@ -17,7 +17,7 @@ import { openJobStore } from '../db/index.ts';
 import { buildApp } from './app.js';
 import { schedulesFromEnv } from './scheduler.js';
 import { timeZone } from '../tools/dates.ts';
-import { geoAllowFromEnv, openGeo } from './geo.js';
+import { countryLookup, geoAllowFromEnv, openGeo, openRelay } from './geo.js';
 import { createAlerts } from './alerts.js';
 import { createNotices } from './notices.js';
 import { getSetting, setSetting } from '../db/settings.ts';
@@ -117,8 +117,21 @@ const trustProxy = !process.env.TRUST_PROXY ? false : process.env.TRUST_PROXY ==
 // without it nothing is blocked and locations count as unknown. The demo never opens it (it counts nothing).
 const geoAllow = geoAllowFromEnv();
 const lookups = geoAllow.length || authMode === 'google' ? await openGeo().catch(() => null) : null;
-const geo = { allow: geoAllow, lookup: lookups?.country ?? null };
+// Apple's iCloud Private Relay list comes first for the country check; DB-IP decides for every other address.
+const relayStarted = Date.now();
+const relay = geoAllow.length ? (() => { try { return openRelay(); } catch { return null; } })() : null;
+const geo = { allow: geoAllow, lookup: lookups?.country ? countryLookup({ relay: relay?.country, dbip: lookups.country }) : null };
 if (geoAllow.length) console.log(geo.lookup ? `[geo] only ${geoAllow.join(', ')} allowed` : '[geo] the location database is missing: nothing is blocked (the next image build adds it)');
+if (geoAllow.length) {
+  console.log(relay
+    ? `[geo] iCloud Private Relay list: ${relay.v4} IPv4 and ${relay.v6} IPv6 ranges (${Date.now() - relayStarted} ms)`
+    : '[geo] the iCloud Private Relay list is missing: relay visitors are checked against the location database only (the next image build adds it)');
+}
+if (geoAllow.length && !relay) {
+  services.alerts?.alert('geo-relay', 'iCloud Private Relay list missing', "Apple's iCloud Private Relay address list is missing from the server image, so visitors using Private Relay are checked against the location database only, and some in the allowed countries may be refused. Blocking is still on. The next image build (or the weekly rebuild) adds it.", { once: true }).catch(() => {});
+} else if (relay) {
+  services.alerts?.recovered('geo-relay');
+}
 if (geoAllow.length && !geo.lookup) {
   services.alerts?.alert('geo-db', 'US-only blocking is off', 'The location database is missing from the server image, so visitors outside the allowed countries are not blocked. The next image build (or the weekly rebuild) adds it.', { once: true }).catch(() => {});
 } else if (geo.lookup) {

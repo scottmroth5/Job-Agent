@@ -365,6 +365,9 @@ server/security.js: security headers on every response (strict CSP: scripts only
 it), rate limits in google mode (sign-in 30 per 15 minutes per address; 100 refused requests blocks the address for the window;
 TRUST_PROXY behind a proxy), and errorReply (5xx bodies are generic; details go to the server log, never request bodies).
 test/security.test.js walks app.routeList: a new route is covered automatically and must need sign-in unless it is /auth/* or /healthz.
+US-only access (server/geo.js, GEO_ALLOW; the app only, never the demo): the country comes from Apple's iCloud Private Relay list
+(/app/geo/relay.csv, downloaded at build time) first, then DB-IP; unknown addresses pass, no DB-IP file fails open, a missing
+relay list keeps blocking on and alerts the owner (geo-relay). test/geo.test.js, documentation addresses only.
 
 ## Inbox
 Pre-filter first: only threads the user started, known contacts, known company domains, and config/inbox.json atsDomains;
