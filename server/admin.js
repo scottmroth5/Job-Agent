@@ -6,8 +6,8 @@ import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.
 import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.js';
 import { buildContactRequest } from '../agents/hunt/find-contact.js';
 import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.ts';
-import { buildClassifyRequest } from '../agents/inbox/classify.js';
-import { listOpenApplications } from '../agents/inbox/match.js';
+import { buildClassifyRequest } from '../agents/inbox/classify.ts';
+import { listOpenApplications } from '../agents/inbox/match.ts';
 import { OWNER_ID } from '../db/users.ts';
 
 // The inbox prompt previews with a made-up email; real email bodies are never shown here.

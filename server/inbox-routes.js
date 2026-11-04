@@ -2,10 +2,10 @@
 // summaries are shown to the user here (local server only); they are never logged.
 import { createJobTracer } from '../tools/trace.ts';
 import { assertNoRunningRun } from '../tools/runs.ts';
-import { runInbox } from '../agents/inbox/process.js';
-import { listNeedsReview, resolveReview, CHOICES } from '../agents/inbox/review.js';
-import { listOpenApplications } from '../agents/inbox/match.js';
-import { trimBody } from '../agents/inbox/atsParse.js';
+import { runInbox } from '../agents/inbox/process.ts';
+import { listNeedsReview, resolveReview, CHOICES } from '../agents/inbox/review.ts';
+import { listOpenApplications } from '../agents/inbox/match.ts';
+import { trimBody } from '../agents/inbox/atsParse.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };

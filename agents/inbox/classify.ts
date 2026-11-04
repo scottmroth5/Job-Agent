@@ -5,6 +5,37 @@
 import { fillTemplate } from '../../tools/template.ts';
 import { sanitizeDashes } from '../../tools/text.ts';
 import { getPrompt } from '../prompts.ts';
+import type { Claude, Run } from '@scottmroth5/agent-core';
+import type { Database } from '../../tools/types.ts';
+import type { Prompt } from '../prompts.ts';
+
+/** The parts of an email the classifier reads. */
+export interface ClassifyInput {
+  senderName?: string | null;
+  senderEmail: string;
+  sentAt?: string | null;
+  subject?: string | null;
+  body?: string | null;
+}
+
+/** An application the email may be about, as the prompt lists it. */
+type Application = { id: number; company: string; title: string };
+
+/** The model's answer after validateClassification: every field checked. */
+export interface Classification {
+  applicationId: number | null;
+  confidence: number;
+  type: string;
+  extracted: {
+    company: string | null;
+    role_title: string | null;
+    contact_name: string | null;
+    contact_email: string | null;
+    interview_times: string[];
+    deadline: string | null;
+  };
+  summary: string;
+}
 
 export const EMAIL_TYPES = ['confirmation', 'rejection', 'recruiter_outreach', 'interview_request', 'assessment', 'offer', 'follow_up', 'other'];
 export const CLASSIFY_MAX_TOKENS = 800;
@@ -30,19 +61,19 @@ const INJECTION_PATTERNS = [
 ];
 
 /** True when the email contains instructions aimed at an AI. */
-export function looksLikeInjection(email) {
+export function looksLikeInjection(email: Pick<ClassifyInput, 'subject' | 'body'>) {
   const text = `${email.subject ?? ''}\n${email.body ?? ''}`;
   return INJECTION_PATTERNS.some((re) => re.test(text));
 }
 
 // Stops email text from closing the wrapper or looking like a template placeholder.
-const neutralize = (s) =>
+const neutralize = (s: string | null | undefined) =>
   String(s ?? '')
     .replace(/<\/?\s*email\b[^>]*>/gi, (m) => m.replace(/</g, '‹'))
     .replace(/\{\{/g, '{ {')
     .replace(/\}\}/g, '} }');
 
-export function emailBlock(email) {
+export function emailBlock(email: ClassifyInput) {
   return [
     '<email>',
     `From: ${neutralize(email.senderName ? `${email.senderName} <${email.senderEmail}>` : email.senderEmail)}`,
@@ -54,11 +85,11 @@ export function emailBlock(email) {
   ].join('\n');
 }
 
-export const applicationsBlock = (open) =>
+export const applicationsBlock = (open: Application[]) =>
   open.length ? open.map((a) => `${a.id} | ${neutralize(a.company)} | ${neutralize(a.title)}`).join('\n') : '(none)';
 
 /** claude.send() options for one email. prompt: getPrompt(db, 'inbox-classify') or a draft. */
-export function buildClassifyRequest(email, { open, model, prompt }) {
+export function buildClassifyRequest(email: ClassifyInput, { open, model, prompt }: { open: Application[]; model: string; prompt: Pick<Prompt, 'template' | 'schema'> }) {
   return {
     model,
     maxTokens: CLASSIFY_MAX_TOKENS,
@@ -69,14 +100,16 @@ export function buildClassifyRequest(email, { open, model, prompt }) {
   };
 }
 
-const str = (v) => (typeof v === 'string' && v.trim() ? sanitizeDashes(v.trim()).slice(0, 500) : null);
-const twoSentences = (s) => (str(s) ?? '').split(/(?<=[.!?])\s+/).slice(0, 2).join(' ');
+const str = (v: unknown) => (typeof v === 'string' && v.trim() ? sanitizeDashes(v.trim()).slice(0, 500) : null);
+const twoSentences = (s: unknown) => (str(s) ?? '').split(/(?<=[.!?])\s+/).slice(0, 2).join(' ');
 
 /**
  * Checks the model's answer. An out-of-range confidence or an id that is not an open application means
  * "no match" (application null, confidence 0); an unknown type becomes 'other'.
  */
-export function validateClassification(data, open) {
+// data is the model's answer: JSON constrained by the schema, still checked field by field here.
+export function validateClassification(answer: unknown, open: Array<{ id: number }>): Classification {
+  const data = answer as { confidence?: unknown; application_id?: unknown; extracted?: Record<string, unknown>; type?: string; summary?: unknown } | null | undefined;
   const ids = new Set(open.map((a) => String(a.id)));
   const conf = typeof data?.confidence === 'number' && data.confidence >= 0 && data.confidence <= 1 ? data.confidence : null;
   const idOk = data?.application_id != null && ids.has(String(data.application_id).trim());
@@ -84,13 +117,13 @@ export function validateClassification(data, open) {
   return {
     applicationId: idOk && conf != null ? Number(String(data.application_id).trim()) : null,
     confidence: idOk && conf != null ? conf : data?.application_id == null && conf != null ? conf : 0,
-    type: EMAIL_TYPES.includes(data?.type) ? data.type : 'other',
+    type: EMAIL_TYPES.includes(data?.type as string) ? (data?.type as string) : 'other',
     extracted: {
       company: str(x.company),
       role_title: str(x.role_title),
       contact_name: str(x.contact_name),
       contact_email: str(x.contact_email)?.toLowerCase() ?? null,
-      interview_times: Array.isArray(x.interview_times) ? x.interview_times.map(str).filter(Boolean).slice(0, 10) : [],
+      interview_times: Array.isArray(x.interview_times) ? (x.interview_times.map(str).filter(Boolean) as string[]).slice(0, 10) : [],
       deadline: str(x.deadline),
     },
     summary: twoSentences(data?.summary),
@@ -98,7 +131,10 @@ export function validateClassification(data, open) {
 }
 
 /** Classifies one email. Returns the validated result plus the model, prompt version, and cost. */
-export async function classifyEmail(email, { claude, db, model, open, trace, prompt = getPrompt(db, 'inbox-classify') }) {
+export async function classifyEmail(
+  email: ClassifyInput,
+  { claude, db, model, open, trace, prompt = getPrompt(db, 'inbox-classify') }: { claude: Claude; db?: Database | null; model: string; open: Application[]; trace?: Run | null; prompt?: Pick<Prompt, 'template' | 'schema' | 'version'> },
+) {
   const res = await claude.send({ ...buildClassifyRequest(email, { open, model, prompt }), trace });
   return { ...validateClassification(res.data, open), model: res.model, promptVersion: prompt.version, costUsd: res.costUsd ?? 0 };
 }

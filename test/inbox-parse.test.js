@@ -1,9 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { prefilter, domainOf, domainIn } from '../agents/inbox/prefilter.js';
-import { parseAtsEmail, trimBody } from '../agents/inbox/atsParse.js';
-import { makeEvent, createEmitter } from '../agents/inbox/events.js';
-import { loadInboxConfig } from '../agents/inbox/config.js';
+import { prefilter, domainOf, domainIn } from '../agents/inbox/prefilter.ts';
+import { parseAtsEmail, trimBody } from '../agents/inbox/atsParse.ts';
+import { makeEvent, createEmitter } from '../agents/inbox/events.ts';
+import { loadInboxConfig } from '../agents/inbox/config.ts';
 
 // Synthetic addresses and companies only.
 const ats = loadInboxConfig().atsDomains;

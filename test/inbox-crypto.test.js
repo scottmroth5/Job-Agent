@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { encrypt, decrypt, loadKey, newKey } from '../agents/inbox/crypto.js';
+import { encrypt, decrypt, loadKey, newKey } from '../agents/inbox/crypto.ts';
 import { setEnvValues, hasEnvValue } from '../tools/env-file.ts';
 
 test('encrypt and decrypt round trip, with a fresh IV each time', () => {

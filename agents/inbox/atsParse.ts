@@ -2,7 +2,7 @@
 // trimming. Deterministic, so most confirmations and rejections match without asking Claude.
 import { htmlToText } from '../../tools/html.ts';
 
-const clean = (s) =>
+const clean = (s: string | null | undefined) =>
   String(s ?? '')
     .replace(/^["'“”‘’\s]+|["'“”‘’\s!.:,]+$/g, '')
     .replace(/\s+/g, ' ')
@@ -30,7 +30,7 @@ const BODY_PATTERNS = [
  * { company, title } from an ATS email, either may be null; null when nothing was recognized.
  * Subject patterns win; the body is used only when the subject gave nothing.
  */
-export function parseAtsEmail({ subject, body } = {}) {
+export function parseAtsEmail({ subject, body }: { subject?: string | null; body?: string | null } = {}) {
   const s = String(subject ?? '').trim();
   for (const re of SUBJECT_PATTERNS) {
     const m = re.exec(s);
@@ -45,7 +45,7 @@ export function parseAtsEmail({ subject, body } = {}) {
 }
 
 /** Plain text of an email body: HTML converted, quoted replies and signatures after "-- " dropped, trimmed to max. */
-export function trimBody(text, { html = false, max = 4000 } = {}) {
+export function trimBody(text: string | null | undefined, { html = false, max = 4000 }: { html?: boolean; max?: number } = {}) {
   let t = html ? htmlToText(text) : String(text ?? '');
   t = t.replace(/\r\n/g, '\n');
   const quoted = /^\s*On .{5,200}wrote:\s*$/m.exec(t);
