@@ -13,7 +13,7 @@ const pathsWith = (env) =>
         const { dataPath } = await import('./tools/paths.ts');
         const { DB_PATH } = await import('./db/index.ts');
         const { CONFIG_PATH } = await import('./tools/config.ts');
-        const { ATTACHMENTS_DIR } = await import('./server/attachments.js');
+        const { ATTACHMENTS_DIR } = await import('./server/attachments.ts');
         const { TOKEN_PATH } = await import('./tools/google/auth.ts');
         console.log(JSON.stringify({ db: DB_PATH, config: CONFIG_PATH, attachments: ATTACHMENTS_DIR, token: TOKEN_PATH, logs: dataPath('logs') }));
       `],

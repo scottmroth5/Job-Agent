@@ -14,4 +14,6 @@ export interface Logger {
   info: (...args: unknown[]) => void;
   warn: (...args: unknown[]) => void;
   error: (...args: unknown[]) => void;
+  /** console and a task's logger have it too; quiet loggers pass one so they fit both. */
+  log?: (...args: unknown[]) => void;
 }

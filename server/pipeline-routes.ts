@@ -4,6 +4,11 @@
 import { assertNoRunningRun } from '../tools/runs.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
+import type { Database } from '../tools/types.ts';
+import type { App, Tasks } from './types.ts';
+
+/** Runs scripts/pipeline.js for a user: onLine gets each stdout line, onError each stderr line. */
+export type RunPipeline = (opts: { user: number; onLine: (line: string) => void; onError: (line: string) => void }) => Promise<{ code: number; lastError: string | null }>;
 
 const anyObject = { type: 'object', additionalProperties: true };
 const LOCKS = ['pipeline', 'inbox', 'discover', 'score', 'hunt'];
@@ -15,7 +20,7 @@ const MINE = '(user_id = ? OR (? = 1 AND user_id IS NULL))';
  * A user's latest pipeline run, and whether any pipeline is in progress (from the runs table, so it survives a page
  * reload).
  */
-export function pipelineState(db, uid = OWNER_ID) {
+export function pipelineState(db: Database, uid: number = OWNER_ID) {
   const last = db.prepare(`SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name = 'pipeline' AND ${MINE} ORDER BY id DESC LIMIT 1`).get(uid, uid) ?? null;
   let running = false;
   try {
@@ -30,7 +35,7 @@ export function pipelineState(db, uid = OWNER_ID) {
 }
 
 /** Turns the pipeline's console lines into short progress messages. */
-export function progressLine(line) {
+export function progressLine(line: string) {
   const step = /^\[pipeline\] (Step \d+\/\d+: \w+)/.exec(line);
   if (step) return step[1];
   if (/^Sent "/.test(line)) return 'Report emailed';
@@ -38,35 +43,34 @@ export function progressLine(line) {
   return null;
 }
 
-/**
- * @param {object} ctx
- * @param {(opts: { onLine: (line: string) => void, onError: (line: string) => void }) => Promise<{ code: number, lastError: string | null }>} ctx.runPipeline
- *   onLine gets each stdout line, onError each stderr line
- */
-export function registerPipelineRoutes(app, { db, tasks, runPipeline, schedule = () => null }) {
-  let taskId = null;
+/** schedule() is the scheduler's pipeline job (its next run), or null when none is scheduled. */
+export function registerPipelineRoutes(
+  app: App,
+  { db, tasks, runPipeline, schedule = () => null }: { db: Database; tasks: Tasks; runPipeline: RunPipeline; schedule?: () => { next?: string | null; schedule?: unknown } | null },
+) {
+  let taskId: string | null = null;
 
   /** Starts the current user's pipeline as a task (the button and the scheduler); throws 409 when one is already running. */
-  const start = ({ by = 'button' } = {}) => {
+  const start = ({ by = 'button' }: { by?: string } = {}) => {
     const uid = currentUserId() ?? OWNER_ID;
     if (taskId && tasks.get(taskId)?.status === 'running') throw Object.assign(new Error('The pipeline is already running.'), { statusCode: 409 });
     for (const name of LOCKS) {
       try {
         assertNoRunningRun(db, name);
       } catch (err) {
-        throw Object.assign(new Error(`${err.message} Try again when it finishes.`), { statusCode: 409 });
+        throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
       }
     }
-    taskId = tasks.start('pipeline', { by }, async (step, { logger }) => {
+    taskId = tasks.start('pipeline', { by }, async (step: (message: string, opts?: { log?: boolean }) => void, { logger }: { logger: { info: (t: string) => void; error: (t: string) => void } }) => {
       step(by === 'schedule' ? 'Starting (scheduled)' : 'Starting');
       const { code, lastError } = await runPipeline({
         user: uid,
-        onLine: (line) => {
+        onLine: (line: string) => {
           logger.info(line);
           const p = progressLine(line);
           if (p) step(p, { log: false });
         },
-        onError: (line) => logger.error(line),
+        onError: (line: string) => logger.error(line),
       });
       if (code !== 0) throw new Error(lastError ? `The pipeline stopped: ${lastError}` : `The pipeline stopped with exit code ${code}.`);
       return { ...pipelineState(db, uid).lastFinished };

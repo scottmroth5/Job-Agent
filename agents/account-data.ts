@@ -45,7 +45,7 @@ export function exportAccount(db: Database, uid: number, now = new Date()) {
  * Deletes a user's account and everything that is theirs. Returns counts (rows by table, files). Throws for the owner.
  * attachmentsDir is where attached files live (data/attachments).
  */
-export function deleteAccount(db: Database, uid: number, { attachmentsDir = null }: { attachmentsDir?: string | null } = {}) {
+export function deleteAccount(db: Database, uid: number, { attachmentsDir = null }: { attachmentsDir?: string | null } = {}): Record<string, number> {
   if (uid === OWNER_ID) throw Object.assign(new Error("The owner's account cannot be deleted."), { statusCode: 400 });
   const user = db.prepare('SELECT ai_source FROM users WHERE id = ?').get(uid) as { ai_source: string } | undefined;
   if (!user) throw Object.assign(new Error('Account not found.'), { statusCode: 404 });

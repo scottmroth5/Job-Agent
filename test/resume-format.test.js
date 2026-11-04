@@ -1,4 +1,4 @@
-// Resume downloads as the user prefers (tools/resume-format.ts, server/resume-routes.js): the original file, plain text,
+// Resume downloads as the user prefers (tools/resume-format.ts, server/resume-routes.ts): the original file, plain text,
 // Word, or PDF laid out from the text. Synthetic resumes only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

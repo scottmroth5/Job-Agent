@@ -1,6 +1,6 @@
 // Revising a cover letter with Claude (the job panel's Revise with Claude): the current draft, the user's feedback, and
 // the earlier turns go in; a revised letter body and a short note on what changed come out. Nothing is saved here: the
-// user keeps going or saves the version they want (server/letter-routes.js). The same background as the letter itself
+// user keeps going or saves the version they want (server/letter-routes.ts). The same background as the letter itself
 // (the knowledge doc plus the job's resume) is the system prompt, so facts stay the user's own; the posting is data.
 import { HUNT_MODEL, finishLetter } from './generate.ts';
 import { formatAnalysis } from './letters.ts';

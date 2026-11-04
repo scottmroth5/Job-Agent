@@ -1,4 +1,4 @@
-// Resumes (agents/resumes.ts, server/resume-routes.js): upload, label and match titles, default, replace, delete,
+// Resumes (agents/resumes.ts, server/resume-routes.ts): upload, label and match titles, default, replace, delete,
 // download your own only, and the right one reaching each job's letter and tweaks. Synthetic files and data only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

@@ -112,7 +112,7 @@ function Tile({ href, onClick, icon, title, stat, alert, arrange }) {
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-// The tiles in their default order; the keys match server/layout.js LAYOUT_AREAS.home.
+// The tiles in their default order; the keys match server/layout.ts LAYOUT_AREAS.home.
 export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'];
 
 /** The start page: a tile for each screen with what needs attention, the pipeline, and this month's Claude budget. */

@@ -89,7 +89,7 @@ export const api = {
   restoreProfileVersion: (n) => request('POST', `/api/account/profile/versions/${n}/restore`),
   // The knowledge doc from a document: its text, not saved.
   profileFromFile: (file) => uploadFile('/api/account/profile/from-file', file, '5 MB'),
-  // A job's cover letter versions, revising with Claude, and saving or restoring a version (server/letter-routes.js).
+  // A job's cover letter versions, revising with Claude, and saving or restoring a version (server/letter-routes.ts).
   letters: (id) => request('GET', `/api/postings/${id}/letters`),
   letterHeader: () => request('GET', '/api/letter-header'),
   saveLetterHeader: (header) => request('PUT', '/api/letter-header', header),
@@ -128,7 +128,7 @@ export const api = {
   },
   dismissClaim: (id, versionId, index) => request('POST', `/api/postings/${id}/letters/${versionId}/claims/${index}/dismiss`),
   letterFromFile: (id, file) => uploadFile(`/api/postings/${id}/letter/from-file`, file, '5 MB'),
-  // Settings > Resumes (server/resume-routes.js).
+  // Settings > Resumes (server/resume-routes.ts).
   resumes: () => request('GET', '/api/resumes'),
   uploadResume: (file) => uploadFile('/api/resumes', file, '5 MB'),
   replaceResume: (id, file) => uploadFile(`/api/resumes/${id}/file`, file, '5 MB'),

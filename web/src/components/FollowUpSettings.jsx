@@ -4,7 +4,7 @@ import { useDemo } from '../demo.jsx';
 
 /**
  * Settings: follow-ups. An application with no reply is worth a follow-up from followUpFrom days until the stale days;
- * after that it is stale, and Home offers to close it as no response (server/follow-up-routes.js).
+ * after that it is stale, and Home offers to close it as no response (server/follow-up-routes.ts).
  */
 export default function FollowUpSettings() {
   const demo = useDemo();

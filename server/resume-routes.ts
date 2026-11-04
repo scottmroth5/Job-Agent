@@ -3,16 +3,18 @@
 // download is always an attachment with nosniff and a sandbox policy, like job attachments.
 import { addResume, deleteResume, listResumes, replaceResumeFile, resumeFile, updateResume } from '../agents/resumes.ts';
 import { MAX_DOC_BYTES } from '../tools/doc-text.ts';
-import { uploadName } from './account-routes.js';
-import { disposition } from './attachments.js';
+import { uploadName } from './account-routes.ts';
+import { disposition } from './attachments.ts';
 import { resumeDocx, resumePdf } from '../tools/resume-format.ts';
+import type { Database } from '../tools/types.ts';
+import type { App, FastifyReply, FastifyRequest } from './types.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
-const TYPES = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', text: 'text/plain; charset=utf-8' };
+const TYPES: Record<string, string> = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', text: 'text/plain; charset=utf-8' };
 
-export function registerResumeRoutes(app, { db }) {
-  const fileBody = (req, reply) => {
+export function registerResumeRoutes(app: App, { db }: { db: Database }) {
+  const fileBody = (req: FastifyRequest, reply: FastifyReply) => {
     if (Buffer.isBuffer(req.body) && req.body.length) return req.body;
     reply.code(400).send({ error: 'Send the file as the request body (application/octet-stream).' });
     return null;
@@ -33,7 +35,7 @@ export function registerResumeRoutes(app, { db }) {
     },
   );
 
-  app.patch(
+  app.patch<{ Params: { id: string }; Body: { label?: string; titles?: string; isDefault?: boolean } }>(
     '/api/resumes/:id',
     {
       schema: {
@@ -46,7 +48,7 @@ export function registerResumeRoutes(app, { db }) {
     async (req) => updateResume(db, req.params.id, req.body),
   );
 
-  app.post(
+  app.post<{ Params: { id: string } }>(
     '/api/resumes/:id/file',
     { bodyLimit: MAX_DOC_BYTES, schema: { summary: "Replace a resume's file (its label, titles, and default stay)", params: uuidParams, response: { 200: anyObject } } },
     async (req, reply) => {
@@ -56,13 +58,13 @@ export function registerResumeRoutes(app, { db }) {
     },
   );
 
-  app.delete('/api/resumes/:id', { schema: { summary: 'Delete a resume', params: uuidParams } }, async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/resumes/:id', { schema: { summary: 'Delete a resume', params: uuidParams } }, async (req, reply) => {
     deleteResume(db, req.params.id);
     return reply.code(204).send();
   });
 
   // format: original (the file as uploaded), text, docx, or pdf (both laid out from its text by tools/resume-format.ts).
-  app.get(
+  app.get<{ Params: { id: string }; Querystring: { format?: 'original' | 'text' | 'docx' | 'pdf' } }>(
     '/api/resumes/:id/file',
     {
       schema: {

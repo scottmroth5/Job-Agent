@@ -8,7 +8,14 @@ import { OWNER_ID } from '../db/users.ts';
 const KEEP = 100;
 const MAX_LINES = 5000;
 
+/**
+ * @typedef {{ id: string, uid: number, kind: string, meta: object, status: string, steps: Array<{ at: string, message: string }>,
+ *   log: Array<{ at: string, level: string, text: string }>, result: unknown, error: string | null, startedAt: string,
+ *   finishedAt: string | null }} Task
+ */
+
 export function createTaskRunner() {
+  /** @type {Map<string, Task>} */
   const tasks = new Map();
   const finished = new Map(); // id -> promise that settles when the task ends
   let next = 1;
@@ -49,6 +56,7 @@ export function createTaskRunner() {
     return id;
   }
 
+  /** @param {Task} task */
   const brief = ({ log, uid, ...t }) => ({ ...t, lines: log.length });
   // With a uid, only that user's task; without one (the server's own checks), any.
   const find = (id, uid) => {

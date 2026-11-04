@@ -9,7 +9,7 @@ import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
 import { draftContent, validateDraft, DRAFT_MODEL, DRAFT_SCHEMA, MAX_FILES } from '../agents/draft-profile.ts';
-import { DRAFTS_PER_DAY } from '../server/draft-routes.js';
+import { DRAFTS_PER_DAY } from '../server/draft-routes.ts';
 import { saveUserConfig, saveUserProfile } from '../agents/user-config.ts';
 import { createJobClaude } from '../tools/claude.ts';
 

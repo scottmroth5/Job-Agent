@@ -1,15 +1,17 @@
 // Screen layouts each user arranges: today the Home page's tile order. Saved on the server (user_settings
 // layout:<area>) so the order follows you to every device. The UI applies it with web/src/layout.js arranged().
 import { deleteUserSetting, getUserSetting, setUserSetting } from '../db/settings.ts';
+import type { Database } from '../tools/types.ts';
+import type { App } from './types.ts';
 
 /** Each area's items in their default order. web/src/components/HomePage.jsx draws a tile for each home key. */
-export const LAYOUT_AREAS = { home: ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'] };
+export const LAYOUT_AREAS: Record<string, string[]> = { home: ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'] };
 
-const key = (area) => `layout:${area}`;
+const key = (area: string) => `layout:${area}`;
 
 /** The saved order for each area (null when never arranged), keeping only items the area still has. */
-export function getLayout(db) {
-  const out = {};
+export function getLayout(db: Database) {
+  const out: Record<string, string[] | null> = {};
   for (const [area, items] of Object.entries(LAYOUT_AREAS)) {
     let saved = null;
     try {
@@ -17,14 +19,14 @@ export function getLayout(db) {
     } catch {
       saved = null;
     }
-    out[area] = Array.isArray(saved) ? saved.filter((k) => items.includes(k)) : null;
+    out[area] = Array.isArray(saved) ? (saved as string[]).filter((k) => items.includes(k)) : null;
   }
   return out;
 }
 
-export function registerLayoutRoutes(app, { db }) {
+export function registerLayoutRoutes(app: App, { db }: { db: Database }) {
   for (const [area, items] of Object.entries(LAYOUT_AREAS)) {
-    app.put(
+    app.put<{ Body: { order: string[] } }>(
       `/api/layout/${area}`,
       {
         schema: {

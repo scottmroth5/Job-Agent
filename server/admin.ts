@@ -9,6 +9,13 @@ import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD 
 import { buildClassifyRequest } from '../agents/inbox/classify.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { OWNER_ID } from '../db/users.ts';
+import type { Database } from '../tools/types.ts';
+import type { UserConfig } from '../agents/user-config.ts';
+import type { PostingsRow } from '../db/types.ts';
+import type { App } from './types.ts';
+
+/** A job to preview a prompt with: its row and its latest v2 analysis. */
+type SamplePosting = PostingsRow & { analysis_json: string | null };
 
 // The inbox prompt previews with a made-up email; real email bodies are never shown here.
 const SAMPLE_EMAIL = {
@@ -31,7 +38,7 @@ const NAMES = Object.keys(PROMPTS);
 const nameParams = { type: 'object', required: ['name'], properties: { name: { type: 'string', enum: NAMES } } };
 const anyObject = { type: 'object', additionalProperties: true };
 
-function detail(db, name) {
+function detail(db: Database, name: string) {
   const def = PROMPTS[name];
   const current = getPrompt(db, name);
   const base = defaultPrompt(name);
@@ -54,22 +61,22 @@ function detail(db, name) {
 }
 
 /** A job to preview with: the one asked for, else a recent one with text (and an analysis for hunt prompts). */
-function samplePosting(db, name, postingId) {
+function samplePosting(db: Database, name: string, postingId: number | undefined): SamplePosting | null {
   const needsAnalysis = name === 'resume-tweaks' || name === 'cover-letter';
   const track = name === 'score-fractional' ? 'fractional' : name === 'score' ? 'fulltime' : null;
   const analysisSql = `(SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1)`;
-  if (postingId) return db.prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) ?? null;
+  if (postingId) return (db.prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) as SamplePosting | undefined) ?? null;
   return (
-    db
+    (db
       .prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p
         WHERE p.user_id = @uid AND (p.fetched_text IS NOT NULL OR p.jd_text IS NOT NULL) ${track ? 'AND p.track = @track' : ''}
         ${needsAnalysis ? `AND ${analysisSql} IS NOT NULL` : ''}
         ORDER BY p.id DESC LIMIT 1`)
-      .get(track ? { track } : {}) ?? null
+      .get(track ? { track } : {}) as SamplePosting | undefined) ?? null
   );
 }
 
-export function registerAdminRoutes(app, { db, config }) {
+export function registerAdminRoutes(app: App, { db, config }: { db: Database; config: UserConfig }) {
   // The signed-in user's spend: the owner sees everything on their key; anyone else, their own.
   const spending = (uid = OWNER_ID) => ({ ...budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: spendByLabel(db, { uid }) });
 
@@ -77,7 +84,7 @@ export function registerAdminRoutes(app, { db, config }) {
   // the cap below stays the owner's.
   app.get('/api/spending', { schema: { summary: "Your Claude spend this month, by feature, against your cap or allowance if you have one", response: { 200: anyObject } } }, async (req) => spending(req.uid));
 
-  app.put(
+  app.put<{ Body: { limitUsd: number } }>(
     '/api/admin/budget',
     {
       schema: {
@@ -99,11 +106,11 @@ export function registerAdminRoutes(app, { db, config }) {
     }),
   );
 
-  app.get('/api/prompts/:name', { schema: { summary: 'A prompt with its default, placeholders, schema and history', params: nameParams, response: { 200: anyObject } } }, async (req) =>
+  app.get<{ Params: { name: string } }>('/api/prompts/:name', { schema: { summary: 'A prompt with its default, placeholders, schema and history', params: nameParams, response: { 200: anyObject } } }, async (req) =>
     detail(db, req.params.name),
   );
 
-  app.put(
+  app.put<{ Params: { name: string }; Body: { template: string; note?: string } }>(
     '/api/prompts/:name',
     {
       schema: {
@@ -119,7 +126,7 @@ export function registerAdminRoutes(app, { db, config }) {
     },
   );
 
-  app.post(
+  app.post<{ Params: { name: string }; Body: { versionId: number | null } }>(
     '/api/prompts/:name/restore',
     {
       schema: {
@@ -135,7 +142,7 @@ export function registerAdminRoutes(app, { db, config }) {
     },
   );
 
-  app.post(
+  app.post<{ Params: { name: string }; Body: { template: string; postingId?: number } }>(
     '/api/prompts/:name/preview',
     {
       schema: {
@@ -157,7 +164,7 @@ export function registerAdminRoutes(app, { db, config }) {
       const posting = samplePosting(db, name, req.body.postingId);
       if (!posting) return { problems: [], text: null, posting: null, message: 'No job with posting text (and, for resume tweaks and letters, a v2 analysis) to preview with yet.' };
       const draft = { template: req.body.template, schema: defaultPrompt(name).schema, version: 'draft', track: posting.track };
-      let text;
+      let text: string | undefined;
       if (name === 'score' || name === 'score-fractional') {
         text = buildScoreRequest(posting, { config, knowledge: '', model: DEFAULT_SCORE_MODEL, prompt: draft }).prompt;
       } else if (name === 'meeting-prep') {
@@ -168,7 +175,7 @@ export function registerAdminRoutes(app, { db, config }) {
         const analysis = posting.analysis_json ? JSON.parse(posting.analysis_json) : null;
         text = buildContactRequest(posting, { config, knowledge: '', prompt: draft, analysis, notes: posting.notes ?? '' }).prompt;
       } else {
-        const analysis = JSON.parse(posting.analysis_json);
+        const analysis = JSON.parse(posting.analysis_json as string); // samplePosting gave a job with one
         const current = { tweaks: getPrompt(db, 'resume-tweaks'), letter: getPrompt(db, 'cover-letter') };
         const prompts = name === 'resume-tweaks' ? { ...current, tweaks: draft } : { ...current, letter: draft };
         const build = name === 'resume-tweaks' ? buildTweaksRequest : buildLetterRequest;

@@ -1,5 +1,5 @@
 // The knowledge doc in the app for everyone, the owner included (agents/user-config.ts backgroundFor,
-// server/account-routes.js); a document can fill the box for review. Synthetic data only.
+// server/account-routes.ts); a document can fill the box for review. Synthetic data only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';

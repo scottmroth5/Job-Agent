@@ -1,20 +1,31 @@
 // Meeting prep routes: start a prep for a job (a background task), read one, delete one. Prep text and the
 // people's names stay in the database and the response; task output holds counts only.
 import { MAX_ATTENDEES, MEETING_FORMATS, MEETING_KINDS, listPreps, writeMeetingPrep } from '../agents/hunt/prep.ts';
+import type { Claude } from '@scottmroth5/agent-core';
+import type { JobStore } from '../tools/types.ts';
+import type { UserConfig } from '../agents/user-config.ts';
+import type { MeetingPrepsRow } from '../db/types.ts';
+import type { App, IdParams, RouteServices, StartTask } from './types.ts';
+
+/** What the prep dialog sends (the body schema below); writeMeetingPrep checks and tidies it again. */
+type PrepBody = {
+  attendees: Array<{ name: string; role?: string; organization?: string; url?: string; about?: string }>;
+  meetingAt?: string | null;
+  kind?: string | null;
+  format?: string | null;
+  context?: string | null;
+  research?: boolean;
+};
 
 const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
-const str = (max) => ({ type: 'string', maxLength: max });
+const str = (max: number) => ({ type: 'string', maxLength: max });
 
-/**
- * @param {import('fastify').FastifyInstance} app
- * @param {object} deps
- * @param {Function} deps.startTask  the app's task starter (refuses while a pipeline step runs)
- */
-export function registerPrepRoutes(app, { store, config, services, startTask }) {
+/** startTask is the app's task starter (it refuses while a pipeline step runs). */
+export function registerPrepRoutes(app: App, { store, config, services, startTask }: { store: JobStore; config: UserConfig; services: RouteServices; startTask: StartTask }) {
   const { db } = store;
 
-  app.post(
+  app.post<{ Params: IdParams; Body: PrepBody }>(
     '/api/postings/:id/meeting-prep',
     {
       schema: {
@@ -54,7 +65,8 @@ export function registerPrepRoutes(app, { store, config, services, startTask }) 
         const r = await writeMeetingPrep({
           store,
           config,
-          claude: services.claude,
+          // Not checked for null here: the demo, the one place without AI, refuses every write before this runs.
+          claude: services.claude as Claude,
           knowledge: await services.knowledge(),
           drive: services.drive,
           run,
@@ -69,12 +81,12 @@ export function registerPrepRoutes(app, { store, config, services, startTask }) 
     },
   );
 
-  app.get('/api/postings/:id/meeting-preps', { schema: { summary: "A job's meeting preps, newest first (without their text)", params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }, response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
+  app.get<{ Params: IdParams }>('/api/postings/:id/meeting-preps', { schema: { summary: "A job's meeting preps, newest first (without their text)", params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }, response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
     listPreps(db, req.params.id),
   );
 
-  app.get('/api/meeting-preps/:id', { schema: { summary: 'One meeting prep with its text (Markdown) and what was asked', params: uuidParams, response: { 200: anyObject } } }, async (req, reply) => {
-    const r = db.prepare('SELECT * FROM meeting_preps WHERE id = ? AND user_id = @uid').get(req.params.id);
+  app.get<{ Params: { id: string } }>('/api/meeting-preps/:id', { schema: { summary: 'One meeting prep with its text (Markdown) and what was asked', params: uuidParams, response: { 200: anyObject } } }, async (req, reply) => {
+    const r = db.prepare('SELECT * FROM meeting_preps WHERE id = ? AND user_id = @uid').get(req.params.id) as MeetingPrepsRow | undefined;
     if (!r) return reply.code(404).send({ error: 'Meeting prep not found' });
     return {
       id: r.id,
@@ -95,7 +107,7 @@ export function registerPrepRoutes(app, { store, config, services, startTask }) 
     };
   });
 
-  app.delete('/api/meeting-preps/:id', { schema: { summary: 'Delete a meeting prep from the app (its Google Doc stays in Drive)', params: uuidParams } }, async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/api/meeting-preps/:id', { schema: { summary: 'Delete a meeting prep from the app (its Google Doc stays in Drive)', params: uuidParams } }, async (req, reply) => {
     const r = db.prepare('DELETE FROM meeting_preps WHERE id = ? AND user_id = @uid').run(req.params.id);
     if (!r.changes) return reply.code(404).send({ error: 'Meeting prep not found' });
     return reply.code(204).send();

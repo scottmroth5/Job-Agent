@@ -114,7 +114,7 @@ facts, never anyone's jobs or key) only.
 Accounts (phase 2): any verified Google address signs in (server/auth.js); AUTH_ALLOWED_EMAILS are the owner's addresses
 (accountFor; syncOwnerEmail gives user 1 the first). Anyone else: no row goes to /auth/register (name, note, 18 or older, terms; a form
 post, no script; MAX_PENDING open requests at most), pending to /auth/waiting, rejected to /auth/not-approved; API calls get
-403 with { account }. Paused accounts get in read-only (no writes, no AI). Admin > Users (server/users-routes.js, admin role,
+403 with { account }. Paused accounts get in read-only (no writes, no AI). Admin > Users (server/users-routes.ts, admin role,
 never in the demo): approve, reject, pause, resume, and AI setup. server/notices.js sends the account emails (see Hard rules).
 Requests run as their user (server/app.js: decided in onRequest, run as them from preHandler). OWNER_ONLY routes: the inbox
 (the owner's own Gmail; another person's needs Google's restricted-scope review) and what everyone shares (lists, the owner's cap).
@@ -135,7 +135,7 @@ every route as a second user against the owner's demo data; test/registration.te
 test/user-search.test.js covers per-user settings, the config view, the pipeline as its presser, and the script's refusals.
 Phase 4: Admin > Users shows last seen (users.last_seen_at, touchLastSeen at most every 15 minutes), last pipeline run, and
 setup chips (search ready, About you, key, schedule; never the text). Putting a user on the owner's key needs their address
-typed (confirmEmail) and emails them; so does taking them off it or changing the cap. Feedback (server/feedback-routes.js,
+typed (confirmEmail) and emails them; so does taking them off it or changing the cap. Feedback (server/feedback-routes.ts,
 feedback table, db/user-tables.ts lists the user tables since 013): any user writes to the owner from Settings, at most
 FEEDBACK_PER_DAY a day; it is emailed to the owner with the sender as Reply-To (buildRawEmail allows one plain address) and
 listed on Users with Mark done. ADMIN_ONLY prefixes in server/app.js: /api/admin/users, /api/admin/feedback. The Home Admin
@@ -147,7 +147,7 @@ decided_by = self; PAUSED_MAY in server/app.js lets a paused account resume or d
 every user-table row (db/user-tables.ts order), attached file folders, the account; runs on their own key are deleted, runs
 on the owner's key are kept for the owner's cap with meta and summary cleared. The owner deletes an account the same way
 (POST /api/admin/users/:id/delete). Both email the person; a self-delete also tells the owner. test/account-data.test.js.
-Help (#/help, server/help-routes.js): guides in help/*.md (generic, rendered with tools/markdown.ts) and Ask, answered from
+Help (#/help, server/help-routes.ts): guides in help/*.md (generic, rendered with tools/markdown.ts) and Ask, answered from
 the guides only on the asker's own AI (HELP_MODEL, a traced 'help' run, ASKS_PER_DAY; nothing logged or stored). Time zones:
 users.time_zone (016) rides in the request or job context (runAsUser(uid, fn, { timeZone })); tools/dates.ts localDay,
 localDaysAgo, dayOf, and timeZone() follow it, else the app's TZ. The owner, scripts, budgets (calendar months), and the
@@ -171,7 +171,7 @@ before in user_settings profile.versions (newest first, 20 at most; a doc saved 
 GET /api/account/profile/versions, /versions/:n, POST /versions/:n/restore, and GET /api/account/profile.docx?version=
 (prepDocx). test/knowledge-versions.test.js.
 Fill from a document (POST /api/account/profile/from-file) returns a file's text without saving; tools/doc-text.ts reads
-PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.ts, server/resume-routes.js,
+PDF (unpdf), .docx (mammoth), and text with no AI call. Resumes (017, agents/resumes.ts, server/resume-routes.ts,
 Settings > Resumes): file and text in the resumes table (so backups, export, and deletion cover them; export omits the
 blob), a label, plain title words, one default. pickResume chooses per job title; withResume adds its text to the
 background for letters, tweaks, and meeting prep (never scoring), and artifacts/meeting_preps record resume_id. Downloads: GET /api/resumes/:id/file?format=original|text|docx|pdf;
@@ -179,7 +179,7 @@ tools/resume-format.ts lays the text out as Word (docx) and as a PDF it writes i
 help/search-settings.md, help/prompts.md. tools/markdown.ts renders fenced blocks (escaped). test/onboarding.test.js.
 Letters and preps in the app: the job panel shows a letter's text (always without a Google Doc, on request with one) with
 Copy and Download Word; the prep reader has Download Word too. server/word-docs.js builds the .docx (the letter in the
-Google Doc's layout from the current user's settings; the prep from its Markdown), server/document-routes.js serves your
+Google Doc's layout from the current user's settings; the prep from its Markdown), server/document-routes.ts serves your
 own only. test/word-docs.test.js. Each user's own Gmail and Drive
 wait on Google's verification of those scopes.
 
@@ -188,13 +188,13 @@ The Home page (#/) opens with Today and upcoming (server/today.js, summary.today
 past due, jobs at an offer, applications worth a follow-up, and one item for all stale ones; each opens its job), then a tile per screen.
 The job panel's Next step box is the same list for one job (GET /api/postings/:id nextSteps; every open reminder, however
 far out), with Prepare for a meeting and Done (registerReminderRoutes, registered with or without Gmail).
-Follow-ups (agents/follow-ups.ts, server/follow-up-routes.js): no reply from FOLLOW_UP_DAYS (7, server/funnel.js) until
+Follow-ups (agents/follow-ups.ts, server/follow-up-routes.ts): no reply from FOLLOW_UP_DAYS (7, server/funnel.js) until
 the user's stale days (Settings > Follow-ups, user_settings followUp.staleDays, default 45; never archived jobs) is a
 follow-up with Find someone to contact (agents/hunt/find-contact.ts: Sonnet with web search on the user's AI, prompt
 find-contact, the result saved as an agent note) and Close: no response; from the stale days on it is stale, closed one at
 a time or all at once (Home: Review via GET /api/follow-ups/stale, then POST close-stale) to the status list's noResponse
 role (018: "No response", closed group) with a note and changed_by user history. The Funnel's list uses the same window.
-test/follow-ups.test.js. Arrange tiles saves the order (server/layout.js, PUT /api/layout/home, returned
+test/follow-ups.test.js. Arrange tiles saves the order (server/layout.ts, PUT /api/layout/home, returned
 with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
 icons in web/public (install icons full-bleed, favicons as drawn) made from assets/app-icon-1024.png (kept out of the image);
 test/icons.test.js checks their sizes and that they load before sign-in.
@@ -203,8 +203,8 @@ any verified address gets a session and its account decides the rest (Users abov
 (server/session.js, SESSION_SECRET); every route but /auth/*, /healthz, /privacy and /terms (server/pages.js, from
 PRIVACY.md and TERMS.md), and the Add to Home Screen files (manifest.webmanifest, icon-180/192/512.png) needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
 server/app.js holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
-The Run pipeline button (server/pipeline-routes.js) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
-lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.js) checks
+The Run pipeline button (server/pipeline-routes.ts) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
+lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.ts) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.ts, and closes reminders.
 Every task keeps its output (server/tasks.js: steps plus log lines; pass the task's logger to createJobTracer so run logs land there);
 the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
@@ -220,12 +220,12 @@ never enable both. Child scripts run through services.runScript.
 Keyboard and screen readers: job titles and column headers in the Jobs table are real buttons (aria-sort on the header);
 the job panel is a dialog that takes focus, keeps Tab inside, and returns focus to its opener; charts carry a table
 for screen readers (.sr-only). Keep new controls as buttons or links, not clickable divs or rows.
-Attachments (server/attachments.js): the raw file is the POST body with its name in X-Filename, stored as
+Attachments (server/attachments.ts): the raw file is the POST body with its name in X-Filename, stored as
 data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images open inline, and downloads carry nosniff and a sandbox CSP.
 
 ## Prompts
 agents/prompts.ts is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active
-(prompt_versions table, with history), else the repo file, which stays the default. Settings > Prompts (#/settings/prompts, web/src/components/PromptsSettings.jsx, routes /api/prompts in server/admin.js)
+(prompt_versions table, with history), else the repo file, which stays the default. Settings > Prompts (#/settings/prompts, web/src/components/PromptsSettings.jsx, routes /api/prompts in server/admin.ts)
 edits every template in PROMPTS for the current user only (prompt_versions is a user table); Admin keeps Lists, Spending,
 and Users (all app-wide: the shared lists, the cap on the owner's key, accounts) and is shown to admins only, never in the demo; each
 user's own spend by feature is on Settings (GET /api/spending; setting the cap stays PUT /api/admin/budget, owner only); placeholders are validated on save, and output schemas stay read-only in the repo because code reads
@@ -240,7 +240,7 @@ Go Fractional is bot-protected: it is never scraped, and search.siteSearch stays
 Letters: Sonnet 5.5 at medium effort; v1's cleanup (strip greeting/sign-off, no dashes) and config.coverLetterChecks run in code,
 plus a word-limit flag. Letter Docs go to the app's own "Job Agent Cover Letters" Drive folder (drive.file scope).
 Nothing is overwritten: --regenerate creates new artifacts and Docs.
-The job panel's Cover letter (web/src/components/LetterSection.jsx, server/letter-routes.js): Revise with Claude
+The job panel's Cover letter (web/src/components/LetterSection.jsx, server/letter-routes.ts): Revise with Claude
 (agents/hunt/revise-letter.ts, Sonnet at medium effort, the knowledge doc plus the job's resume as system, REVISE_SCHEMA,
 REVISIONS_PER_DAY; saves nothing), saving a kept revision (source v2-revision) or the user's own text (source user; letters.js
 userLetterBody keeps its wording but takes off the header through the greeting and the sign-off on, and rebuilds a
@@ -260,7 +260,7 @@ each letter it writes on the same trace; the panel checks a version after a save
 CHECKS_PER_DAY) and dismisses claims (.../claims/:index/dismiss); restore copies the check. It never blocks a letter, a
 save, or a download; logs hold counts only. The demo seeds SAMPLE_CHECK_CLAIMS and answers Check again with sampleCheck.
 test/verify-letter.test.js, test/letter-check-routes.test.js.
-Meeting prep (agents/hunt/prep.ts, server/prep-routes.js, Prepare for a meeting in the job panel): Opus 5.5 at high effort,
+Meeting prep (agents/hunt/prep.ts, server/prep-routes.ts, Prepare for a meeting in the job panel): Opus 5.5 at high effort,
 streamed, with server-side refusal fallbacks; with research on it uses web_search_20260209 (max 15) and web_fetch (max 5).
 Input is the people (name, role, firm, link, what the user knows), meeting kind, format, time, and free context, plus the
 knowledge doc, posting, analysis, latest letter, and notes. The document is the Markdown after the last tool block, saved
@@ -270,7 +270,7 @@ in meeting_preps (UUID keys) and as a Google Doc in "Job Agent Meeting Prep". Ab
 Default model and promotion threshold live in agents/discovery/score.ts with the eval evidence behind them.
 Change the prompt, schema, model, or threshold only after rerunning the scoring eval and comparing pairwise accuracy.
 Never kept (tools/listings.ts): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
-Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.js, Settings and Skip this site under the job panel's
+Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.ts, Settings and Skip this site under the job panel's
 link): each user's own list with a note per site in user_settings; configFor adds it to search.excludedSites (the owner's
 file entries stay, shown as from the file), so scripts read config through configFor(store.raw, OWNER_ID, loadConfig()).
 Saved jobs from a site are removed only on request (archiveSiteJobs; never one applied to). test/excluded-sites.test.js.
@@ -287,6 +287,8 @@ imports name the .ts file, and type-only imports use import type. Typecheck and 
 `void call()` marks a deliberate fire-and-forget call whose function catches its own errors; a lint finding that is a real
 bug is fixed as a bug, never hidden. Each any or @ts-expect-error has its reason beside it. types/agent-core.d.ts types the
 agent-core exports until Agent-Core ships its own; keep it in step on an upgrade.
+Routes type their request with Fastify's generics (app.post<{ Params: IdParams; Body: {...} }>, matching the JSON schema);
+server/types.ts holds App, RouteServices, StartTask, Notices, and declares req.uid. Query results are cast to db/types.ts rows.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
@@ -315,7 +317,7 @@ rejects with DEMO_NOT_SAVED, and fires demo-blocked, which DemoNotice (web/src/d
 what protects it. Only Open posting (sample links) and the admin pages stay hidden.
 The demo's /api/me names the sample candidate (DEMO_EMAIL, an example.com address) so the header reads like production's.
 Demo Settings shows the sample candidate's About you and search, editable but never saved (DEMO_ABOUT_YOU and DEMO_CONFIG, served by
-server/account-routes.js in demo mode; nothing stored). A sample watch-out about location comes only from that job's workplace.
+server/account-routes.ts in demo mode; nothing stored). A sample watch-out about location comes only from that job's workplace.
 scripts/demo-seed.js builds the sample database (marked with the demo_database setting; it refuses any other database,
 checked read-only) from demo/sample-data.js; sample prompt edits are the repo defaults plus one line (PROMPT_EDITS) and must
 validate. Sample data is invented and on example.com domains; never copy the user's data, wording, or history into it.
@@ -355,7 +357,7 @@ PRIVACY.md must stay true of the code: a new outside service, admin column, or d
 ## Spending and internet safety
 Make Claude clients only with tools/claude.ts createJobClaude(db). Each call is paid by the user it runs as: the owner, and
 users the owner put on their key (users.ai_source 'owner'), use ANTHROPIC_API_KEY; anyone else their own key, saved in
-Settings (server/account-routes.js: checked with Anthropic's free model list, sealed by tools/secret-box.ts with USER_KEY_SECRET
+Settings (server/account-routes.ts: checked with Anthropic's free model list, sealed by tools/secret-box.ts with USER_KEY_SECRET
 and the user id, never returned, logged, or shown, even to the admin). No key, no AI (NoClaudeKeyError). Caps (agents/budget.ts
 checkBudget, from run_calls joined to runs.user_id): everything on the owner's key against the owner's cap (Admin > Spending,
 else MONTHLY_CLAUDE_BUDGET_USD, else $50), and each user on it against their own monthly cap (Admin > Users); the first

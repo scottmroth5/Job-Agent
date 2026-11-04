@@ -1,4 +1,4 @@
-// Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.js): each user's own list with notes, added
+// Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.ts): each user's own list with notes, added
 // to the settings file's search.excludedSites for everything that reads it; removing a site's saved jobs keeps the ones
 // you applied to. Synthetic data on example domains only.
 import { test } from 'node:test';

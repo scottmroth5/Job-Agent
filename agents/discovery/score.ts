@@ -26,7 +26,8 @@ export interface ScorePrompt {
   schema: object | null;
   version: string;
   track: string;
-  source: string;
+  /** custom or default; a prompt preview's draft (server/admin.ts) has none. */
+  source?: string;
 }
 
 /**
