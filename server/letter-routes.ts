@@ -14,8 +14,19 @@ import { ensureLetterFolder } from '../tools/google/drive.ts';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { letterPdf } from '../tools/pdf-writer.ts';
 import { letterHeader, saveLetterHeader, MAX_LINKS } from '../agents/letter-header.ts';
-import { uploadName } from './account-routes.js';
+import { uploadName } from './account-routes.ts';
 import { letterDocx, docxName } from './word-docs.js';
+import type { JobStore } from '../tools/types.ts';
+import type { UserConfig } from '../agents/user-config.ts';
+import type { PostingsRow } from '../db/types.ts';
+import type { LetterCheck } from '../agents/letter-checks.ts';
+import type { RevisionTurn } from '../agents/hunt/revise-letter.ts';
+import type { App, FastifyReply, FastifyRequest, IdParams, RouteServices } from './types.ts';
+
+/** A cover letter version as the query reads it. */
+type VersionRow = { id: number; content: string; source: string; flags_json: string | null; doc_url: string | null; created_at: string; resume: string | null };
+type VersionParams = { id: number; versionId: number };
+type Letter = { content: string; created_at: string };
 
 export const REVISIONS_PER_DAY = 40;
 export const CHECKS_PER_DAY = 60;
@@ -40,22 +51,23 @@ const checkReply = {
     },
   },
 };
-const publicCheck = (c) => (c ? { status: c.status, claims: c.claims, checkedAt: c.checkedAt } : null);
-const SOURCES = { v2: 'Written by Job Hunt', 'v2-revision': 'Revised with Claude', user: 'Your version', v1: 'From the old spreadsheet' };
-const longDate = (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+const publicCheck = (c: LetterCheck | null) => (c ? { status: c.status, claims: c.claims, checkedAt: c.checkedAt } : null);
+const SOURCES: Record<string, string> = { v2: 'Written by Job Hunt', 'v2-revision': 'Revised with Claude', user: 'Your version', v1: 'From the old spreadsheet' };
+const longDate = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 const MAX_LETTER_CHARS = 8000;
 
-export function registerLetterRoutes(app, { store, config, services }) {
+export function registerLetterRoutes(app: App, { store, config, services }: { store: JobStore; config: UserConfig; services: RouteServices }) {
   const { db } = store;
-  const revisions = new Map(); // uid -> timestamps in the last day
-  const checks = new Map(); // uid -> fact check timestamps in the last day
-  const job = (id) => db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id);
-  const versions = (postingId) => withChecks(
+  const revisions = new Map<number, number[]>(); // uid -> timestamps in the last day
+  const checks = new Map<number, number[]>(); // uid -> fact check timestamps in the last day
+  const job = (id: number) => db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
+  const versions = (postingId: number) => withChecks(
+    (
     db
       .prepare(`SELECT a.id, a.content, a.source, a.flags_json, a.doc_url, a.created_at, r.label AS resume FROM artifacts a
           LEFT JOIN resumes r ON r.id = a.resume_id AND r.user_id = a.user_id
           WHERE a.posting_id = ? AND a.user_id = @uid AND a.kind = 'cover_letter' ORDER BY a.id DESC`)
-      .all(postingId)
+      .all(postingId) as VersionRow[])
       .map((v, i, all) => ({
         id: v.id,
         number: all.length - i,
@@ -69,20 +81,23 @@ export function registerLetterRoutes(app, { store, config, services }) {
         content: v.content,
       })),
   );
-  const withChecks = (list) => {
+  const withChecks = <T extends { id: number }>(list: T[]) => {
     const found = checksFor(db, list.map((v) => v.id));
     return list.map((v) => ({ ...v, check: publicCheck(found.get(v.id) ?? null) }));
   };
-  const version = (postingId, versionId) =>
-    db.prepare("SELECT id, content FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(versionId, postingId);
-  const latestAnalysis = (postingId) => {
-    const a = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId);
+  const version = (postingId: number, versionId: number) =>
+    db.prepare("SELECT id, content FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(versionId, postingId) as { id: number; content: string } | undefined;
+  const latestAnalysis = (postingId: number) => {
+    const a = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
     return a ? JSON.parse(a) : null;
   };
 
   // A new version: the job's row supplies user_id, so another user's job gets nothing. The owner's letters also get a
   // Google Doc, as the pipeline's do; a Doc failure keeps the version and says so.
-  const saveVersion = async (posting, { content, source, flags, model = null, resumeId = null }) => {
+  const saveVersion = async (
+    posting: PostingsRow,
+    { content, source, flags, model = null, resumeId = null }: { content: string; source: string; flags: string[]; model?: string | null; resumeId?: string | null },
+  ) => {
     const now = new Date();
     const id = Number(
       db
@@ -90,7 +105,7 @@ export function registerLetterRoutes(app, { store, config, services }) {
             SELECT user_id, id, 'cover_letter', ?, ?, ?, ?, NULL, ?, ? FROM postings WHERE id = ? AND user_id = @uid`)
         .run(content, flags.length ? JSON.stringify(flags) : null, source, model, now.toISOString(), resumeId, posting.id).lastInsertRowid,
     );
-    let docError = null;
+    let docError: string | null = null;
     const drive = services.drive;
     if (drive) {
       try {
@@ -122,13 +137,13 @@ export function registerLetterRoutes(app, { store, config, services }) {
   app.get('/api/letter-header', { schema: { summary: 'Your cover letter header (name, email, phone, location, sign-off, links); saved is false until you save one', response: { 200: anyObject } } }, async () =>
     letterHeader(db, config),
   );
-  app.put('/api/letter-header', { schema: { summary: 'Save your cover letter header', body: headerBody, response: { 200: anyObject } } }, async (req) => saveLetterHeader(db, req.body));
+  app.put<{ Body: Record<string, unknown> }>('/api/letter-header', { schema: { summary: 'Save your cover letter header', body: headerBody, response: { 200: anyObject } } }, async (req) => saveLetterHeader(db, req.body));
 
-  app.get('/api/postings/:id/letters', { schema: { summary: "A job's cover letter versions, newest (current) first", params: idParams, response: { 200: { type: 'array', items: anyObject } } } }, async (req, reply) =>
+  app.get<{ Params: IdParams }>('/api/postings/:id/letters', { schema: { summary: "A job's cover letter versions, newest (current) first", params: idParams, response: { 200: { type: 'array', items: anyObject } } } }, async (req, reply) =>
     job(req.params.id) ? versions(req.params.id) : reply.code(404).send({ error: 'Job not found' }),
   );
 
-  app.post(
+  app.post<{ Params: IdParams; Body: { letter: string; feedback: string; history?: RevisionTurn[] } }>(
     '/api/postings/:id/letter/revise',
     {
       schema: {
@@ -168,13 +183,13 @@ export function registerLetterRoutes(app, { store, config, services }) {
         run.finish('ok', { flags: r.flags.length });
         return { ...r, resume: resume?.label ?? null };
       } catch (err) {
-        run.finish('failed', { error: err.name });
+        run.finish('failed', { error: (err as Error).name });
         throw err;
       }
     },
   );
 
-  app.post(
+  app.post<{ Params: IdParams; Body: { content: string; source: 'revision' | 'user' } }>(
     '/api/postings/:id/letter',
     {
       schema: {
@@ -200,7 +215,7 @@ export function registerLetterRoutes(app, { store, config, services }) {
   );
 
   // The fact check on one version: run (or run again) on the user's AI, then shown in the panel. Never touches the letter.
-  app.post(
+  app.post<{ Params: VersionParams }>(
     '/api/postings/:id/letters/:versionId/check',
     { schema: { summary: "Check a letter version's claims about you against your knowledge doc and resume (uses your AI); the letter is unchanged", params: versionParams, response: { 200: checkReply } } },
     async (req, reply) => {
@@ -216,12 +231,12 @@ export function registerLetterRoutes(app, { store, config, services }) {
       const background = withResume(await services.knowledge(), pickResume(db, posting.title));
       const run = createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-check', { posting: posting.id });
       const r = await runCheck({ db, claude: services.claude, background, posting, artifactId: v.id, letter: v.content, config, trace: run });
-      run.finish(r.check?.status === 'checked' ? 'ok' : 'failed', { flagged: r.flagged, ...(r.error ? { error: r.error.name } : {}) });
+      run.finish(r.check?.status === 'checked' ? 'ok' : 'failed', { flagged: r.flagged, ...(r.error ? { error: (r.error as Error).name } : {}) });
       return publicCheck(r.check);
     },
   );
 
-  app.post(
+  app.post<{ Params: VersionParams & { index: number } }>(
     '/api/postings/:id/letters/:versionId/claims/:index/dismiss',
     {
       schema: {
@@ -239,14 +254,14 @@ export function registerLetterRoutes(app, { store, config, services }) {
     },
   );
 
-  app.post(
+  app.post<{ Params: IdParams; Body: { versionId: number } }>(
     '/api/postings/:id/letter/restore',
     {
       schema: { summary: 'Make an earlier cover letter version current again (saved as a new version)', params: idParams, body: { type: 'object', required: ['versionId'], additionalProperties: false, properties: { versionId: { type: 'integer', minimum: 1 } } }, response: { 200: anyObject } },
     },
     async (req, reply) => {
       const posting = job(req.params.id);
-      const old = posting && db.prepare("SELECT content, source, flags_json, resume_id FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.body.versionId, posting.id);
+      const old = posting && db.prepare("SELECT content, source, flags_json, resume_id FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.body.versionId, posting.id) as { content: string; source: string; flags_json: string | null; resume_id: string | null } | undefined;
       if (!old) return reply.code(404).send({ error: 'Version not found' });
       const saved = await saveVersion(posting, { content: old.content, source: old.source, flags: old.flags_json ? JSON.parse(old.flags_json) : [], resumeId: old.resume_id });
       copyCheck(db, req.body.versionId, saved.id); // the same text, so the same check
@@ -254,7 +269,7 @@ export function registerLetterRoutes(app, { store, config, services }) {
     },
   );
 
-  app.post(
+  app.post<{ Params: IdParams; Body: unknown }>(
     '/api/postings/:id/letter/from-file',
     { bodyLimit: MAX_DOC_BYTES, schema: { summary: "A file's text for your own letter version (the raw file as the body, its name in X-Filename); nothing is saved", params: idParams, response: { 200: anyObject } } },
     async (req, reply) => {
@@ -267,23 +282,24 @@ export function registerLetterRoutes(app, { store, config, services }) {
   );
 
   // Word or PDF of the current letter, or of any version (?version=<id>), in the Google Doc's layout.
-  const download = (format) => async (req, reply) => {
+  const download = (format: 'pdf' | 'docx') => async (req: FastifyRequest<{ Params: IdParams; Querystring: { version?: number } }>, reply: FastifyReply) => {
     const posting = job(req.params.id);
     const version = req.query.version
-      ? posting && db.prepare("SELECT content, created_at FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.query.version, posting.id)
-      : posting && db.prepare("SELECT content, created_at FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").get(posting.id);
+      ? posting && (db.prepare("SELECT content, created_at FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.query.version, posting.id) as Letter | undefined)
+      : posting && (db.prepare("SELECT content, created_at FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").get(posting.id) as Letter | undefined);
     if (!version?.content) return reply.code(404).send({ error: 'No cover letter for this job yet.' });
+    // A version was found, so the job was too (posting!).
     const written = new Date(version.created_at);
-    const letter = { candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(written), body: version.content };
-    const name = letterDocName(letter.candidate.name, posting.title, posting.company);
+    const letter = { candidate: letterHeader(db, config), company: posting!.company, title: posting!.title, date: longDate(written), body: version.content };
+    const name = letterDocName(letter.candidate.name, posting!.title, posting!.company);
     const [type, body, file] =
       format === 'pdf'
-        ? ['application/pdf', letterPdf(letter), `${name}.pdf`]
-        : ['application/vnd.openxmlformats-officedocument.wordprocessingml.document', await letterDocx(letter), docxName(name)];
+        ? (['application/pdf', letterPdf(letter), `${name}.pdf`] as const)
+        : (['application/vnd.openxmlformats-officedocument.wordprocessingml.document', await letterDocx(letter), docxName(name)] as const);
     return reply.header('Content-Type', type).header('Content-Disposition', `attachment; filename="${file}"`).header('X-Content-Type-Options', 'nosniff').header('Cache-Control', 'no-store').send(body);
   };
   const versionQuery = { type: 'object', properties: { version: { type: 'integer', minimum: 1 } } };
-  app.get('/api/postings/:id/letter.pdf', { schema: { summary: "The job's cover letter (current, or ?version=) as a PDF", params: idParams, querystring: versionQuery } }, download('pdf'));
-  app.get('/api/postings/:id/letter.docx', { schema: { summary: "The job's cover letter (current, or ?version=) as a Word document", params: idParams, querystring: versionQuery } }, download('docx'));
+  app.get<{ Params: IdParams; Querystring: { version?: number } }>('/api/postings/:id/letter.pdf', { schema: { summary: "The job's cover letter (current, or ?version=) as a PDF", params: idParams, querystring: versionQuery } }, download('pdf'));
+  app.get<{ Params: IdParams; Querystring: { version?: number } }>('/api/postings/:id/letter.docx', { schema: { summary: "The job's cover letter (current, or ?version=) as a Word document", params: idParams, querystring: versionQuery } }, download('docx'));
   return { download };
 }

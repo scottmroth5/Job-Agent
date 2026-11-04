@@ -5,24 +5,31 @@ import { OWNER_ID } from '../db/users.ts';
 import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_STALE_DAYS, FOLLOW_UP_FROM, MAX_STALE_DAYS, MIN_STALE_DAYS } from '../agents/follow-ups.ts';
 import { findContact } from '../agents/hunt/find-contact.ts';
 import { demoContactResult } from '../demo/sample-data.js';
+import type { Claude } from '@scottmroth5/agent-core';
+import type { JobStore } from '../tools/types.ts';
+import type { UserConfig } from '../agents/user-config.ts';
+import type { App, IdParams, RouteServices, StartTask } from './types.ts';
 
 export const CONTACT_SEARCHES_PER_DAY = 20;
 const anyObject = { type: 'object', additionalProperties: true };
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };
 
-export function registerFollowUpRoutes(app, { store, config, services, startTask, demo = false }) {
+export function registerFollowUpRoutes(
+  app: App,
+  { store, config, services, startTask, demo = false }: { store: JobStore; config: UserConfig; services: Pick<RouteServices, 'claude' | 'knowledge'>; startTask: StartTask; demo?: boolean },
+) {
   const { db } = store;
 
   // The demo's Find someone to contact: a canned sample answer for the job, as a read. It calls no model, so the demo
   // never spends anything, and saves nothing. Registered only in the demo.
   if (demo) {
-    app.get('/api/postings/:id/find-contact/sample', { schema: { summary: 'Demo only: a sample Find someone to contact answer for this job (no AI, nothing saved)', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
-      const p = db.prepare('SELECT company, title, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id);
+    app.get<{ Params: IdParams }>('/api/postings/:id/find-contact/sample', { schema: { summary: 'Demo only: a sample Find someone to contact answer for this job (no AI, nothing saved)', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
+      const p = db.prepare('SELECT company, title, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id) as { company: string; title: string; applied_on: string | null } | undefined;
       if (!p) return reply.code(404).send({ error: 'Job not found' });
       return { sample: true, markdown: demoContactResult({ company: p.company, title: p.title, appliedOn: p.applied_on }) };
     });
   }
-  const searches = new Map(); // uid -> timestamps in the last day
+  const searches = new Map<number, number[]>(); // uid -> timestamps in the last day
   const settings = () => ({ staleDays: staleDays(db), defaultStaleDays: DEFAULT_STALE_DAYS, followUpFrom: FOLLOW_UP_FROM, min: MIN_STALE_DAYS, max: MAX_STALE_DAYS });
 
   app.get('/api/follow-ups', { schema: { summary: 'Your follow-up settings and how many applications are waiting: worth a follow-up, and stale', response: { 200: anyObject } } }, async () => {
@@ -30,7 +37,7 @@ export function registerFollowUpRoutes(app, { store, config, services, startTask
     return { ...settings(), followUp: w.followUp.length, stale: w.stale.length };
   });
 
-  app.put(
+  app.put<{ Body: { staleDays: number } }>(
     '/api/follow-ups/settings',
     { schema: { summary: 'Set the days with no reply after which an application is stale', body: { type: 'object', required: ['staleDays'], additionalProperties: false, properties: { staleDays: { type: 'integer' } } }, response: { 200: anyObject } } },
     async (req) => {
@@ -49,14 +56,14 @@ export function registerFollowUpRoutes(app, { store, config, services, startTask
     return { closed: jobs.length, jobs };
   });
 
-  app.post('/api/postings/:id/close-no-response', { schema: { summary: 'Close one application with no reply as no response', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
+  app.post<{ Params: IdParams }>('/api/postings/:id/close-no-response', { schema: { summary: 'Close one application with no reply as no response', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
     if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
     const jobs = closeNoResponse(db, { ids: [req.params.id] });
     if (!jobs.length) return reply.code(409).send({ error: 'This job is not an application waiting for a reply.' });
     return { closed: 1, jobs };
   });
 
-  app.post(
+  app.post<{ Params: IdParams }>(
     '/api/postings/:id/find-contact',
     { schema: { summary: 'Find the likely hiring manager or a recruiter for this job and draft a short note (web search on your AI; saved as a note). Runs as a task.', params: idParams, response: { 202: { type: 'object', properties: { taskId: { type: 'string' } } } } } },
     async (req, reply) => {
@@ -70,7 +77,8 @@ export function registerFollowUpRoutes(app, { store, config, services, startTask
       searches.set(uid, [...recent, Date.now()]);
       const knowledge = await services.knowledge();
       const taskId = startTask('find-contact', { id }, async (step, { run }) => {
-        const r = await findContact({ store, config, claude: services.claude, knowledge, run, postingId: id, onStep: step });
+        // services.claude was checked above, before the task started.
+        const r = await findContact({ store, config, claude: services.claude as Claude, knowledge, run, postingId: id, onStep: step });
         step('Saved as a note on the job');
         return r;
       });

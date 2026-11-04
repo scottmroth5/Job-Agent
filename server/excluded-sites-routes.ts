@@ -7,20 +7,23 @@ import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote
 import { clearConfigViews, userConfig } from '../agents/user-config.ts';
 import { archiveSiteJobs, findListings } from '../agents/hunt/archive.ts';
 import { excludedSite } from '../tools/listings.ts';
+import type { Database } from '../tools/types.ts';
+import type { JobSearchConfig } from '../tools/config.ts';
+import type { App, FastifyRequest } from './types.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const siteParams = { type: 'object', required: ['site'], properties: { site: { type: 'string', minLength: 3, maxLength: 253, pattern: '^[a-z0-9.-]+$' } } };
 
-export function registerExcludedSiteRoutes(app, { db, ownerConfig = null }) {
-  const uidOf = (req) => req.uid ?? OWNER_ID;
+export function registerExcludedSiteRoutes(app: App, { db, ownerConfig = null }: { db: Database; ownerConfig?: JobSearchConfig | null }) {
+  const uidOf = (req: FastifyRequest) => req.uid ?? OWNER_ID;
   // Sites someone other than the owner listed in their saved search before this list existed (moved in on first change).
-  const legacyFor = (uid) => (uid === OWNER_ID ? [] : userConfig(db, uid).search.excludedSites ?? []);
-  const opts = (uid) => ({ legacy: legacyFor(uid) });
-  const view = (uid) => {
+  const legacyFor = (uid: number) => (uid === OWNER_ID ? [] : userConfig(db, uid).search.excludedSites ?? []);
+  const opts = (uid: number) => ({ legacy: legacyFor(uid) });
+  const view = (uid: number) => {
     const fromFile = uid === OWNER_ID ? ownerConfig?.search?.excludedSites ?? [] : [];
     const sites = excludedSites(db, uid, opts(uid));
     // One pass over the saved jobs: how many cleanup would still remove for each site.
-    const counts = new Map();
+    const counts = new Map<string, number>();
     for (const p of findListings(db, { search: { excludedSites: [...sites.map((s) => s.site), ...fromFile] } })) {
       const site = excludedSite(p.url, [...sites.map((s) => s.site), ...fromFile]);
       if (site && p.reason.startsWith('excluded site')) counts.set(site, (counts.get(site) ?? 0) + 1);
@@ -30,14 +33,14 @@ export function registerExcludedSiteRoutes(app, { db, ownerConfig = null }) {
       fromFile: fromFile.map((site) => ({ site, savedJobs: counts.get(site) ?? 0 })),
     };
   };
-  const changed = (uid) => {
+  const changed = (uid: number) => {
     clearConfigViews();
     return view(uid);
   };
 
   app.get('/api/excluded-sites', { schema: { summary: 'The job sites you skip, with your notes and how many saved jobs each still has', response: { 200: anyObject } } }, async (req) => view(uidOf(req)));
 
-  app.post(
+  app.post<{ Body: { site: string; note?: string } }>(
     '/api/excluded-sites',
     {
       schema: {
@@ -53,7 +56,7 @@ export function registerExcludedSiteRoutes(app, { db, ownerConfig = null }) {
     },
   );
 
-  app.patch(
+  app.patch<{ Params: { site: string }; Body: { note: string } }>(
     '/api/excluded-sites/:site',
     { schema: { summary: "Change a skipped site's note", params: siteParams, body: { type: 'object', required: ['note'], additionalProperties: false, properties: { note: { type: 'string', maxLength: MAX_NOTE } } }, response: { 200: anyObject } } },
     async (req) => {
@@ -63,13 +66,13 @@ export function registerExcludedSiteRoutes(app, { db, ownerConfig = null }) {
     },
   );
 
-  app.delete('/api/excluded-sites/:site', { schema: { summary: 'Stop skipping a job site (its jobs are found again from the next run)', params: siteParams, response: { 200: anyObject } } }, async (req) => {
+  app.delete<{ Params: { site: string } }>('/api/excluded-sites/:site', { schema: { summary: 'Stop skipping a job site (its jobs are found again from the next run)', params: siteParams, response: { 200: anyObject } } }, async (req) => {
     const uid = uidOf(req);
     removeExcludedSite(db, uid, req.params.site, opts(uid));
     return changed(uid);
   });
 
-  app.post(
+  app.post<{ Params: { site: string } }>(
     '/api/excluded-sites/:site/remove-jobs',
     { schema: { summary: "Remove your saved jobs from a skipped site (archived and marked passed; jobs you applied to are kept)", params: siteParams, response: { 200: anyObject } } },
     async (req, reply) => {

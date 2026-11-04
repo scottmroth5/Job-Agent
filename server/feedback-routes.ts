@@ -4,13 +4,15 @@
 import { randomUUID } from 'node:crypto';
 import { getUser, OWNER_ID } from '../db/users.ts';
 import { listFeedback, markFeedbackDone } from './admin-queries.js';
+import type { Database } from '../tools/types.ts';
+import type { App, Notices } from './types.ts';
 
 export const FEEDBACK_PER_DAY = 10;
 export const MAX_FEEDBACK_CHARS = 4000;
 const anyObject = { type: 'object', additionalProperties: true };
 
-export function registerFeedbackRoutes(app, { db, notices = {}, admin = true }) {
-  app.post(
+export function registerFeedbackRoutes(app: App, { db, notices = {}, admin = true }: { db: Database; notices?: Notices; admin?: boolean }) {
+  app.post<{ Body: { body: string; page?: string } }>(
     '/api/feedback',
     {
       schema: {
@@ -28,13 +30,13 @@ export function registerFeedbackRoutes(app, { db, notices = {}, admin = true }) 
       const body = req.body.body.trim();
       if (!body) throw Object.assign(new Error('Write something first.'), { statusCode: 400 });
       const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-      const today = db.prepare('SELECT COUNT(*) FROM feedback WHERE user_id = @uid AND created_at >= ?').pluck().get(since);
+      const today = db.prepare('SELECT COUNT(*) FROM feedback WHERE user_id = @uid AND created_at >= ?').pluck().get(since) as number;
       if (today >= FEEDBACK_PER_DAY) throw Object.assign(new Error('That is a lot of feedback for one day. Try again tomorrow.'), { statusCode: 429 });
       const id = randomUUID();
       const page = req.body.page?.replace(/[^\w#/ -]/g, '').slice(0, 100) || null;
       db.prepare('INSERT INTO feedback (user_id, id, body, page, created_at) VALUES (@uid, ?, ?, ?, ?)').run(id, body, page, new Date().toISOString());
       // The owner's own feedback is a note to self: saved, not emailed.
-      if ((req.uid ?? OWNER_ID) !== OWNER_ID) await notices.feedback?.(getUser(db, req.uid), body, page);
+      if ((req.uid ?? OWNER_ID) !== OWNER_ID) await notices.feedback?.(getUser(db, req.uid as number), body, page);
       return reply.code(201).send({ id, sent: true });
     },
   );
@@ -43,7 +45,7 @@ export function registerFeedbackRoutes(app, { db, notices = {}, admin = true }) 
   app.get('/api/admin/feedback', { schema: { summary: 'Feedback from every user, open first (admin)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
     listFeedback(db),
   );
-  app.post(
+  app.post<{ Params: { id: string } }>(
     '/api/admin/feedback/:id/done',
     { schema: { summary: 'Mark feedback done (admin)', params: { type: 'object', required: ['id'], properties: { id: { type: 'string', maxLength: 64 } } }, response: { 200: anyObject } } },
     async (req) => {

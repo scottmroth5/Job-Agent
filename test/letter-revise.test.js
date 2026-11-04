@@ -1,4 +1,4 @@
-// Cover letters in the job panel (agents/hunt/revise-letter.ts, server/letter-routes.js): revising with Claude saves
+// Cover letters in the job panel (agents/hunt/revise-letter.ts, server/letter-routes.ts): revising with Claude saves
 // nothing, keeping a draft or your own version is a new current version, older versions can be made current again,
 // and any version downloads as Word or PDF. Synthetic data; Claude is a stand-in.
 import { test } from 'node:test';

@@ -9,17 +9,20 @@ import { docxName, prepDocx } from './word-docs.js';
 import { fileTitle } from '../tools/text.ts';
 import { validateConfig } from '../tools/config.ts';
 import { deleteAccount, exportAccount } from '../agents/account-data.ts';
-import { ATTACHMENTS_DIR } from './attachments.js';
+import { ATTACHMENTS_DIR } from './attachments.ts';
 import { isTimeZone, localDay } from '../tools/dates.ts';
 import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.js';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { KNOWLEDGE_SECTIONS, knowledgeTemplate } from '../agents/knowledge-sections.ts';
+import type { Database } from '../tools/types.ts';
+import type { User } from '../db/users.ts';
+import type { App, FastifyRequest, Notices } from './types.ts';
 
 // What Settings needs to guide a knowledge doc: the sections (for its checklist) and a blank template.
 const KNOWLEDGE_GUIDE = { knowledgeSections: KNOWLEDGE_SECTIONS, knowledgeTemplate: knowledgeTemplate() };
 
 /** An upload's file name from X-Filename (URI-encoded by the page), for its type check only; never used as a path. */
-export function uploadName(req) {
+export function uploadName(req: FastifyRequest) {
   const raw = String(req.headers['x-filename'] ?? '');
   try {
     return decodeURIComponent(raw);
@@ -32,8 +35,8 @@ const anyObject = { type: 'object', additionalProperties: true };
 // Anthropic API keys: "sk-ant-" then letters, digits, dashes, and underscores.
 const KEY_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,200}$/;
 
-function account(db, uid) {
-  const u = getUser(db, uid);
+function account(db: Database, uid: number) {
+  const u = getUser(db, uid) as User; // the request's own account, which exists
   const budget = budgetStatus(db, { uid });
   return {
     email: u.email,
@@ -51,11 +54,11 @@ function account(db, uid) {
   };
 }
 
-/**
- * @param {object} o
- * @param {(apiKey: string) => Promise<boolean>} [o.checkKey]  tools/claude.ts claudeKeyWorks (tests pass a fake)
- */
-export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }) {
+/** checkKey is tools/claude.ts claudeKeyWorks (tests pass a fake). */
+export function registerAccountRoutes(
+  app: App,
+  { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }: { db: Database; checkKey: (apiKey: string) => Promise<boolean>; notices?: Notices; attachmentsDir?: string; demo?: boolean },
+) {
   // Phase 6: take your data with you, pause yourself, or delete your account. Deleting needs your address typed.
   app.get('/api/account/export', { schema: { summary: 'Download everything that is yours, as JSON', response: { 200: anyObject } } }, async (req, reply) =>
     reply
@@ -63,7 +66,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       .header('Cache-Control', 'no-store')
       .send(exportAccount(db, req.uid ?? OWNER_ID)),
   );
-  app.post(
+  app.post<{ Body: { confirmEmail: string } }>(
     '/api/account/delete',
     {
       schema: {
@@ -75,14 +78,14 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
     async (req) => {
       const uid = req.uid ?? OWNER_ID;
       if (uid === OWNER_ID) throw Object.assign(new Error("The owner's account cannot be deleted."), { statusCode: 400 });
-      const user = getUser(db, uid);
+      const user = getUser(db, uid) as User; // the request's own account
       if (req.body.confirmEmail.trim().toLowerCase() !== user.email) throw Object.assign(new Error(`Type ${user.email} to confirm.`), { statusCode: 400 });
       const counts = deleteAccount(db, uid, { attachmentsDir });
       await notices.accountDeleted?.(user, { byOwner: false });
       return { deleted: true, jobs: counts.postings ?? 0 };
     },
   );
-  app.put(
+  app.put<{ Body: { timeZone: string | null } }>(
     '/api/account/timezone',
     {
       schema: {
@@ -108,7 +111,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
   });
   app.post('/api/account/resume', { schema: { summary: 'Resume your account, when you paused it yourself', response: { 200: anyObject } } }, async (req) => {
     const uid = req.uid ?? OWNER_ID;
-    const row = db.prepare('SELECT status, decided_by FROM users WHERE id = ?').get(uid);
+    const row = db.prepare('SELECT status, decided_by FROM users WHERE id = ?').get(uid) as { status: string; decided_by: number | null } | undefined;
     if (row?.status !== 'paused') throw Object.assign(new Error('Your account is not paused.'), { statusCode: 400 });
     if (row.decided_by !== uid) throw Object.assign(new Error('The owner paused your account, so only they can resume it.'), { statusCode: 403 });
     db.prepare("UPDATE users SET status = 'active', decided_at = ?, updated_at = ? WHERE id = ?").run(new Date().toISOString(), new Date().toISOString(), uid);
@@ -119,7 +122,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
     account(db, req.uid ?? OWNER_ID),
   );
 
-  app.put(
+  app.put<{ Body: { key: string } }>(
     '/api/account/claude-key',
     {
       schema: {
@@ -133,7 +136,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       if (uid === OWNER_ID) throw Object.assign(new Error('Your AI uses ANTHROPIC_API_KEY in the server settings.'), { statusCode: 400 });
       const apiKey = req.body.key.trim();
       if (!KEY_PATTERN.test(apiKey)) throw Object.assign(new Error('That does not look like an Anthropic API key (it starts with sk-ant-).'), { statusCode: 400 });
-      let key;
+      let key: ReturnType<typeof boxKey>;
       try {
         key = boxKey();
       } catch {
@@ -155,7 +158,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
   // Google Doc, so these answer the owner with where to change them instead.
   // The demo shows the sample candidate's About you and search (demo/sample-data.js), read-only, so visitors see what
   // scoring works from; nothing is read from or saved to the database.
-  const search = (uid) => {
+  const search = (uid: number) => {
     if (demo) {
       const config = cleanConfig(DEMO_CONFIG, DEMO_CONFIG.candidate.name);
       return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE, scheduled: false };
@@ -164,8 +167,8 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       // The owner's search settings stay in their settings file; their knowledge doc lives here, like everyone's.
       return { owner: true, profile: userProfile(db, uid), profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE };
     }
-    const u = getUser(db, uid);
-    const config = userConfig(db, uid, u.name);
+    const u = getUser(db, uid) as User; // the request's own account
+    const config = userConfig(db, uid, u.name as string); // registration asks every account for a name
     const profile = userProfile(db, uid);
     return {
       owner: false,
@@ -177,7 +180,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
     };
   };
   app.get('/api/account/search', { schema: { summary: 'Your search settings, background, and schedule choice', response: { 200: anyObject } } }, async (req) => search(req.uid ?? OWNER_ID));
-  app.put(
+  app.put<{ Body: Record<string, unknown> }>(
     '/api/account/search',
     {
       schema: {
@@ -192,7 +195,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       return search(uid);
     },
   );
-  app.put(
+  app.put<{ Body: { text: string; source?: string } }>(
     '/api/account/profile',
     {
       schema: {
@@ -210,27 +213,27 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
 
   // Knowledge doc versions (every save keeps the one before) and Word downloads of the current one or any version.
   // The demo has no saved versions; its download is the sample candidate's knowledge doc.
-  const versionsOf = (uid) => (demo ? [{ text: DEMO_ABOUT_YOU, savedAt: null, source: 'sample' }] : profileVersions(db, uid));
+  const versionsOf = (uid: number) => (demo ? [{ text: DEMO_ABOUT_YOU, savedAt: null, source: 'sample' }] : profileVersions(db, uid));
   const versionParams = { type: 'object', required: ['n'], properties: { n: { type: 'integer', minimum: 1 } } };
   app.get('/api/account/profile/versions', { schema: { summary: 'Your knowledge doc versions, newest (current) first, without their text', response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
     versionsOf(req.uid ?? OWNER_ID).map((v, i, all) => ({ n: all.length - i, current: i === 0, savedAt: v.savedAt, source: v.source, chars: v.text.length })),
   );
-  const versionAt = (uid, n) => {
+  const versionAt = (uid: number, n: number) => {
     const all = versionsOf(uid);
     return all.at(all.length - n) ?? null;
   };
-  app.get('/api/account/profile/versions/:n', { schema: { summary: 'One knowledge doc version with its text', params: versionParams, response: { 200: anyObject } } }, async (req, reply) => {
+  app.get<{ Params: { n: number } }>('/api/account/profile/versions/:n', { schema: { summary: 'One knowledge doc version with its text', params: versionParams, response: { 200: anyObject } } }, async (req, reply) => {
     const v = versionAt(req.uid ?? OWNER_ID, req.params.n);
     return v ? { n: req.params.n, ...v } : reply.code(404).send({ error: 'Version not found' });
   });
-  app.post('/api/account/profile/versions/:n/restore', { schema: { summary: 'Make an earlier knowledge doc version current again (saved as a new version)', params: versionParams, response: { 200: anyObject } } }, async (req, reply) => {
+  app.post<{ Params: { n: number } }>('/api/account/profile/versions/:n/restore', { schema: { summary: 'Make an earlier knowledge doc version current again (saved as a new version)', params: versionParams, response: { 200: anyObject } } }, async (req, reply) => {
     const uid = req.uid ?? OWNER_ID;
     const v = versionAt(uid, req.params.n);
     if (!v) return reply.code(404).send({ error: 'Version not found' });
     saveUserProfile(db, uid, v.text, { source: 'restore' });
     return search(uid);
   });
-  app.get(
+  app.get<{ Querystring: { version?: number } }>(
     '/api/account/profile.docx',
     { schema: { summary: 'Your knowledge doc (current, or ?version=) as a Word document', querystring: { type: 'object', properties: { version: { type: 'integer', minimum: 1 } } } } },
     async (req, reply) => {
@@ -238,7 +241,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
       const text = req.query.version ? versionAt(uid, req.query.version)?.text : demo ? DEMO_ABOUT_YOU : userProfile(db, uid);
       if (!text) return reply.code(404).send({ error: 'No knowledge doc yet.' });
       const name = demo ? DEMO_CONFIG.candidate.name : getUser(db, uid)?.name;
-      const file = docxName(fileTitle(name, 'Knowledge Doc', req.query.version && `v${req.query.version}`));
+      const file = docxName(fileTitle(name, 'Knowledge Doc', (req.query.version && `v${req.query.version}`) as string | undefined));
       return reply
         .header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
         .header('Content-Disposition', `attachment; filename="${file}"`)
@@ -248,7 +251,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
     },
   );
   // A document's text for About you: it fills the box for review and is not saved (Save does that). PDF, .docx, or text.
-  app.post(
+  app.post<{ Body: unknown }>(
     '/api/account/profile/from-file',
     {
       bodyLimit: MAX_DOC_BYTES,
@@ -264,7 +267,7 @@ export function registerAccountRoutes(app, { db, checkKey, notices = {}, attachm
     },
   );
 
-  app.put(
+  app.put<{ Body: { on: boolean } }>(
     '/api/account/schedule',
     {
       schema: {

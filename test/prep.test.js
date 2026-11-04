@@ -181,3 +181,16 @@ test('API: refusals for no people, unknown jobs, and bad choices; a failed Googl
   await app.close();
   store.close();
 });
+
+test('API: with no AI here, a prep is refused with 503 before any task starts', async () => {
+  const { app, store, id, fake } = await setup();
+  const noAi = await buildApp({ store, config, services: { ...fake.services, claude: null } });
+  const res = await noAi.inject({ method: 'POST', url: `/api/postings/${id}/meeting-prep`, payload: { attendees: [{ name: 'A' }] } });
+  assert.equal(res.statusCode, 503);
+  assert.match(res.json().error, /AI is not available here/);
+  assert.deepEqual((await noAi.inject('/api/tasks')).json(), [], 'no task was started');
+  assert.equal(store.db.prepare('SELECT COUNT(*) FROM meeting_preps').pluck().get(), 0);
+  await noAi.close();
+  await app.close();
+  store.close();
+});

@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
-import { cleanFilename, cleanType } from '../server/attachments.js';
+import { cleanFilename, cleanType } from '../server/attachments.ts';
 
 // Synthetic files in a temporary folder only.
 async function setup() {

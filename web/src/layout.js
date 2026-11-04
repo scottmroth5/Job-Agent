@@ -1,4 +1,4 @@
-// The order rule for arranged screens (server/layout.js saves the order): saved items first in their saved order,
+// The order rule for arranged screens (server/layout.ts saves the order): saved items first in their saved order,
 // then anything added since in its default place. Unknown or repeated saved items are dropped. No JSX, so the
 // unit tests import it directly.
 export function arranged(defaults, saved) {

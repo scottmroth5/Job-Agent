@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
 import { page } from '../server/auth.js';
-import { loadGuides } from '../server/help-routes.js';
+import { loadGuides } from '../server/help-routes.ts';
 import { supportEmail, withSupport } from '../tools/support.ts';
 
 test('the address: a plain address or nothing; the placeholder becomes a link or the fallback', () => {

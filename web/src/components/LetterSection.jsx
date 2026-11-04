@@ -330,7 +330,7 @@ function Versions({ job, versions, onRestored }) {
 
 /**
  * The job panel's Cover letter: the current letter with Copy and Download (Word or PDF), Revise with Claude, Use my
- * own version, and Versions. Every save is a new version (server/letter-routes.js); nothing is overwritten.
+ * own version, and Versions. Every save is a new version (server/letter-routes.ts); nothing is overwritten.
  */
 export default function LetterSection({ job, onChanged }) {
   const demo = useDemo();

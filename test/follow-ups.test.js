@@ -1,4 +1,4 @@
-// Follow-ups (agents/follow-ups.ts, server/follow-up-routes.js, agents/hunt/find-contact.ts): the window from 7 days to
+// Follow-ups (agents/follow-ups.ts, server/follow-up-routes.ts, agents/hunt/find-contact.ts): the window from 7 days to
 // the user's stale days (45 by default, never archived jobs), closing stale applications as no response, and Find
 // someone to contact saved as a note. Synthetic data on example domains; Claude is a stand-in.
 import { test } from 'node:test';

@@ -6,12 +6,25 @@ import { runInbox } from '../agents/inbox/process.ts';
 import { listNeedsReview, resolveReview, CHOICES } from '../agents/inbox/review.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { trimBody } from '../agents/inbox/atsParse.ts';
+import type { Claude } from '@scottmroth5/agent-core';
+import type { Database, JobStore, Logger } from '../tools/types.ts';
+import type { Gmail } from '../agents/inbox/gmail.ts';
+import type { InboxConfig } from '../agents/inbox/config.ts';
+import type { App, TaskStep, Tasks } from './types.ts';
+
+/** The inbox's services (server/index.js): whether Gmail is signed in, its client, the email key, and inbox.json. */
+export interface InboxServices {
+  ready: () => boolean;
+  gmail: (opts: { onWait: (ms: number) => void }) => Gmail;
+  key: () => Buffer;
+  cfg: InboxConfig;
+}
 
 const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
 
 /** Everything the Inbox screen shows. */
-export function inboxOverview(db, { ready }) {
+export function inboxOverview(db: Database, { ready }: { ready: boolean }) {
   return {
     signedIn: ready,
     lastCheck: db.prepare("SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name IN ('inbox', 'inbox-backfill') ORDER BY id DESC LIMIT 1").get() ?? null,
@@ -41,13 +54,9 @@ export function inboxOverview(db, { ready }) {
   };
 }
 
-/**
- * @param {object} ctx
- * @param {{ ready: () => boolean, gmail: () => object, key: () => Buffer, cfg: object }} ctx.inbox
- */
-export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
+export function registerInboxRoutes(app: App, { store, tasks, claude, inbox }: { store: JobStore; tasks: Tasks; claude: Claude | null; inbox: InboxServices }) {
   const { db } = store;
-  let checkTaskId = null;
+  let checkTaskId: string | null = null;
 
   app.get('/api/inbox', { schema: { summary: 'Emails to review, open reminders, recent linked emails, last check', response: { 200: anyObject } } }, async () => {
     const task = checkTaskId ? tasks.get(checkTaskId) : null;
@@ -61,35 +70,36 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
   );
 
   /** Starts an inbox check as a task (the Inbox screen and the scheduler). */
-  function startCheck({ by = 'button' } = {}) {
+  function startCheck({ by = 'button' }: { by?: string } = {}) {
       if (!inbox.ready()) throw Object.assign(new Error('Gmail is not signed in. Run "npm run inbox:auth" first.'), { statusCode: 400 });
       for (const name of ['inbox', 'inbox-backfill', 'pipeline']) {
         try {
           assertNoRunningRun(db, name);
         } catch (err) {
-          throw Object.assign(new Error(`${err.message} Try again when it finishes.`), { statusCode: 409 });
+          throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
         }
       }
-      checkTaskId = tasks.start('inbox', { by }, async (step, { logger }) => {
+      checkTaskId = tasks.start('inbox', { by }, async (step: TaskStep, { logger }: { logger: Logger }) => {
         const gmail = inbox.gmail({ onWait: (ms) => logger.warn(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
         // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
         const run = createJobTracer({ store, logger }).startRun('inbox', { model: inbox.cfg.model });
         try {
           step('Reading new mail');
-          const s = await runInbox({ store, gmail, claude, cfg: inbox.cfg, key: inbox.key(), run, log: run.log });
+          // claude is set wherever Gmail can be ready (the demo has neither, and ready() refused above).
+          const s = await runInbox({ store, gmail, claude: claude as Claude, cfg: inbox.cfg, key: inbox.key(), run, log: run.log });
           for (const n of s.notices) logger.info(n);
           run.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length });
           step(`Done: ${s.considered} job emails, ${s.matched} linked, ${s.needsReview} to review`);
           return { considered: s.considered, matched: s.matched, needsReview: s.needsReview, opportunities: s.opportunities, statusChanges: s.statusChanges.length, notices: s.notices, failures: s.failures.length };
         } catch (err) {
-          run.finish('failed', { error: err.message });
+          run.finish('failed', { error: (err as Error).message });
           throw err;
         }
       });
       return checkTaskId;
   }
 
-  app.post(
+  app.post<{ Params: { id: string }; Body: { choice: string; postingId?: number } }>(
     '/api/inbox/emails/:id/review',
     {
       schema: {
@@ -105,7 +115,7 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
       const { choice, postingId } = req.body;
       if (choice === 'reassign' && !postingId) return reply.code(400).send({ error: 'Choose the job to link it to.' });
       // The body is re-read from Gmail so a newly linked email keeps it (encrypted), as the inbox run would.
-      let body = null;
+      let body: string | null = null;
       if (inbox.ready() && choice !== 'not_job' && choice !== 'dismiss') {
         const m = await inbox.gmail({ onWait: () => {} }).getMessage(e.gmail_message_id).catch(() => null);
         body = m ? trimBody(m.rawBody, { html: m.bodyIsHtml, max: inbox.cfg.bodyChars }) : null;
@@ -114,7 +124,7 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
         const r = resolveReview(db, e, choice, { postingId, body, key: body ? inbox.key() : null });
         return { postingId: r.postingId, statusChange: r.statusChange, review: r.review, notices: r.notices.filter((n) => !n.startsWith('Needs review')) };
       } catch (err) {
-        return reply.code(400).send({ error: err.message });
+        return reply.code(400).send({ error: (err as Error).message });
       }
     },
   );
@@ -123,8 +133,8 @@ export function registerInboxRoutes(app, { store, tasks, claude, inbox }) {
 }
 
 /** Closing a reminder: registered whether or not Gmail is set up, since the job panel's Next step box closes them too. */
-export function registerReminderRoutes(app, { db }) {
-  app.patch(
+export function registerReminderRoutes(app: App, { db }: { db: Database }) {
+  app.patch<{ Params: { id: string }; Body: { status: 'done' | 'dismissed' } }>(
     '/api/inbox/reminders/:id',
     {
       schema: {

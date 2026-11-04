@@ -6,7 +6,7 @@
 //   npm run backup -- --check-passphrase    check JOB_BACKUP_PASSPHRASE in .env, then stop
 import { createJobTracer } from '../tools/trace.ts';
 import { openJobStore } from '../db/index.ts';
-import { ATTACHMENTS_DIR } from '../server/attachments.js';
+import { ATTACHMENTS_DIR } from '../server/attachments.ts';
 import { checkPassphrase } from '../tools/backup/crypto.ts';
 import { createBackupDrive } from '../tools/backup/drive.ts';
 import { localDate, runBackup } from '../tools/backup/run.ts';

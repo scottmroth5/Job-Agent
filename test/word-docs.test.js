@@ -1,4 +1,4 @@
-// Word downloads of cover letters and meeting preps (server/word-docs.js, server/document-routes.js). Made-up jobs and
+// Word downloads of cover letters and meeting preps (server/word-docs.js, server/document-routes.ts). Made-up jobs and
 // text; the .docx files are opened and their text checked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

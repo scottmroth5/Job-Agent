@@ -5,14 +5,16 @@ import { decide, DECISION_NAMES, getUser, setAiAccess } from '../db/users.ts';
 import { listUsers, usageByWeek, usagePeriodStart, usageTotals } from './admin-queries.js';
 import { BROWSER_NAMES, DEVICES, SOURCES } from './usage-totals.js';
 import { deleteAccount } from '../agents/account-data.ts';
-import { ATTACHMENTS_DIR } from './attachments.js';
+import { ATTACHMENTS_DIR } from './attachments.ts';
+import type { Database } from '../tools/types.ts';
+import type { App, IdParams, Notices } from './types.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };
 
-export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATTACHMENTS_DIR }) {
+export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir = ATTACHMENTS_DIR }: { db: Database; notices?: Notices; attachmentsDir?: string }) {
   // Deleting someone's account removes everything that is theirs; their address must be typed to confirm.
-  app.post(
+  app.post<{ Params: IdParams; Body: { confirmEmail: string } }>(
     '/api/admin/users/:id/delete',
     {
       schema: {
@@ -45,7 +47,7 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
     },
   };
   // Device, browser, location, and source totals over the same weeks (server/usage-totals.js): app-wide, never per account.
-  const total = (values, pattern) => ({
+  const total = (values: string[] | null, pattern?: string) => ({
     type: 'object',
     additionalProperties: false,
     required: ['value', 'count'],
@@ -57,7 +59,7 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
     required: ['city', 'state', 'country', 'count'],
     properties: { city: { type: 'string' }, state: { type: 'string' }, country: { type: 'string' }, count: { type: 'integer' } },
   };
-  app.get(
+  app.get<{ Querystring: { weeks: number } }>(
     '/api/admin/usage',
     {
       schema: {
@@ -86,7 +88,7 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
     listUsers(db),
   );
 
-  app.post(
+  app.post<{ Params: { id: number; decision: string } }>(
     '/api/admin/users/:id/:decision',
     {
       schema: {
@@ -96,7 +98,8 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
       },
     },
     async (req) => {
-      const user = decide(db, req.params.id, req.params.decision, { by: req.uid });
+      // Admin routes always run as a signed-in admin, so uid is set.
+      const user = decide(db, req.params.id, req.params.decision, { by: req.uid as number });
       // The person hears about their own account (resuming needs no email).
       switch (req.params.decision) {
         case 'approve':
@@ -115,7 +118,7 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
     },
   );
 
-  app.put(
+  app.put<{ Params: IdParams; Body: { source: 'own' | 'owner'; capUsd?: number | null; confirmEmail?: string } }>(
     '/api/admin/users/:id/ai',
     {
       schema: {
@@ -138,7 +141,7 @@ export function registerUserRoutes(app, { db, notices = {}, attachmentsDir = ATT
       if (granting && String(req.body.confirmEmail ?? '').trim().toLowerCase() !== before.email) {
         throw Object.assign(new Error(`Type ${before.email} to confirm you want to pay for their AI.`), { statusCode: 400 });
       }
-      const after = setAiAccess(db, req.params.id, req.body);
+      const after = setAiAccess(db, req.params.id, req.body) as NonNullable<ReturnType<typeof setAiAccess>>; // the user was found above
       // They hear when the owner starts or stops covering them, or changes the cap.
       if (after.ai_source === 'owner' && (granting || after.ai_cap_usd !== before.ai_cap_usd)) await notices.aiCovered?.(after, after.ai_cap_usd);
       if (after.ai_source === 'own' && before.ai_source === 'owner') await notices.aiOwnKey?.(after);

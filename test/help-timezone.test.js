@@ -9,7 +9,7 @@ import { addUser, OWNER_ID } from '../db/users.ts';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
-import { ASKS_PER_DAY, HELP_MODEL, loadGuides } from '../server/help-routes.js';
+import { ASKS_PER_DAY, HELP_MODEL, loadGuides } from '../server/help-routes.ts';
 import { createJobClaude } from '../tools/claude.ts';
 import { isTimeZone, localDay, localDaysAgo, timeZone } from '../tools/dates.ts';
 

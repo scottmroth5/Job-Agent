@@ -4,7 +4,7 @@ import { checkLocation } from '../tools/location.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.ts';
 import { findCopies, storedKey, identityKey, liveCopySql } from '../agents/identity.ts';
 import { lookups, sqlList } from '../agents/lookups.ts';
-import { listAttachments } from './attachments.js';
+import { listAttachments } from './attachments.ts';
 import { listPreps } from '../agents/hunt/prep.ts';
 import { addNote, listNotes } from '../agents/notes.ts';
 import { localDay } from '../tools/dates.ts';

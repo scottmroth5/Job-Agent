@@ -318,7 +318,7 @@ export const SAMPLE_TASKS = [
   },
 ];
 
-// The sample candidate's knowledge doc, shown read-only on the demo's Settings (server/account-routes.js): a full worked
+// The sample candidate's knowledge doc, shown read-only on the demo's Settings (server/account-routes.ts): a full worked
 // example of the seven sections (agents/knowledge-sections.ts) that Help teaches. Invented, like everything here.
 export const DEMO_ABOUT_YOU = `## 1. Summary
 Engineering leader with 15 years in software and 8 leading teams, mostly in healthcare and other regulated industries. I am at my best when a product works, customers depend on it, and the platform and the team now have to grow faster than they were built to. Known for scaling teams without slowing releases, and for passing audits on the first try.
@@ -373,6 +373,7 @@ Engineering leader with 15 years in software and 8 leading teams, mostly in heal
 // The demo's Find someone to contact: a canned answer in the real one's shape, built from the sample job. The people are
 // invented and their links are example.com pages; no model is called and nothing is saved.
 const slug = (s) => String(s ?? '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean).join('-');
+/** @param {{ company: string, title: string, appliedOn?: string | null }} job */
 export function demoContactResult({ company, title, appliedOn = null }) {
   const site = `https://${slug(company) || 'example'}.example.com`;
   const reportsTo = /\b(vp|vice president|head|svp|chief|cto)\b/i.test(title) ? 'Chief Technology Officer' : 'VP of Engineering';

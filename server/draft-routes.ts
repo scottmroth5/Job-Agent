@@ -4,13 +4,16 @@
 import { draftProfile, MAX_FILE_BYTES, MAX_FILES } from '../agents/draft-profile.ts';
 import { createJobTracer } from '../tools/trace.ts';
 import { OWNER_ID } from '../db/users.ts';
+import type { JobStore } from '../tools/types.ts';
+import type { DraftInput } from '../agents/draft-profile.ts';
+import type { App, RouteServices } from './types.ts';
 
 export const DRAFTS_PER_DAY = 10;
 const anyObject = { type: 'object', additionalProperties: true };
 
-export function registerDraftRoutes(app, { store, services }) {
-  const drafts = new Map(); // uid -> [timestamps in the last day]
-  app.post(
+export function registerDraftRoutes(app: App, { store, services }: { store: JobStore; services: Pick<RouteServices, 'claude'> }) {
+  const drafts = new Map<number, number[]>(); // uid -> [timestamps in the last day]
+  app.post<{ Body: DraftInput }>(
     '/api/account/draft',
     {
       // Base64 files are a third larger than the files themselves.
@@ -42,7 +45,7 @@ export function registerDraftRoutes(app, { store, services }) {
         run.finish('ok', { questions: draft.questions.length });
         return draft;
       } catch (err) {
-        run.finish('failed', { error: err.name });
+        run.finish('failed', { error: (err as Error).name });
         throw err;
       }
     },
