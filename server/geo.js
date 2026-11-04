@@ -9,11 +9,17 @@
 // (iCloud Private Relay, new mobile IPv6 ranges) often arrive from such addresses, and blocking them locked out real
 // users; only an address placed in another country is refused. Each refusal is logged with its country and a shortened
 // address (the first half: a /24 or /48), never the full one, at most once an hour per shortened address.
-import { existsSync } from 'node:fs';
+// iCloud Private Relay (Safari, and home-screen web apps on iPhone) sends requests from Apple's relay partners' addresses,
+// which DB-IP often places in the wrong country. Apple publishes those addresses with the country each one stands for
+// (https://mask-api.icloud.com/egress-ip-ranges.csv, downloaded into the image next to DB-IP's file), so the country
+// comes from that list first and from DB-IP only for addresses it does not list. A relay address Apple lists outside the
+// allowed countries is still refused. Without the list, blocking stays on with DB-IP alone (server/index.js alerts).
+import { existsSync, readFileSync } from 'node:fs';
 import { isIP } from 'node:net';
 import maxmind from 'maxmind';
 
 export const GEO_DB_PATH = process.env.GEO_DB || '/app/geo/city.mmdb';
+export const RELAY_PATH = process.env.GEO_RELAY || '/app/geo/relay.csv';
 const ALWAYS_OPEN = [/^\/healthz(\?|$)/];
 
 /** The allowed country codes from GEO_ALLOW ("US", "US,CA"); empty when unset. */
@@ -51,6 +57,106 @@ export async function openGeo(path = GEO_DB_PATH) {
     },
   };
 }
+
+const ipv4Number = (a) => a.split('.').reduce((n, octet) => n * 256 + Number(octet), 0);
+
+/** The top 64 bits of an IPv6 address (already checked with isIP) as a BigInt; an IPv4 tail is in the low bits. */
+function ipv6High(a) {
+  const [head, tail] = a.split('::');
+  const groups = (s) => (s ? s.split(':').flatMap((g) => (g.includes('.') ? ['0', '0'] : [g])) : []);
+  const before = groups(head);
+  const after = tail === undefined ? [] : groups(tail);
+  const all = [...before, ...Array(8 - before.length - after.length).fill('0'), ...after];
+  return all.slice(0, 4).reduce((n, g) => (n << 16n) + BigInt(`0x${g}`), 0n);
+}
+
+const byStart = (x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0);
+
+// Sorted ranges, with neighbouring or overlapping ranges of the same country joined into one.
+function merged(ranges, one) {
+  const out = [];
+  for (const r of ranges.sort(byStart)) {
+    const last = out[out.length - 1];
+    if (last && last[2] === r[2] && r[0] <= last[1] + one) {
+      if (r[1] > last[1]) last[1] = r[1];
+    } else out.push(r);
+  }
+  return out;
+}
+
+/**
+ * Apple's relay list ("prefix,CC,region,city," per line) as sorted [start, end, country] ranges: IPv4 as numbers,
+ * IPv6 by the top 64 bits as BigInts (exact: Apple lists no prefix longer than /64, and a longer one is skipped).
+ * Malformed lines are skipped.
+ */
+export function parseRelayRanges(text) {
+  const v4 = [];
+  const v6 = [];
+  const countries = new Map(); // one string per country code, not one per line
+  for (const line of String(text ?? '').split('\n')) {
+    const [prefix = '', code = ''] = line.split(',', 2);
+    const cc = code.trim().toUpperCase();
+    if (!/^[A-Z]{2}$/.test(cc)) continue;
+    const slash = prefix.indexOf('/');
+    if (slash < 0) continue;
+    const addr = prefix.slice(0, slash).trim().toLowerCase();
+    const bits = prefix.slice(slash + 1).trim();
+    if (!/^\d{1,3}$/.test(bits)) continue;
+    const len = Number(bits);
+    if (!countries.has(cc)) countries.set(cc, cc);
+    const country = countries.get(cc);
+    const kind = isIP(addr);
+    if (kind === 4 && len <= 32) {
+      const size = 2 ** (32 - len);
+      const start = ipv4Number(addr) - (ipv4Number(addr) % size);
+      v4.push([start, start + size - 1, country]);
+    } else if (kind === 6 && len <= 64 && !addr.includes('%')) {
+      const size = 1n << BigInt(64 - len);
+      const high = ipv6High(addr);
+      const start = high - (high % size);
+      v6.push([start, start + size - 1n, country]);
+    }
+  }
+  return { v4: merged(v4, 1), v6: merged(v6, 1n) };
+}
+
+// The country of the last range starting at or before x, when x is inside it.
+function find(ranges, x) {
+  let lo = 0;
+  let hi = ranges.length - 1;
+  let hit = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (ranges[mid][0] <= x) {
+      hit = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  return hit >= 0 && x <= ranges[hit][1] ? ranges[hit][2] : null;
+}
+
+/** ip -> the country Apple lists for it, or null when it is not a relay address. */
+export function relayLookup({ v4, v6 }) {
+  return (ip) => {
+    let a = String(ip ?? '').trim().toLowerCase();
+    if (a.startsWith('::ffff:') && isIP(a.slice(7)) === 4) a = a.slice(7);
+    const kind = isIP(a);
+    if (kind === 4) return find(v4, ipv4Number(a));
+    if (kind === 6 && !a.includes('%')) return find(v6, ipv6High(a));
+    return null;
+  };
+}
+
+/** The relay list's lookup, or null when there is no file (or nothing in it): { country(ip), v4, v6 (range counts) }. */
+export function openRelay(path = RELAY_PATH) {
+  if (!existsSync(path)) return null;
+  const ranges = parseRelayRanges(readFileSync(path, 'utf8'));
+  if (!ranges.v4.length && !ranges.v6.length) return null;
+  return { country: relayLookup(ranges), v4: ranges.v4.length, v6: ranges.v6.length };
+}
+
+/** The country for the check: Apple's relay list first, then DB-IP for addresses it does not list. */
+export const countryLookup = ({ relay = null, dbip = null } = {}) => (ip) => relay?.(ip) ?? dbip?.(ip) ?? null;
 
 /** The first half of an address, for logs: 203.0.113.x or 2001:db8:1:: (a /24 or /48). */
 export function shortAddress(ip) {

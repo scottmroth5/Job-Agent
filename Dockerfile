@@ -43,6 +43,11 @@ RUN echo "location database for build $GEO_STAMP" && mkdir -p /geo \
          && gunzip -c /tmp/city.mmdb.gz > /geo/city.mmdb && [ -s /geo/city.mmdb ]; then echo "location database $m"; break; fi; \
       rm -f /geo/city.mmdb; \
     done; rm -f /tmp/city.mmdb.gz; true
+# Apple's iCloud Private Relay addresses with the country each stands for (server/geo.js checks it before DB-IP). A failed
+# download leaves no file: blocking stays on with DB-IP alone, the app alerts the owner, and the weekly rebuild tries again.
+RUN echo "relay list for build $GEO_STAMP" \
+ && if curl -fsSL --max-time 300 -o /geo/relay.csv "https://mask-api.icloud.com/egress-ip-ranges.csv" && [ -s /geo/relay.csv ]; \
+    then echo "relay list $(wc -l < /geo/relay.csv) lines"; else rm -f /geo/relay.csv; fi; true
 
 # Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
 FROM node:22-bookworm-slim

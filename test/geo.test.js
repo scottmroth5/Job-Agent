@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
-import { geoAllowFromEnv, geoBlocker, isPrivateAddress, shortAddress } from '../server/geo.js';
+import { countryLookup, geoAllowFromEnv, geoBlocker, isPrivateAddress, parseRelayRanges, relayLookup, shortAddress } from '../server/geo.js';
 
 const COUNTRY = { '8.8.8.8': 'US', '81.2.69.142': 'GB', '203.0.113.9': null };
 const lookup = (ip) => COUNTRY[ip] ?? null;
@@ -42,9 +42,69 @@ test('refusals are logged with the country and half the address, at most hourly 
   assert.equal(shortAddress('2001:db8:1234:5678::1'), '2001:db8:1234::');
 });
 
-async function appFrom(ip, { allow = ['US'] } = {}) {
+// A made-up relay list in Apple's format, on documentation addresses only (192.0.2.0/24, 2001:db8::/32).
+const RELAY_CSV = [
+  '192.0.2.0/28,US,US-NY,New York,',
+  '192.0.2.16/28,US,US-NY,New York,', // joins the one before
+  '192.0.2.64/27,GB,GB-EN,London,',
+  '2001:db8:1::/48,US,US-CA,Los Angeles,',
+  '2001:db8:2:3::/64,GB,GB-EN,London,',
+  '',
+  'ip_prefix,country,region,city,',
+  'not-an-address/24,US,,,',
+  '192.0.2.200/33,US,,,',
+  '2001:db8:9::/65,US,,,',
+  '192.0.2.128/28,,,,',
+  '192.0.2.144/28,USA,,,',
+  '192.0.2.160',
+].join('\n');
+
+test('the relay list: ranges, edges, IPv6, and malformed lines skipped', () => {
+  const ranges = parseRelayRanges(RELAY_CSV);
+  assert.equal(ranges.v4.length, 2, 'two US /28s join; the GB /27 stays apart; bad lines are skipped');
+  assert.equal(ranges.v6.length, 2, 'the /65 is skipped');
+  const relay = relayLookup(ranges);
+  assert.equal(relay('192.0.2.0'), 'US', 'first address');
+  assert.equal(relay('192.0.2.31'), 'US', 'last address of the joined range');
+  assert.equal(relay('192.0.2.32'), null, 'one past the end');
+  assert.equal(relay('192.0.2.63'), null, 'one before the next range');
+  assert.equal(relay('192.0.2.64'), 'GB');
+  assert.equal(relay('192.0.2.95'), 'GB');
+  assert.equal(relay('192.0.2.96'), null);
+  assert.equal(relay('::ffff:192.0.2.5'), 'US', 'IPv4 written as IPv6');
+  assert.equal(relay('192.0.2.130'), null, 'a line with no country');
+  assert.equal(relay('2001:db8:1::'), 'US', 'first IPv6 address');
+  assert.equal(relay('2001:db8:1:ffff:ffff:ffff:ffff:ffff'), 'US', 'last IPv6 address');
+  assert.equal(relay('2001:db8:2::1'), null, 'next /48');
+  assert.equal(relay('2001:db8:2:3:abcd::1'), 'GB', 'inside the /64');
+  assert.equal(relay('2001:db8:2:4::1'), null, 'the next /64');
+  assert.equal(relay('2001:db8:9::1'), null, 'the skipped /65');
+  for (const bad of ['', 'nonsense', null, '192.0.2']) assert.equal(relay(bad), null);
+  assert.deepEqual(parseRelayRanges(''), { v4: [], v6: [] });
+});
+
+test('the country check: the relay list first, DB-IP for addresses it does not list', () => {
+  const relay = relayLookup(parseRelayRanges(RELAY_CSV));
+  const dbip = (ip) => ({ '192.0.2.1': 'GB', '192.0.2.70': 'US', '81.2.69.142': 'GB', '8.8.8.8': 'US' })[ip] ?? null;
+  const country = countryLookup({ relay, dbip });
+  assert.equal(country('192.0.2.1'), 'US', 'listed as US, DB-IP says GB');
+  assert.equal(country('192.0.2.70'), 'GB', 'listed as GB, DB-IP says US');
+  assert.equal(country('81.2.69.142'), 'GB', 'not listed: DB-IP');
+  assert.equal(country('203.0.113.9'), null, 'in neither');
+  assert.equal(countryLookup({ dbip })('192.0.2.1'), 'GB', 'no relay list: DB-IP alone');
+});
+
+test('the image downloads the relay list without ever failing the build', () => {
+  const dockerfile = readFileSync(new URL('../Dockerfile', import.meta.url), 'utf8');
+  const step = dockerfile.split(/\nRUN /).find((s) => s.includes('mask-api.icloud.com/egress-ip-ranges.csv')) ?? '';
+  assert.ok(step, 'the relay list is downloaded');
+  assert.match(step, /-o \/geo\/relay\.csv/);
+  assert.match(step, /; true\s*$/m, 'a failed download never fails the build');
+});
+
+async function appFrom(ip, { allow = ['US'], lookup: countryOf = lookup } = {}) {
   const store = openJobStore(':memory:');
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null }, trustProxy: TRUST_PROXY, geo: { allow, lookup } });
+  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null }, trustProxy: TRUST_PROXY, geo: { allow, lookup: countryOf } });
   return (url, opts = {}) => app.inject({ url, remoteAddress: '172.18.0.4', ...opts, headers: { 'x-forwarded-for': ip, ...(opts.headers ?? {}) } });
 }
 
@@ -65,4 +125,19 @@ test('in the US, from inside the server, or with blocking off: everything as usu
   assert.equal((await (await appFrom('8.8.8.8'))('/api/postings')).statusCode, 200);
   assert.equal((await (await appFrom('172.18.0.1'))('/api/postings')).statusCode, 200, "Docker's network (Caddy)");
   assert.equal((await (await appFrom('81.2.69.142', { allow: [] }))('/api/postings')).statusCode, 200, 'GEO_ALLOW unset');
+});
+
+test('iCloud Private Relay: the country Apple lists decides, whatever DB-IP says', async () => {
+  const relay = relayLookup(parseRelayRanges(RELAY_CSV));
+  const dbip = (ip) => ({ '192.0.2.1': 'GB', '192.0.2.70': 'US', '81.2.69.142': 'GB', '8.8.8.8': 'US' })[ip] ?? null;
+  const viaRelay = (ip) => appFrom(ip, { lookup: countryLookup({ relay, dbip }) });
+  assert.equal((await (await viaRelay('192.0.2.1'))('/api/postings')).statusCode, 200, 'DB-IP says GB, Apple lists US');
+  assert.equal((await (await viaRelay('192.0.2.5'))('/api/postings')).statusCode, 200, 'DB-IP has no country, Apple lists US');
+  assert.equal((await (await viaRelay('2001:db8:1::7'))('/api/postings')).statusCode, 200, 'IPv6 relay address listed as US');
+  assert.equal((await (await viaRelay('192.0.2.70'))('/api/postings')).statusCode, 403, 'Apple lists GB');
+  assert.equal((await (await viaRelay('2001:db8:2:3::1'))('/api/postings')).statusCode, 403, 'IPv6 relay address listed as GB');
+  // Not in the list: exactly as before.
+  assert.equal((await (await viaRelay('81.2.69.142'))('/api/postings')).statusCode, 403);
+  assert.equal((await (await viaRelay('8.8.8.8'))('/api/postings')).statusCode, 200);
+  assert.equal((await (await viaRelay('203.0.113.9'))('/api/postings')).statusCode, 200, 'unknown still passes');
 });
