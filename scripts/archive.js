@@ -3,7 +3,7 @@
 //   npm run archive                 move them
 import { createJobTracer } from '../tools/trace.ts';
 import { openJobStore } from '../db/index.ts';
-import { archivePostings } from '../agents/hunt/archive.js';
+import { archivePostings } from '../agents/hunt/archive.ts';
 
 const dryRun = process.argv.includes('--dry-run');
 const store = openJobStore();

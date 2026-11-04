@@ -6,12 +6,20 @@
 import { fillTemplate } from '../../tools/template.ts';
 import { truncate } from '../../tools/text.ts';
 import { getPrompt } from '../prompts.ts';
+import type { Claude, Run } from '@scottmroth5/agent-core';
+import type { Database } from '../../tools/types.ts';
+import type { Prompt } from '../prompts.ts';
+import type { Claim } from '../letter-checks.ts';
+
+/** The posting fields a check reads. */
+type CheckedPosting = { company: string; title: string; jd_text?: string | null; fetched_text?: string | null };
+type CheckConfig = { candidate?: { name?: string } } | null;
 
 // Haiku 4.5 from the letter eval (EVALS.md, 2026-11-03): the same recall as Sonnet 5.5 with fewer extra flags, at
 // under half the cost.
 export const VERIFY_MODEL = 'claude-haiku-4-5';
 // Per model, as for scoring: Haiku 4.5 takes no effort setting; Sonnet and Opus 5.5 always think, so effort stays low.
-export const VERIFY_SETTINGS = {
+export const VERIFY_SETTINGS: Record<string, { maxTokens: number; effort?: string }> = {
   'claude-haiku-4-5': { maxTokens: 4000 },
   'claude-sonnet-5-5': { maxTokens: 12000, effort: 'low' },
   'claude-opus-5-5': { maxTokens: 12000, effort: 'low' },
@@ -24,7 +32,14 @@ const EVIDENCE_CHARS = 300;
 const POSTING_CHARS = 6000;
 
 /** claude.send options for checking one letter. */
-export function buildVerifyRequest({ posting, letter, background, prompt, config, model = VERIFY_MODEL }) {
+export function buildVerifyRequest({ posting, letter, background, prompt, config, model = VERIFY_MODEL }: {
+  posting: CheckedPosting;
+  letter: string | null | undefined;
+  background: string;
+  prompt: Pick<Prompt, 'template' | 'schema'>;
+  config: CheckConfig;
+  model?: string;
+}) {
   const text = String(posting.jd_text || posting.fetched_text || '').trim();
   const values = {
     candidateName: config?.candidate?.name ?? 'the candidate',
@@ -39,30 +54,39 @@ export function buildVerifyRequest({ posting, letter, background, prompt, config
 }
 
 /** The model's claims, kept to the schema's values and sizes (the API schema cannot carry limits). */
-export function cleanClaims(data) {
-  const claims = Array.isArray(data?.claims) ? data.claims : [];
+// data is the model's answer: JSON constrained by the schema, still checked field by field here.
+export function cleanClaims(data: unknown): Claim[] {
+  const answer = data as { claims?: unknown } | null | undefined;
+  const claims = (Array.isArray(answer?.claims) ? answer.claims : []) as Array<{ claim?: unknown; kind?: string; verdict?: string; evidence?: unknown } | null>;
   return claims
-    .filter((c) => c && typeof c.claim === 'string' && c.claim.trim() && VERDICTS.includes(c.verdict))
+    .filter((c): c is { claim: string; kind?: string; verdict: string; evidence?: unknown } => Boolean(c && typeof c.claim === 'string' && c.claim.trim() && VERDICTS.includes(c.verdict as string)))
     .slice(0, MAX_CLAIMS)
     .map((c) => ({
       claim: c.claim.trim().slice(0, CLAIM_CHARS),
-      kind: KINDS.includes(c.kind) ? c.kind : 'other',
+      kind: KINDS.includes(c.kind as string) ? (c.kind as string) : 'other',
       verdict: c.verdict,
       evidence: c.verdict === 'unsupported' ? '' : String(c.evidence ?? '').trim().slice(0, EVIDENCE_CHARS),
     }));
 }
 
 /** Claims that need the user's eye: contradicted first, then unsupported. */
-export const flagged = (claims) => [...claims.filter((c) => c.verdict === 'contradicted'), ...claims.filter((c) => c.verdict === 'unsupported')];
+export const flagged = <T extends { verdict: string }>(claims: T[]) => [...claims.filter((c) => c.verdict === 'contradicted'), ...claims.filter((c) => c.verdict === 'unsupported')];
 
 /**
  * Checks one letter on the user's AI. Returns { claims, model, promptVersion, costUsd }; throws when the call fails
  * (the caller records a failed check).
- * @param {{ claude: import('@scottmroth5/agent-core').Claude, db?: import('../../tools/types.ts').Database | null, background: string,
- *   posting: object, letter: string, config: object | null, trace?: import('@scottmroth5/agent-core').Run | null, model?: string,
- *   prompt?: { template: string, schema: object, version: string } }} options
  */
-export async function verifyLetter({ claude, db = null, background, posting, letter, config, trace = null, model = VERIFY_MODEL, prompt = getPrompt(db, 'verify-letter') }) {
+export async function verifyLetter({ claude, db = null, background, posting, letter, config, trace = null, model = VERIFY_MODEL, prompt = getPrompt(db, 'verify-letter') }: {
+  claude: Claude;
+  db?: Database | null;
+  background: string;
+  posting: CheckedPosting;
+  letter: string;
+  config: CheckConfig;
+  trace?: Run | null;
+  model?: string;
+  prompt?: Pick<Prompt, 'template' | 'schema' | 'version'>;
+}) {
   const res = await claude.send({ ...buildVerifyRequest({ posting, letter, background, prompt, config, model }), trace });
   return { claims: cleanClaims(res.data), model, promptVersion: prompt.version, costUsd: res.costUsd ?? null };
 }

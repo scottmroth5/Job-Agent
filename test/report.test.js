@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { collectReport, renderReport } from '../agents/hunt/report.js';
-import { archivePostings, findArchivable } from '../agents/hunt/archive.js';
+import { collectReport, renderReport } from '../agents/hunt/report.ts';
+import { archivePostings, findArchivable } from '../agents/hunt/archive.ts';
 
 // Synthetic postings only.
 function addPosting(db, { stage = 'pipeline', status = 'new', discovered = '2026-09-29', company = 'Example Co', title = 'VP Engineering' } = {}) {

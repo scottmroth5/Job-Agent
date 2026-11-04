@@ -1,6 +1,6 @@
 // Meeting prep routes: start a prep for a job (a background task), read one, delete one. Prep text and the
 // people's names stay in the database and the response; task output holds counts only.
-import { MAX_ATTENDEES, MEETING_FORMATS, MEETING_KINDS, listPreps, writeMeetingPrep } from '../agents/hunt/prep.js';
+import { MAX_ATTENDEES, MEETING_FORMATS, MEETING_KINDS, listPreps, writeMeetingPrep } from '../agents/hunt/prep.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };

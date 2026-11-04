@@ -2,8 +2,27 @@
 // the earlier turns go in; a revised letter body and a short note on what changed come out. Nothing is saved here: the
 // user keeps going or saves the version they want (server/letter-routes.js). The same background as the letter itself
 // (the knowledge doc plus the job's resume) is the system prompt, so facts stay the user's own; the posting is data.
-import { HUNT_MODEL, finishLetter } from './generate.js';
-import { formatAnalysis } from './letters.js';
+import { HUNT_MODEL, finishLetter } from './generate.ts';
+import { formatAnalysis } from './letters.ts';
+import type { Claude, Run } from '@scottmroth5/agent-core';
+import type { PostingsRow } from '../../db/types.ts';
+import type { AnalysisFields } from './letters.ts';
+import type { LetterConfig } from './generate.ts';
+
+/** An earlier turn in the revision: what the candidate asked and what Claude changed. */
+export interface RevisionTurn {
+  feedback: string;
+  changes: string;
+}
+
+/** What one revision turn reads. */
+interface ReviseInput {
+  posting: Pick<PostingsRow, 'company' | 'title' | 'jd_text' | 'fetched_text'>;
+  analysis?: AnalysisFields | null;
+  letter: string | null | undefined;
+  feedback: string | null | undefined;
+  history?: RevisionTurn[];
+}
 
 export const REVISE_SETTINGS = { maxTokens: 12000, effort: 'medium' };
 export const MAX_TURNS = 12;
@@ -20,7 +39,7 @@ export const REVISE_SCHEMA = {
 };
 
 /** The request text: the job, the current draft, the earlier turns, and the new feedback. */
-export function reviseMessage({ posting, analysis, letter, feedback, history = [] }) {
+export function reviseMessage({ posting, analysis, letter, feedback, history = [] }: ReviseInput) {
   const text = String(posting.jd_text || posting.fetched_text || '').slice(0, POSTING_CHARS);
   const turns = history
     .slice(-MAX_TURNS)
@@ -50,7 +69,12 @@ export function reviseMessage({ posting, analysis, letter, feedback, history = [
 }
 
 /** One revision turn on the user's AI. Returns { letter, changes, flags } with the letter cleaned like any other. */
-export async function reviseLetter({ claude, background, posting, analysis, letter, feedback, history, config, trace = null }) {
+export async function reviseLetter({ claude, background, posting, analysis, letter, feedback, history, config, trace = null }: ReviseInput & {
+  claude: Claude;
+  background: string;
+  config: LetterConfig;
+  trace?: Run | null;
+}) {
   const res = await claude.send({
     model: HUNT_MODEL,
     ...REVISE_SETTINGS,

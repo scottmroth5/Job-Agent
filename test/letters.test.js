@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml, paragraphsFromLines, userLetterBody } from '../agents/hunt/letters.js';
+import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml, paragraphsFromLines, userLetterBody } from '../agents/hunt/letters.ts';
 import { escapeHtml } from '../tools/html.ts';
 
 // Synthetic names and rules only.

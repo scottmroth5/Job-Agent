@@ -1,11 +1,11 @@
-// Cover letters in the job panel (agents/hunt/revise-letter.js, server/letter-routes.js): revising with Claude saves
+// Cover letters in the job panel (agents/hunt/revise-letter.ts, server/letter-routes.js): revising with Claude saves
 // nothing, keeping a draft or your own version is a new current version, older versions can be made current again,
 // and any version downloads as Word or PDF. Synthetic data; Claude is a stand-in.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
-import { reviseMessage } from '../agents/hunt/revise-letter.js';
+import { reviseMessage } from '../agents/hunt/revise-letter.ts';
 import { documentText } from '../tools/doc-text.ts';
 
 const config = { candidate: { name: 'Pat Example', signoffName: 'Pat', contactLine: 'Anytown, ST | pat@example.com' }, coverLetterChecks: [{ label: 'confident', text: '\\bi am confident\\b' }], search: { homeLocations: [] }, fractional: {} };

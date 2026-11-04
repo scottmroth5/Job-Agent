@@ -11,7 +11,7 @@ import { resolveDetails } from './discovery/details.ts';
 import { jobIdFromUrl } from './discovery/sources/linkedin.ts';
 import * as fractionaljobs from './discovery/sources/fractionaljobs.ts';
 import { scorePostings, DEFAULT_SCORE_MODEL, PROMOTE_AT } from './discovery/score.ts';
-import { generateForPostings } from './hunt/generate.js';
+import { generateForPostings } from './hunt/generate.ts';
 import { lookups } from './lookups.ts';
 import { adoptNotesText } from './notes.ts';
 import { localDay } from '../tools/dates.ts';
@@ -21,6 +21,7 @@ import type { JobStore } from '../db/index.ts';
 import type { Http } from '../tools/http.ts';
 import type { UserConfig } from './user-config.ts';
 import type { JobItem, PageRenderer } from './discovery/types.ts';
+import type { DriveClient } from '../tools/google/drive.ts';
 
 /** What the Add job dialog and npm run add send. */
 export interface ManualInput {
@@ -46,7 +47,7 @@ export interface ManualContext {
   /** The knowledge doc (with the chosen resume), the system prompt for scoring and writing. */
   knowledge: string;
   /** createDriveClient(), or null to skip Google Docs. */
-  drive: object | null;
+  drive: DriveClient | null;
   run?: Run;
   onStep?: (message: string) => void;
 }

@@ -1,4 +1,4 @@
-// Follow-ups (agents/follow-ups.ts, server/follow-up-routes.js, agents/hunt/find-contact.js): the window from 7 days to
+// Follow-ups (agents/follow-ups.ts, server/follow-up-routes.js, agents/hunt/find-contact.ts): the window from 7 days to
 // the user's stale days (45 by default, never archived jobs), closing stale applications as no response, and Find
 // someone to contact saved as a note. Synthetic data on example domains; Claude is a stand-in.
 import { test } from 'node:test';
@@ -8,7 +8,7 @@ import { buildApp } from '../server/app.js';
 import { addUser } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
 import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_STALE_DAYS } from '../agents/follow-ups.ts';
-import { buildContactRequest } from '../agents/hunt/find-contact.js';
+import { buildContactRequest } from '../agents/hunt/find-contact.ts';
 import { getPrompt } from '../agents/prompts.ts';
 import { localDaysAgo } from '../tools/dates.ts';
 

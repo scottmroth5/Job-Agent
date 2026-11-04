@@ -4,7 +4,7 @@
 //   npm run report -- --no-email         print the subject and summary instead of sending
 import { openJobStore } from '../db/index.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
-import { collectReport, renderReport, sendReport } from '../agents/hunt/report.js';
+import { collectReport, renderReport, sendReport } from '../agents/hunt/report.ts';
 
 const hours = Number(process.argv.find((a) => a.startsWith('--hours='))?.split('=')[1] ?? 24);
 const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();

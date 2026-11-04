@@ -5,7 +5,7 @@
 import { OWNER_ID } from '../db/users.ts';
 import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote, MAX_NOTE } from '../agents/excluded-sites.ts';
 import { clearConfigViews, userConfig } from '../agents/user-config.ts';
-import { archiveSiteJobs, findListings } from '../agents/hunt/archive.js';
+import { archiveSiteJobs, findListings } from '../agents/hunt/archive.ts';
 import { excludedSite } from '../tools/listings.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };

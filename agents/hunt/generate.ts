@@ -8,9 +8,33 @@ import { ensureLetterFolder } from '../../tools/google/drive.ts';
 import { getPrompt } from '../prompts.ts';
 import { PROMOTE_AT } from '../discovery/score.ts';
 import { runCheck } from '../letter-checks.ts';
-import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.js';
+import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml } from './letters.ts';
 import { lookups, sqlList } from '../lookups.ts';
 import { pickResume, withResume } from '../resumes.ts';
+import type { Claude, Run, SendOptions } from '@scottmroth5/agent-core';
+import type { Database, JobStore } from '../../tools/types.ts';
+import type { JobSearchConfig } from '../../tools/config.ts';
+import type { DriveClient } from '../../tools/google/drive.ts';
+import type { PostingsRow } from '../../db/types.ts';
+import type { AnalysisFields } from './letters.ts';
+
+/** The settings letters read: the candidate's names and the cover letter checks. */
+export type LetterConfig = { candidate: JobSearchConfig['candidate']; coverLetterChecks?: JobSearchConfig['coverLetterChecks'] };
+
+/** The posting fields the hunt prompts read. */
+export type PromptPosting = Pick<PostingsRow, 'company' | 'title' | 'jd_text' | 'fetched_text' | 'notes'>;
+
+/** A posting selectForHunt returns: its row, its latest v2 analysis and score, and what already exists. */
+export type HuntPosting = PostingsRow & {
+  analysis_json: string | null;
+  v2_score: number | null;
+  has_tweaks: number;
+  has_letter: number;
+  letter_missing_doc: number | null;
+};
+
+/** The prompt templates the two requests fill. */
+type HuntTemplates = { tweaks: { template: string }; letter: { template: string } };
 
 export const HUNT_MODEL = 'claude-sonnet-5-5';
 // Writing quality matters more here than in scoring, so medium effort; thinking counts toward maxTokens.
@@ -19,8 +43,8 @@ const CONTENT_CHARS = 6000;
 const MIN_NOTES = 30;
 
 /** Both hunt prompts in effect (admin-screen edits or the repo defaults), with short version hashes. */
-export function loadHuntPrompts(db = null) {
-  const load = (name) => {
+export function loadHuntPrompts(db: Database | null = null) {
+  const load = (name: string) => {
     const p = getPrompt(db, name);
     return { template: p.template, version: p.version, source: p.source };
   };
@@ -28,7 +52,7 @@ export function loadHuntPrompts(db = null) {
 }
 
 /** Postings eligible for tweaks/letters, with their latest v2 analysis and what already exists. */
-export function selectForHunt(db, { ids, promoteAt = PROMOTE_AT } = {}) {
+export function selectForHunt(db: Database, { ids, promoteAt = PROMOTE_AT }: { ids?: number[] | null; promoteAt?: number } = {}): HuntPosting[] {
   const base = `SELECT p.*,
       (SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS analysis_json,
       (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS v2_score,
@@ -37,14 +61,14 @@ export function selectForHunt(db, { ids, promoteAt = PROMOTE_AT } = {}) {
       (SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' AND a.source = 'v2'
          AND a.doc_id IS NULL ORDER BY a.id DESC LIMIT 1) AS letter_missing_doc
     FROM (SELECT * FROM postings WHERE user_id = @uid) p`;
-  if (ids?.length) return db.prepare(`${base} WHERE p.id IN (${ids.map(() => '?').join(', ')}) ORDER BY p.id`).all(...ids);
+  if (ids?.length) return db.prepare(`${base} WHERE p.id IN (${ids.map(() => '?').join(', ')}) ORDER BY p.id`).all(...ids) as HuntPosting[];
   return db
     .prepare(`SELECT * FROM (${base} WHERE p.stage IN ${sqlList(lookups(db).ids('stage', 'active'))} AND p.status IN ${sqlList(lookups(db).ids('status', 'evaluate', 'waiting'))})
       WHERE v2_score >= ? AND (has_tweaks = 0 OR has_letter = 0 OR letter_missing_doc IS NOT NULL) ORDER BY id`)
-    .all(promoteAt);
+    .all(promoteAt) as HuntPosting[];
 }
 
-function promptValues(posting, analysis, config) {
+function promptValues(posting: PromptPosting, analysis: AnalysisFields, config: LetterConfig) {
   const text = (posting.jd_text || posting.fetched_text || '').trim();
   return {
     candidateName: config.candidate.name,
@@ -58,12 +82,12 @@ function promptValues(posting, analysis, config) {
 }
 
 /** claude.send options for resume tweaks. */
-export function buildTweaksRequest(posting, analysis, { config, knowledge, prompts }) {
+export function buildTweaksRequest(posting: PromptPosting, analysis: AnalysisFields, { config, knowledge, prompts }: { config: LetterConfig; knowledge: string; prompts: HuntTemplates }) {
   return { model: HUNT_MODEL, system: knowledge, prompt: fillTemplate(prompts.tweaks.template, promptValues(posting, analysis, config)), label: 'resume-tweaks', ...HUNT_SETTINGS };
 }
 
 /** claude.send options for a cover letter body. */
-export function buildLetterRequest(posting, analysis, { config, knowledge, prompts }) {
+export function buildLetterRequest(posting: PromptPosting, analysis: AnalysisFields, { config, knowledge, prompts }: { config: LetterConfig; knowledge: string; prompts: HuntTemplates }) {
   return { model: HUNT_MODEL, system: knowledge, prompt: fillTemplate(prompts.letter.template, promptValues(posting, analysis, config)), label: 'cover-letter', ...HUNT_SETTINGS };
 }
 
@@ -71,7 +95,7 @@ export function buildLetterRequest(posting, analysis, { config, knowledge, promp
 export const MAX_LETTER_WORDS = 350;
 
 /** Cleans a letter body and returns { body, flags }. */
-export function finishLetter(text, config) {
+export function finishLetter(text: string, config: LetterConfig) {
   const body = sanitizeDashes(stripSalutationAndSignoff(text, [config.candidate.name, config.candidate.signoffName]));
   const flags = checkCoverLetter(body, config.coverLetterChecks ?? []);
   const words = body.split(/\s+/).filter(Boolean).length;
@@ -79,21 +103,22 @@ export function finishLetter(text, config) {
   return { body, flags };
 }
 
-const longDate = (d) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+const longDate = (d: Date) => d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
 /**
  * Generates what each selected posting is missing: resume tweaks, a cover letter, or just the
- * letter's Google Doc (when an earlier save failed).
- * @param {object} ctx
- * @param {{db, tx}} ctx.store
- * @param {object} ctx.config
- * @param {{send}} ctx.claude
- * @param {string} ctx.knowledge
- * @param {object|null} ctx.drive       from createDriveClient(), or null to skip Docs
- * @param {object} [ctx.run]
- * @param {object} [ctx.options]        { ids, regenerate, promoteAt, maxConsecutiveFailures = 3 }
+ * letter's Google Doc (when an earlier save failed). drive is createDriveClient(), or null to skip Docs.
  */
-export async function generateForPostings({ store, config, claude, knowledge, drive, run, now = new Date(), options = {} }) {
+export async function generateForPostings({ store, config, claude, knowledge, drive, run, now = new Date(), options = {} }: {
+  store: Pick<JobStore, 'db'>;
+  config: LetterConfig;
+  claude: Claude;
+  knowledge: string;
+  drive: DriveClient | null;
+  run?: Run | null;
+  now?: Date;
+  options?: { ids?: number[] | null; regenerate?: boolean; promoteAt?: number; maxConsecutiveFailures?: number };
+}) {
   const { ids, regenerate = false, promoteAt = PROMOTE_AT, maxConsecutiveFailures = 3 } = options;
   const { db } = store;
   const prompts = loadHuntPrompts(db);
@@ -104,11 +129,23 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
   const setDoc = db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid');
   const letterById = db.prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid');
 
-  const summary = { selected: postings.length, tweaks: 0, letters: 0, checked: 0, claimFlags: 0, docs: 0, docFailures: [], flagged: [], skipped: [], failures: [], aborted: false };
+  const summary = {
+    selected: postings.length,
+    tweaks: 0,
+    letters: 0,
+    checked: 0,
+    claimFlags: 0,
+    docs: 0,
+    docFailures: [] as Array<{ id: number; error: string }>,
+    flagged: [] as Array<{ id: number; flags: string[] }>,
+    skipped: [] as Array<{ id: number; reason: string }>,
+    failures: [] as Array<{ id: number; error: string }>,
+    aborted: false,
+  };
   let consecutive = 0;
-  let folderId = null;
+  let folderId: string | null = null;
 
-  const saveDoc = async (posting, artifactId, body) => {
+  const saveDoc = async (posting: HuntPosting, artifactId: number, body: string) => {
     if (!drive) return;
     try {
       folderId ??= await ensureLetterFolder(drive, db);
@@ -119,17 +156,18 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
       summary.docs += 1;
       run?.log?.('info', `#${posting.id}: letter saved as a Google Doc`);
     } catch (err) {
-      summary.docFailures.push({ id: posting.id, error: `${err.name}: ${err.message}` });
+      const e = err as Error;
+      summary.docFailures.push({ id: posting.id, error: `${e.name}: ${e.message}` });
     }
   };
 
-  const call = async (request) => {
+  const call = async (request: Omit<SendOptions, 'trace'>) => {
     const res = await claude.send({ ...request, trace: run });
     consecutive = 0;
     return res.text;
   };
 
-  const log = (msg) => run?.log?.('info', msg);
+  const log = (msg: string) => run?.log?.('info', msg);
   log(postings.length ? `${postings.length} promoted jobs need tweaks, a letter, or a letter Doc` : 'Nothing to write');
   for (const [i, p] of postings.entries()) {
     if (summary.aborted) break;
@@ -152,7 +190,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
       }
       if (p.letter_missing_doc && !regenerate) {
         log(`${tag}: saving the earlier letter as a Google Doc`);
-        await saveDoc(p, p.letter_missing_doc, letterById.get(p.letter_missing_doc).content);
+        await saveDoc(p, p.letter_missing_doc, (letterById.get(p.letter_missing_doc) as { content: string }).content);
       } else if (!p.has_letter || regenerate) {
         log(`${tag}: writing cover letter`);
         const { body, flags } = finishLetter(await call(buildLetterRequest(p, analysis, { config, knowledge: background, prompts })), config);
@@ -172,8 +210,9 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
       }
     } catch (err) {
       consecutive += 1;
-      summary.failures.push({ id: p.id, error: `${err.name}: ${err.message}` });
-      run?.log?.('warn', `Hunt generation failed for posting ${p.id}: ${err.name}`);
+      const e = err as Error;
+      summary.failures.push({ id: p.id, error: `${e.name}: ${e.message}` });
+      run?.log?.('warn', `Hunt generation failed for posting ${p.id}: ${e.name}`);
       if (consecutive >= maxConsecutiveFailures) summary.aborted = true;
     }
   }
@@ -181,7 +220,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
 }
 
 /** Rough cost estimate: two Sonnet calls per posting that needs both. */
-export function estimateHuntCost(postings, knowledgeChars) {
+export function estimateHuntCost(postings: Array<Pick<HuntPosting, 'has_tweaks' | 'has_letter' | 'jd_text' | 'fetched_text'>>, knowledgeChars: number) {
   let usd = 0;
   for (const p of postings) {
     const calls = (p.has_tweaks ? 0 : 1) + (p.has_letter ? 0 : 1);

@@ -21,7 +21,7 @@ import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { pickResume } from '../agents/resumes.ts';
 import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
 import { saveCheck } from '../agents/letter-checks.ts';
-import { VERIFY_MODEL } from '../agents/hunt/verify-letter.js';
+import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.ts';
 
 const MARKER = 'demo_database';

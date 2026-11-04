@@ -58,7 +58,7 @@ import { staleDays } from '../agents/follow-ups.ts';
 import { registerInboxRoutes, registerReminderRoutes } from './inbox-routes.js';
 import { addPosting } from '../agents/manual.ts';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
-import { generateForPostings } from '../agents/hunt/generate.js';
+import { generateForPostings } from '../agents/hunt/generate.ts';
 import { resolveDetails } from '../agents/discovery/details.ts';
 import { jobIdFromUrl } from '../agents/discovery/sources/linkedin.ts';
 import * as fractionaljobs from '../agents/discovery/sources/fractionaljobs.ts';

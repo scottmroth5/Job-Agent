@@ -1,5 +1,5 @@
 // Word (.docx) copies of a cover letter and a meeting prep, for downloading: users without Google Docs send their
-// letters from these, and the owner can use them too. The letter follows the Google Doc's layout (agents/hunt/letters.js
+// letters from these, and the owner can use them too. The letter follows the Google Doc's layout (agents/hunt/letters.ts
 // letterHtml); the prep is its Markdown with headings, bullets, and bold kept. Text is set as text, never as markup.
 import { Document, ExternalHyperlink, HeadingLevel, Packer, Paragraph, TextRun } from 'docx';
 import { headerLines, SEPARATOR } from '../tools/letter-header.ts';

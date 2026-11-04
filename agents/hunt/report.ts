@@ -4,11 +4,42 @@ import { escapeHtml as e } from '../../tools/html.ts';
 import { sendEmail } from '../../tools/google/gmail.ts';
 import { PROMOTE_AT } from '../discovery/score.ts';
 import { lookups, sqlList } from '../lookups.ts';
+import type { OAuth2Client } from 'google-auth-library';
+import type { Database } from '../../tools/types.ts';
+import type { PostingsRow, RunsRow } from '../../db/types.ts';
+
+/** A job as the report lists it: the posting, its latest score, and its latest letter. */
+type ReportJob = Pick<PostingsRow, 'id' | 'company' | 'title' | 'location' | 'url' | 'status' | 'stage'> & {
+  score: number | null;
+  reason: string | null;
+  analysis_json: string | null;
+  letter_url: string | null;
+  letter_flags: string | null;
+  letter_id: number | null;
+  has_tweaks: number;
+  flags: string[];
+};
+
+/** Everything the report shows (collectReport). The step summaries are each run's summary JSON; only these fields are read. */
+export interface ReportData {
+  since: string;
+  runs: Array<Pick<RunsRow, 'id' | 'name' | 'status' | 'cost_usd' | 'calls' | 'started_at'> & { summary: unknown }>;
+  discover: { inserted?: number; bySource?: Record<string, { new?: number }>; locationChecks?: Record<string, number> } | null;
+  score: { distribution?: Record<string, number> } | null;
+  hunt: unknown;
+  archive: { archived?: unknown[] } | null;
+  costUsd: number;
+  failedSteps: string[];
+  promoted: Array<ReportJob & { score: number; analysis: { topTalkingPoint?: string } | null }>;
+  pipeline: ReportJob[];
+  statusCounts: Record<string, number>;
+  statusOrder: Array<{ id: string; label: string }>;
+}
 
 // Pipeline order in the report: decisions first, then conversations, then waiting, then to evaluate.
 const REPORT_ORDER = ['decision', 'conversation', 'waiting', 'evaluate'];
 
-const parse = (s) => {
+const parse = (s: string | null) => {
   try {
     return s ? JSON.parse(s) : null;
   } catch {
@@ -17,12 +48,12 @@ const parse = (s) => {
 };
 
 /** Gathers everything the report shows for runs started at or after `since` (ISO timestamp). */
-export function collectReport(db, { since, promoteAt = PROMOTE_AT }) {
-  const runs = db
+export function collectReport(db: Database, { since, promoteAt = PROMOTE_AT }: { since: string; promoteAt?: number }): ReportData {
+  const runs = (db
     .prepare('SELECT id, name, status, cost_usd, calls, summary, started_at FROM runs WHERE started_at >= ? ORDER BY id')
-    .all(since)
+    .all(since) as Array<Pick<RunsRow, 'id' | 'name' | 'status' | 'cost_usd' | 'calls' | 'summary' | 'started_at'>>)
     .map((r) => ({ ...r, summary: parse(r.summary) }));
-  const latest = (name) => [...runs].reverse().find((r) => r.name === name) ?? null;
+  const latest = (name: string) => [...runs].reverse().find((r) => r.name === name) ?? null;
   const lk = lookups(db);
   const active = sqlList(lk.ids('stage', 'active'));
   const orderCase = `CASE ${REPORT_ORDER.map((g, i) => lk.ids('status', g).length ? `WHEN p.status IN ${sqlList(lk.ids('status', g))} THEN ${i}` : '').join(' ')} ELSE ${REPORT_ORDER.length} END`;
@@ -36,20 +67,20 @@ export function collectReport(db, { since, promoteAt = PROMOTE_AT }) {
       ${letter.replace('%s', 'id')} AS letter_id,
       EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks') AS has_tweaks`;
 
-  const promoted = db
+  const promoted = (db
     .prepare(`SELECT ${cols} FROM postings p WHERE p.user_id = @uid AND p.stage IN ${active}
       AND EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v2' AND s.score >= ? AND s.created_at >= ?)
       ORDER BY score DESC, p.id`)
-    .all(promoteAt, since)
+    .all(promoteAt, since) as Array<ReportJob & { score: number }>)
     .map((p) => ({ ...p, analysis: parse(p.analysis_json), flags: parse(p.letter_flags) ?? [] }));
 
-  const pipeline = db
+  const pipeline = (db
     .prepare(`SELECT ${cols} FROM postings p WHERE p.user_id = @uid AND p.stage IN ${active} ORDER BY ${orderCase}, score DESC, p.id`)
-    .all()
+    .all() as ReportJob[])
     .map((p) => ({ ...p, flags: parse(p.letter_flags) ?? [] }));
 
   const statusCounts = Object.fromEntries(
-    db.prepare(`SELECT status, COUNT(*) AS n FROM postings WHERE user_id = @uid AND stage IN ${active} GROUP BY status`).all().map((r) => [r.status, r.n]),
+    (db.prepare(`SELECT status, COUNT(*) AS n FROM postings WHERE user_id = @uid AND stage IN ${active} GROUP BY status`).all() as Array<{ status: string; n: number }>).map((r) => [r.status, r.n]),
   );
   // Status labels and display order for the counts line (closed statuses are left out, as before).
   const statusOrder = REPORT_ORDER.flatMap((g) => lk.ids('status', g)).map((id) => ({ id, label: lk.label('status', id) }));
@@ -70,14 +101,14 @@ export function collectReport(db, { since, promoteAt = PROMOTE_AT }) {
 }
 
 const colors = { head: '#1a5276', muted: '#666', good: '#1e8449', warn: '#b9770e', bad: '#c0392b', border: '#e0e0e0' };
-const scoreColor = (s) => (s >= 8 ? colors.good : s >= 7 ? '#27ae60' : s >= 5 ? colors.warn : colors.bad);
-const section = (title, body) =>
+const scoreColor = (s: number) => (s >= 8 ? colors.good : s >= 7 ? '#27ae60' : s >= 5 ? colors.warn : colors.bad);
+const section = (title: string, body: string) =>
   `<div style="padding:16px 24px;border:1px solid ${colors.border};border-top:none;">` +
   `<h2 style="color:${colors.head};font-size:16px;margin:0 0 10px;">${e(title)}</h2>${body}</div>`;
-const link = (url, text) => (url ? `<a href="${e(url)}" style="color:${colors.head};">${e(text)}</a>` : e(text));
+const link = (url: string | null | undefined, text: string) => (url ? `<a href="${e(url)}" style="color:${colors.head};">${e(text)}</a>` : e(text));
 
 /** Renders the report. Returns { subject, html, text } where text is a short plain summary. */
-export function renderReport(data, { now = new Date(), promoteAt = PROMOTE_AT } = {}) {
+export function renderReport(data: ReportData, { now = new Date(), promoteAt = PROMOTE_AT }: { now?: Date; promoteAt?: number } = {}) {
   const dateText = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   const newCount = data.discover?.inserted ?? 0;
   const parts = [];
@@ -99,7 +130,7 @@ export function renderReport(data, { now = new Date(), promoteAt = PROMOTE_AT } 
       .join(' &middot; ');
     const loc = Object.entries(d.locationChecks ?? {}).map(([k, v]) => `${e(k)} ${v}`).join(', ');
     const dist = data.score?.distribution
-      ? Object.entries(data.score.distribution).sort(([a], [b]) => b - a).map(([s, n]) => `${e(s)}: ${n}`).join(' &middot; ')
+      ? Object.entries(data.score.distribution).sort(([a], [b]) => Number(b) - Number(a)).map(([s, n]) => `${e(s)}: ${n}`).join(' &middot; ')
       : 'not scored yet';
     parts.push(section(`${newCount} new postings`, `<p style="margin:0 0 6px;">${bySource || 'No sources ran.'}</p>` +
       `<p style="margin:0 0 6px;color:${colors.muted};">Location: ${loc || 'n/a'}</p>` +
@@ -161,7 +192,7 @@ export function renderReport(data, { now = new Date(), promoteAt = PROMOTE_AT } 
 }
 
 /** Collects, renders and sends the report to `to`. Returns { subject, text, messageId }. */
-export async function sendReport({ db, auth, to, since, now = new Date() }) {
+export async function sendReport({ db, auth, to, since, now = new Date() }: { db: Database; auth: OAuth2Client; to: string; since: string; now?: Date }) {
   const report = renderReport(collectReport(db, { since }), { now });
   const messageId = await sendEmail(auth, { to, subject: report.subject, html: report.html });
   return { subject: report.subject, text: report.text, messageId };

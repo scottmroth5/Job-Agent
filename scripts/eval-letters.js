@@ -8,7 +8,7 @@ import { createJobClaude } from '../tools/claude.ts';
 import { repoPath, dataPath } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
-import { VERIFY_MODEL } from '../agents/hunt/verify-letter.js';
+import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { runLetterEval, estimateLetterEval } from '../evals/letters/run.js';
 
 const argv = process.argv.slice(2);
