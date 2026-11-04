@@ -190,7 +190,7 @@ The job panel's Next step box is the same list for one job (GET /api/postings/:i
 far out), with Prepare for a meeting and Done (registerReminderRoutes, registered with or without Gmail).
 Follow-ups (agents/follow-ups.ts, server/follow-up-routes.js): no reply from FOLLOW_UP_DAYS (7, server/funnel.js) until
 the user's stale days (Settings > Follow-ups, user_settings followUp.staleDays, default 45; never archived jobs) is a
-follow-up with Find someone to contact (agents/hunt/find-contact.js: Sonnet with web search on the user's AI, prompt
+follow-up with Find someone to contact (agents/hunt/find-contact.ts: Sonnet with web search on the user's AI, prompt
 find-contact, the result saved as an agent note) and Close: no response; from the stale days on it is stale, closed one at
 a time or all at once (Home: Review via GET /api/follow-ups/stale, then POST close-stale) to the status list's noResponse
 role (018: "No response", closed group) with a note and changed_by user history. The Funnel's list uses the same window.
@@ -241,7 +241,7 @@ Letters: Sonnet 5.5 at medium effort; v1's cleanup (strip greeting/sign-off, no 
 plus a word-limit flag. Letter Docs go to the app's own "Job Agent Cover Letters" Drive folder (drive.file scope).
 Nothing is overwritten: --regenerate creates new artifacts and Docs.
 The job panel's Cover letter (web/src/components/LetterSection.jsx, server/letter-routes.js): Revise with Claude
-(agents/hunt/revise-letter.js, Sonnet at medium effort, the knowledge doc plus the job's resume as system, REVISE_SCHEMA,
+(agents/hunt/revise-letter.ts, Sonnet at medium effort, the knowledge doc plus the job's resume as system, REVISE_SCHEMA,
 REVISIONS_PER_DAY; saves nothing), saving a kept revision (source v2-revision) or the user's own text (source user; letters.js
 userLetterBody keeps its wording but takes off the header through the greeting and the sign-off on, and rebuilds a
 PDF's paragraphs; from-file returns the same body) as a new current version (with a Google Doc for the owner), restoring an older version as
@@ -252,7 +252,7 @@ from config.candidate (tools/letter-header.ts fromCandidate), and every letter d
 headerLines (shared by Word, PDF, and the Google Doc) puts email, phone, and location on one line and the links as many
 to a line as fit; each email or web address is a clickable link (PDF link annotations). Every document's text goes through tools/text.ts withoutPictographs (emoji show as pictures in Word and "?"
 in a PDF), and discovery and manual add save titles and companies without them. test/letter-header.test.js.
-Letter fact check (v3 Phase 1; agents/hunt/verify-letter.js, prompt verify-letter with agents/hunt/schemas/verify-letter.json,
+Letter fact check (v3 Phase 1; agents/hunt/verify-letter.ts, prompt verify-letter with agents/hunt/schemas/verify-letter.json,
 VERIFY_MODEL, Haiku 4.5 from the letter eval): each claim a letter makes about the candidate, supported, unsupported, or contradicted by the
 knowledge doc plus the job's resume (system); the posting is data. letter_checks (022, a user table) holds one row per
 version (agents/letter-checks.ts: claims_json with dismissed flags; failed = could not run). generateForPostings checks
@@ -260,7 +260,7 @@ each letter it writes on the same trace; the panel checks a version after a save
 CHECKS_PER_DAY) and dismisses claims (.../claims/:index/dismiss); restore copies the check. It never blocks a letter, a
 save, or a download; logs hold counts only. The demo seeds SAMPLE_CHECK_CLAIMS and answers Check again with sampleCheck.
 test/verify-letter.test.js, test/letter-check-routes.test.js.
-Meeting prep (agents/hunt/prep.js, server/prep-routes.js, Prepare for a meeting in the job panel): Opus 5.5 at high effort,
+Meeting prep (agents/hunt/prep.ts, server/prep-routes.js, Prepare for a meeting in the job panel): Opus 5.5 at high effort,
 streamed, with server-side refusal fallbacks; with research on it uses web_search_20260209 (max 15) and web_fetch (max 5).
 Input is the people (name, role, firm, link, what the user knows), meeting kind, format, time, and free context, plus the
 knowledge doc, posting, analysis, latest letter, and notes. The document is the Markdown after the last tool block, saved

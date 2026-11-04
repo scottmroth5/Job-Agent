@@ -38,7 +38,7 @@ const checkSummary = (check) => {
 };
 
 /**
- * The fact check on the current letter (agents/hunt/verify-letter.js): each claim about you that your knowledge doc and
+ * The fact check on the current letter (agents/hunt/verify-letter.ts): each claim about you that your knowledge doc and
  * resume contradict or do not mention, with the evidence, to dismiss one at a time. It never blocks Copy, Download, or a
  * save. autoRun checks a version that has none yet (just after you save one).
  */

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { openStore } from '@scottmroth5/agent-core';
 import { openJobStore, loadMigrations } from '../db/index.ts';
 import { listPostings } from '../server/queries.js';
-import { archivePostings } from '../agents/hunt/archive.js';
+import { archivePostings } from '../agents/hunt/archive.ts';
 
 // Synthetic data only.
 test('the duplicate status is allowed and closes a job like passed', () => {

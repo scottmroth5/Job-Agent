@@ -2,9 +2,9 @@
 // a prompt filled with a real job. Output schemas are shown read-only.
 import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersions, validateTemplate } from '../agents/prompts.ts';
 import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
-import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.js';
-import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.js';
-import { buildContactRequest } from '../agents/hunt/find-contact.js';
+import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.ts';
+import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.ts';
+import { buildContactRequest } from '../agents/hunt/find-contact.ts';
 import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.ts';
 import { buildClassifyRequest } from '../agents/inbox/classify.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';

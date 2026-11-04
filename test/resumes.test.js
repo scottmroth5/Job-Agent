@@ -8,7 +8,7 @@ import { openJobStore } from '../db/index.ts';
 import { addUser } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
 import { addResume, deleteResume, listResumes, MAX_RESUMES, pickResume, replaceResumeFile, updateResume, withResume } from '../agents/resumes.ts';
-import { generateForPostings } from '../agents/hunt/generate.js';
+import { generateForPostings } from '../agents/hunt/generate.ts';
 import { exportAccount } from '../agents/account-data.ts';
 import { buildApp } from '../server/app.js';
 import { authSettings } from '../server/auth.js';

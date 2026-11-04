@@ -1,9 +1,9 @@
 // Follow-ups (agents/follow-ups.ts): the user's stale-application days (Settings > Follow-ups), closing applications
 // with no reply as no response (one job, or every stale one from Home), and Find someone to contact for one job (a
-// task on the user's AI, saved as a note on the job; agents/hunt/find-contact.js).
+// task on the user's AI, saved as a note on the job; agents/hunt/find-contact.ts).
 import { OWNER_ID } from '../db/users.ts';
 import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_STALE_DAYS, FOLLOW_UP_FROM, MAX_STALE_DAYS, MIN_STALE_DAYS } from '../agents/follow-ups.ts';
-import { findContact } from '../agents/hunt/find-contact.js';
+import { findContact } from '../agents/hunt/find-contact.ts';
 import { demoContactResult } from '../demo/sample-data.js';
 
 export const CONTACT_SEARCHES_PER_DAY = 20;

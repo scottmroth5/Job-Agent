@@ -6,7 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { samplePrep, sampleLetter, sampleTweaks, sampleScore, sampleRevision, sampleHelpAnswer, sampleDraft } from '../demo/samples.js';
 import { DEMO_CONFIG, JOBS } from '../demo/sample-data.js';
 import { validateDraft } from '../agents/draft-profile.ts';
-import { finishLetter } from '../agents/hunt/generate.js';
+import { finishLetter } from '../agents/hunt/generate.ts';
 import { sectionCheck } from '../agents/knowledge-sections.ts';
 
 const job = { company: JOBS[0].company, title: JOBS[0].title, score: 9, analysis: { reason: 'Strong match.', strengths: ['Scaled a platform team'], watchOuts: ['Team is offshore'] } };
@@ -61,7 +61,7 @@ test('the sample draft is a valid draft with all seven knowledge doc sections an
 test('the sample fact check reads like the real one: valid claims, one contradicted and one unsupported, evidence quoted from the knowledge doc', async () => {
   const { sampleCheck } = await import('../demo/samples.js');
   const { DEMO_ABOUT_YOU } = await import('../demo/sample-data.js');
-  const { cleanClaims } = await import('../agents/hunt/verify-letter.js');
+  const { cleanClaims } = await import('../agents/hunt/verify-letter.ts');
   const c = sampleCheck();
   assert.equal(c.status, 'checked');
   const claims = c.claims.map(({ dismissed, ...rest }) => rest);

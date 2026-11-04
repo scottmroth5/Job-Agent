@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { addValue, updateValue, setRole, lookups } from '../agents/lookups.ts';
-import { archivePostings } from '../agents/hunt/archive.js';
+import { archivePostings } from '../agents/hunt/archive.ts';
 import { selectPostings } from '../agents/discovery/score.ts';
 import { planStatus } from '../agents/inbox/actions.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';

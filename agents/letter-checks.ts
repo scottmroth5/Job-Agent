@@ -1,12 +1,12 @@
 // Saved fact checks on cover letter versions (letter_checks, 022): one row per version, its claims as JSON with a
 // dismissed flag on each. Rows copy user_id from the letter's artifact row, so another user's letter gets nothing.
-// The check itself is agents/hunt/verify-letter.js; runCheck ties them together and never throws.
-import { verifyLetter, flagged } from './hunt/verify-letter.js';
+// The check itself is agents/hunt/verify-letter.ts; runCheck ties them together and never throws.
+import { verifyLetter, flagged } from './hunt/verify-letter.ts';
 import type { Claude, Run } from '@scottmroth5/agent-core';
 import type { Database } from '../tools/types.ts';
 import type { LetterChecksRow } from '../db/types.ts';
 
-/** One claim the check found in a letter (agents/hunt/verify-letter.js), with the user's dismissal. */
+/** One claim the check found in a letter (agents/hunt/verify-letter.ts), with the user's dismissal. */
 export interface Claim {
   claim: string;
   kind: string;

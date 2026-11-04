@@ -4,17 +4,29 @@ import { escapeHtml } from '../../tools/html.ts';
 import { fileTitle, paragraphsOf, withoutPictographs } from '../../tools/text.ts';
 import { headerLines, SEPARATOR } from '../../tools/letter-header.ts';
 import { keywordMatcher } from '../../tools/titles.ts';
+import type { JobSearchConfig } from '../../tools/config.ts';
+import type { LetterHeader } from '../../tools/letter-header.ts';
+
+/** The fields of a score analysis (agents/discovery/score.ts) the hunt prompts show. */
+export interface AnalysisFields {
+  score?: unknown;
+  reason?: unknown;
+  roleType?: unknown;
+  strengths?: string[] | null;
+  watchOuts?: string[] | null;
+  topTalkingPoint?: unknown;
+}
 
 const executive = keywordMatcher(['cto', 'vp', 'vice president', 'chief', 'director', 'head of']);
 
 /** v1's role positioning: executive titles use the executive resume positioning. */
-export function roleTypeText(title) {
+export function roleTypeText(title: string | null | undefined) {
   return executive(title) ? 'executive (CTO, VP, Director)' : 'engineering manager or SDM';
 }
 
 /** Formats a v2 score analysis the way the hunt prompts refer to it (TOP TALKING POINT, KEY STRENGTHS). */
-export function formatAnalysis(a) {
-  const bullets = (xs) => (xs?.length ? xs.map((x) => `• ${x}`).join('\n') : '• None noted');
+export function formatAnalysis(a: AnalysisFields) {
+  const bullets = (xs: string[] | null | undefined) => (xs?.length ? xs.map((x) => `• ${x}`).join('\n') : '• None noted');
   return [
     `FIT SCORE: ${a.score} of 10. ${a.reason ?? ''}`.trim(),
     `ROLE TYPE: ${a.roleType ?? 'Unknown'}`,
@@ -24,10 +36,10 @@ export function formatAnalysis(a) {
   ].join('\n\n');
 }
 
-const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const escapeRegex = (s: unknown) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Removes any salutation or sign-off the model adds; the Doc template supplies them (v1 behavior). */
-export function stripSalutationAndSignoff(text, names = []) {
+export function stripSalutationAndSignoff(text: string | null | undefined, names: Array<string | null | undefined> = []) {
   const who = names.filter(Boolean).map(escapeRegex);
   const signoff = new RegExp(`^\\s*(sincerely|best regards|kind regards|regards|thank you|warm regards${who.length ? `|${who.join('|')}` : ''})\\b`, 'i');
   const lines = String(text ?? '').split('\n');
@@ -48,15 +60,15 @@ const SIGNOFF = /(?:^|[\s.!?])(?:sincerely|best regards|kind regards|warm regard
  * a line that ends a sentence and stops well short of the longest lines ends its paragraph. Text that has blank
  * lines already is left alone.
  */
-export function paragraphsFromLines(text) {
+export function paragraphsFromLines(text: string | null | undefined) {
   const s = String(text ?? '').replace(/\r\n?/g, '\n').trim();
   if (s.includes('\n\n')) return s;
   const lines = s.split('\n').map((l) => l.trim());
   if (lines.length < 4) return s;
   const longest = Math.max(...lines.map((l) => l.length));
-  const ends = (l) => /[.!?:]["'”’)]?$/.test(l) && l.length < longest * 0.85;
-  const paragraphs = [];
-  let current = [];
+  const ends = (l: string) => /[.!?:]["'”’)]?$/.test(l) && l.length < longest * 0.85;
+  const paragraphs: string[] = [];
+  let current: string[] = [];
   for (const l of lines) {
     if (l) current.push(l);
     if (l && ends(l)) {
@@ -73,7 +85,7 @@ export function paragraphsFromLines(text) {
  * the header (name, contact lines, date, "Re:" line, greeting) and the sign-off with whatever follows it taken off,
  * since the Word and PDF layout adds them. Text with no greeting near its start keeps its first lines.
  */
-export function userLetterBody(text, names = []) {
+export function userLetterBody(text: string | null | undefined, names: Array<string | null | undefined> = []) {
   let s = paragraphsFromLines(text);
   const head = s.slice(0, 1200);
   const greeting = GREETING.exec(head) ?? GREETING_LINE.exec(head);
@@ -89,13 +101,13 @@ export function userLetterBody(text, names = []) {
  * text (one pattern against the whole letter) or sentence (two patterns that must both match one sentence).
  * Returns the labels of the rules that fired, without duplicates.
  */
-export function checkCoverLetter(text, rules = []) {
+export function checkCoverLetter(text: string | null | undefined, rules: JobSearchConfig['coverLetterChecks'] = []) {
   const sentences = String(text ?? '').split(/(?<=[.!?])\s+/);
-  const fired = [];
+  const fired: string[] = [];
   for (const rule of rules) {
     let hit = false;
     try {
-      if (rule.text) hit = new RegExp(rule.text, 'i').test(text);
+      if (rule.text) hit = new RegExp(rule.text, 'i').test(text as string);
       if (!hit && Array.isArray(rule.sentence) && rule.sentence.length === 2) {
         const [a, b] = rule.sentence.map((p) => new RegExp(p, 'i'));
         hit = sentences.some((s) => a.test(s) && b.test(s));
@@ -109,13 +121,13 @@ export function checkCoverLetter(text, rules = []) {
 }
 
 /** The letter's file and Google Doc name, e.g. "Pat Example VP, Engineering at Example Co Cover Letter". */
-export function letterDocName(name, title, company) {
+export function letterDocName(name: string, title: string, company: string | null | undefined) {
   return fileTitle(name, title, company && `at ${company}`, 'Cover Letter');
 }
 
 /** The cover letter as HTML for conversion to a Google Doc (v1's layout). Everything is escaped. */
-export function letterHtml({ candidate, company, title, date, body }) {
-  const p = (s, style = '') => `<p${style ? ` style="${style}"` : ''}>${escapeHtml(withoutPictographs(s))}</p>`;
+export function letterHtml({ candidate, company, title, date, body }: { candidate: LetterHeader; company: string; title: string; date: string; body: string }) {
+  const p = (s: string, style = '') => `<p${style ? ` style="${style}"` : ''}>${escapeHtml(withoutPictographs(s))}</p>`;
   const paragraphs = paragraphsOf(body)
     .map((para) => p(para))
     .join('\n');

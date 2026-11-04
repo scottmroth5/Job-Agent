@@ -1,6 +1,6 @@
 // Runs the letter fact check (the production verifyLetter and the prompt in effect) over the synthetic cases for each
 // model, and scores it with metrics.js. Writes nothing to the database beyond the traced run's call records.
-import { verifyLetter, VERIFY_SETTINGS } from '../../agents/hunt/verify-letter.js';
+import { verifyLetter, VERIFY_SETTINGS } from '../../agents/hunt/verify-letter.ts';
 import { getPrompt } from '../../agents/prompts.ts';
 import { letterMetrics } from './metrics.js';
 

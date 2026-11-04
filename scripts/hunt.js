@@ -15,7 +15,7 @@ import { assertNoRunningRun } from '../tools/runs.ts';
 import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
-import { generateForPostings, selectForHunt, estimateHuntCost } from '../agents/hunt/generate.js';
+import { generateForPostings, selectForHunt, estimateHuntCost } from '../agents/hunt/generate.ts';
 
 function parseArgs(argv) {
   const ids = argv.find((a) => a.startsWith('--ids='))?.split('=')[1]?.split(',').map(Number).filter(Number.isFinite);

@@ -5,10 +5,10 @@
 // check (agents/letter-checks.ts): the panel asks for one after a save, and the user dismisses claims one at a time.
 import { createJobTracer } from '../tools/trace.ts';
 import { OWNER_ID } from '../db/users.ts';
-import { reviseLetter, MAX_TURNS } from '../agents/hunt/revise-letter.js';
+import { reviseLetter, MAX_TURNS } from '../agents/hunt/revise-letter.ts';
 import { checksFor, copyCheck, dismissClaim, runCheck } from '../agents/letter-checks.ts';
-import { finishLetter, HUNT_MODEL } from '../agents/hunt/generate.js';
-import { letterDocName, letterHtml, userLetterBody } from '../agents/hunt/letters.js';
+import { finishLetter, HUNT_MODEL } from '../agents/hunt/generate.ts';
+import { letterDocName, letterHtml, userLetterBody } from '../agents/hunt/letters.ts';
 import { pickResume, withResume } from '../agents/resumes.ts';
 import { ensureLetterFolder } from '../tools/google/drive.ts';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';

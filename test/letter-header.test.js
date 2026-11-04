@@ -13,7 +13,7 @@ import { letterHeader, saveLetterHeader } from '../agents/letter-header.ts';
 import { documentText } from '../tools/doc-text.ts';
 import { letterPdf, winAnsi } from '../tools/pdf-writer.ts';
 import { letterDocx } from '../server/word-docs.js';
-import { letterHtml } from '../agents/hunt/letters.js';
+import { letterHtml } from '../agents/hunt/letters.ts';
 import { validateConfig } from '../tools/config.ts';
 
 const candidate = { name: 'Pat Example', signoffName: 'Pat', contactLine: 'pat@example.com | 555-0100', linkedin: 'https://www.linkedin.com/in/example/', website: 'https://example.com/', github: 'github.com/example' };

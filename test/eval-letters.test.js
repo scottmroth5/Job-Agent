@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { judgeLetter, letterMetrics } from '../evals/letters/metrics.js';
 import { estimateLetterEval } from '../evals/letters/run.js';
-import { KINDS } from '../agents/hunt/verify-letter.js';
+import { KINDS } from '../agents/hunt/verify-letter.ts';
 
 const cases = JSON.parse(readFileSync(new URL('../evals/letters/cases.json', import.meta.url), 'utf8'));
 const flag = (claim, verdict = 'contradicted') => ({ claim, kind: 'other', verdict, evidence: '' });

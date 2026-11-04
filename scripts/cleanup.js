@@ -11,7 +11,7 @@ import { openJobStore } from '../db/index.ts';
 import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.ts';
 import { OWNER_ID } from '../db/users.ts';
-import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.js';
+import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.ts';
 import { rekeyPostings } from '../agents/identity.ts';
 
 const dryRun = process.argv.includes('--dry-run');

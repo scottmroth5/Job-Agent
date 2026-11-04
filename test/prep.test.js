@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
-import { buildPrepRequest, extractDocument, normalizePrepInput, prepDocName, prepHtml, PREP_MODEL } from '../agents/hunt/prep.js';
+import { buildPrepRequest, extractDocument, normalizePrepInput, prepDocName, prepHtml, PREP_MODEL } from '../agents/hunt/prep.ts';
 import { getPrompt } from '../agents/prompts.ts';
 
 const config = {

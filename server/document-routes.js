@@ -1,7 +1,7 @@
 // Word downloads of a meeting prep (server/word-docs.js), for whoever's job it is. A cover letter's Word and PDF
 // downloads are in server/letter-routes.js, with its versions.
 import { prepDocx, docxName } from './word-docs.js';
-import { prepDocName } from '../agents/hunt/prep.js';
+import { prepDocName } from '../agents/hunt/prep.ts';
 import { letterHeader } from '../agents/letter-header.ts';
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';

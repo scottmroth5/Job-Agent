@@ -1,10 +1,10 @@
 // The cover letter fact check in the job panel and after generation (server/letter-routes.js, agents/letter-checks.ts,
-// agents/hunt/generate.js). Synthetic data; Claude is a stand-in.
+// agents/hunt/generate.ts). Synthetic data; Claude is a stand-in.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.js';
-import { generateForPostings } from '../agents/hunt/generate.js';
+import { generateForPostings } from '../agents/hunt/generate.ts';
 import { CHECKS_PER_DAY } from '../server/letter-routes.js';
 
 const config = { candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { homeLocations: [] }, fractional: {} };

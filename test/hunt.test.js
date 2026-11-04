@@ -4,7 +4,7 @@ import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { getUserSetting as getSetting } from '../db/settings.ts';
 import { ensureLetterFolder } from '../tools/google/drive.ts';
-import { generateForPostings, selectForHunt, buildLetterRequest, loadHuntPrompts, finishLetter, estimateHuntCost } from '../agents/hunt/generate.js';
+import { generateForPostings, selectForHunt, buildLetterRequest, loadHuntPrompts, finishLetter, estimateHuntCost } from '../agents/hunt/generate.ts';
 
 // Synthetic config, knowledge and postings only.
 const config = {

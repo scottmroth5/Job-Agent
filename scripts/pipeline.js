@@ -21,9 +21,9 @@ import { configFor, profileForAI } from '../agents/user-config.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { runDiscovery, SOURCES } from '../agents/discovery/discover.ts';
 import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
-import { generateForPostings } from '../agents/hunt/generate.js';
-import { archivePostings } from '../agents/hunt/archive.js';
-import { collectReport, renderReport, sendReport } from '../agents/hunt/report.js';
+import { generateForPostings } from '../agents/hunt/generate.ts';
+import { archivePostings } from '../agents/hunt/archive.ts';
+import { collectReport, renderReport, sendReport } from '../agents/hunt/report.ts';
 
 const noEmail = process.argv.includes('--no-email');
 const userArg = process.argv.find((a) => a.startsWith('--user='));
