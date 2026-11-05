@@ -40,6 +40,8 @@ jobs:
       - run: npm run lint
       # db/types.ts must be what the migrations build.
       - run: npm run db:types -- --check
+      # web/src/api-types.ts must be what the route schemas give.
+      - run: npm run api:types -- --check
       - run: npm run web:build
       - run: npm run check:personal -- --all
       - run: npm run check:security

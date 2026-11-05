@@ -54,6 +54,8 @@ node --test test/db.test.js       run one suite
 npm run typecheck                 tsc --noEmit, strict (tsconfig.json for the server side, web/tsconfig.json for the page)
 npm run lint                      the promise rules (no-floating-promises, await-thenable, no-misused-promises) and import type
 npm run db:types                  regenerate db/types.ts (a row type per table) from the migrations; CI runs -- --check
+npm run api:types                 regenerate web/src/api-types.ts (each route's params, query, body, and response) from
+                                  /api/openapi.json (decision 0005); CI runs -- --check
 npm run check:personal -- --all   scan every tracked file for personal data (the pre-commit hook checks staged files)
 npm run hooks:install             enable the pre-commit guard in a fresh clone
 npm run config:from-v1            build data/config/job-search.json from the v1 export
@@ -203,7 +205,8 @@ AUTH_MODE=none (default) binds to 127.0.0.1 with no login. AUTH_MODE=google (ser
 any verified address gets a session and its account decides the rest (Users above); the session is a signed cookie
 (server/session.ts, SESSION_SECRET); every route but /auth/*, /healthz, /privacy and /terms (server/pages.ts, from
 PRIVACY.md and TERMS.md), and the Add to Home Screen files (manifest.webmanifest, icon-180/192/512.png) needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
-server/app.ts holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI.
+server/app.ts holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI;
+web/src/api-types.ts is generated from it (npm run api:types after a route schema change).
 The Run pipeline button (server/pipeline-routes.ts) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.ts) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.ts, and closes reminders.
