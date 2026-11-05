@@ -12,7 +12,7 @@ const insert = (db, o = {}) =>
       VALUES (${hasUser(db) ? '1, ' : ''}@k, 'Example Co', 'CTO', 'example|cto', '2026-10-01', @stage, @status, @track, 'x', 'x')`)
     .run({ k: `k${Math.random()}`, stage: 'discovered', status: 'new', track: 'fulltime', ...o });
 
-test('009 and 018 seed the built-in values in order, with groups, settings, and roles', () => {
+test('009, 018, and 023 seed the built-in values in order, with groups, settings, and roles', () => {
   const store = openJobStore(':memory:');
   const { db } = store;
   const ids = (list) => db.prepare('SELECT id FROM lookup_values WHERE list = ? ORDER BY sort_order').pluck().all(list);
@@ -22,8 +22,25 @@ test('009 and 018 seed the built-in values in order, with groups, settings, and 
   assert.equal(db.prepare("SELECT group_key FROM lookup_values WHERE list = 'status' AND id = 'offer'").pluck().get(), 'decision');
   assert.deepEqual(JSON.parse(db.prepare("SELECT settings_json FROM lookup_values WHERE id = 'fractional'").pluck().get()), { scorePrompt: 'score-fractional', terms: true });
   assert.deepEqual(db.prepare('SELECT list, role, value_id FROM lookup_roles ORDER BY list, role').all().map((r) => `${r.list}.${r.role}=${r.value_id}`), [
-    'stage.archive=archived', 'stage.default=discovered', 'stage.promote=pipeline', 'status.default=new', 'status.noResponse=no_response', 'track.default=fulltime',
+    'stage.archive=archived', 'stage.default=discovered', 'stage.promote=pipeline',
+    'status.applied=applied', 'status.default=new', 'status.duplicate=duplicate', 'status.interview=interviewing', 'status.noResponse=no_response',
+    'status.offer=offer', 'status.passed=passed', 'status.rejected=rejected', 'track.default=fulltime',
   ]);
+  store.close();
+});
+
+test('023 keeps a status role already set and fills in the rest', () => {
+  const store = openJobStore(':memory:');
+  const raw = store.raw;
+  raw.prepare("DELETE FROM lookup_roles WHERE list = 'status' AND role IN ('applied', 'interview', 'offer', 'rejected', 'duplicate', 'passed')").run();
+  raw.prepare("INSERT INTO lookup_values (list, id, label, group_key, sort_order, origin, created_at, updated_at) VALUES ('status', 'turned_down', 'Turned down', 'closed', 999, 'custom', 'x', 'x')").run();
+  raw.prepare("INSERT INTO lookup_roles (list, role, value_id) VALUES ('status', 'rejected', 'turned_down')").run();
+  const m = loadMigrations().find((x) => x.id === '023-status-roles');
+  m.up(raw);
+  const roles = Object.fromEntries(raw.prepare("SELECT role, value_id FROM lookup_roles WHERE list = 'status'").all().map((r) => [r.role, r.value_id]));
+  assert.equal(roles.rejected, 'turned_down', 'kept');
+  assert.equal(roles.duplicate, 'duplicate');
+  assert.deepEqual([roles.applied, roles.interview, roles.offer, roles.passed], ['applied', 'interviewing', 'offer', 'passed']);
   store.close();
 });
 
@@ -56,4 +73,15 @@ test('009 on an existing database keeps every row and refuses unknown values alr
   assert.equal(db.pragma('integrity_check', { simple: true }), 'ok');
   assert.deepEqual(db.pragma('foreign_key_check'), []);
   store.close();
+});
+
+test('023 gives no role to a value the list does not have', async () => {
+  const { default: Database } = await import('better-sqlite3');
+  const raw = new Database(':memory:');
+  raw.exec(`CREATE TABLE lookup_values (list TEXT NOT NULL, id TEXT NOT NULL, PRIMARY KEY (list, id));
+    CREATE TABLE lookup_roles (list TEXT NOT NULL, role TEXT NOT NULL, value_id TEXT NOT NULL, PRIMARY KEY (list, role));`);
+  for (const id of ['applied', 'interviewing', 'offer', 'rejected', 'passed']) raw.prepare("INSERT INTO lookup_values (list, id) VALUES ('status', ?)").run(id);
+  loadMigrations().find((x) => x.id === '023-status-roles').up(raw);
+  assert.deepEqual(raw.prepare("SELECT role FROM lookup_roles ORDER BY role").pluck().all(), ['applied', 'interview', 'offer', 'passed', 'rejected']);
+  raw.close();
 });

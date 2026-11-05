@@ -66,6 +66,9 @@ function weekStart(iso: string | null) {
 export function applications(db: Database, { now = new Date() } = {}): Application[] {
   const lk = lookups(db);
   const group = (status: string | null) => lk.groupOf('status', status);
+  // The status a rejection email moves a job to (Admin > Lists): moves to it count as rejections.
+  const rejectedStatus = lk.role('status', 'rejected');
+  const isRejected = (s: string | null) => s != null && s === rejectedStatus;
   const history = new Map<number, HistoryRow[]>();
   for (const h of db.prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history WHERE user_id = @uid ORDER BY changed_at, id').all() as HistoryRow[]) {
     history.set(h.posting_id, [...(history.get(h.posting_id) ?? []), h]);
@@ -84,7 +87,7 @@ export function applications(db: Database, { now = new Date() } = {}): Applicati
     const dated = (hs: HistoryRow[]) => hs.filter((h) => h.changed_by !== 'import').map((h) => day(h.changed_at));
     const progressed = (s: string | null) => (['waiting', 'conversation', 'decision'] as Array<string | null>).includes(group(s));
     const everProgressed = progressed(p.status) || hist.some((h) => progressed(h.to_status));
-    const applied = Boolean(p.applied_on) || everProgressed || p.status === 'rejected' || hist.some((h) => h.to_status === 'rejected');
+    const applied = Boolean(p.applied_on) || everProgressed || isRejected(p.status) || hist.some((h) => isRejected(h.to_status));
     if (!applied) continue;
 
     const appliedOn = day(p.applied_on) ?? earliest(dated(into((s) => group(s) === 'waiting'))) ?? earliest(dated(into(progressed))) ?? (day(p.discovered_on) as string); // discovered_on is always set
@@ -96,8 +99,8 @@ export function applications(db: Database, { now = new Date() } = {}): Applicati
     };
     const interview = milestone((s) => group(s) === 'conversation', ['interview_request']);
     const offer = milestone((s) => group(s) === 'decision', ['offer']);
-    const rejected = milestone((s) => s === 'rejected', ['rejection']);
-    const responded = milestone((s) => (['conversation', 'decision'] as Array<string | null>).includes(group(s)) || s === 'rejected', RESPONSE_EMAILS);
+    const rejected = milestone(isRejected, ['rejection']);
+    const responded = milestone((s) => (['conversation', 'decision'] as Array<string | null>).includes(group(s)) || isRejected(s), RESPONSE_EMAILS);
     const closed = lk.isClosed(p.status);
     const waitingDays = daysBetween(appliedOn, now.toISOString());
     out.push({

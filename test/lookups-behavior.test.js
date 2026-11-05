@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { addValue, updateValue, setRole, lookups } from '../agents/lookups.ts';
+import { addValue, updateValue, setRole, lookups, invalidateLookups } from '../agents/lookups.ts';
+import { liveCopySql } from '../agents/identity.ts';
+import { applications } from '../server/funnel.ts';
 import { archivePostings } from '../agents/hunt/archive.ts';
 import { selectPostings } from '../agents/discovery/score.ts';
 import { planStatus } from '../agents/inbox/actions.ts';
@@ -51,8 +53,36 @@ test('an added status behaves like the built-in ones in its group', () => {
 
 test('an archived inbox target sends the email to review instead of setting it', () => {
   const { store, db } = setup();
-  updateValue(db, 'status', 'interviewing', { archived: true });
+  // Archived before 023 gave it a role (the migration keeps such a value as the role's).
+  store.raw.prepare("UPDATE lookup_values SET archived_at = 'x' WHERE list = 'status' AND id = 'interviewing'").run();
+  invalidateLookups(db);
   assert.match(planStatus('applied', 'interview_request', lookups(db)).review, /"Interviewing" status is archived/);
+  store.close();
+});
+
+test('status roles: the inbox, duplicates, cleanup, and the funnel use the values the roles point at', () => {
+  const { store, db, add } = setup();
+  for (const [label, group, role] of [['Moved forward', 'waiting', 'applied'], ['Turned down', 'closed', 'rejected'], ['Same job', 'closed', 'duplicate']]) {
+    setRole(db, 'status', role, addValue(db, 'status', { label, group }));
+  }
+  const lk = lookups(db);
+  assert.deepEqual(planStatus('new', 'confirmation', lk), { change: { from: 'new', to: 'moved_forward' } });
+  assert.deepEqual(planStatus('moved_forward', 'rejection', lk), { change: { from: 'moved_forward', to: 'turned_down' } });
+  assert.match(planStatus('offer', 'rejection', lk).review, /after an offer/);
+
+  const keep = add();
+  const copy = add();
+  updatePosting(db, copy, { duplicateOf: keep });
+  assert.equal(db.prepare('SELECT status FROM postings WHERE id = ?').pluck().get(copy), 'same_job');
+  const live = db.prepare(`SELECT id FROM postings q WHERE user_id = @uid AND ${liveCopySql(db)}`).pluck().all();
+  assert.ok(live.includes(keep) && !live.includes(copy), 'a copy closed with the duplicate role is not a live copy');
+
+  const turned = add({ status: 'turned_down' });
+  const old = add({ status: 'rejected' });
+  db.prepare("UPDATE postings SET applied_on = '2026-09-01' WHERE id IN (?, ?) AND user_id = @uid").run(turned, old);
+  const apps = Object.fromEntries(applications(db, { now: new Date('2026-10-05') }).map((a) => [a.id, a]));
+  assert.equal(apps[turned].rejected.reached, true, "the role's value counts as rejected");
+  assert.equal(apps[old].rejected.reached, false, 'the value the role left does not');
   store.close();
 });
 

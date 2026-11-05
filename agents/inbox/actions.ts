@@ -29,8 +29,8 @@ type ActionClassification = Pick<Classification, 'type' | 'extracted' | 'summary
 /** The stored email an action works from. */
 type ActionEmail = { id: string; gmailMessageId: string; threadId: string; sentAt: string; senderEmail: string };
 
-// The built-in statuses the inbox moves jobs to; ranks and closed statuses come from status groups (agents/lookups.ts).
-const TARGET: Record<string, string> = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interviewing', offer: 'offer' };
+// The status role each email type moves a job to (Admin > Lists); ranks and closed statuses come from status groups (agents/lookups.ts).
+const TARGET: Record<string, string> = { confirmation: 'applied', rejection: 'rejected', interview_request: 'interview', offer: 'offer' };
 // Types that are about an application; without a confident link they need a person to place them.
 const APPLICATION_TYPES = ['confirmation', 'rejection', 'interview_request', 'assessment', 'offer', 'follow_up'];
 
@@ -57,11 +57,12 @@ export function decideLink({ ruleMatch, classification: c, threshold }: { ruleMa
  * lk: lookups(db), or the built-in lists when omitted. An archived target status sends the email to review.
  */
 export function planStatus(current: string, type: string, lk: Lookups = lookups(null)): StatusPlan {
-  const to = TARGET[type];
+  const role = TARGET[type];
+  const to = role ? lk.role('status', role) : null;
   if (!to || to === current) return { none: true };
   if (!lk.selectable('status', to)) return { review: `the "${lk.label('status', to)}" status is archived, so it was not set` };
   if (lk.isClosed(current)) return { review: `the application is ${current}; a ${type.replace('_', ' ')} email would reopen it` };
-  if (to === 'rejected') return lk.groupOf('status', current) === 'decision' ? { review: 'a rejection arrived after an offer' } : { change: { from: current, to } };
+  if (role === 'rejected') return lk.groupOf('status', current) === 'decision' ? { review: 'a rejection arrived after an offer' } : { change: { from: current, to } };
   const [rankTo, rankNow] = [lk.rank(to), lk.rank(current)];
   if (rankTo != null && rankNow != null && rankTo > rankNow) return { change: { from: current, to } };
   return { review: `would move the status backward (${current} to ${to})` };

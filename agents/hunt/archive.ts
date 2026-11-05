@@ -70,9 +70,10 @@ export function findDuplicates(db: Database) {
   const archived = lk.ids('stage', 'archived');
   const active = lk.ids('stage', 'active');
   const evaluate = lk.ids('status', 'evaluate');
+  const duplicate = lk.role('status', 'duplicate');
   // A copy this cleanup already removed (its last status change is the agent's) never wins over one still in play.
   const keepRank = (p: Copy) => [
-    p.agent_removed ? 9 : p.status === 'duplicate' ? 7 : GROUP_RANK[lk.groupOf('status', p.status) as string] ?? 6,
+    p.agent_removed ? 9 : p.status === duplicate ? 7 : GROUP_RANK[lk.groupOf('status', p.status) as string] ?? 6,
     archived.includes(p.stage) ? 1 : 0,
     active.includes(p.stage) ? 0 : 1,
     p.has_text ? 0 : 1,
@@ -131,7 +132,7 @@ export function archiveSiteJobs(db: Database, site: string, { now = new Date(), 
   return { archived: found, dryRun };
 }
 
-// Archives each one and marks it passed (or duplicate) with a note and status history, changed_by 'agent'.
+// Archives each one and marks it with the passed (or duplicate) role's status, with a note and status history, changed_by 'agent'.
 function archiveFound(db: Database, found: Found[], now: Date) {
   const lk = lookups(db);
   const evaluate = lk.ids('status', 'evaluate');
@@ -139,9 +140,11 @@ function archiveFound(db: Database, found: Found[], now: Date) {
   const update = db.prepare('UPDATE postings SET stage = @stage, status = @status, updated_at = @now WHERE id = @id AND user_id = @uid');
   const history = db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)");
   const stage = lk.role('stage', 'archive');
+  // 023 sets both roles, and a role is moved, never removed.
+  const [duplicate, passed] = [lk.role('status', 'duplicate') as string, lk.role('status', 'passed') as string];
   db.transaction(() => {
     for (const p of found) {
-      const status = !evaluate.includes(p.status) ? p.status : /^duplicate of/.test(p.reason) ? 'duplicate' : 'passed';
+      const status = !evaluate.includes(p.status) ? p.status : /^duplicate of/.test(p.reason) ? duplicate : passed;
       update.run({ id: p.id, stage, status, now: nowIso });
       addNote(db, p.id, `Removed ${localDay(now)}: ${p.reason}.`, { source: 'agent', now });
       if (status !== p.status) history.run(p.id, p.status, status, nowIso);

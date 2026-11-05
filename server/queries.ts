@@ -293,7 +293,8 @@ export function updatePosting(db: Database, id: number, patch: PostingPatch, con
     if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
     const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${localDay(now)}.`;
     set.stage = lk.role('stage', 'archive') as string; // the stage list always has an archive role
-    if (current.status !== 'duplicate') set.status = 'duplicate';
+    const duplicate = lk.role('status', 'duplicate') as string; // 023 sets it, and a role is moved, never removed
+    if (current.status !== duplicate) set.status = duplicate;
     newNotes.push({ body: note, source: 'agent' });
   }
   if (patch.location !== undefined) set.location = patch.location || null;
