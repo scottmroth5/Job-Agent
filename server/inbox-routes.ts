@@ -12,10 +12,10 @@ import type { Gmail } from '../agents/inbox/gmail.ts';
 import type { InboxConfig } from '../agents/inbox/config.ts';
 import type { App, TaskStep, Tasks } from './types.ts';
 
-/** The inbox's services (server/index.js): whether Gmail is signed in, its client, the email key, and inbox.json. */
+/** The inbox's services (server/main.ts): whether Gmail is signed in, its client, the email key, and inbox.json. */
 export interface InboxServices {
   ready: () => boolean;
-  gmail: (opts: { onWait: (ms: number) => void }) => Gmail;
+  gmail: (opts?: { onWait?: (ms: number) => void }) => Gmail;
   key: () => Buffer;
   cfg: InboxConfig;
 }

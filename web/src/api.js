@@ -5,15 +5,15 @@ const OFFLINE = 'Cannot reach the Job Agent server. Start it with npm run ui, th
 
 // The demo (AUTH_MODE=demo; App calls setDemoMode from /api/me). Every change is stopped here, before anything is sent:
 // it rejects with DEMO_NOT_SAVED and announces it (the demo-blocked event, shown by App's DemoNotice). AI actions answer
-// with canned samples from demo/samples.js, loaded only in the demo, through local stand-in tasks; no model is called.
-// The server refuses changes in the demo too (server/auth.js), so this is for clarity, not protection.
+// with canned samples from demo/samples.ts, loaded only in the demo, through local stand-in tasks; no model is called.
+// The server refuses changes in the demo too (server/auth.ts), so this is for clarity, not protection.
 let demoMode = false;
 export const setDemoMode = (on) => {
   demoMode = Boolean(on);
 };
 export const DEMO_NOT_SAVED = 'Demo: nothing was saved. In your own account this would save the change.';
 const DEMO_ALLOWED = /^\/api\/prompts\/[a-z-]+\/preview$/; // fills a draft prompt and writes nothing
-const demoSamples = () => import('../../demo/samples.js');
+const demoSamples = () => import('../../demo/samples.ts');
 const demoTasks = new Map();
 const pause = (ms) => new Promise((r) => setTimeout(r, ms));
 function demoBlocked(method, path) {

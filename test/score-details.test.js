@@ -1,9 +1,9 @@
-// The job panel's score details (server/queries.js scoreDetails, agents/prompts.ts describeVersion): when and how the
+// The job panel's score details (server/queries.ts scoreDetails, agents/prompts.ts describeVersion): when and how the
 // current score was made, which prompt, and when a re-score would change it. Synthetic data only.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { getPosting } from '../server/queries.js';
+import { getPosting } from '../server/queries.ts';
 import { defaultPrompt, describeVersion, getPrompt, savePrompt, versionOf } from '../agents/prompts.ts';
 
 function setup() {

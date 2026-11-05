@@ -7,9 +7,9 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
-import { CONTENT_SECURITY_POLICY, createRateLimiter, errorReply } from '../server/security.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
+import { CONTENT_SECURITY_POLICY, createRateLimiter, errorReply } from '../server/security.ts';
 
 const settingsFor = (publicUrl) =>
   authSettings({

@@ -180,7 +180,7 @@ To reach the app from your phone and run the schedule without this computer on, 
 `AUTH_MODE=demo` serves a read-only showcase on made-up data: a fictional candidate, fictional companies, and a sample search with scores, letters, notes, emails, a meeting prep, and pipeline history, dated relative to today. There is no sign-in, every request that would change data is refused, and the server starts without Claude, Gmail, or Drive, so a visitor can never spend money or reach an account.
 
 - **On this computer:** `npm run demo`, then open http://localhost:5180. It rebuilds `demo-data/` each time and never reads `.env`.
-- **The sample data** lives in `demo/sample-data.js`; `scripts/demo-seed.js` builds the database and refuses to replace one it did not make.
+- **The sample data** lives in `demo/sample-data.ts`; `scripts/demo-seed.js` builds the database and refuses to replace one it did not make.
 - **In the cloud:** the `demo` service in `deploy/compose.yml` runs the same image with no secrets, a read-only filesystem, an in-memory database rebuilt on every start, and small memory and CPU limits. Caddy serves it at `DEMO_SITE_ADDRESS` with a `noindex` header. Every request is rate limited per address.
 - **Usage counts (optional):** set `DEMO_POSTHOG_KEY` (a PostHog project key) and `DEMO_POSTHOG_HOST` in the server's `.env` and the demo counts which screens and sample features visitors try, with fixed names only (see the demo section of [PRIVACY.md](PRIVACY.md)). No cookies, no stored id, no URLs or typed text; a browser sending Global Privacy Control sends nothing. The demo banner links to the privacy policy. The signed-in app never sends anything to PostHog.
 

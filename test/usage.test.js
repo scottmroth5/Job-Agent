@@ -1,4 +1,4 @@
-// The admin's private weekly totals (server/admin-queries.js usageByWeek, GET /api/admin/usage): counts across every
+// The admin's private weekly totals (server/admin-queries.ts usageByWeek, GET /api/admin/usage): counts across every
 // account, placed by local week, with nothing about who or which job. Made-up accounts and jobs; no network.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,10 +6,10 @@ import { randomBytes } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
 import { runAsUser } from '../db/scope.ts';
 import { addUser } from '../db/users.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
-import { usageByWeek } from '../server/admin-queries.js';
-import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
+import { usageByWeek } from '../server/admin-queries.ts';
+import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { localDay } from '../tools/dates.ts';
 
 const SITE = 'http://localhost:5178';

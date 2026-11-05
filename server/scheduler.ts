@@ -11,9 +11,15 @@
 // A run missed while the server was off (or the computer asleep) runs when it comes back, if the missed time was
 // within the last 12 hours and the job has not run since.
 
+/** A parsed schedule: weekdays (days) or a day of the month, a time, and, for "|" specs, each part. */
+export type Schedule = { spec: string; hour: number; minute: number; days: Set<number> | null; monthDay?: number; parts?: Schedule[] };
+/** A scheduled job: run starts it and resolves when it is done; lastRanAt is when it last started (ISO), from the runs table. */
+export type ScheduledJob = { name: string; schedule: Schedule; run: () => Promise<unknown>; lastRanAt: () => string | null };
+type Timer = ReturnType<typeof setInterval>;
+
 const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const FULL_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-const GROUPS = { daily: [0, 1, 2, 3, 4, 5, 6], weekdays: [1, 2, 3, 4, 5], weekends: [0, 6] };
+const GROUPS: Record<string, number[]> = { daily: [0, 1, 2, 3, 4, 5, 6], weekdays: [1, 2, 3, 4, 5], weekends: [0, 6] };
 export const CATCH_UP_HOURS = 12;
 export const DEFAULT_RESTORE_TEST = 'monthly 1 05:00';
 const CHECK_EVERY_MS = 30 * 1000;
@@ -22,7 +28,7 @@ const CHECK_EVERY_MS = 30 * 1000;
  * Parses "Mon,Thu 06:00", "daily 23:00", or "weekdays 7:30", and several of those joined by "|" ("Mon,Thu 06:00 | Sat 09:00"),
  * which run at each part's times. Throws a message that says what is wrong.
  */
-export function parseSchedule(spec) {
+export function parseSchedule(spec: string | null | undefined): Schedule {
   // Monthly: "monthly 1 05:00" runs on that day of the month (1 to 28, so every month has it).
   const monthly = /^\s*monthly\s+(\d{1,2})\s+(\d{1,2}):(\d{2})\s*$/i.exec(String(spec ?? ''));
   if (monthly) {
@@ -42,7 +48,7 @@ export function parseSchedule(spec) {
   const hour = Number(hh);
   const minute = Number(mm);
   if (hour > 23 || minute > 59) throw new Error(`"${spec}": the time must be between 00:00 and 23:59.`);
-  const days = new Set();
+  const days = new Set<number>();
   for (const part of daysText.toLowerCase().split(/[\s,]+/).filter(Boolean)) {
     if (GROUPS[part]) GROUPS[part].forEach((d) => days.add(d));
     else {
@@ -55,12 +61,13 @@ export function parseSchedule(spec) {
 }
 
 // Whether a schedule runs on a date: its day of the month, or one of its weekdays.
-const onDay = (s, t) => (s.monthDay ? t.getDate() === s.monthDay : s.days.has(t.getDay()));
-const at = (base, s) => new Date(base.getFullYear(), base.getMonth(), base.getDate(), s.hour, s.minute, 0, 0);
+// A schedule without a day of the month has its weekdays.
+const onDay = (s: Schedule, t: Date) => (s.monthDay ? t.getDate() === s.monthDay : (s.days as Set<number>).has(t.getDay()));
+const at = (base: Date, s: Schedule) => new Date(base.getFullYear(), base.getMonth(), base.getDate(), s.hour, s.minute, 0, 0);
 
 /** The next scheduled time strictly after `from`, in local time (the earliest of the parts' next times). */
-export function nextRun(s, from = new Date()) {
-  if (s.parts) return s.parts.map((p) => nextRun(p, from)).filter(Boolean).sort((a, b) => a - b)[0] ?? null;
+export function nextRun(s: Schedule, from = new Date()): Date | null {
+  if (s.parts) return s.parts.map((p) => nextRun(p, from)).filter((t): t is Date => t != null).sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
   for (let i = 0; i <= (s.monthDay ? 62 : 7); i += 1) {
     const day = new Date(from.getFullYear(), from.getMonth(), from.getDate() + i);
     const t = at(day, s);
@@ -70,8 +77,8 @@ export function nextRun(s, from = new Date()) {
 }
 
 /** The latest scheduled time at or before `when` (the latest of the parts' last times). */
-export function lastRun(s, when = new Date()) {
-  if (s.parts) return s.parts.map((p) => lastRun(p, when)).filter(Boolean).sort((a, b) => b - a)[0] ?? null;
+export function lastRun(s: Schedule, when = new Date()): Date | null {
+  if (s.parts) return s.parts.map((p) => lastRun(p, when)).filter((t): t is Date => t != null).sort((a, b) => b.getTime() - a.getTime())[0] ?? null;
   for (let i = 0; i <= (s.monthDay ? 62 : 7); i += 1) {
     const day = new Date(when.getFullYear(), when.getMonth(), when.getDate() - i);
     const t = at(day, s);
@@ -82,8 +89,8 @@ export function lastRun(s, when = new Date()) {
 
 /** The jobs set in the environment: [{ name, schedule }]. Throws on a bad spec, so a typo never silently disables a job. */
 export function schedulesFromEnv(env = process.env) {
-  const jobs = [];
-  for (const [name, key] of [['pipeline', 'SCHEDULE_PIPELINE'], ['inbox', 'SCHEDULE_INBOX'], ['backup', 'SCHEDULE_BACKUP']]) {
+  const jobs: Array<{ name: string; schedule: Schedule }> = [];
+  for (const [name, key] of [['pipeline', 'SCHEDULE_PIPELINE'], ['inbox', 'SCHEDULE_INBOX'], ['backup', 'SCHEDULE_BACKUP']] as const) {
     if (env[key]?.trim()) jobs.push({ name, schedule: parseSchedule(env[key]) });
   }
   // The restore test follows the backup: monthly by default once backups are scheduled, unless turned off.
@@ -92,31 +99,38 @@ export function schedulesFromEnv(env = process.env) {
   return jobs;
 }
 
-/**
- * @param {object} o
- * @param {Array<{ name: string, schedule: object, run: () => Promise<void>, lastRanAt: () => string|null }>} o.jobs
- *   run starts the job and resolves when it is done; lastRanAt is when it last started (ISO), from the runs table
- * @param {() => Date} [o.now]
- * @param {{ info: Function, warn: Function }} [o.log]
- * @param {(fn: Function, ms: number) => any} [o.every]  setInterval (injectable for tests)
- * @param {(name: string, ok: boolean, error: string|null) => unknown} [o.onResult]  after each run (server/alerts.js)
- */
-export function createScheduler({ jobs, now = () => new Date(), log = console, every = setInterval, clear = clearInterval, onResult = null }) {
-  const state = jobs.map((j) => ({ ...j, next: nextRun(j.schedule, now()), running: false, lastResult: null }));
-  let timer = null;
+/** every and clear are setInterval and clearInterval (injectable for tests); onResult hears after each run (server/alerts.ts). */
+export function createScheduler({
+  jobs,
+  now = () => new Date(),
+  log = console,
+  every = setInterval,
+  clear = clearInterval,
+  onResult = null,
+}: {
+  jobs: ScheduledJob[];
+  now?: () => Date;
+  log?: { info?: (text: string) => void; warn?: (text: string) => void };
+  every?: (fn: () => void, ms: number) => Timer;
+  clear?: (timer: Timer) => void;
+  onResult?: ((name: string, ok: boolean, error: string | null) => unknown) | null;
+}) {
+  type JobState = ScheduledJob & { next: Date | null; running: boolean; lastResult: 'ok' | 'failed' | null };
+  const state: JobState[] = jobs.map((j) => ({ ...j, next: nextRun(j.schedule, now()), running: false, lastResult: null }));
+  let timer: Timer | null = null;
 
-  const fire = async (job, why) => {
+  const fire = async (job: JobState, why: string) => {
     if (job.running) return;
     job.running = true;
     log.info?.(`[schedule] ${job.name}: starting (${why})`);
-    let error = null;
+    let error: string | null = null;
     try {
       await job.run();
       job.lastResult = 'ok';
     } catch (err) {
-      error = err.message;
+      error = (err as Error).message;
       job.lastResult = 'failed';
-      log.warn?.(`[schedule] ${job.name}: ${err.message}`);
+      log.warn?.(`[schedule] ${job.name}: ${(err as Error).message}`);
     } finally {
       job.running = false;
     }
@@ -141,7 +155,7 @@ export function createScheduler({ jobs, now = () => new Date(), log = console, e
       for (const job of state) {
         const missed = lastRun(job.schedule, t);
         const ran = job.lastRanAt();
-        if (missed && t - missed <= CATCH_UP_HOURS * 3600 * 1000 && (!ran || new Date(ran) < missed)) void fire(job, 'missed while the server was off');
+        if (missed && t.getTime() - missed.getTime() <= CATCH_UP_HOURS * 3600 * 1000 && (!ran || new Date(ran) < missed)) void fire(job, 'missed while the server was off');
       }
       timer = every(tick, CHECK_EVERY_MS);
       timer?.unref?.();

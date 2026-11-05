@@ -1,11 +1,14 @@
 // Protections for running on the internet: security headers on every response, rate limits on sign-in and on
 // repeated refused requests, and server errors that never reveal internals. In AUTH_MODE=none the server only
 // listens on this computer, so the rate limits are off there; the headers are always on.
+import type { App, FastifyReply } from './types.ts';
+
+type Limit = { windowMs: number; max: number };
 
 // The web page loads only its own scripts and styles. 'unsafe-inline' for styles covers React style attributes;
 // scripts stay strict, so injected markup can never run code. connect adds origins the page may send to (the demo's
-// analytics host, server/demo-analytics.js); no script is ever loaded from them.
-export const contentSecurityPolicy = ({ connect = [] } = {}) => [
+// analytics host, server/demo-analytics.ts); no script is ever loaded from them.
+export const contentSecurityPolicy = ({ connect = [] }: { connect?: string[] } = {}) => [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
@@ -21,10 +24,10 @@ export const CONTENT_SECURITY_POLICY = contentSecurityPolicy();
 
 /**
  * Adds security headers to every response; a route that set its own (attachments' sandbox policy) keeps it.
- * @param {{ https?: boolean, connect?: string[] }} opts  https adds Strict-Transport-Security; connect, see above
+ * https adds Strict-Transport-Security; connect, see above.
  */
-export function registerSecurityHeaders(app, { https = false, connect = [] } = {}) {
-  const headers = {
+export function registerSecurityHeaders(app: App, { https = false, connect = [] }: { https?: boolean; connect?: string[] } = {}) {
+  const headers: Record<string, string> = {
     'content-security-policy': contentSecurityPolicy({ connect }),
     'x-content-type-options': 'nosniff',
     'x-frame-options': 'DENY',
@@ -43,14 +46,14 @@ export function registerSecurityHeaders(app, { https = false, connect = [] } = {
 }
 
 /** A fixed-window counter per key (client address). In memory: a restart clears it, which is fine for one server. */
-export function createRateLimiter({ windowMs, max, now = () => Date.now() }) {
-  const hits = new Map();
-  const prune = (t) => {
+export function createRateLimiter({ windowMs, max, now = () => Date.now() }: Limit & { now?: () => number }) {
+  const hits = new Map<string, { start: number; count: number }>();
+  const prune = (t: number) => {
     for (const [k, v] of hits) if (t - v.start >= windowMs) hits.delete(k);
   };
   return {
     /** Counts one hit. Returns { allowed, retryAfterSeconds }. */
-    hit(key) {
+    hit(key: string) {
       const t = now();
       if (hits.size > 10000) prune(t);
       let entry = hits.get(key);
@@ -60,11 +63,11 @@ export function createRateLimiter({ windowMs, max, now = () => Date.now() }) {
       return { allowed: entry.count <= max, retryAfterSeconds: Math.ceil((entry.start + windowMs - t) / 1000) };
     },
     /** Whether the key is over the limit, without counting. */
-    blocked(key) {
+    blocked(key: string) {
       const entry = hits.get(key);
       return Boolean(entry && now() - entry.start < windowMs && entry.count > max);
     },
-    retryAfter(key) {
+    retryAfter(key: string) {
       const entry = hits.get(key);
       return entry ? Math.max(1, Math.ceil((entry.start + windowMs - now()) / 1000)) : 1;
     },
@@ -83,11 +86,14 @@ export const DEMO_REQUEST_LIMIT = { windowMs: 15 * 60 * 1000, max: 1500 };
  * ends. all (the public demo) also caps every request per address. Register before the sign-in check so a blocked
  * address is refused first.
  */
-export function registerRateLimits(app, { signIn = SIGN_IN_LIMIT, refused = REFUSED_LIMIT, all = null, now } = {}) {
+export function registerRateLimits(
+  app: App,
+  { signIn = SIGN_IN_LIMIT, refused = REFUSED_LIMIT, all = null, now }: { signIn?: Limit; refused?: Limit; all?: Limit | null; now?: () => number } = {},
+) {
   const signInLimiter = createRateLimiter({ ...signIn, now });
   const refusedLimiter = createRateLimiter({ ...refused, now });
   const allLimiter = all ? createRateLimiter({ ...all, now }) : null;
-  const tooMany = (reply, seconds) =>
+  const tooMany = (reply: FastifyReply, seconds: number) =>
     reply.code(429).header('retry-after', String(seconds)).send({ error: 'Too many requests from this address. Try again later.' });
 
   app.addHook('onRequest', async (req, reply) => {
@@ -110,7 +116,11 @@ export function registerRateLimits(app, { signIn = SIGN_IN_LIMIT, refused = REFU
  * The reply body for an error: what went wrong for the caller's mistakes (4xx), and a plain message for server
  * faults (5xx), whose details go to the server log only (never request bodies).
  */
-export function errorReply(err, req, log = console) {
+export function errorReply(
+  err: { statusCode?: number; validation?: unknown; name: string; message: string },
+  req: { method: string; url: string },
+  log: { error?: (text: string) => void } = console,
+) {
   const status = err.statusCode ?? (err.validation ? 400 : 500);
   if (status < 500) return { status, body: { error: err.message } };
   log.error?.(`[error] ${req.method} ${req.url.split('?')[0]}: ${err.name}: ${err.message}`);

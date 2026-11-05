@@ -1,10 +1,10 @@
-// The demo's canned AI answers (demo/samples.js): shaped like the real ones and held to the same rules, so the demo
+// The demo's canned AI answers (demo/samples.ts): shaped like the real ones and held to the same rules, so the demo
 // reads like the app. They use only the fictional candidate's facts and call no model.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readdirSync, readFileSync } from 'node:fs';
-import { samplePrep, sampleLetter, sampleTweaks, sampleScore, sampleRevision, sampleHelpAnswer, sampleDraft } from '../demo/samples.js';
-import { DEMO_CONFIG, JOBS } from '../demo/sample-data.js';
+import { samplePrep, sampleLetter, sampleTweaks, sampleScore, sampleRevision, sampleHelpAnswer, sampleDraft } from '../demo/samples.ts';
+import { DEMO_CONFIG, JOBS } from '../demo/sample-data.ts';
 import { validateDraft } from '../agents/draft-profile.ts';
 import { finishLetter } from '../agents/hunt/generate.ts';
 import { sectionCheck } from '../agents/knowledge-sections.ts';
@@ -59,8 +59,8 @@ test('the sample draft is a valid draft with all seven knowledge doc sections an
 });
 
 test('the sample fact check reads like the real one: valid claims, one contradicted and one unsupported, evidence quoted from the knowledge doc', async () => {
-  const { sampleCheck } = await import('../demo/samples.js');
-  const { DEMO_ABOUT_YOU } = await import('../demo/sample-data.js');
+  const { sampleCheck } = await import('../demo/samples.ts');
+  const { DEMO_ABOUT_YOU } = await import('../demo/sample-data.ts');
   const { cleanClaims } = await import('../agents/hunt/verify-letter.ts');
   const c = sampleCheck();
   assert.equal(c.status, 'checked');

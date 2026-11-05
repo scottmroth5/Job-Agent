@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { assertSafeBinding } from '../server/auth.js';
+import { buildApp } from '../server/app.ts';
+import { assertSafeBinding } from '../server/auth.ts';
 
 // Synthetic config, knowledge and postings only.
 const config = {

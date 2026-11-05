@@ -1,4 +1,4 @@
-// Word downloads of cover letters and meeting preps (server/word-docs.js, server/document-routes.ts). Made-up jobs and
+// Word downloads of cover letters and meeting preps (server/word-docs.ts, server/document-routes.ts). Made-up jobs and
 // text; the .docx files are opened and their text checked.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -6,10 +6,10 @@ import { randomBytes } from 'node:crypto';
 import JSZip from 'jszip';
 import { openJobStore } from '../db/index.ts';
 import { addUser, OWNER_ID } from '../db/users.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
-import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
-import { letterDocx, prepDocx, docxName } from '../server/word-docs.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
+import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
+import { letterDocx, prepDocx, docxName } from '../server/word-docs.ts';
 
 const SITE = 'http://localhost:5178';
 const documentXml = async (buffer) => (await JSZip.loadAsync(buffer)).file('word/document.xml').async('string');

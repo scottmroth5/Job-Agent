@@ -1,9 +1,9 @@
-// Failure emails (server/alerts.js) and header safety in the email builder. A fake sender; nothing is emailed.
+// Failure emails (server/alerts.ts) and header safety in the email builder. A fake sender; nothing is emailed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { createAlerts } from '../server/alerts.js';
-import { createScheduler, parseSchedule } from '../server/scheduler.js';
+import { createAlerts } from '../server/alerts.ts';
+import { createScheduler, parseSchedule } from '../server/scheduler.ts';
 import { buildRawEmail } from '../tools/google/gmail.ts';
 
 const local = (y, mo, d, h = 12) => new Date(y, mo - 1, d, h);

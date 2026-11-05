@@ -98,7 +98,7 @@ export function pruneMigrationCopies(dir: string, keep = KEEP_MIGRATION_COPIES) 
  * store.db is scoped to one user (db/scope.ts): queries on user tables run as the user of the current request or job
  * (runAsUser), else as fallbackUid. Command-line scripts and tests act as the owner; the server passes null, so a
  * user-table query outside a request or job throws. store.raw is the unscoped database, for migrations, backups, and
- * server/admin-queries.js only.
+ * server/admin-queries.ts only.
  * snapshot false: no copy (a throwaway copy itself).
  */
 export function openJobStore(

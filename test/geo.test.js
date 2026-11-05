@@ -1,12 +1,12 @@
-// US-only access (server/geo.js): requests from outside the allowed countries get the 403 page; the health check and
+// US-only access (server/geo.ts): requests from outside the allowed countries get the 403 page; the health check and
 // private addresses always pass; no GEO_ALLOW or no database means nothing is blocked. A fake country lookup; no download,
 // no network. Requests arrive from Caddy with the visitor's address forwarded, using production's TRUST_PROXY.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { countryLookup, geoAllowFromEnv, geoBlocker, isPrivateAddress, parseRelayRanges, relayLookup, shortAddress } from '../server/geo.js';
+import { buildApp } from '../server/app.ts';
+import { countryLookup, geoAllowFromEnv, geoBlocker, isPrivateAddress, parseRelayRanges, relayLookup, shortAddress } from '../server/geo.ts';
 
 const COUNTRY = { '8.8.8.8': 'US', '81.2.69.142': 'GB', '203.0.113.9': null };
 const lookup = (ip) => COUNTRY[ip] ?? null;

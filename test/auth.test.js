@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { assertSafeBinding, authSettings, safeNext } from '../server/auth.js';
+import { buildApp } from '../server/app.ts';
+import { assertSafeBinding, authSettings, safeNext } from '../server/auth.ts';
 
 // Synthetic accounts and a fake Google exchange; no network.
 const SITE = 'http://localhost:5178';

@@ -5,10 +5,11 @@ import { readFileSync } from 'node:fs';
 import { renderMarkdown } from '../tools/markdown.ts';
 import { repoPath } from '../tools/paths.ts';
 import { withSupport } from '../tools/support.ts';
+import type { App } from './types.ts';
 
 const PAGES = { '/privacy': ['Privacy policy', 'PRIVACY.md'], '/terms': ['Terms', 'TERMS.md'] };
 
-export function registerPages(app) {
+export function registerPages(app: App) {
   for (const [path, [title, file]] of Object.entries(PAGES)) {
     const body = renderMarkdown(withSupport(readFileSync(repoPath(file), 'utf8')));
     const html =

@@ -9,7 +9,7 @@ export interface JobStore extends Store {
   raw: Database;
 }
 
-/** The logging a module needs: console fits, and so does a task's logger (server/tasks.js). */
+/** The logging a module needs: console fits, and so does a task's logger (server/tasks.ts). */
 export interface Logger {
   info: (...args: unknown[]) => void;
   warn: (...args: unknown[]) => void;

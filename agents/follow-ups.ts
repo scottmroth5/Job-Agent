@@ -7,7 +7,7 @@ import { getUserSetting, setUserSetting } from '../db/settings.ts';
 import { lookups } from './lookups.ts';
 import { addNote } from './notes.ts';
 import { localDay } from '../tools/dates.ts';
-import { applications, DEFAULT_STALE_DAYS, FOLLOW_UP_DAYS } from '../server/funnel.js';
+import { applications, DEFAULT_STALE_DAYS, FOLLOW_UP_DAYS } from '../server/funnel.ts';
 import type { Database } from '../tools/types.ts';
 
 export { DEFAULT_STALE_DAYS };

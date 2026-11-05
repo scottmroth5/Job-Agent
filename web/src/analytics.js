@@ -1,4 +1,4 @@
-// The public demo's usage counts, sent to PostHog (server/demo-analytics.js): which screens visitors open and which
+// The public demo's usage counts, sent to PostHog (server/demo-analytics.ts): which screens visitors open and which
 // sample features they try, and where the visit came from as one of five fixed categories, never what they type or
 // see. Every event is built here from fixed names and fixed property values; anything else is dropped before it is
 // sent. No SDK, cookies, or storage: an anonymous id lives only as long as the page, and requests carry no referrer

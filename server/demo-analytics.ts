@@ -29,10 +29,10 @@ export function demoAnalytics(env = process.env) {
 }
 
 /** The domain above an address's host (demo.example.com gives example.com), or null without one (localhost, an IP). */
-function parentSite(publicUrl) {
+function parentSite(publicUrl: string | undefined) {
   let host;
   try {
-    host = new URL(publicUrl).hostname.toLowerCase();
+    host = new URL(publicUrl ?? '').hostname.toLowerCase();
   } catch {
     return null;
   }

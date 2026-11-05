@@ -11,11 +11,11 @@ import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
 import { USER_TABLES } from '../db/user-tables.ts';
 import { addUser, OWNER_ID } from '../db/users.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
-import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
+import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { seedDemo } from '../scripts/demo-seed.js';
-import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.js';
+import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.ts';
 
 const SITE = 'http://localhost:5178';
 // Strings only A's sample data holds: its companies.
@@ -123,7 +123,7 @@ test('a paused account can look at its own data but change nothing; a pending on
 });
 
 test('routes that use the owner\'s own accounts refuse everyone else, and every one of them exists', async () => {
-  const { OWNER_ONLY } = await import('../server/app.js');
+  const { OWNER_ONLY } = await import('../server/app.ts');
   const { store, app, asA, asB } = await setup();
   const routes = new Set(app.routeList.map((r) => `${r.method} ${r.url}`));
   for (const route of OWNER_ONLY) {

@@ -116,7 +116,7 @@ const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'];
 
 /** The start page: a tile for each screen with what needs attention, the pipeline, and this month's Claude budget. */
-// Home's Today list (server/today.js): reminders due, offers, follow-ups, and stale applications; each opens its job. The first few
+// Home's Today list (server/today.ts): reminders due, offers, follow-ups, and stale applications; each opens its job. The first few
 // show; the rest open on request.
 const TODAY_SHOWN = 5;
 const KIND_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };

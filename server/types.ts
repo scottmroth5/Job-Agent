@@ -3,19 +3,31 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { Claude, Run } from '@scottmroth5/agent-core';
 import type { DriveClient } from '../tools/google/drive.ts';
 import type { PageRenderer } from '../agents/discovery/types.ts';
-import type { createTaskRunner } from './tasks.js';
-import type { createNotices } from './notices.js';
+import type { createTaskRunner } from './tasks.ts';
+import type { createNotices } from './notices.ts';
+import type { accountFor } from '../db/users.ts';
+
+/** A signed-in address's account (db/users.ts accountFor). */
+export type Account = NonNullable<ReturnType<typeof accountFor>>;
 
 declare module 'fastify' {
   interface FastifyRequest {
-    /** The user the request runs as (server/app.js decides it in onRequest); unset with no sign-in (AUTH_MODE=none). */
+    /** The user the request runs as (server/app.ts decides it in onRequest); unset with no sign-in (AUTH_MODE=none). */
     uid?: number;
+    /** The signed-in address (AUTH_MODE=google, server/auth.ts). */
+    user?: string;
+    /** Its account, on every request that gets past the sign-in check (AUTH_MODE=google). */
+    account?: Account | null;
+    /** The account's role, set with uid (server/app.ts). */
+    role?: string;
+    /** The user's own time zone for calendar days; null for the owner, who uses the app's (server/app.ts). */
+    timeZone?: string | null;
   }
 }
 
 export type { FastifyReply, FastifyRequest };
 
-/** The Fastify app the routes register on (server/app.js buildApp). */
+/** The Fastify app the routes register on (server/app.ts buildApp). */
 export type App = FastifyInstance;
 
 /** Route params for /api/.../:id with an integer id. */
@@ -31,13 +43,13 @@ export interface RouteServices {
   drive: DriveClient | null;
 }
 
-/** The in-memory task runner (server/tasks.js). */
+/** The in-memory task runner (server/tasks.ts). */
 export type Tasks = ReturnType<typeof createTaskRunner>;
 
-/** The account emails (server/notices.js); routes take any of them, and none in tests. */
+/** The account emails (server/notices.ts); routes take any of them, and none in tests. */
 export type Notices = Partial<ReturnType<typeof createNotices>>;
 
-/** A task's progress step (server/tasks.js). */
+/** A task's progress step (server/tasks.ts). */
 export type TaskStep = (message: string, opts?: { log?: boolean }) => void;
 
 /** buildApp's startTask: a traced background task for the current user; returns its id. */

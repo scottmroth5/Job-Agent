@@ -1,6 +1,6 @@
 // The public demo (AUTH_MODE=demo): every control is there, but nothing is saved and no AI is used. Changes are stopped
 // in web/src/api.js before they are sent, and DemoNotice says so each time; AI actions answer with canned samples
-// (demo/samples.js). The server refuses changes too. Components read the flag with useDemo().
+// (demo/samples.ts). The server refuses changes too. Components read the flag with useDemo().
 import { createContext, useContext, useEffect, useState } from 'react';
 import { DEMO_NOT_SAVED } from './api.js';
 
@@ -8,7 +8,7 @@ export const DemoContext = createContext(false);
 export const useDemo = () => useContext(DemoContext);
 
 // The demo sends no Referer to other sites (Referrer-Policy: same-origin), so the link to the app says it came from the
-// demo (the app's usage totals count it as the demo source; server/usage-totals.js).
+// demo (the app's usage totals count it as the demo source; server/usage-totals.ts).
 const fromDemo = (url) => {
   try {
     const u = new URL(url);

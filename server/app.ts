@@ -6,20 +6,20 @@ import swagger from '@fastify/swagger';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { createJobTracer } from '../tools/trace.ts';
-import { listPostings, getPosting, updatePosting, summary } from './queries.js';
+import { listPostings, getPosting, updatePosting, summary } from './queries.ts';
 import { registerLookupRoutes } from './lookups-routes.ts';
 import { lookups } from '../agents/lookups.ts';
-import { funnel } from './funnel.js';
+import { funnel } from './funnel.ts';
 import { registerAttachmentRoutes } from './attachments.ts';
 import { registerPrepRoutes } from './prep-routes.ts';
 import { registerNoteRoutes } from './notes-routes.ts';
-import { createScheduler } from './scheduler.js';
-import { BLOCKED_PAGE, geoBlocker } from './geo.js';
-import { registerUsageTotals } from './usage-totals.js';
-import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.js';
+import { createScheduler } from './scheduler.ts';
+import { BLOCKED_PAGE, geoBlocker } from './geo.ts';
+import { registerUsageTotals } from './usage-totals.ts';
+import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.ts';
 import { timeZone } from '../tools/dates.ts';
-import { createTaskRunner } from './tasks.js';
-import { registerAuth } from './auth.js';
+import { createTaskRunner } from './tasks.ts';
+import { registerAuth } from './auth.ts';
 import { currentUserId, runAsUser } from '../db/scope.ts';
 import { OWNER_ID, touchLastSeen } from '../db/users.ts';
 import { registerFeedbackRoutes } from './feedback-routes.ts';
@@ -28,10 +28,71 @@ import { registerDraftRoutes } from './draft-routes.ts';
 import { registerDocumentRoutes } from './document-routes.ts';
 import { registerLetterRoutes } from './letter-routes.ts';
 import { MIN_PROFILE_CHARS, userConfig, userProfile } from '../agents/user-config.ts';
-import { adminWaiting } from './admin-queries.js';
-import { today } from './today.js';
+import { adminWaiting } from './admin-queries.ts';
+import { today } from './today.ts';
+import type { FastifyError, FastifyServerOptions } from 'fastify';
+import type { Claude } from '@scottmroth5/agent-core';
+import type { JobStore } from '../db/index.ts';
+import type { Http } from '../tools/http.ts';
+import type { UserConfig } from '../agents/user-config.ts';
+import type { PostingsRow } from '../db/types.ts';
+import type { JobItem, PageRenderer } from '../agents/discovery/types.ts';
+import type { ManualInput } from '../agents/manual.ts';
+import type { PostingFilters, PostingPatch } from './queries.ts';
+import type { Schedule } from './scheduler.ts';
+import type { CountryOf } from './geo.ts';
+import type { Place } from './usage-totals.ts';
+import type { AuthSettings, Exchange } from './auth.ts';
+import type { createAlerts } from './alerts.ts';
+import type { InboxServices } from './inbox-routes.ts';
+import type { RunPipeline } from './pipeline-routes.ts';
+import type { Account, FastifyReply, IdParams, Notices, RouteServices, StartTask } from './types.ts';
 
-// Routes for admins: the Users screen and the feedback users sent (server/app.js refuses anyone else).
+/** A browser for pages that need JavaScript (tools/browser.ts), closed when its task ends. */
+type Browser = PageRenderer & { close?: () => Promise<unknown> };
+/** Runs a script as its own process (server/main.ts). */
+export type RunScript = (opts: { script: string; args?: string[]; onLine: (line: string) => void; onError?: (line: string) => void }) => Promise<{ code: number; lastError: string | null }>;
+/** A finished run the demo replays on the Activity tab (demo/sample-data.ts SAMPLE_TASKS). */
+type SampleTask = { kind: string; meta?: object; output: Array<{ step?: string; level?: string; text?: string }>; result?: unknown };
+type ServerLog = { info?: (text: string) => void; warn?: (text: string) => void; error?: (text: string) => void };
+
+/** What buildApp runs with: server/main.ts builds the real ones (or the demo's); tests pass fakes and leave most out. */
+export type AppServices = Omit<RouteServices, 'knowledge'> & {
+  /** Tests only: a stand-in for the owner's knowledge doc (buildApp reads everyone's from Settings). */
+  knowledge?: (() => Promise<string>) | null;
+  /** null only in the demo. */
+  http: Http | null;
+  createBrowser?: (() => Promise<Browser | null>) | null;
+  runScript?: RunScript;
+  runPipeline?: RunPipeline;
+  schedules?: Array<{ name: string; schedule: Schedule }>;
+  inbox?: InboxServices;
+  notices?: Notices;
+  alerts?: ReturnType<typeof createAlerts>;
+  log?: ServerLog;
+  sampleTasks?: SampleTask[];
+  checkClaudeKey?: (apiKey: string) => Promise<boolean>;
+  attachmentsDir?: string;
+};
+
+export type BuildAppOptions = {
+  store: JobStore;
+  config: UserConfig;
+  services: AppServices;
+  /** The built UI to serve (web/dist); skipped when missing. */
+  webDir?: string;
+  /** 'none' (default), 'google', or 'demo'. */
+  authMode?: string;
+  /** For google mode: authSettings(), and a fake exchange in tests. */
+  auth?: { settings?: Partial<AuthSettings>; exchange?: Exchange; now?: () => number };
+  logger?: boolean;
+  /** As TRUST_PROXY gives it; Fastify also takes a hop count, which its types leave out. */
+  trustProxy?: FastifyServerOptions['trustProxy'] | number;
+  geo?: { allow?: string[]; lookup?: CountryOf | null; log?: ServerLog | null };
+  usage?: { location?: ((ip: string) => Place | null) | null; siteHost?: string | null; demoHost?: string | null; now?: () => Date };
+};
+
+// Routes for admins: the Users screen and the feedback users sent (server/app.ts refuses anyone else).
 const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback', '/api/admin/usage'];
 // What a paused account may still change: resume itself (when it paused itself) or delete itself.
 const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
@@ -47,7 +108,7 @@ export const OWNER_ONLY = new Set([
 import { registerAdminRoutes } from './admin.ts';
 import { registerAccountRoutes } from './account-routes.ts';
 import { registerResumeRoutes } from './resume-routes.ts';
-import { registerPages } from './pages.js';
+import { registerPages } from './pages.ts';
 import { registerUserRoutes } from './users-routes.ts';
 import { claudeKeyWorks } from '../tools/claude.ts';
 import { getLayout, registerLayoutRoutes } from './layout.ts';
@@ -72,40 +133,32 @@ const idParams = { type: 'object', required: ['id'], properties: { id: { type: '
 const anyObject = { type: 'object', additionalProperties: true };
 const taskAccepted = { 202: { type: 'object', properties: { taskId: { type: 'string' } } } };
 
-/**
- * @param {object} ctx
- * @param {{db}} ctx.store
- * @param {object} ctx.config
- * @param {object} ctx.services   { claude, knowledge: () => Promise<string>, drive, http, createBrowser: () => Promise<browser|null>,
- *                                  runPipeline({ onLine }), inbox: { ready(), gmail(opts), key(), cfg } }
- * @param {string} [ctx.webDir]   built UI to serve (web/dist); skipped when missing
- * @param {string} [ctx.authMode]   'none' (default) or 'google'
- * @param {object} [ctx.auth]       { settings: authSettings(), exchange? } for google mode (tests pass a fake exchange)
- */
-export async function buildApp({ store, config, services, webDir, authMode = 'none', auth = {}, logger = false, trustProxy = false, geo = {}, usage = {} }) {
+export async function buildApp({ store, config, services: given, webDir, authMode = 'none', auth = {}, logger = false, trustProxy = false, geo = {}, usage = {} }: BuildAppOptions) {
   // trustProxy: behind a reverse proxy (Caddy in the cloud), the client's address comes from X-Forwarded-For.
-  const app = Fastify({ logger, trustProxy });
-  // US-only access (server/geo.js, GEO_ALLOW): refused before anything else runs; the health check always passes.
-  const blocked = geoBlocker({ ...geo, log: geo.log ?? services.log ?? console });
+  const app = Fastify({ logger, trustProxy: trustProxy as FastifyServerOptions['trustProxy'] });
+  // US-only access (server/geo.ts, GEO_ALLOW): refused before anything else runs; the health check always passes.
+  const blocked = geoBlocker({ ...geo, log: geo.log ?? given.log ?? console });
   // Each user's own settings, background, and documents (agents/user-config.ts): routes keep using config and services,
   // which answer for whoever the request runs as. The owner's are the settings file, the Google Doc, and their Drive.
   const ownerConfig = config;
   if (config) config = userConfigView(config, store.raw ?? store.db);
   const asOwner = () => (currentUserId() ?? OWNER_ID) === OWNER_ID;
-  const setupOf = (uid) => {
+  const setupOf = (uid: number) => {
     const raw = store.raw ?? db;
-    const u = raw.prepare('SELECT name, ai_source, claude_key_enc IS NOT NULL AS has_key FROM users WHERE id = ?').get(uid);
+    // A signed-in user has a row; a null name goes to userConfig as it always has.
+    const u = raw.prepare('SELECT name, ai_source, claude_key_enc IS NOT NULL AS has_key FROM users WHERE id = ?').get(uid) as { name: string; ai_source: string; has_key: number };
     return { ai: u.ai_source === 'owner' || Boolean(u.has_key), aboutYou: userProfile(raw, uid).length >= MIN_PROFILE_CHARS, search: userConfig(raw, uid, u.name).ready };
   };
-  const ownerDrive = services.drive;
-  const testKnowledge = services.knowledge; // tests only: a stand-in for the owner's knowledge doc
-  services = {
-    ...services,
+  const ownerDrive = given.drive;
+  const testKnowledge = given.knowledge; // tests only: a stand-in for the owner's knowledge doc
+  const services: AppServices & RouteServices = {
+    ...given,
     get drive() {
       return asOwner() ? ownerDrive : null; // others' letters and preps stay in the app (no access to their Drive yet)
     },
     // The knowledge doc from Settings, the current user's.
-    knowledge: async () => backgroundFor(store.raw ?? store.db, asOwner() ? OWNER_ID : currentUserId(), { fallback: testKnowledge ?? null }),
+    // Not the owner means there is a current user.
+    knowledge: async () => backgroundFor(store.raw ?? store.db, asOwner() ? OWNER_ID : (currentUserId() as number), { fallback: testKnowledge ?? null }),
   };
   app.addHook('onRequest', async (req, reply) => {
     if (blocked(req)) return reply.code(403).type('text/html').header('Cache-Control', 'no-store').send(BLOCKED_PAGE);
@@ -117,15 +170,17 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     tasks.start(sample.kind, sample.meta ?? {}, async (step, { logger }) => {
       for (const entry of sample.output) {
         if (entry.step) step(entry.step);
-        else logger[entry.level ?? 'info'](entry.text);
+        else logger[(entry.level ?? 'info') as 'info' | 'warn' | 'error'](entry.text); // the samples use these levels
       }
       return sample.result ?? null;
     });
   }
 
   // Every route, for the test that checks each one needs sign-in.
-  const routes = [];
-  app.addHook('onRoute', (r) => routes.push({ method: r.method, url: r.url }));
+  const routes: Array<{ method: string | string[]; url: string }> = [];
+  app.addHook('onRoute', (r) => {
+    routes.push({ method: r.method, url: r.url });
+  });
   app.decorate('routeList', routes);
 
   await app.register(swagger, {
@@ -135,7 +190,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerSecurityHeaders(app, { https: Boolean(auth.settings?.publicUrl?.startsWith('https://')), connect: analytics ? [analytics.host] : [] });
   // A ceiling on every route per address (@fastify/rate-limit): far above normal use, it stops floods and scripted
   // abuse. The health check is exempt. The tighter limits for sign-in, refused requests, and the demo follow
-  // (server/security.js).
+  // (server/security.ts).
   await app.register(fastifyRateLimit, {
     global: true,
     max: authMode === 'none' ? 6000 : 600,
@@ -145,9 +200,10 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   });
   if (authMode !== 'none') registerRateLimits(app, { now: auth.now, all: authMode === 'demo' ? DEMO_REQUEST_LIMIT : null });
   registerAuth(app, { mode: authMode, settings: auth.settings, exchange: auth.exchange, now: auth.now, db, notices: services.notices ?? {} });
-  // The admin's usage totals (server/usage-totals.js): the signed-in app only, never the demo or a local run.
+  // The admin's usage totals (server/usage-totals.ts): the signed-in app only, never the demo or a local run. Google
+  // mode always has its settings (assertSafeBinding).
   if (authMode === 'google') {
-    registerUsageTotals(app, { db: store.raw ?? store.db, location: usage.location, ownOrigin: new URL(auth.settings.publicUrl).origin, siteHost: usage.siteHost, demoHost: usage.demoHost, now: usage.now });
+    registerUsageTotals(app, { db: store.raw ?? store.db, location: usage.location, ownOrigin: new URL((auth.settings as AuthSettings).publicUrl).origin, siteHost: usage.siteHost, demoHost: usage.demoHost, now: usage.now });
   }
   // Multi-user (db/scope.ts): each route handler, and every task it starts, runs as the signed-in user; with no sign-in
   // (AUTH_MODE none, and the demo) that is the owner. The user is decided, and refused if inactive or not allowed this
@@ -157,7 +213,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   // auth.js has already sent anyone without an active or paused account to request access or wait.
   app.addHook('onRequest', async (req, reply) => {
     if (authMode === 'google' && !req.account) return;
-    const account = authMode === 'google' ? req.account : { uid: OWNER_ID, status: 'active', role: 'admin' };
+    const account: Account = authMode === 'google' ? (req.account as Account) : { uid: OWNER_ID, status: 'active', role: 'admin' }; // checked above
     const route = `${req.method} ${req.routeOptions.url}`;
     if (account.status === 'paused' && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && !PAUSED_MAY.has(route)) {
       return reply.code(403).send({ error: 'Your account is paused: you can look, but not change anything.' });
@@ -169,24 +225,24 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     req.uid = account.uid;
     req.role = account.role;
     // Their own time zone for calendar days (the owner always uses the app's).
-    req.timeZone = account.uid === OWNER_ID ? null : (db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(account.uid) ?? null);
+    req.timeZone = account.uid === OWNER_ID ? null : ((db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(account.uid) as string | null | undefined) ?? null);
     if (authMode === 'google') touchLastSeen(db, account.uid);
   });
   app.addHook('preHandler', (req, reply, done) => (req.uid ? runAsUser(req.uid, done, { timeZone: req.timeZone }) : done()));
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
 
   app.setErrorHandler((err, req, reply) => {
-    const { status, body } = errorReply(err, req, services.log ?? console);
+    const { status, body } = errorReply(err as FastifyError, req, services.log ?? console);
     reply.code(status).send(body);
   });
 
   /** Runs a background action as a traced task; refuses while a pipeline step is running. */
-  const startTask = (kind, meta, fn) => {
+  const startTask: StartTask = (kind, meta, fn) => {
     for (const name of ['pipeline', 'discover', 'score', 'hunt']) {
       try {
         assertNoRunningRun(db, name);
       } catch (err) {
-        throw Object.assign(new Error(`${err.message} Try again when it finishes.`), { statusCode: 409 });
+        throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
       }
     }
     return tasks.start(kind, meta, async (step, { logger }) => {
@@ -198,7 +254,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
         run.finish('ok', result && typeof result === 'object' ? { ...result, materials: undefined } : null);
         return result;
       } catch (err) {
-        run.finish('failed', { error: err.message });
+        run.finish('failed', { error: (err as Error).message });
         throw err;
       } finally {
         await browser?.close?.();
@@ -206,11 +262,11 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     });
   };
 
-  const notFound = (reply) => reply.code(404).send({ error: 'Job not found' });
+  const notFound = (reply: FastifyReply) => reply.code(404).send({ error: 'Job not found' });
 
   app.get('/api/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
-  app.get(
+  app.get<{ Querystring: { days?: '30' | '90' | 'all'; track?: string } }>(
     '/api/funnel',
     {
       schema: {
@@ -224,7 +280,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
 
   app.get('/api/summary', { schema: { summary: 'Counts, the Today list, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async (req) => ({
     ...summary(db, config),
-    // Home's Today list: reminders due, offers, and follow-ups (server/today.js).
+    // Home's Today list: reminders due, offers, and follow-ups (server/today.ts).
     today: today(db).items,
     layout: getLayout(db),
     // A new user's setup (the Home checklist): AI paid for, About you long enough, search complete.
@@ -233,7 +289,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     ...(req.role === 'admin' && authMode !== 'demo' ? { adminWaiting: adminWaiting(db) } : {}),
   }));
 
-  app.get(
+  app.get<{ Querystring: PostingFilters & { needsDescription?: boolean; minScore?: number; limit?: number } }>(
     '/api/postings',
     {
       schema: {
@@ -256,8 +312,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     },
     async (req) => {
       const lk = lookups(db);
-      const special = { status: ['all', 'active', 'progress'], stage: ['all'], track: ['all'] };
-      for (const list of ['status', 'stage', 'track']) {
+      const special: Record<string, string[]> = { status: ['all', 'active', 'progress'], stage: ['all'], track: ['all'] };
+      for (const list of ['status', 'stage', 'track'] as const) {
         const v = req.query[list];
         if (v && !special[list].includes(v) && !lk.get(list, v)) throw Object.assign(new Error(`Unknown ${list} "${v}".`), { statusCode: 400 });
       }
@@ -265,13 +321,13 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     },
   );
 
-  app.get('/api/postings/:id', { schema: { summary: 'Job detail', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
+  app.get<{ Params: IdParams }>('/api/postings/:id', { schema: { summary: 'Job detail', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
     const job = getPosting(db, req.params.id, config);
-    // Its next steps (open reminders, an offer, a follow-up due): the panel's Next step box (server/today.js).
+    // Its next steps (open reminders, an offer, a follow-up due): the panel's Next step box (server/today.ts).
     return job ? { ...job, nextSteps: today(db, { jobId: job.id }).items } : notFound(reply);
   });
 
-  app.patch(
+  app.patch<{ Params: IdParams; Body: PostingPatch }>(
     '/api/postings/:id',
     {
       schema: {
@@ -302,7 +358,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     async (req, reply) => updatePosting(db, req.params.id, req.body, config) ?? notFound(reply),
   );
 
-  app.post(
+  app.post<{ Body: ManualInput }>(
     '/api/postings',
     {
       schema: {
@@ -327,14 +383,15 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
       },
     },
     async (req, reply) => {
-      const input = Object.fromEntries(Object.entries(req.body ?? {}).filter(([, v]) => v !== ''));
+      const input: ManualInput = Object.fromEntries(Object.entries(req.body ?? {}).filter(([, v]) => v !== ''));
       const taskId = startTask('add', { url: input.url ?? null }, async (step, { run, browser }) =>
         addPosting(input, {
           store,
           config,
-          http: services.http,
+          // null only in the demo, which refuses this route (server/auth.ts).
+          http: services.http as Http,
           browser,
-          claude: services.claude,
+          claude: services.claude as Claude,
           knowledge: await services.knowledge(),
           drive: services.drive,
           run,
@@ -345,7 +402,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     },
   );
 
-  app.post(
+  app.post<{ Params: { id: number; action: 'score' | 'write-materials' | 'regenerate' | 'refetch' } }>(
     '/api/postings/:id/actions/:action',
     {
       schema: {
@@ -356,12 +413,14 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     },
     async (req, reply) => {
       const { id, action } = req.params;
-      const posting = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id);
+      const posting = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
       if (!posting) return notFound(reply);
+      // null only in the demo, which refuses this route (server/auth.ts).
+      const claude = services.claude as Claude;
       const taskId = startTask(action, { id }, async (step, { run, browser }) => {
         if (action === 'score') {
           step('Scoring');
-          const s = await scorePostings({ store, config, claude: services.claude, knowledge: await services.knowledge(), model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], rescore: true } });
+          const s = await scorePostings({ store, config, claude, knowledge: await services.knowledge(), model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], rescore: true } });
           if (s.failures.length) throw new Error(s.failures[0].error);
           step(s.promoted.includes(id) ? 'Scored and moved to your pipeline' : 'Scored');
           return { scored: s.scored, promoted: s.promoted.includes(id) };
@@ -372,19 +431,20 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
           const knowledge = await services.knowledge();
           if (!hasScore) {
             step('Scoring first');
-            await scorePostings({ store, config, claude: services.claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], rescore: true } });
+            await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], rescore: true } });
           }
           step(action === 'regenerate' ? 'Writing new resume tweaks and cover letter' : 'Writing resume tweaks and cover letter');
-          const g = await generateForPostings({ store, config, claude: services.claude, knowledge, drive: services.drive, run, options: { ids: [id], regenerate: action === 'regenerate' } });
+          const g = await generateForPostings({ store, config, claude, knowledge, drive: services.drive, run, options: { ids: [id], regenerate: action === 'regenerate' } });
           if (g.failures.length) throw new Error(g.failures[0].error);
           step(g.docs ? 'Cover letter saved as a Google Doc' : 'Done');
           return { tweaks: g.tweaks, letters: g.letters, checked: g.checked, claimFlags: g.claimFlags, docs: g.docs, flagged: g.flagged };
         }
         // refetch
         step('Fetching the posting text');
-        const item = { url: posting.url, title: posting.title, company: posting.company, location: posting.location, linkedinJobId: jobIdFromUrl(posting.url) };
-        if (isOnSite(posting.url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, posting.url);
-        await resolveDetails(item, { http: services.http, browser });
+        // resolveDetails reads these and fills in the text and fetch fields.
+        const item = { url: posting.url, title: posting.title, company: posting.company, location: posting.location, linkedinJobId: jobIdFromUrl(posting.url) } as JobItem;
+        if (isOnSite(posting.url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, posting.url as string); // on the site, so it has a url
+        await resolveDetails(item, { http: services.http as Http, browser });
         const ok = item.fetchStatus === 'ok';
         db.prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN @text IS NULL THEN fetched_at ELSE @now END,
             fetch_status = @status, fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
@@ -422,8 +482,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   registerNoteRoutes(app, { db });
   registerExcludedSiteRoutes(app, { db, ownerConfig });
   registerFollowUpRoutes(app, { store, config, services, startTask, demo: authMode === 'demo' });
-  let scheduler = null;
-  const scheduled = (name) => scheduler?.status().find((j) => j.name === name) ?? null;
+  let scheduler: ReturnType<typeof createScheduler> | null = null;
+  const scheduled = (name: string) => scheduler?.status().find((j) => j.name === name) ?? null;
   const pipeline = services.runPipeline ? registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline, schedule: () => scheduled('pipeline') }) : null;
   const inboxChecks = services.inbox ? registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox }) : null;
   registerReminderRoutes(app, { db });
@@ -432,7 +492,8 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const startBackup = () =>
     tasks.start('backup', { by: 'schedule' }, async (step, { logger }) => {
       step('Backing up');
-      const { code, lastError } = await services.runScript({ script: 'scripts/backup.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
+      // Scheduled only with runScript (the runners below).
+      const { code, lastError } = await (services.runScript as RunScript)({ script: 'scripts/backup.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
       if (code !== 0) throw new Error(lastError ? `The backup failed: ${lastError}` : `The backup failed with exit code ${code}.`);
       step('Backup done');
     });
@@ -441,28 +502,28 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
   const startRestoreTest = () =>
     tasks.start('restore-test', { by: 'schedule' }, async (step, { logger }) => {
       step('Testing the newest backup');
-      const { code, lastError } = await services.runScript({ script: 'scripts/backup-verify.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
+      const { code, lastError } = await (services.runScript as RunScript)({ script: 'scripts/backup-verify.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
       if (code !== 0) throw new Error(lastError ? `The restore test failed: ${lastError}` : `The restore test failed with exit code ${code}.`);
       step('Restore test passed');
     });
 
-  // The in-app scheduler (server/scheduler.js): each job starts the same task as its button, and waits for it.
+  // The in-app scheduler (server/scheduler.ts): each job starts the same task as its button, and waits for it.
   if (services.schedules?.length) {
     const HOURS = 3600 * 1000;
-    const finish = async (taskId, hours) => {
+    const finish = async (taskId: string, hours: number) => {
       const t = await tasks.wait(taskId, hours * HOURS);
       if (t?.status === 'failed') throw new Error(t.error ?? 'failed');
     };
-    const runners = {
+    const runners: Record<string, (() => Promise<unknown>) | null | undefined> = {
       pipeline: pipeline && (async () => {
         await finish(pipeline.start({ by: 'schedule' }), 4);
         // Then the inbox, as the Windows scheduled run did; a pipeline failure above skips it.
-        if (inboxChecks && services.inbox.ready()) await finish(inboxChecks.startCheck({ by: 'schedule' }), 1);
+        if (inboxChecks && (services.inbox as InboxServices).ready()) await finish(inboxChecks.startCheck({ by: 'schedule' }), 1);
         // Then each user who asked to be on the schedule, one at a time, each as themselves; one user's failure never
         // stops the next or marks the owner's run failed.
         for (const uid of scheduledUsers(store.raw ?? db)) {
-          const timeZone = db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) ?? null;
-          await runAsUser(uid, () => finish(pipeline.start({ by: 'schedule' }), 4), { timeZone }).catch((err) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
+          const timeZone = (db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) as string | null | undefined) ?? null;
+          await runAsUser(uid, () => finish(pipeline.start({ by: 'schedule' }), 4), { timeZone }).catch((err: Error) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
         }
       }),
       inbox: inboxChecks && (() => finish(inboxChecks.startCheck({ by: 'schedule' }), 1)),
@@ -470,18 +531,21 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
       'restore-test': services.runScript && (() => finish(startRestoreTest(), 1)),
     };
     // The owner's runs: the schedule is theirs (users' scheduled runs follow it).
-    const lastRanAt = (name) => () => db.prepare('SELECT started_at FROM runs WHERE name = ? AND (user_id IS NULL OR user_id = 1) ORDER BY id DESC LIMIT 1').pluck().get(name) ?? null;
-    scheduler = createScheduler({
+    const lastRanAt = (name: string) => () =>
+      (db.prepare('SELECT started_at FROM runs WHERE name = ? AND (user_id IS NULL OR user_id = 1) ORDER BY id DESC LIMIT 1').pluck().get(name) as string | null | undefined) ?? null;
+    const jobsScheduler = createScheduler({
       // Scheduled jobs are the owner's (phase 1); each user's own schedule comes with per-user feeds.
-      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: () => runAsUser(OWNER_ID, runners[j.name]), lastRanAt: lastRanAt(j.name) })),
+      // Each runner is kept by the filter.
+      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: () => runAsUser(OWNER_ID, runners[j.name] as () => Promise<unknown>), lastRanAt: lastRanAt(j.name) })),
       log: services.log ?? console,
-      // A failed scheduled job emails the owner (server/alerts.js); the next success clears it.
-      onResult: services.alerts ? (name, ok, error) => services.alerts.jobResult(name, ok, error) : null,
+      // A failed scheduled job emails the owner (server/alerts.ts); the next success clears it.
+      onResult: services.alerts ? (name, ok, error) => (services.alerts as ReturnType<typeof createAlerts>).jobResult(name, ok, error) : null,
     });
+    scheduler = jobsScheduler;
     app.addHook('onReady', async () => {
-      scheduler.start();
+      jobsScheduler.start();
     });
-    app.addHook('onClose', async () => scheduler.stop());
+    app.addHook('onClose', async () => jobsScheduler.stop());
   }
 
   app.get('/api/schedule', { schema: { summary: 'The scheduled jobs, their schedules, and when each runs next (empty when none are set)', response: { 200: anyObject } } }, async () => ({
@@ -493,7 +557,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     tasks.list({ uid: req.uid ?? 0 }),
   );
 
-  app.get(
+  app.get<{ Params: { id: string }; Querystring: { from?: number } }>(
     '/api/tasks/:id/log',
     {
       schema: {
@@ -506,7 +570,7 @@ export async function buildApp({ store, config, services, webDir, authMode = 'no
     async (req, reply) => tasks.log(req.params.id, req.query.from ?? 0, { uid: req.uid ?? 0 }) ?? reply.code(404).send({ error: 'Task not found' }),
   );
 
-  app.get(
+  app.get<{ Params: { id: string } }>(
     '/api/tasks/:id',
     { schema: { summary: 'Progress of a background action', params: { type: 'object', properties: { id: { type: 'string' } } }, response: { 200: anyObject } } },
     async (req, reply) => tasks.get(req.params.id, { uid: req.uid ?? 0 }) ?? reply.code(404).send({ error: 'Task not found' }),

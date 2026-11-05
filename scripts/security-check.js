@@ -11,7 +11,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { CONTENT_SECURITY_POLICY } from '../server/security.js';
+import { CONTENT_SECURITY_POLICY } from '../server/security.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SKIP = ['node_modules', '.git', 'data', 'legacy', 'dist'];
@@ -38,7 +38,7 @@ const BROWSER_SINKS = [
 
 // Where a child process may start, and why: each runs fixed commands, never text from a request.
 const CHILD_PROCESS_ALLOWED = {
-  'server/index.js': 'runs scripts/pipeline.js and scripts/backup.js as their own processes',
+  'server/main.ts': 'runs scripts/pipeline.js and scripts/backup.js as their own processes',
   'scripts/check-personal.js': 'reads staged files from git in the pre-commit hook',
   'scripts/evals.js': 'runs the eval scripts',
   'tools/google/oauth-flow.ts': 'opens the browser for the one-time Google sign-in on the owner computer',
@@ -67,9 +67,9 @@ export function securityProblems(root = ROOT) {
     });
   }
   const scriptSrc = /script-src ([^;]*)/.exec(CONTENT_SECURITY_POLICY)?.[1]?.trim();
-  if (scriptSrc !== "'self'") problems.push({ file: 'server/security.js', line: 0, rule: `CSP script-src must be 'self' only (is ${scriptSrc})` });
+  if (scriptSrc !== "'self'") problems.push({ file: 'server/security.ts', line: 0, rule: `CSP script-src must be 'self' only (is ${scriptSrc})` });
   if (!/object-src 'none'/.test(CONTENT_SECURITY_POLICY) || !/base-uri 'none'/.test(CONTENT_SECURITY_POLICY) || !/frame-ancestors 'none'/.test(CONTENT_SECURITY_POLICY)) {
-    problems.push({ file: 'server/security.js', line: 0, rule: "CSP must keep object-src, base-uri and frame-ancestors 'none'" });
+    problems.push({ file: 'server/security.ts', line: 0, rule: "CSP must keep object-src, base-uri and frame-ancestors 'none'" });
   }
   return problems;
 }

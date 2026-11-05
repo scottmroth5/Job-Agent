@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
 import { repoPath } from '../tools/paths.ts';
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

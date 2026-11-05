@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { KNOWLEDGE_SECTIONS, knowledgeTemplate, sectionCheck } from '../agents/knowledge-sections.ts';
 import { DRAFT_SYSTEM } from '../agents/draft-profile.ts';
 import { defaultPrompt } from '../agents/prompts.ts';
-import { DEMO_ABOUT_YOU } from '../demo/sample-data.js';
+import { DEMO_ABOUT_YOU } from '../demo/sample-data.ts';
 import { repoPath } from '../tools/paths.ts';
 
 const all = (text) => sectionCheck(text).every((s) => s.found);

@@ -1,4 +1,4 @@
-// Builds the public demo's database from demo/sample-data.js: a fictional candidate's job search with scores,
+// Builds the public demo's database from demo/sample-data.ts: a fictional candidate's job search with scores,
 // analyses, letters, notes, emails, a meeting prep, and pipeline history, dated relative to today.
 //
 //   DATA_DIR=demo-data node scripts/demo-seed.js           build demo-data/job-agent.db and its config
@@ -19,7 +19,7 @@ import { addNote } from '../agents/notes.ts';
 import { companyTitleKey } from '../tools/urls.ts';
 import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { pickResume } from '../agents/resumes.ts';
-import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.js';
+import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.ts';
 import { saveCheck } from '../agents/letter-checks.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.ts';

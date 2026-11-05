@@ -2,8 +2,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
-import { page } from '../server/auth.js';
+import { buildApp } from '../server/app.ts';
+import { page } from '../server/auth.ts';
 import { loadGuides } from '../server/help-routes.ts';
 import { supportEmail, withSupport } from '../tools/support.ts';
 

@@ -9,10 +9,10 @@ import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
 import { USER_TABLES } from '../db/user-tables.ts';
 import { addUser, OWNER_ID } from '../db/users.ts';
-import { buildApp } from '../server/app.js';
-import { authSettings } from '../server/auth.js';
-import { createNotices } from '../server/notices.js';
-import { SESSION_COOKIE, sessionKey, sign } from '../server/session.js';
+import { buildApp } from '../server/app.ts';
+import { authSettings } from '../server/auth.ts';
+import { createNotices } from '../server/notices.ts';
+import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { saveUserProfile } from '../agents/user-config.ts';
 
 const SITE = 'http://localhost:5178';

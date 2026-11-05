@@ -5,7 +5,7 @@ import { listingReason, isListingPage, excludedSite, skipReason } from '../tools
 import { interpretResult, ruleScore, isRuleScored, NO_TEXT_CAP } from '../agents/discovery/score.ts';
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.ts';
 import { validateManualInput, addPosting } from '../agents/manual.ts';
-import { listPostings, summary } from '../server/queries.js';
+import { listPostings, summary } from '../server/queries.ts';
 
 // Synthetic titles and links in the shapes seen in Google results; no real data.
 test('list-of-jobs titles and search links are recognized', () => {
@@ -225,7 +225,7 @@ test('rows carry pay from the job terms, the source salary, or the description, 
 });
 
 test('editing the company finds the earlier copy, and duplicateOf archives this one with a note', async () => {
-  const { updatePosting, getPosting } = await import('../server/queries.js');
+  const { updatePosting, getPosting } = await import('../server/queries.ts');
   const { rekeyPostings, findCopies } = await import('../agents/identity.ts');
   const store = openJobStore(':memory:');
   const { db } = store;
@@ -287,7 +287,7 @@ test("discovery's first status entry does not count as removed by cleanup", () =
 });
 
 test('copies already archived as duplicates are not pointed out again', async () => {
-  const { updatePosting, getPosting } = await import('../server/queries.js');
+  const { updatePosting, getPosting } = await import('../server/queries.ts');
   const store = openJobStore(':memory:');
   const { db } = store;
   const add = (o) => {

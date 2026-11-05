@@ -98,7 +98,7 @@ declare module '@scottmroth5/agent-core' {
     recordCall(info: CallInfo): void;
     log(level: 'info' | 'warn' | 'error', msg: string, fields?: object): void;
     /** Idempotent; later calls return the first totals. */
-    finish(status?: string, summary?: object): Totals;
+    finish(status?: string, summary?: object | null): Totals;
   }
 
   export interface Logger {

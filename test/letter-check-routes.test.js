@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
-import { buildApp } from '../server/app.js';
+import { buildApp } from '../server/app.ts';
 import { generateForPostings } from '../agents/hunt/generate.ts';
 import { CHECKS_PER_DAY } from '../server/letter-routes.ts';
 
