@@ -383,12 +383,13 @@ export async function buildApp({ store, config, services: given, webDir, authMod
       },
     },
     async (req, reply) => {
+      if (!services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
       const input: ManualInput = Object.fromEntries(Object.entries(req.body ?? {}).filter(([, v]) => v !== ''));
       const taskId = startTask('add', { url: input.url ?? null }, async (step, { run, browser }) =>
         addPosting(input, {
           store,
           config,
-          // null only in the demo, which refuses this route (server/auth.ts).
+          // null only in the demo, which refuses this route (server/auth.ts); claude was checked above.
           http: services.http as Http,
           browser,
           claude: services.claude as Claude,
@@ -415,7 +416,8 @@ export async function buildApp({ store, config, services: given, webDir, authMod
       const { id, action } = req.params;
       const posting = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
       if (!posting) return notFound(reply);
-      // null only in the demo, which refuses this route (server/auth.ts).
+      if (action !== 'refetch' && !services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
+      // Checked above for the actions that use it.
       const claude = services.claude as Claude;
       const taskId = startTask(action, { id }, async (step, { run, browser }) => {
         if (action === 'score') {
@@ -426,7 +428,8 @@ export async function buildApp({ store, config, services: given, webDir, authMod
           return { scored: s.scored, promoted: s.promoted.includes(id) };
         }
         if (action === 'write-materials' || action === 'regenerate') {
-          if (posting.stage === 'discovered') db.prepare("UPDATE postings SET stage = 'pipeline', updated_at = ? WHERE id = ? AND user_id = @uid").run(new Date().toISOString(), id);
+          const lk = lookups(db);
+          if (lk.groupOf('stage', posting.stage) === 'found') db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), new Date().toISOString(), id);
           const hasScore = db.prepare("SELECT 1 FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule')").get(id);
           const knowledge = await services.knowledge();
           if (!hasScore) {

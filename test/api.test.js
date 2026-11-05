@@ -121,6 +121,32 @@ test('adding a job runs as a task with progress steps; actions score and write m
   store.close();
 });
 
+test('writing materials for a Discovered job moves it to the promote stage first', async () => {
+  const { app, store, ids } = await setup();
+  store.db.prepare('UPDATE postings SET fetched_text = ? WHERE id = ?').run(DESCRIPTION, ids.found);
+  const task = await app.tasks.wait((await app.inject({ method: 'POST', url: `/api/postings/${ids.found}/actions/write-materials` })).json().taskId);
+  assert.equal(task.status, 'done', task.error);
+  assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(ids.found), 'pipeline');
+  await app.close();
+  store.close();
+});
+
+test('with no AI here, adding a job and the AI actions are refused with 503 before any task starts; refetch is not', async () => {
+  const store = openJobStore(':memory:');
+  const id = Number(store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, discovered_on, created_at, updated_at)
+    VALUES (1, 'https://jobs.example.com/9', 'k9', 'Nine Co', 'CTO', 'k9', 'LinkedIn', 'pipeline', 'new', 'fulltime', '2026-09-30', 'x', 'x')`).run().lastInsertRowid);
+  const app = await buildApp({ store, config, services: { ...services(), claude: null } });
+  const add = await app.inject({ method: 'POST', url: '/api/postings', payload: { title: 'CTO', company: 'Added Co', description: DESCRIPTION } });
+  assert.equal(add.statusCode, 503);
+  for (const action of ['score', 'write-materials', 'regenerate']) {
+    assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${id}/actions/${action}` })).statusCode, 503, action);
+  }
+  assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${id}/actions/refetch` })).statusCode, 202);
+  assert.equal(store.db.prepare("SELECT COUNT(*) FROM runs WHERE name IN ('ui-add', 'ui-score', 'ui-write-materials', 'ui-regenerate')").pluck().get(), 0);
+  await app.close();
+  store.close();
+});
+
 test('actions are refused while a pipeline run is in progress', async () => {
   const { app, store, ids } = await setup();
   store.db.prepare("INSERT INTO runs (name, status, started_at) VALUES ('pipeline', 'running', ?)").run(new Date().toISOString());
