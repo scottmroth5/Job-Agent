@@ -53,11 +53,42 @@ const STATUS_GROUP: Record<string, StatusGroup> = {
 
 /** Roles a list has, and which group the value holding each role must be in (null: any). */
 export const ROLES: Record<string, Record<string, string[] | null>> = {
-  status: { default: ['evaluate'], noResponse: ['closed'] },
+  status: {
+    default: ['evaluate'],
+    noResponse: ['closed'],
+    // The values the app sets itself (023): the inbox's moves, duplicate copies, and cleanup.
+    applied: ['waiting'],
+    interview: ['conversation'],
+    offer: ['decision'],
+    rejected: ['closed'],
+    duplicate: ['closed'],
+    passed: ['closed'],
+  },
   stage: { default: ['found', 'active'], promote: ['active'], archive: ['archived'] },
   track: { default: null },
 };
-export const ROLE_LABELS: Record<string, string> = { default: 'Default for new jobs', promote: 'Where 7+ jobs are promoted', archive: 'Where archived jobs go', noResponse: 'Where stale applications are closed (no reply)' };
+export const ROLE_LABELS: Record<string, string> = {
+  default: 'Default for new jobs',
+  promote: 'Where 7+ jobs are promoted',
+  archive: 'Where archived jobs go',
+  noResponse: 'Where stale applications are closed (no reply)',
+  applied: 'Where a confirmation email moves a job',
+  interview: 'Where an interview request moves a job',
+  offer: 'Where an offer email moves a job',
+  rejected: 'Where a rejection email moves a job (the funnel counts moves to it as rejections)',
+  duplicate: 'Where duplicate copies are closed',
+  passed: 'Where cleanup closes jobs you never acted on',
+};
+
+// The status roles 023 added, on the built-in values, for the built-in lists below.
+const ADDED_ROLES: Array<[list: string, role: string, valueId: string]> = [
+  ['status', 'applied', 'applied'],
+  ['status', 'interview', 'interviewing'],
+  ['status', 'offer', 'offer'],
+  ['status', 'rejected', 'rejected'],
+  ['status', 'duplicate', 'duplicate'],
+  ['status', 'passed', 'passed'],
+];
 
 export const SCORE_PROMPTS = ['score', 'score-fractional'];
 const ID = /^[a-z][a-z0-9_]{0,39}$/;
@@ -82,12 +113,12 @@ function build(rows: ValueRow[], roles: Array<Pick<LookupRolesRow, 'list' | 'rol
   return makeApi(byList, roleMap);
 }
 
-/** The built-in lists (the 009 seeds), for code and tests that run without a database. */
+/** The built-in lists (the 009 seeds and 023's roles), for code and tests that run without a database. */
 let builtIn: Lookups | null = null;
 export function builtInLookups(): Lookups {
   builtIn ??= build(
     BUILT_INS.map(([list, id, label, group, settings], i) => ({ list, id, label, group_key: group, sort_order: (i + 1) * 10, settings_json: settings ? JSON.stringify(settings) : null, origin: 'built_in', archived_at: null })),
-    BUILT_IN_ROLES.map(([list, role, value_id]) => ({ list, role, value_id })),
+    [...BUILT_IN_ROLES, ...ADDED_ROLES].map(([list, role, value_id]) => ({ list, role, value_id })),
   );
   return builtIn;
 }

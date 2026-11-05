@@ -57,7 +57,8 @@ export function rekeyPostings(db: Database) {
  */
 export function liveCopySql(db: Database) {
   const lk = lookups(db);
-  return `q.status != 'duplicate' AND (q.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR (q.status NOT IN ${sqlList(lk.ids('status', 'evaluate'))}
+  const duplicate = lk.role('status', 'duplicate');
+  return `q.status NOT IN ${sqlList(duplicate ? [duplicate] : [])} AND (q.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR (q.status NOT IN ${sqlList(lk.ids('status', 'evaluate'))}
   AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = q.id AND h.user_id = q.user_id ORDER BY h.id DESC LIMIT 1), '') != 'agent'))`;
 }
 

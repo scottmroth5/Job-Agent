@@ -14,6 +14,7 @@ import * as resumes from './migrations/017-resumes.ts';
 import * as noResponse from './migrations/018-no-response.ts';
 import * as dismissedEmail from './migrations/019-dismissed-email.ts';
 import * as usageBrowser from './migrations/021-usage-browser.ts';
+import * as statusRoles from './migrations/023-status-roles.ts';
 import { scopeDb } from './scope.ts';
 import type { ScopedDatabase } from './scope.ts';
 import type { Migration, Store } from '@scottmroth5/agent-core';
@@ -35,7 +36,7 @@ const MIGRATIONS_DIR = repoPath('db', 'migrations');
 
 // Migrations that need code rather than plain SQL. Each exports id and up(db); foreignKeys = false marks a table rebuild
 // (agent-core runs it with foreign keys off, then checks them before it commits).
-const CODE_MIGRATIONS: Array<{ id: string; up: (db: Database.Database) => void; foreignKeys?: boolean }> = [duplicateStatus, lookups, postingNotes, users, accounts, activity, timeZoneColumn, resumes, noResponse, dismissedEmail, usageBrowser];
+const CODE_MIGRATIONS: Array<{ id: string; up: (db: Database.Database) => void; foreignKeys?: boolean }> = [duplicateStatus, lookups, postingNotes, users, accounts, activity, timeZoneColumn, resumes, noResponse, dismissedEmail, usageBrowser, statusRoles];
 
 /** Migrations: the .sql files in db/migrations plus CODE_MIGRATIONS, applied in id (file-name) order. */
 export function loadMigrations(dir = MIGRATIONS_DIR): Migration[] {

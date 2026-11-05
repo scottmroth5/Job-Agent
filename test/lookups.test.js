@@ -56,13 +56,17 @@ test('adding, renaming, regrouping, and ordering values', () => {
 test('archiving: allowed for any value except one holding a role; archived values keep their behavior', () => {
   const store = openJobStore(':memory:');
   const { db } = store;
-  updateValue(db, 'status', 'interviewing', { archived: true });
+  const screen = addValue(db, 'status', { label: 'Phone screen', group: 'conversation' });
+  updateValue(db, 'status', screen, { archived: true });
   const lk = lookups(db);
-  assert.equal(lk.selectable('status', 'interviewing'), false);
-  assert.ok(lk.inProgress().includes('interviewing'), 'jobs that already have it keep its behavior');
-  assert.equal(lookups(db).values('status', { includeArchived: false }).some((v) => v.id === 'interviewing'), false);
-  updateValue(db, 'status', 'interviewing', { archived: false });
-  assert.equal(lookups(db).selectable('status', 'interviewing'), true);
+  assert.equal(lk.selectable('status', screen), false);
+  assert.ok(lk.inProgress().includes(screen), 'jobs that already have it keep its behavior');
+  assert.equal(lookups(db).values('status', { includeArchived: false }).some((v) => v.id === screen), false);
+  updateValue(db, 'status', screen, { archived: false });
+  assert.equal(lookups(db).selectable('status', screen), true);
+  // The statuses the app sets itself hold roles (023), so they move the role before they can be archived.
+  assert.throws(() => updateValue(db, 'status', 'interviewing', { archived: true }), /interview request moves a job/);
+  assert.throws(() => setRole(db, 'status', 'rejected', 'applied'), /must be in closed/);
 
   assert.throws(() => updateValue(db, 'stage', 'pipeline', { archived: true }), /where 7\+ jobs are promoted/);
   assert.throws(() => updateValue(db, 'status', 'new', { group: 'closed' }), /Move that role first/);

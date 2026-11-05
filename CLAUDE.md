@@ -35,7 +35,8 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
 /agents/lookups.js  the configurable status, stage, and track lists (lookup_values, lookup_roles; Admin > Lists). Jobs store each
                     value's immutable text ID. Behavior comes from the value's group (status: evaluate, waiting, conversation,
                     decision, closed; stage: found, active, archived; track settings choose the scoring prompt and pay fields) and
-                    from roles (default status/stage/track, promotion stage, archive stage). Never compare to a literal status,
+                    from roles (default status/stage/track, promotion stage, archive stage, and 023 status roles for the values the app sets:
+                    the inbox moves applied, interview, offer, rejected; duplicate; passed; noResponse). Never compare to a literal status,
                     stage, or track ID for behavior: use lookups(db) helpers and sqlList(). Values are archived, never deleted
 /agents/identity.js same-job matching: companyTitleKey (tools/urls.ts) spells out VP/Sr/CTO, drops "of/and/remote" and company suffixes;
                     placeholder companies ("See posting") are read from the Google title. Rule changes need npm run cleanup to rekey
