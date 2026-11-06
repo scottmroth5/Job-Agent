@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
+
+type FollowUps = ApiResponse<'GET /api/follow-ups'>;
 import { useDemo } from '../demo.tsx';
 
 /**
@@ -8,19 +12,19 @@ import { useDemo } from '../demo.tsx';
  */
 export default function FollowUpSettings() {
   const demo = useDemo();
-  const [data, setData] = useState(null);
+  const [data, setData] = useState<FollowUps | null>(null);
   const [days, setDays] = useState('');
-  const [note, setNote] = useState(null);
-  const [error, setError] = useState(null);
-  const show = (d) => {
-    setData((old) => ({ ...old, ...d }));
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const show = (d: FollowUps) => {
+    setData((old: FollowUps | null) => ({ ...old, ...d }));
     setDays(String(d.staleDays));
   };
   useEffect(() => {
-    api.followUps().then(show, (err) => setError(err.message));
+    api.followUps().then(show, (err: Error) => setError(err.message));
   }, []);
 
-  const save = async (e) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setNote(null);
@@ -29,7 +33,7 @@ export default function FollowUpSettings() {
       show(await api.followUps());
       setNote('Saved.');
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 

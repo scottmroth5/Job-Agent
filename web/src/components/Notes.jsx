@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { renderMarkdown } from '../../../tools/markdown.ts';
-import { DashIcon } from './DashIcon.jsx';
+import { DashIcon } from './DashIcon.tsx';
 
 /** Formatted Markdown, rendered safely (tools/markdown.ts escapes everything first). */
 export function Markdown({ text, className = 'md' }) {

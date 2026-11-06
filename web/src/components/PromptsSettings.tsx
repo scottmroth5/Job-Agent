@@ -2,12 +2,17 @@ import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { useDemo } from '../demo.tsx';
 import { isOwner, useMe } from '../me.tsx';
+import type { ApiResponse } from '../api.ts';
+
+type PromptSummary = ApiResponse<'GET /api/prompts'>[number];
+type Prompt = ApiResponse<'GET /api/prompts/:name'>;
+type PromptVersion = { id: number; createdAt: string; note: string | null; version: string; active: boolean; template: string };
 
 // Settings > Prompts: each user's own prompt edits (prompt_versions rows are theirs; agents/prompts.ts getPrompt reads
 // the current user's active edit, else the repo default). Saved versions, restore, a no-AI preview, and the output
 // format the code reads.
 
-function PromptList({ prompts, selected, onSelect }) {
+function PromptList({ prompts, selected, onSelect }: { prompts: PromptSummary[]; selected: string; onSelect: (name: string) => void }) {
   return (
     <nav className="prompt-list" aria-label="Prompts">
       {prompts.map((p) => (
@@ -21,17 +26,17 @@ function PromptList({ prompts, selected, onSelect }) {
   );
 }
 
-function PromptEditor({ name, onSaved, ownerView }) {
-  const [p, setP] = useState(null);
+function PromptEditor({ name, onSaved, ownerView }: { name: string; onSaved: () => unknown; ownerView: boolean }) {
+  const [p, setP] = useState<Prompt | null>(null);
   const [draft, setDraft] = useState('');
   const [note, setNote] = useState('');
-  const [error, setError] = useState(null);
-  const [message, setMessage] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [preview, setPreview] = useState<ApiResponse<'POST /api/prompts/:name/preview'> | null>(null);
   const [previewId, setPreviewId] = useState('');
   const [showDefault, setShowDefault] = useState(false);
   const [showSchema, setShowSchema] = useState(false);
-  const area = useRef(null);
+  const area = useRef<HTMLTextAreaElement>(null);
 
   const load = async () => {
     const data = await api.prompt(name);
@@ -44,13 +49,13 @@ function PromptEditor({ name, onSaved, ownerView }) {
 
   useEffect(() => {
     setMessage(null);
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError((err as Error).message));
   }, [name]);
 
   if (!p) return <div className="muted">{error ?? 'Loading…'}</div>;
   const dirty = draft !== p.template;
 
-  const insert = (placeholder) => {
+  const insert = (placeholder: string) => {
     const el = area.current;
     const text = `{{${placeholder}}}`;
     const start = el?.selectionStart ?? draft.length;
@@ -62,7 +67,7 @@ function PromptEditor({ name, onSaved, ownerView }) {
     });
   };
 
-  const act = async (fn, success) => {
+  const act = async (fn: () => Promise<Prompt | null | undefined>, success: string) => {
     setError(null);
     setMessage(null);
     try {
@@ -75,7 +80,7 @@ function PromptEditor({ name, onSaved, ownerView }) {
       setMessage(success);
       onSaved();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -84,7 +89,7 @@ function PromptEditor({ name, onSaved, ownerView }) {
     try {
       setPreview(await api.previewPrompt(name, draft, previewId));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -109,7 +114,7 @@ function PromptEditor({ name, onSaved, ownerView }) {
 
       <div className="chips" aria-label="Placeholders">
         <span className="muted small">Insert:</span>
-        {p.allowed.map((ph) => (
+        {p.allowed.map((ph: string) => (
           <button key={ph} type="button" className={`chip ${used.has(ph) ? 'used' : ''} ${p.required.includes(ph) ? 'required' : ''}`} onClick={() => insert(ph)} title={p.required.includes(ph) ? 'Required' : 'Optional'}>
             {`{{${ph}}}`}
           </button>
@@ -165,7 +170,7 @@ function PromptEditor({ name, onSaved, ownerView }) {
         ) : (
           <table className="history">
             <tbody>
-              {p.versions.map((v) => (
+              {p.versions.map((v: PromptVersion) => (
                 <tr key={v.id}>
                   <td className="muted small">{v.createdAt.slice(0, 16).replace('T', ' ')}</td>
                   <td>{v.note ?? <span className="muted">no note</span>}</td>
@@ -205,11 +210,11 @@ export default function PromptsSettings() {
   const me = useMe();
   const demo = useDemo();
   const ownerView = isOwner(me) || demo;
-  const [all, setPrompts] = useState([]);
+  const [all, setPrompts] = useState<PromptSummary[]>([]);
   const prompts = ownerView ? all : all.filter((p) => p.name !== 'inbox-classify');
   const [selected, setSelected] = useState('score');
-  const [error, setError] = useState(null);
-  const refresh = () => api.prompts().then(setPrompts).catch((err) => setError(err.message));
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () => api.prompts().then(setPrompts).catch((err) => setError((err as Error).message));
   useEffect(() => {
     void refresh();
   }, []);

@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
+
+type Resume = ApiResponse<'GET /api/resumes'>[number];
 import { useDemo } from '../demo.tsx';
 
 const ACCEPT = '.pdf,.docx,.txt,.md';
-const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-const KIND_NAMES = { pdf: 'PDF', docx: 'Word', text: 'text' };
+const KIND_NAMES: Record<string, string | undefined> = { pdf: 'PDF', docx: 'Word', text: 'text' };
 
 /**
  * Download as the user prefers: the file as uploaded, or its text laid out as PDF or Word, or plain text. The PDF and Word
  * versions use a clean one-column layout (tools/resume-format.ts); the original keeps the user's own design.
  */
-function DownloadMenu({ r }) {
-  const href = (format) => `/api/resumes/${r.id}/file?format=${format}`;
+function DownloadMenu({ r }: { r: Resume }) {
+  const href = (format: string) => `/api/resumes/${r.id}/file?format=${format}`;
   return (
     <details className="download-menu">
       <summary className="button">Download</summary>
@@ -36,17 +39,17 @@ function DownloadMenu({ r }) {
 }
 
 /** One resume: its label and the job titles it is for (edited in place), default, replace, download, delete. */
-function ResumeRow({ r, demo, onChanged, onError }) {
+function ResumeRow({ r, demo, onChanged, onError }: { r: Resume; demo: boolean; onChanged: () => Promise<unknown>; onError: (message: string | null) => void }) {
   const [label, setLabel] = useState(r.label);
   const [titles, setTitles] = useState(r.titles);
   const dirty = label !== r.label || titles !== r.titles;
-  const act = async (fn) => {
+  const act = async (fn: () => Promise<unknown>) => {
     onError(null);
     try {
       await fn();
       await onChanged();
     } catch (err) {
-      onError(err.message);
+      onError((err as Error).message);
     }
   };
   return (
@@ -111,22 +114,22 @@ function ResumeRow({ r, demo, onChanged, onError }) {
  */
 export default function ResumesSettings() {
   const demo = useDemo();
-  const [list, setList] = useState(null);
-  const [error, setError] = useState(null);
+  const [list, setList] = useState<Resume[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = () => api.resumes().then(setList, (err) => setError(err.message));
+  const load = () => api.resumes().then(setList, (err: Error) => setError(err.message));
   useEffect(() => {
     void load();
   }, []);
 
-  const upload = async (file) => {
+  const upload = async (file: File) => {
     setError(null);
     setBusy(true);
     try {
       await api.uploadResume(file);
       await load();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }

@@ -1,21 +1,26 @@
 import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
+
+type Sites = ApiResponse<'GET /api/excluded-sites'>;
+type Site = { site: string; note?: string | null; addedAt?: string | null; savedJobs: number };
 import { useDemo } from '../demo.tsx';
 
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** One skipped site: its note (edited in place), how many saved jobs it still has, and Stop skipping. */
-function SiteRow({ s, demo, onChange, onError }) {
+function SiteRow({ s, demo, onChange, onError }: { s: Site; demo: boolean; onChange: (data: Sites) => Promise<void> | void; onError: (message: string | null) => void }) {
   const [note, setNote] = useState(s.note ?? '');
   const [busy, setBusy] = useState(false);
   useEffect(() => setNote(s.note ?? ''), [s.note]);
-  const act = async (fn) => {
+  const act = async (fn: () => Promise<Sites>) => {
     setBusy(true);
     onError(null);
     try {
       await onChange(await fn());
     } catch (err) {
-      onError(err.message);
+      onError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -55,16 +60,16 @@ function SiteRow({ s, demo, onChange, onError }) {
  */
 export default function ExcludedSitesSettings() {
   const demo = useDemo();
-  const [data, setData] = useState(null);
+  const [data, setData] = useState<Sites | null>(null);
   const [site, setSite] = useState('');
   const [note, setNote] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    api.excludedSites().then(setData, (err) => setError(err.message));
+    api.excludedSites().then(setData, (err) => setError((err as Error).message));
   }, []);
 
-  const add = async (e) => {
+  const add = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
@@ -73,12 +78,12 @@ export default function ExcludedSitesSettings() {
       setSite('');
       setNote('');
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   };
-  const changed = async (d) => setData(d.sites ? d : await api.excludedSites());
+  const changed = async (d: Sites) => setData(d.sites ? d : await api.excludedSites());
 
   return (
     <section className="home-card">
@@ -93,16 +98,16 @@ export default function ExcludedSitesSettings() {
         <>
           {data.sites.length === 0 && data.fromFile.length === 0 && <p className="muted">No sites skipped yet.</p>}
           <ul className="skip-sites">
-            {data.sites.map((s) => (
+            {data.sites.map((s: Site) => (
               <SiteRow key={s.site} s={s} demo={demo} onChange={changed} onError={setError} />
             ))}
-            {data.fromFile.map((s) => (
+            {data.fromFile.map((s: Site) => (
               <li key={`file-${s.site}`} className="skip-site">
                 <div className="row">
                   <b>{s.site}</b>
                   <span className="muted small">from your settings file (search.excludedSites)</span>
                   {s.savedJobs > 0 && (
-                    <button type="button" onClick={() => api.removeSiteJobs(s.site).then(changed, (err) => setError(err.message))}>
+                    <button type="button" onClick={() => api.removeSiteJobs(s.site).then(changed, (err) => setError((err as Error).message))}>
                       Remove {plural(s.savedJobs, 'saved job')}
                     </button>
                   )}

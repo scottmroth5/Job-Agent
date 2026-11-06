@@ -1,39 +1,42 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
 import { Markdown } from './Notes.jsx';
 
-const HOW = { typed: 'Typed or edited', file: 'From an uploaded file', draft: 'From Build a draft', restore: 'Restored', earlier: 'Saved before versions were kept', sample: 'The sample' };
-const when = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'date unknown');
+const HOW: Record<string, string | undefined> = { typed: 'Typed or edited', file: 'From an uploaded file', draft: 'From Build a draft', restore: 'Restored', earlier: 'Saved before versions were kept', sample: 'The sample' };
+const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'date unknown');
 
 /**
  * The knowledge doc's versions (every save keeps the one before, up to 20): when and how each was saved, and View,
  * Download Word, or Make current (saved as a new version, so nothing is lost).
  */
-export default function KnowledgeVersions({ onRestored }) {
-  const [versions, setVersions] = useState(null);
+type Versions = ApiResponse<'GET /api/account/profile/versions'>;
+
+export default function KnowledgeVersions({ onRestored }: { onRestored: (profile: ApiResponse<'POST /api/account/profile/versions/:n/restore'>) => void }) {
+  const [versions, setVersions] = useState<Versions | null>(null);
   const [open, setOpen] = useState(false);
-  const [viewing, setViewing] = useState(null);
-  const [error, setError] = useState(null);
+  const [viewing, setViewing] = useState<ApiResponse<'GET /api/account/profile/versions/:n'> | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     api.profileVersions().then(setVersions, () => setVersions([]));
   }, []);
   if (!versions?.length) return null;
 
-  const view = async (n) => {
+  const view = async (n: number) => {
     setError(null);
     if (viewing?.n === n) return setViewing(null);
     try {
       setViewing(await api.profileVersion(n));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
-  const restore = async (n) => {
+  const restore = async (n: number) => {
     setError(null);
     try {
       onRestored(await api.restoreProfileVersion(n));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
