@@ -9,6 +9,6 @@ try {
   const report = baselineReport(DB_PATH, { attachmentsDir: dataPath('attachments') });
   console.log(process.argv.includes('--json') ? JSON.stringify(report, null, 2) : renderBaseline(report));
 } catch (err) {
-  console.error(`baseline failed: ${err.name}: ${err.message}`);
+  console.error(`baseline failed: ${/** @type {Error} */ (err).name}: ${/** @type {Error} */ (err).message}`);
   process.exitCode = 1;
 }

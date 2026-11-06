@@ -15,6 +15,9 @@ const ENV_MIN_LENGTH = 8; // shorter .env values (flags, small numbers) would on
  * Finds private terms in text. Matching is case-insensitive and whole-word where the term
  * starts and ends with a letter or digit. allowTerms are blanked out first, so a public
  * handle that contains a private word (e.g. a username containing a first name) does not trip.
+ * @param {string} text
+ * @param {string[]} terms
+ * @param {string[]} [allowTerms]
  * @returns {Array<{line: number, term: number}>} 1-based line numbers and indexes into terms
  */
 export function findPersonalHits(text, terms, allowTerms = []) {
@@ -28,6 +31,7 @@ export function findPersonalHits(text, terms, allowTerms = []) {
     const end = /[\p{L}\p{N}]$/u.test(t.trim()) ? '(?![\\p{L}\\p{N}])' : '';
     return new RegExp(`${start}${e}${end}`, 'iu');
   });
+  /** @type {Array<{line: number, term: number}>} */
   const hits = [];
   scrubbed.split(/\r?\n/).forEach((line, i) => {
     patterns.forEach((p, term) => {
@@ -37,7 +41,10 @@ export function findPersonalHits(text, terms, allowTerms = []) {
   return hits;
 }
 
-/** Shows enough of a term to recognize it without printing a secret in full. */
+/**
+ * Shows enough of a term to recognize it without printing a secret in full.
+ * @param {string} term
+ */
 export function maskTerm(term) {
   return term.length <= 4 ? `${term[0]}***` : `${term.slice(0, 2)}***${term.slice(-1)} (${term.length} chars)`;
 }
@@ -46,26 +53,34 @@ export function maskTerm(term) {
 // appear in code and docs. Everything else in .env is treated as private, including TZ, which hints at location.
 export const NON_SECRET_ENV_KEYS = new Set(['SCHEDULE_PIPELINE', 'SCHEDULE_INBOX', 'SCHEDULE_BACKUP', 'DATA_DIR', 'MONTHLY_CLAUDE_BUDGET_USD', 'TRUST_PROXY', 'AUTH_MODE', 'HOST', 'PORT', 'PLAYWRIGHT_CHANNEL']);
 
-/** Values from a .env file, except the app options above. */
+/**
+ * Values from a .env file, except the app options above.
+ * @param {string} text
+ */
 export function envValues(text) {
   return text
     .split(/\r?\n/)
     .map((l) => /^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/.exec(l))
-    .filter((m) => m && !NON_SECRET_ENV_KEYS.has(m[1]))
-    .map((m) => m[2].trim().replace(/^(['"])(.*)\1$/, '$2'))
+    .filter(/** @returns {m is RegExpExecArray} */ (m) => Boolean(m && !NON_SECRET_ENV_KEYS.has(/** @type {string} */ (m[1]))))
+    .map((m) => /** @type {string} */ (m[2]).trim().replace(/^(['"])(.*)\1$/, '$2'))
     .filter((v) => v && v.length >= ENV_MIN_LENGTH);
 }
 
-/** Paths that hold personal data by design: anything under data/, and .env files. */
+/**
+ * Paths that hold personal data by design: anything under data/, and .env files.
+ * @param {string} file
+ */
 export function isForbiddenPath(file) {
   const f = file.replace(/\\/g, '/');
   return f.startsWith('data/') || /(^|\/)\.env(\..*)?$/.test(f);
 }
 
+/** @param {string} s */
 function escapeRegex(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** @param {string[]} args */
 function git(args) {
   return execFileSync('git', args, { cwd: repoPath(), encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 }
@@ -80,6 +95,7 @@ function main() {
     console.error(`check-personal: ${CONFIG_PATH} is missing, so personal data cannot be checked. Run "npm run config:from-v1".`);
     return 1;
   }
+  /** @type {{ privateTerms?: string[], allowTerms?: string[] }} */
   const config = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
   const envPath = repoPath('.env');
   const terms = [
@@ -107,7 +123,7 @@ function main() {
     if (text.includes('\u0000')) continue; // binary
     for (const hit of findPersonalHits(text, terms, allowTerms)) {
       found += 1;
-      console.error(`  ${file}:${hit.line}  matches private term ${maskTerm(terms[hit.term])}`);
+      console.error(`  ${file}:${hit.line}  matches private term ${maskTerm(/** @type {string} */ (terms[hit.term]))}`);
     }
   }
 

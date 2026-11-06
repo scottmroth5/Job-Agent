@@ -9,21 +9,27 @@ import { createJobTracer } from '../tools/trace.ts';
 import { openJobStore, DB_PATH } from '../db/index.ts';
 import { importV1 } from '../db/import-v1.ts';
 import { dataPath } from '../tools/paths.ts';
+/** @import { SheetRow } from '../db/import-v1.ts' */
 
 const SHEETS_DIR = dataPath('v1-export', 'sheets');
 
+/**
+ * @param {string} path
+ * @returns {SheetRow[]}
+ */
 const readCsv = (path) =>
   parse(readFileSync(path), { columns: true, bom: true, skip_empty_lines: true, relax_column_count: true, trim: false });
 
 /**
  * Finds the exports by name: the Discovered Jobs sheet, and the hunt sheet tabs.
  * Hunt tabs are ordered archives first (by name) and the current "Jobs" tab last.
+ * @param {string[]} names
  */
 export function classifySheetFiles(names) {
   const csv = names.filter((n) => n.toLowerCase().endsWith('.csv'));
   const discovered = csv.filter((n) => /^discovered/i.test(n));
   const hunt = csv.filter((n) => !/^discovered/i.test(n));
-  const isCurrent = (n) => /- jobs\.csv$/i.test(n);
+  const isCurrent = (/** @type {string} */ n) => /- jobs\.csv$/i.test(n);
   return {
     discovered,
     hunt: [...hunt.filter((n) => !isCurrent(n)).sort(), ...hunt.filter(isCurrent)].map((name) => ({ name, current: isCurrent(name) })),
@@ -62,9 +68,9 @@ function main() {
       (counts.outOfRangeScores ? ` (${counts.outOfRangeScores} outside 1-10 not imported)` : ''));
     console.log(`  artifacts: ${counts.artifacts.analysis} analyses, ${counts.artifacts.resume_tweaks} resume tweaks, ${counts.artifacts.cover_letter} cover letter references`);
     console.log('  by stage and status:');
-    for (const r of counts.byStageStatus) console.log(`    ${r.stage.padEnd(10)} ${r.status.padEnd(12)} ${r.n}`);
+    for (const r of counts.byStageStatus ?? []) console.log(`    ${r.stage.padEnd(10)} ${r.status.padEnd(12)} ${r.n}`);
     console.log('  by source:');
-    for (const r of counts.bySource) console.log(`    ${(r.source ?? '(none)').padEnd(18)} ${r.n}`);
+    for (const r of counts.bySource ?? []) console.log(`    ${(r.source ?? '(none)').padEnd(18)} ${r.n}`);
     const unknown = Object.entries(counts.unknownStatuses);
     if (unknown.length) console.log(`  unrecognized statuses (imported as new): ${unknown.map(([s, n]) => `"${s}" x${n}`).join(', ')}`);
   } catch (err) {
@@ -79,7 +85,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     main();
   } catch (err) {
-    console.error(err.message);
+    console.error(/** @type {Error} */ (err).message);
     process.exitCode = 1;
   }
 }

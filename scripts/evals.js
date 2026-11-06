@@ -6,6 +6,10 @@
 import { spawnSync } from 'node:child_process';
 
 const argv = process.argv.slice(2);
+/**
+ * @param {string} script
+ * @param {string[]} args
+ */
 const run = (script, args) => {
   console.log(`\n=== ${script} ===`);
   const r = spawnSync(process.execPath, ['--env-file=.env', script, ...args], { stdio: 'inherit' });

@@ -9,6 +9,7 @@ import { dataPath } from '../tools/paths.ts';
 
 const EXPORT_DIR = dataPath('v1-export', 'prompts');
 
+/** @param {unknown} s */
 const list = (s) =>
   String(s ?? '')
     .split(',')
@@ -19,8 +20,10 @@ const list = (s) =>
  * Builds the config object from v1 property values ({ NAME: value }).
  * privateTerms is seeded with every personal value found; employer names are pulled from
  * the plain-word alternatives in COVER_LETTER_CHECKS sentence rules (e.g. "acme|globex").
+ * @param {Record<string, string | undefined>} props
  */
 export function buildConfig(props) {
+  /** @type {Array<{ sentence?: unknown }>} */
   const checks = props.COVER_LETTER_CHECKS ? JSON.parse(props.COVER_LETTER_CHECKS) : [];
   const name = props.CONTACT_NAME?.trim() ?? '';
   const contactParts = String(props.CONTACT_LINE ?? '')
@@ -29,7 +32,7 @@ export function buildConfig(props) {
     .filter((s) => s.length >= 4);
   const employers = checks
     .filter((r) => Array.isArray(r.sentence))
-    .flatMap((r) => r.sentence[0].split('|'))
+    .flatMap((r) => /** @type {string[]} */ (r.sentence)[0].split('|'))
     .map((t) => t.replace(/\\b/g, '').trim())
     .filter((t) => /^[A-Za-z]{4,}$/.test(t));
 
@@ -46,7 +49,7 @@ export function buildConfig(props) {
     props.COVER_LETTER_FOLDER_ID?.trim(),
     props.DISCOVERED_SHEET_ID?.trim(),
     props.JOB_HUNT_SHEET_ID?.trim(),
-  ].filter((t) => t && t.length >= 3);
+  ].filter(/** @returns {t is string} */ (t) => Boolean(t && t.length >= 3));
 
   return {
     candidate: {
@@ -78,13 +81,14 @@ function main() {
     'COVER_LETTER_CHECKS', 'YOUR_KNOWLEDGE_DOC_ID', 'COVER_LETTER_FOLDER_ID',
     'DISCOVERED_SHEET_ID', 'JOB_HUNT_SHEET_ID',
   ];
+  /** @type {Record<string, string>} */
   const props = {};
   for (const n of names) {
     const file = join(EXPORT_DIR, `${n}.txt`);
     try {
       props[n] = readFileSync(file, 'utf8').trim();
     } catch (err) {
-      if (err.code !== 'ENOENT') throw err;
+      if (/** @type {NodeJS.ErrnoException} */ (err).code !== 'ENOENT') throw err;
     }
   }
   const config = buildConfig(props);
@@ -94,7 +98,7 @@ function main() {
   try {
     writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2) + '\n', { flag: 'wx' });
   } catch (err) {
-    if (err.code !== 'EEXIST') throw err;
+    if (/** @type {NodeJS.ErrnoException} */ (err).code !== 'EEXIST') throw err;
     console.error(`${CONFIG_PATH} already exists. Delete it first to regenerate from the v1 export.`);
     return 1;
   }

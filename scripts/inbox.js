@@ -16,6 +16,7 @@ import { runInbox } from '../agents/inbox/process.ts';
 import { getPrompt } from '../agents/prompts.ts';
 
 const argv = process.argv.slice(2);
+/** @param {string} name */
 const get = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
 
 async function main() {
@@ -32,13 +33,18 @@ async function main() {
     if (!dryRun) assertNoRunningRun(store.db, name);
     const run = dryRun ? null : createJobTracer({ store }).startRun(name, { model: cfg.model, promptVersion: getPrompt(store.db, 'inbox-classify').version });
     try {
+      /**
+       * @param {'info' | 'warn' | 'error'} level
+       * @param {string} m
+       */
       const log = (level, m) => (run ? run.log(level, m) : console.log(m));
-      const s = await runInbox({ store, gmail, claude: createJobClaude(store.db), cfg, key, run, log, options: { mode, days, dryRun } });
-      const totals = run?.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length });
+      const s = await runInbox({ store, gmail, claude: createJobClaude(store.db), cfg, key: /** @type {Buffer} */ (key), run, log, options: { mode, days, dryRun } });
+      // A dry run stores no bodies (key null) and records no run; it returns before totals are read.
+      const totals = /** @type {NonNullable<ReturnType<NonNullable<typeof run>['finish']>>} */ (run?.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length }));
 
       console.log(`\n${dryRun ? 'DRY RUN: ' : ''}${s.fetched} messages checked (${s.source}); ${s.alreadySeen} already processed, ${s.skipped} not job related.`);
       if (dryRun) {
-        console.log(`${s.considered} would be classified with ${cfg.model}, about $${s.estimatedUsd.toFixed(2)}.`);
+        console.log(`${s.considered} would be classified with ${cfg.model}, about $${/** @type {number} */ (s.estimatedUsd).toFixed(2)}.`);
         return;
       }
       console.log(`${s.considered} job emails: ${s.matched} linked, ${s.opportunities} new opportunities, ${s.needsReview} need review.`);
@@ -53,7 +59,7 @@ async function main() {
       if (s.failures.length) console.log(`${s.failures.length} emails failed to classify; the next run retries them.`);
       console.log(`Cost: $${totals.costUsd.toFixed(4)} (${totals.calls} Claude calls).`);
     } catch (err) {
-      run?.finish('failed', { error: `${err.name}: ${err.message}` });
+      run?.finish('failed', { error: `${/** @type {Error} */ (err).name}: ${/** @type {Error} */ (err).message}` });
       throw err;
     }
   } finally {
