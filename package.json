@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node --test",
-    "typecheck": "tsc -p . && tsc -p web && tsc -p types",
+    "typecheck": "tsc -p . && tsc -p tsconfig.checkjs.json && tsc -p web && tsc -p types",
     "lint": "eslint .",
     "db:types": "node scripts/db-types.js",
     "api:types": "node scripts/api-types.ts",

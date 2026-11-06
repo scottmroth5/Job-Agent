@@ -5,14 +5,27 @@ import { resolveDetails } from '../../agents/discovery/details.ts';
 import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.ts';
 import { checkLocation } from '../../tools/location.ts';
 import { lookups, sqlList } from '../../agents/lookups.ts';
+/**
+ * @import { Database } from '../../tools/types.ts'
+ * @import { Http } from '../../tools/http.ts'
+ * @import { JobSearchConfig } from '../../tools/config.ts'
+ * @import { JobItem, PageRenderer } from '../../agents/discovery/types.ts'
+ * @import { PostingsRow } from '../../db/types.ts'
+ */
+
+/**
+ * One scoring eval case (data/evals/score/cases.json).
+ * @typedef {{ id: number, label: 'applied' | 'passed', company: string, title: string, location: string | null, url: string | null, location_check: string, jd_text: string, v1Score: number | null }} ScoreCase
+ */
 
 export const MIN_CASE_TEXT = 500;
 
 /**
- * @returns {Promise<{cases: object[], skipped: {noText: number}, fetched: number}>}
+ * @param {{ db: Database, http: Http, browser?: PageRenderer | null, config: Pick<JobSearchConfig, 'search'>, log?: (line: string) => void }} opts
+ * @returns {Promise<{cases: ScoreCase[], skipped: {noText: number}, fetched: number}>}
  */
 export async function buildCases({ db, http, browser = null, config, log = () => {} }) {
-  const rows = db
+  const found = db
     .prepare(`SELECT p.id, p.company, p.title, p.location, p.url, p.status, p.jd_text,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-analysis' ORDER BY s.id DESC LIMIT 1) AS v1_score,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-quick' ORDER BY s.id DESC LIMIT 1) AS v1_quick
@@ -21,7 +34,9 @@ export async function buildCases({ db, http, browser = null, config, log = () =>
         AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = p.id AND h.user_id = p.user_id ORDER BY h.id DESC LIMIT 1), '') != 'agent'
       ORDER BY p.id`)
     .all();
+  const rows = /** @type {Array<Pick<PostingsRow, 'id' | 'company' | 'title' | 'location' | 'url' | 'status' | 'jd_text'> & { v1_score: number | null, v1_quick: number | null }>} */ (found);
 
+  /** @type {ScoreCase[]} */
   const cases = [];
   const skipped = { noText: 0 };
   let fetched = 0;
@@ -29,10 +44,12 @@ export async function buildCases({ db, http, browser = null, config, log = () =>
   for (const r of rows) {
     let text = r.jd_text && r.jd_text.length >= MIN_CASE_TEXT ? r.jd_text : null;
     let location = r.location;
+    /** @type {string | null} */
     let workplace = null;
     if (!text && r.url) {
+      /** @type {Partial<JobItem> & Pick<JobItem, 'url' | 'company' | 'title'>} */
       const item = { url: r.url, linkedinJobId: jobIdFromUrl(r.url), company: r.company, title: r.title, location: r.location };
-      await resolveDetails(item, { http, browser, state });
+      await resolveDetails(/** @type {JobItem} */ (item), { http, browser, state }); // fills in what it finds; reads no source
       if (item.description && item.description.length >= MIN_CASE_TEXT) {
         text = item.description;
         location = item.location ?? location;

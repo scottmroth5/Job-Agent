@@ -9,13 +9,34 @@ import { listOpenApplications } from '../../agents/inbox/match.ts';
 import { decideEmail, estimateCostUsd } from '../../agents/inbox/process.ts';
 import { parseFrom } from '../../agents/inbox/gmail.ts';
 import { isContact, isCompanyDomain } from '../../agents/inbox/store.ts';
+/**
+ * @import { Claude, Run } from '@scottmroth5/agent-core'
+ * @import { Database } from '../../tools/types.ts'
+ * @import { InboxConfig } from '../../agents/inbox/config.ts'
+ * @import { InboxResult } from './metrics.js'
+ */
 
+/**
+ * evals/inbox/cases.json: the open applications, and labeled emails.
+ * @typedef {{ id: number, company: string, title: string, status: string, domain?: string }} EvalApplication
+ * @typedef {{ from: string, subject: string, body: string, sentAt?: string, threadStartedByMe?: boolean }} EvalEmail
+ * @typedef {{ id: string, email: EvalEmail, expected: InboxResult['expected'] }} InboxCase
+ */
+
+/**
+ * @param {Database} db
+ * @param {EvalApplication[]} applications
+ */
 function seed(db, applications) {
   const insert = db.prepare(`INSERT INTO postings (user_id, id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
     VALUES (@uid, ?, ?, ?, ?, ?, '2026-09-01', 'pipeline', ?, ?, 'x', 'x')`);
   for (const a of applications) insert.run(a.id, `eval-${a.id}`, a.company, a.title, storedKey(a), a.status, a.domain ?? null);
 }
 
+/**
+ * @param {InboxCase} c
+ * @param {number} bodyChars
+ */
 export function toEmail(c, bodyChars) {
   const from = parseFrom(c.email.from);
   return {
@@ -30,10 +51,19 @@ export function toEmail(c, bodyChars) {
   };
 }
 
+/**
+ * @param {InboxCase[]} cases
+ * @param {EvalApplication[]} applications
+ * @param {number} bodyChars
+ */
 export const estimateInboxEval = (cases, applications, bodyChars) => estimateCostUsd(cases.map((c) => ({ bodyChars: Math.min(c.email.body.length, bodyChars) })), applications.length);
 
-/** @returns {Promise<object[]>} one result per case, for inboxMetrics() */
+/**
+ * @param {{ cases: InboxCase[], applications: EvalApplication[], claude: Claude, cfg: InboxConfig, model?: string, trace?: Run | null, log?: (line: string) => void }} opts
+ * @returns {Promise<InboxResult[]>} one result per case, for inboxMetrics()
+ */
 export async function runInboxEval({ cases, applications, claude, cfg, model = cfg.model, trace, log = () => {} }) {
+  /** @type {InboxResult[]} */
   const results = [];
   for (const c of cases) {
     const store = openJobStore(':memory:');

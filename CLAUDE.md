@@ -295,6 +295,9 @@ Routes type their request with Fastify's generics (app.post<{ Params: IdParams; 
 server/types.ts holds App, RouteServices, StartTask, Notices, and declares req.uid, user, account, role, and timeZone. Query
 results are cast to db/types.ts rows. server/index.js is a one-line launcher for server/main.ts (npm run ui, the Dockerfile,
 and compose.yml run index.js); buildApp's options and services are BuildAppOptions and AppServices in server/app.ts.
+scripts, evals, and test stay JavaScript (deploy.sh, compose.yml, the Windows tasks, and the server run scripts/*.js by name),
+typed with JSDoc (@param, @typedef, /** @import { X } from '...' */, casts as /** @type {T} */ (x)) and checked by
+tsconfig.checkjs.json, whose include lists each directory that passes (evals so far).
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
