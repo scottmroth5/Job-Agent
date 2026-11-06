@@ -1,13 +1,19 @@
 import { useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { useLookups } from '../lookups.tsx';
 import { api, followTask } from '../api.ts';
-import TaskProgress from './TaskProgress.jsx';
+import TaskProgress from './TaskProgress.tsx';
+import type { ApiBody, Job, Task } from '../api.ts';
 
-const EMPTY = { url: '', title: '', company: '', location: '', description: '', notes: '', track: '', rateText: '', hoursText: '', writeMaterials: false };
+type AddForm = { url: string; title: string; company: string; location: string; description: string; notes: string; track: string; rateText: string; hoursText: string; writeMaterials: boolean };
+/** The saved job the form matched (the add task's result when it found one). */
+type Match = { id: Job['id']; title: string; company: string; summary?: string; url?: string | null };
+
+const EMPTY: AddForm = { url: '', title: '', company: '', location: '', description: '', notes: '', track: '', rateText: '', hoursText: '', writeMaterials: false };
 
 /** What the form adds to an existing job: terms, location, description, and notes appended (never title/company). */
-function updateFromForm(form, existingNotes) {
-  const patch = {};
+function updateFromForm(form: AddForm, existingNotes: string | null | undefined) {
+  const patch: ApiBody<'PATCH /api/postings/:id'> = {};
   if (form.track) patch.track = form.track;
   if (form.rateText.trim()) patch.rateText = form.rateText.trim();
   if (form.hoursText.trim()) patch.hoursText = form.hoursText.trim();
@@ -19,9 +25,9 @@ function updateFromForm(form, existingNotes) {
   return patch;
 }
 
-function DuplicateCard({ match, matchedBy, form, onOpen }) {
-  const [state, setState] = useState(null);
-  const [error, setError] = useState(null);
+function DuplicateCard({ match, matchedBy, form, onOpen }: { match: Match; matchedBy: string; form: AddForm; onOpen: (id: Job['id']) => void }) {
+  const [state, setState] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const update = async () => {
     setError(null);
     try {
@@ -32,9 +38,9 @@ function DuplicateCard({ match, matchedBy, form, onOpen }) {
         return;
       }
       await api.update(match.id, patch);
-      setState(`Updated: ${Object.keys(patch).map((k) => ({ rateText: 'rate', hoursText: 'hours' })[k] ?? k).join(', ')}.`);
+      setState(`Updated: ${Object.keys(patch).map((k) => ({ rateText: 'rate', hoursText: 'hours' } as Record<string, string | undefined>)[k] ?? k).join(', ')}.`);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
   return (
@@ -57,26 +63,26 @@ function DuplicateCard({ match, matchedBy, form, onOpen }) {
   );
 }
 
-export default function AddJobDialog({ onClose, onAdded }) {
+export default function AddJobDialog({ onClose, onAdded }: { onClose: () => void; onAdded: (id: Job['id']) => void }) {
   const lk = useLookups();
-  const [form, setForm] = useState(EMPTY);
-  const [task, setTask] = useState(null);
-  const [error, setError] = useState(null);
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  const [form, setForm] = useState<AddForm>(EMPTY);
+  const [task, setTask] = useState<Task | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const set = (key: keyof AddForm) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }));
   const busy = task?.status === 'running';
   const done = task?.status === 'done';
   const duplicate = done && task.result?.created === false ? task.result : null;
 
-  const submit = async (e) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
-    const body = Object.fromEntries(Object.entries(form).filter(([, v]) => v !== '' && v !== false));
+    const body = Object.fromEntries(Object.entries(form).filter(([, v]) => v !== '' && v !== false)) as ApiBody<'POST /api/postings'>;
     try {
       const { taskId } = await api.add(body);
       const final = await followTask(taskId, setTask);
       if (final.status === 'done' && final.result?.created) onAdded(final.result.id);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 

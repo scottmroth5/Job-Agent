@@ -1,12 +1,19 @@
 import { useState } from 'react';
-import PipelineButton from './PipelineButton.jsx';
+import type { ReactNode } from 'react';
+import type { ApiBody, ApiResponse, JobRow } from '../api.ts';
+import PipelineButton from './PipelineButton.tsx';
 import { api } from '../api.ts';
 import { arranged, moved } from '../layout.ts';
 import { isAdmin, isOwner, useMe } from '../me.tsx';
 import { DashIcon, DASH } from './DashIcon.tsx';
 
 // Simple line illustrations for the tiles (inline SVG: nothing to download, and they follow the text color).
-const ICONS = {
+type Today = ApiResponse<'GET /api/summary'>['today'][number];
+/** A Home tile, as the saved layout names it (PUT /api/layout/home). */
+type TileKey = ApiBody<'PUT /api/layout/home'>['order'][number];
+type Tile = { href?: string; onClick?: () => void; title: string; stat: string | null; alert?: boolean; hidden?: boolean };
+
+const ICONS: Record<string, ReactNode> = {
   jobs: (
     <>
       <rect x="6" y="14" width="36" height="24" rx="4" />
@@ -61,7 +68,7 @@ const ICONS = {
   ),
 };
 
-function Icon({ name }) {
+function Icon({ name }: { name: string }) {
   return (
     <svg className="tile-icon" viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round">
       {ICONS[name]}
@@ -69,7 +76,7 @@ function Icon({ name }) {
   );
 }
 
-function Tile({ href, onClick, icon, title, stat, alert, arrange }) {
+function Tile({ href, onClick, icon, title, stat, alert, arrange }: Omit<Tile, 'hidden'> & { icon: string; arrange?: { earlier: (() => void) | null; later: (() => void) | null } | null | false }) {
   const body = (
     <>
       {DASH[icon] ? (
@@ -89,10 +96,10 @@ function Tile({ href, onClick, icon, title, stat, alert, arrange }) {
       <div className="tile arranging">
         {body}
         <span className="tile-move">
-          <button type="button" onClick={arrange.earlier} disabled={!arrange.earlier} aria-label={`Move ${title} earlier`}>
+          <button type="button" onClick={arrange.earlier ?? undefined} disabled={!arrange.earlier} aria-label={`Move ${title} earlier`}>
             ‹
           </button>
-          <button type="button" onClick={arrange.later} disabled={!arrange.later} aria-label={`Move ${title} later`}>
+          <button type="button" onClick={arrange.later ?? undefined} disabled={!arrange.later} aria-label={`Move ${title} later`}>
             ›
           </button>
         </span>
@@ -110,32 +117,32 @@ function Tile({ href, onClick, icon, title, stat, alert, arrange }) {
   );
 }
 
-const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 // The tiles in their default order; the keys match server/layout.ts LAYOUT_AREAS.home.
-export const HOME_TILES = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'];
+export const HOME_TILES: TileKey[] = ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'];
 
 /** The start page: a tile for each screen with what needs attention, the pipeline, and this month's Claude budget. */
 // Home's Today list (server/today.ts): reminders due, offers, follow-ups, and stale applications; each opens its job. The first few
 // show; the rest open on request.
 const TODAY_SHOWN = 5;
-const KIND_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };
-const dueText = (iso) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+const KIND_LABELS: Record<string, string | undefined> = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up' };
+const dueText = (iso: string) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
 
 /**
  * Stale applications (no reply after the stale days, Settings > Follow-ups): one item for all of them, with Review
  * (the list, each opening its job) and Close them as no response, which asks once more before it changes anything.
  */
-function StaleItem({ t, demo, onOpenJob, onClosed }) {
-  const [jobs, setJobs] = useState(null);
-  const [done, setDone] = useState(null);
-  const [error, setError] = useState(null);
-  const act = async (fn) => {
+function StaleItem({ t, demo, onOpenJob, onClosed }: { t: Today; demo: boolean; onOpenJob?: (id: JobRow['id']) => void; onClosed?: (n: number) => Promise<void> }) {
+  const [jobs, setJobs] = useState<ApiResponse<'GET /api/follow-ups/stale'>['jobs'] | null>(null);
+  const [done, setDone] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const act = async (fn: () => Promise<unknown>) => {
     setError(null);
     try {
       await fn();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
   return (
@@ -180,7 +187,7 @@ function StaleItem({ t, demo, onOpenJob, onClosed }) {
       )}
       {jobs && !done && (
         <ul className="stale-list small">
-          {jobs.map((j) => (
+          {jobs.map((j: JobRow) => (
             <li key={j.id}>
               <button type="button" className="link" onClick={() => onOpenJob?.(j.id)}>
                 {j.title} at {j.company}
@@ -195,9 +202,9 @@ function StaleItem({ t, demo, onOpenJob, onClosed }) {
   );
 }
 
-function TodayCard({ items: everything, demo, onOpenJob, onChanged }) {
+function TodayCard({ items: everything, demo, onOpenJob, onChanged }: { items: Today[]; demo: boolean; onOpenJob?: (id: JobRow['id']) => void; onChanged?: () => Promise<unknown> | void }) {
   const [all, setAll] = useState(false);
-  const [closed, setClosed] = useState(null); // how many were just closed as no response (the item then goes away)
+  const [closed, setClosed] = useState<number | null>(null); // how many were just closed as no response (the item then goes away)
   // The stale item always shows (last); the cut to the first few applies to the rest.
   const stale = everything.find((t) => t.kind === 'stale');
   const items = everything.filter((t) => t.kind !== 'stale');
@@ -217,7 +224,7 @@ function TodayCard({ items: everything, demo, onOpenJob, onChanged }) {
                 t={t}
                 demo={demo}
                 onOpenJob={onOpenJob}
-                onClosed={async (n) => {
+                onClosed={async (n: number) => {
                   setClosed(n);
                   await onChanged?.();
                 }}
@@ -248,7 +255,15 @@ function TodayCard({ items: everything, demo, onOpenJob, onChanged }) {
   );
 }
 
-export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelineFinished, onLayoutSaved, onChanged }) {
+export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelineFinished, onLayoutSaved, onChanged }: {
+  summary: ApiResponse<'GET /api/summary'> | null;
+  demo: boolean;
+  onAddJob: () => void;
+  onOpenJob?: (id: JobRow['id']) => void;
+  onPipelineFinished?: () => void;
+  onLayoutSaved?: () => Promise<unknown> | void;
+  onChanged?: () => Promise<unknown> | void;
+}) {
   const s = summary;
   const budget = s?.budget;
   // The inbox reads the owner's own Gmail, so it is the owner's only; everything else is everyone's.
@@ -256,10 +271,10 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
   const owner = isOwner(me);
   // An admin's waiting requests and feedback, when there are any.
   const waiting = s?.adminWaiting && (s.adminWaiting.requests || s.adminWaiting.feedback) ? s.adminWaiting : null;
-  const [draft, setDraft] = useState(null); // the order being arranged, or null when not arranging
+  const [draft, setDraft] = useState<TileKey[] | null>(null); // the order being arranged, or null when not arranging
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const tiles = {
+  const [error, setError] = useState<string | null>(null);
+  const tiles: Record<TileKey, Tile> = {
     jobs: { href: '#/jobs', title: 'Jobs', stat: s ? `${plural(s.needsAction ?? 0, 'needs', 'need')} action` : null, alert: s?.needsAction > 0 },
     inbox: { hidden: !owner && !demo, href: '#/inbox', title: 'Inbox', stat: s ? (s.inboxNeedsReview ? `${plural(s.inboxNeedsReview, 'email')} to review` : 'All caught up') : null, alert: s?.inboxNeedsReview > 0 },
     funnel: { href: '#/funnel', title: 'Funnel', stat: s ? `${s.inProgress ?? 0} in progress` : null },
@@ -273,7 +288,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
   };
   // The saved order comes with the summary, so it applies as soon as the page has its numbers.
   const order = (draft ?? arranged(HOME_TILES, s?.layout?.home)).filter((k) => !tiles[k].hidden);
-  const save = async (next) => {
+  const save = async (next: TileKey[]) => {
     setSaving(true);
     setError(null);
     try {
@@ -281,7 +296,7 @@ export default function HomePage({ summary, demo, onAddJob, onOpenJob, onPipelin
       await onLayoutSaved?.(); // the new order arrives with the summary before the draft goes away, so nothing jumps
       setDraft(null);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setSaving(false);
     }

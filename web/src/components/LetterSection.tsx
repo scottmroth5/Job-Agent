@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse, Job } from '../api.ts';
+
+/** A letter version's fact check (letter_checks), as the check route returns it. */
+type Check = ApiResponse<'POST /api/postings/:id/letters/:versionId/check'>;
+type Version = ApiResponse<'GET /api/postings/:id/letters'>[number];
+type Turn = { feedback: string; changes: string };
+type Mode = 'revise' | 'own' | 'versions';
 import { useDemo } from '../demo.tsx';
 import { DashIcon } from './DashIcon.tsx';
 
-const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
 /** Word or PDF of the current letter, or of one version. */
-function LetterDownload({ jobId, versionId = null, label = 'Download' }) {
+function LetterDownload({ jobId, versionId = null, label = 'Download' }: { jobId: Job['id']; versionId?: number | string | null; label?: string }) {
   const q = versionId ? `?version=${versionId}` : '';
   return (
     <details className="download-menu">
@@ -24,13 +32,13 @@ function LetterDownload({ jobId, versionId = null, label = 'Download' }) {
   );
 }
 
-const VERDICT = { contradicted: 'Contradicts your knowledge doc or resume', unsupported: 'Not found in your knowledge doc or resume' };
-const KIND = { employer: 'Employer', title: 'Title', date: 'Date', number: 'Number', credential: 'Credential', other: 'Claim' };
+const VERDICT: Record<string, string | undefined> = { contradicted: 'Contradicts your knowledge doc or resume', unsupported: 'Not found in your knowledge doc or resume' };
+const KIND: Record<string, string | undefined> = { employer: 'Employer', title: 'Title', date: 'Date', number: 'Number', credential: 'Credential', other: 'Claim' };
 /** The claims worth a look, contradicted first, each with its index in the saved list (dismissing uses it). */
-const toReview = (check) =>
+const toReview = (check: Check | null | undefined) =>
   ['contradicted', 'unsupported'].flatMap((verdict) => (check?.claims ?? []).map((c, index) => ({ ...c, index })).filter((c) => c.verdict === verdict));
 /** A one-line summary of a version's fact check, for the Versions list. */
-const checkSummary = (check) => {
+const checkSummary = (check: Check | null | undefined) => {
   if (!check) return 'not fact checked';
   if (check.status === 'failed') return 'fact check could not run';
   const open = toReview(check).filter((c) => !c.dismissed).length;
@@ -42,10 +50,10 @@ const checkSummary = (check) => {
  * resume contradict or do not mention, with the evidence, to dismiss one at a time. It never blocks Copy, Download, or a
  * save. autoRun checks a version that has none yet (just after you save one).
  */
-function FactCheck({ job, version, autoRun, onChecked }) {
-  const [check, setCheck] = useState(version.check);
+function FactCheck({ job, version, autoRun, onChecked }: { job: Job; version: Version; autoRun: boolean; onChecked?: () => unknown }) {
+  const [check, setCheck] = useState<Check | null>(version.check);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     setCheck(version.check);
     setError(null);
@@ -58,7 +66,7 @@ function FactCheck({ job, version, autoRun, onChecked }) {
       setCheck(c);
       onChecked?.();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -66,12 +74,12 @@ function FactCheck({ job, version, autoRun, onChecked }) {
   useEffect(() => {
     if (autoRun && !version.check) void run();
   }, [autoRun, version.id]);
-  const dismiss = async (index) => {
+  const dismiss = async (index: number) => {
     setError(null);
     try {
       setCheck(await api.dismissClaim(job.id, version.id, index));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -125,17 +133,17 @@ function FactCheck({ job, version, autoRun, onChecked }) {
  * Revise with Claude: say what to change, get a revised draft and a note on what changed, and keep going; edit the draft
  * by hand too. Nothing is saved until Use this version, which makes it the current letter (a new version).
  */
-function Reviser({ job, current, onSaved, onClose }) {
+function Reviser({ job, current, onSaved, onClose }: { job: Job; current: string; onSaved: (message: string) => Promise<void>; onClose: () => void }) {
   const [draft, setDraft] = useState(current);
   const [lastClaude, setLastClaude] = useState(current); // the draft as Claude (or the saved letter) left it
-  const [turns, setTurns] = useState([]);
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [feedback, setFeedback] = useState('');
-  const [flags, setFlags] = useState([]);
+  const [flags, setFlags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const edited = draft !== lastClaude;
 
-  const ask = async (e) => {
+  const ask = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
@@ -147,7 +155,7 @@ function Reviser({ job, current, onSaved, onClose }) {
       setFlags(r.flags);
       setFeedback('');
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -158,9 +166,9 @@ function Reviser({ job, current, onSaved, onClose }) {
     try {
       // A draft Claude wrote is a revision; once you have edited it by hand, it is your version.
       const r = await api.saveLetter(job.id, draft, turns.length && !edited ? 'revision' : 'user');
-      onSaved(r.docError ? `Saved as the current letter. ${r.docError}` : 'Saved as the current letter.');
+      void onSaved(r.docError ? `Saved as the current letter. ${r.docError}` : 'Saved as the current letter.'); // closes this and reloads the job, which catches its own errors
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
       setBusy(false);
     }
   };
@@ -222,18 +230,18 @@ function Reviser({ job, current, onSaved, onClose }) {
 }
 
 /** Your own version: paste it or read it from a file (Word, PDF, or text), check it, and save it as the current letter. */
-function OwnVersion({ job, current, onSaved, onClose }) {
+function OwnVersion({ job, current, onSaved, onClose }: { job: Job; current: string; onSaved: (message: string) => Promise<void>; onClose: () => void }) {
   const [text, setText] = useState(current);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const save = async () => {
     setBusy(true);
     setError(null);
     try {
       const r = await api.saveLetter(job.id, text, 'user');
-      onSaved(r.docError ? `Saved as the current letter. ${r.docError}` : 'Saved as the current letter.');
+      void onSaved(r.docError ? `Saved as the current letter. ${r.docError}` : 'Saved as the current letter.'); // closes this and reloads the job, which catches its own errors
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
       setBusy(false);
     }
   };
@@ -255,7 +263,7 @@ function OwnVersion({ job, current, onSaved, onClose }) {
               try {
                 setText((await api.letterFromFile(job.id, file)).text);
               } catch (err) {
-                setError(err.message);
+                setError((err as Error).message);
               }
             }}
           />
@@ -277,10 +285,10 @@ function OwnVersion({ job, current, onSaved, onClose }) {
 }
 
 /** Every version, newest first: how it was made, when, its checks, and view, download, or make current. */
-function Versions({ job, versions, onRestored }) {
+function Versions({ job, versions, onRestored }: { job: Job; versions: Version[]; onRestored: (message: string) => Promise<void> }) {
   const demo = useDemo();
-  const [open, setOpen] = useState(null);
-  const [error, setError] = useState(null);
+  const [open, setOpen] = useState<Version['id'] | null>(null);
+  const [error, setError] = useState<string | null>(null);
   return (
     <div className="letter-work">
       <h4>Versions</h4>
@@ -309,9 +317,9 @@ function Versions({ job, versions, onRestored }) {
                     setError(null);
                     try {
                       await api.restoreLetter(job.id, v.id);
-                      onRestored(`Version ${v.number} is the current letter again.`);
+                      void onRestored(`Version ${v.number} is the current letter again.`); // reloads the job, which catches its own errors
                     } catch (err) {
-                      setError(err.message);
+                      setError((err as Error).message);
                     }
                   }}
                 >
@@ -332,12 +340,12 @@ function Versions({ job, versions, onRestored }) {
  * The job panel's Cover letter: the current letter with Copy and Download (Word or PDF), Revise with Claude, Use my
  * own version, and Versions. Every save is a new version (server/letter-routes.ts); nothing is overwritten.
  */
-export default function LetterSection({ job, onChanged }) {
+export default function LetterSection({ job, onChanged }: { job: Job; onChanged: () => Promise<unknown> | unknown }) {
   const demo = useDemo();
-  const [mode, setMode] = useState(null); // null | 'revise' | 'own' | 'versions'
-  const [versions, setVersions] = useState([]);
+  const [mode, setMode] = useState<Mode | null>(null); // null | 'revise' | 'own' | 'versions'
+  const [versions, setVersions] = useState<Version[]>([]);
   const [copied, setCopied] = useState(false);
-  const [note, setNote] = useState(null);
+  const [note, setNote] = useState<string | null>(null);
   const [autoCheck, setAutoCheck] = useState(false); // a version you just saved gets checked
   const loadVersions = () => api.letters(job.id).then(setVersions, () => setVersions([]));
   useEffect(() => {
@@ -352,13 +360,13 @@ export default function LetterSection({ job, onChanged }) {
   const letter = job.letter;
   if (!letter?.content) return null;
   const current = versions.find((v) => v.current);
-  const saved = async (message) => {
+  const saved = async (message: string) => {
     setMode(null);
     setNote(message);
     setAutoCheck(true);
     await onChanged();
   };
-  const toggle = (m) => setMode(mode === m ? null : m);
+  const toggle = (m: Mode) => setMode(mode === m ? null : m);
 
   return (
     <section className="letter-section">

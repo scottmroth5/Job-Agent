@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { ChangeEvent } from 'react';
 import { api, setDemoMode } from './api.ts';
+import type { ApiResponse, JobRow } from './api.ts';
+import type { Me } from './me.tsx';
 import { startAnalytics, track } from './analytics.ts';
 import { useLookups } from './lookups.tsx';
-import JobTable from './components/JobTable.jsx';
-import DetailPanel from './components/DetailPanel.jsx';
-import AddJobDialog from './components/AddJobDialog.jsx';
-import StackingBar from './components/StackingBar.jsx';
+import JobTable from './components/JobTable.tsx';
+import DetailPanel from './components/DetailPanel.tsx';
+import AddJobDialog from './components/AddJobDialog.tsx';
+import StackingBar from './components/StackingBar.tsx';
 import AdminPage from './components/AdminPage.tsx';
-import InboxPage from './components/InboxPage.jsx';
-import HomePage from './components/HomePage.jsx';
-import ActivityPage from './components/ActivityPage.jsx';
-import FunnelPage from './components/FunnelPage.jsx';
+import InboxPage from './components/InboxPage.tsx';
+import HomePage from './components/HomePage.tsx';
+import ActivityPage from './components/ActivityPage.tsx';
+import FunnelPage from './components/FunnelPage.tsx';
 import { DemoBanner, DemoContext, DemoNotice } from './demo.tsx';
 import { MeContext } from './me.tsx';
 import SettingsPage from './components/SettingsPage.tsx';
@@ -18,20 +21,21 @@ import HelpPage from './components/HelpPage.tsx';
 import { DashIcon } from './components/DashIcon.tsx';
 
 // #/ is the Home page; each screen has its own address.
-const VIEWS = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin', settings: 'Settings', help: 'Help' };
+const VIEWS: Record<string, string | undefined> = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin', settings: 'Settings', help: 'Help' };
 const viewFromHash = () => {
   const name = /^#\/(\w+)/.exec(window.location.hash)?.[1];
-  return VIEWS[name] ? name : 'home';
+  return name && VIEWS[name] ? name : 'home';
 };
 // #/activity/12 opens task 12's output.
 const activityIdFromHash = () => /^#\/activity\/(\w+)/.exec(window.location.hash)?.[1] ?? null;
 
 // 'active' (Needs action) is new jobs to evaluate and offers to decide; applied and interviewing are under 'progress'.
-const DEFAULT_FILTERS = { track: 'all', stage: 'pipeline', status: 'active', needsDescription: false, discoveredAfter: '', q: '', minScore: '' };
+type Filters = { track: string; stage: string; status: string; needsDescription: boolean; discoveredAfter: string; q: string; minScore: string };
+const DEFAULT_FILTERS: Filters = { track: 'all', stage: 'pipeline', status: 'active', needsDescription: false, discoveredAfter: '', q: '', minScore: '' };
 // v2 since the default status changed; a filter saved under the old key would keep showing everything.
 const FILTERS_KEY = 'jobHuntFilters.v2';
 
-function loadFilters() {
+function loadFilters(): Filters {
   try {
     return { ...DEFAULT_FILTERS, ...JSON.parse(localStorage.getItem(FILTERS_KEY) ?? '{}') };
   } catch {
@@ -41,7 +45,7 @@ function loadFilters() {
 
 export default function App() {
   const lk = useLookups();
-  const [me, setMe] = useState(null);
+  const [me, setMe] = useState<Me | null>(null);
   useEffect(() => {
     api
       .me()
@@ -53,13 +57,13 @@ export default function App() {
       .catch(() => {});
   }, []);
   const [filters, setFilters] = useState(loadFilters);
-  const [jobs, setJobs] = useState([]);
-  const [summary, setSummary] = useState(null);
-  const [error, setError] = useState(null);
+  const [jobs, setJobs] = useState<JobRow[]>([]);
+  const [summary, setSummary] = useState<ApiResponse<'GET /api/summary'> | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState<JobRow['id'] | null>(null);
   const [adding, setAdding] = useState(false);
-  const [stack, setStack] = useState([]);
+  const [stack, setStack] = useState<Array<JobRow['id']>>([]);
   const [view, setView] = useState(viewFromHash);
   const [activityId, setActivityId] = useState(activityIdFromHash);
 
@@ -85,7 +89,7 @@ export default function App() {
       setSummary(s);
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -103,7 +107,7 @@ export default function App() {
 
   useEffect(() => {
     if (!lk.lists.status.length) return;
-    const fix = {};
+    const fix: Partial<Filters> = {};
     if (filters.track !== 'all' && !lk.get('track', filters.track)) fix.track = 'all';
     if (filters.stage !== 'all' && !lk.get('stage', filters.stage)) fix.stage = lk.roles.stage.promote ?? 'all';
     if (!['all', 'active', 'progress'].includes(filters.status) && !lk.get('status', filters.status)) fix.status = 'active';
@@ -119,8 +123,8 @@ export default function App() {
   useEffect(() => {
     if (demo && selectedId) track('job_viewed');
   }, [demo, selectedId]);
-  const set = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
-  const toggleStack = (id) => setStack((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const set = (key: keyof Filters) => (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setFilters((f) => ({ ...f, [key]: e.target.value }));
+  const toggleStack = (id: JobRow['id']) => setStack((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   // Advanced filters live behind a link; the link shows how many are in use so a hidden one is never forgotten.
   const [showAdvanced, setShowAdvanced] = useState(false);
   const advancedInUse = [filters.track !== 'all', filters.needsDescription, Boolean(filters.discoveredAfter), Boolean(filters.minScore)].filter(Boolean).length;
@@ -150,7 +154,7 @@ export default function App() {
         <h1>
           <a href="#/">Job Hunt</a>
           {shortName && (
-            <span className="who" title={me.demo ? `The demo's sample candidate, ${me.name ?? me.email}` : `Signed in with Google as ${me.email}`}>
+            <span className="who" title={me?.demo ? `The demo's sample candidate, ${me.name ?? me.email}` : `Signed in with Google as ${me?.email}`}>
               {' '}({shortName})
             </span>
           )}

@@ -1,5 +1,7 @@
+import type { Task } from '../api.ts';
+
 // Shows the steps of a background action as they happen.
-export default function TaskProgress({ task }) {
+export default function TaskProgress({ task }: { task: Task | null | undefined }) {
   if (!task) return null;
   return (
     <div className={`task ${task.status}`} aria-live="polite">

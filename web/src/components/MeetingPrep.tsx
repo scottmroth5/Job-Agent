@@ -1,24 +1,32 @@
 import { useEffect, useState } from 'react';
+import type { ChangeEvent, FormEvent, KeyboardEvent } from 'react';
 import { api, followTask } from '../api.ts';
-import { Markdown } from './Notes.jsx';
-import TaskProgress from './TaskProgress.jsx';
+import type { ApiBody, ApiResponse, Job, Task } from '../api.ts';
+import { Markdown } from './Notes.tsx';
+import TaskProgress from './TaskProgress.tsx';
 import { useDemo } from '../demo.tsx';
 import { DashIcon } from './DashIcon.tsx';
 
 const KINDS = ['Recruiter or search firm', 'Hiring manager', 'Executive, owner, or investor', 'Panel or team', 'Technical', 'Networking or introduction', 'Other'];
 const FORMATS = ['Video', 'Phone', 'In person'];
-const EMPTY_PERSON = { name: '', role: '', organization: '', url: '', about: '' };
+type Person = { name: string; role: string; organization: string; url: string; about: string };
+const EMPTY_PERSON: Person = { name: '', role: '', organization: '', url: '', about: '' };
+type PrepForm = { meetingAt: string; kind: string; format: string; context: string; research: boolean };
+/** A prep as GET /api/meeting-preps/:id returns it, or the demo's sample. */
+type Prep = ApiResponse<'GET /api/meeting-preps/:id'>;
+/** A prep in the job's list (the job detail's meetingPreps). */
+type PrepSummary = { id: string; attendees: Array<{ name: string }>; kind?: string | null; meetingAt?: string | null; createdAt: string; docUrl?: string | null };
 
-const names = (attendees) => {
+const names = (attendees: Array<{ name: string }>) => {
   const list = attendees.map((a) => a.name);
   return list.length > 2 ? `${list.slice(0, 2).join(', ')} and ${list.length - 2} more` : list.join(' and ');
 };
-const when = (iso) =>
+const when = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : null;
-const money = (usd) => (usd == null ? '' : ` · $${usd.toFixed(2)}`);
+const money = (usd: number | null | undefined) => (usd == null ? '' : ` · $${usd.toFixed(2)}`);
 
 // Stops Escape from also closing the job panel behind a dialog.
-const trapEscape = (close) => (e) => {
+const trapEscape = (close: () => void) => (e: KeyboardEvent) => {
   if (e.key === 'Escape') {
     e.stopPropagation();
     close();
@@ -26,26 +34,27 @@ const trapEscape = (close) => (e) => {
 };
 
 /** Who the meeting is with and anything else Claude should know, then a task that writes the prep. */
-function PrepDialog({ job, onClose, onDone }) {
-  const [people, setPeople] = useState([{ ...EMPTY_PERSON, organization: job.company ?? '' }]);
-  const [form, setForm] = useState({ meetingAt: '', kind: '', format: 'Video', context: '', research: true });
-  const [task, setTask] = useState(null);
-  const [error, setError] = useState(null);
+function PrepDialog({ job, onClose, onDone }: { job: Job; onClose: () => void; onDone: (prep: string | Prep | null | undefined) => void }) {
+  const [people, setPeople] = useState<Person[]>([{ ...EMPTY_PERSON, organization: job.company ?? '' }]);
+  const [form, setForm] = useState<PrepForm>({ meetingAt: '', kind: '', format: 'Video', context: '', research: true });
+  const [task, setTask] = useState<Task | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const busy = task?.status === 'running';
 
-  const setPerson = (i, key) => (e) => setPeople((ps) => ps.map((p, k) => (k === i ? { ...p, [key]: e.target.value } : p)));
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }));
+  const setPerson = (i: number, key: keyof Person) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setPeople((ps) => ps.map((p, k) => (k === i ? { ...p, [key]: e.target.value } : p)));
+  const set = (key: keyof PrepForm) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
+    setForm((f) => ({ ...f, [key]: e.target.type === 'checkbox' ? (e.target as HTMLInputElement).checked : e.target.value }));
   const ready = people.some((p) => p.name.trim());
 
-  const submit = async (e) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
-      const body = {
-        attendees: people.filter((p) => p.name.trim()).map((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v.trim()))),
+      const body: ApiBody<'POST /api/postings/:id/meeting-prep'> = {
+        attendees: people.filter((p) => p.name.trim()).map((p) => Object.fromEntries(Object.entries(p).filter(([, v]) => v.trim())) as Person),
         meetingAt: form.meetingAt || null,
-        kind: form.kind || null,
-        format: form.format || null,
+        kind: (form.kind || null) as ApiBody<'POST /api/postings/:id/meeting-prep'>['kind'], // KINDS lists the route's values
+        format: (form.format || null) as ApiBody<'POST /api/postings/:id/meeting-prep'>['format'], // and FORMATS its formats
         context: form.context.trim() || null,
         research: form.research,
       };
@@ -55,7 +64,7 @@ function PrepDialog({ job, onClose, onDone }) {
       if (final.status === 'done') onDone(final.result?.prep ?? final.result?.prepId);
       else setError(final.error ?? 'The prep could not be written.');
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -153,15 +162,15 @@ function PrepDialog({ job, onClose, onDone }) {
 }
 
 /** A finished prep, formatted, with its Google Doc (when there is one), a copy button, and a Word download. */
-function PrepReader({ prepId, sample = null, onClose }) {
+function PrepReader({ prepId = null, sample = null, onClose }: { prepId?: string | null; sample?: Prep | null; onClose: () => void }) {
   const demo = useDemo();
-  const [prep, setPrep] = useState(null);
-  const [error, setError] = useState(null);
+  const [prep, setPrep] = useState<Prep | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (sample) setPrep(sample);
-    else api.prep(prepId).then(setPrep, (err) => setError(err.message));
+    else api.prep(prepId as string).then(setPrep, (err: Error) => setError(err.message)); // a reader has a prep id or a sample
   }, [prepId, sample]);
   const copy = async () => {
     await navigator.clipboard.writeText(prep.content);
@@ -207,24 +216,24 @@ function PrepReader({ prepId, sample = null, onClose }) {
 }
 
 /** The job's meeting preps and the button that starts a new one. */
-export default function MeetingPrep({ job, onChanged, askSignal = 0 }) {
+export default function MeetingPrep({ job, onChanged, askSignal = 0 }: { job: Job; onChanged: () => unknown; askSignal?: number }) {
   const [asking, setAsking] = useState(false);
   // The Next step box's Prepare for a meeting (DetailPanel) opens the same form.
   useEffect(() => {
     if (askSignal) setAsking(true);
   }, [askSignal]);
-  const [reading, setReading] = useState(null);
-  const [samplePrep, setSamplePrep] = useState(null); // the demo's sample prep (never saved)
-  const [error, setError] = useState(null);
-  const preps = job.meetingPreps ?? [];
+  const [reading, setReading] = useState<string | null>(null);
+  const [samplePrep, setSamplePrep] = useState<Prep | null>(null); // the demo's sample prep (never saved)
+  const [error, setError] = useState<string | null>(null);
+  const preps: PrepSummary[] = job.meetingPreps ?? [];
 
-  const remove = async (p) => {
+  const remove = async (p: PrepSummary) => {
     if (!window.confirm(`Delete the prep for ${names(p.attendees)}? ${p.docUrl ? 'Its Google Doc stays in Drive.' : ''}`)) return;
     try {
       await api.deletePrep(p.id);
       onChanged();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 

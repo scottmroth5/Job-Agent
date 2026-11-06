@@ -21,8 +21,8 @@ test('the order rule: saved first, new items in their default place, unknown and
 });
 
 test('the Home page and the server name the same tiles', () => {
-  const jsx = readFileSync(repoPath('web', 'src', 'components', 'HomePage.jsx'), 'utf8');
-  const keys = JSON.parse(/HOME_TILES = (\[[^\]]+\])/.exec(jsx)[1].replaceAll("'", '"'));
+  const jsx = readFileSync(repoPath('web', 'src', 'components', 'HomePage.tsx'), 'utf8');
+  const keys = JSON.parse(/HOME_TILES(?::[^=]+)? = (\[[^\]]+\])/.exec(jsx)[1].replaceAll("'", '"'));
   assert.deepEqual(keys, HOME);
 });
 

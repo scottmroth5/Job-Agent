@@ -21,7 +21,7 @@ export default function FollowUpSettings() {
     setDays(String(d.staleDays));
   };
   useEffect(() => {
-    api.followUps().then(show, (err: Error) => setError(err.message));
+    api.followUps().then(show, (err: Error) => setError((err as Error).message));
   }, []);
 
   const save = async (e: FormEvent) => {
