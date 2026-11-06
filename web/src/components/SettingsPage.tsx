@@ -1,31 +1,35 @@
 import { useEffect, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import { api } from '../api.ts';
-import { useDemo } from '../demo.tsx';
-import SearchSettings from './SearchSettings.jsx';
-import FeedbackForm from './FeedbackForm.jsx';
-import AccountControls from './AccountControls.jsx';
-import ResumesSettings from './ResumesSettings.jsx';
-import ExcludedSitesSettings from './ExcludedSitesSettings.jsx';
-import LetterHeaderSettings from './LetterHeaderSettings.jsx';
-import FollowUpSettings from './FollowUpSettings.jsx';
-import PromptsSettings from './PromptsSettings.jsx';
-import SpendingAdmin from './SpendingAdmin.jsx';
+import type { ApiResponse } from '../api.ts';
 
-const usd = (n) => `$${Number(n).toFixed(2)}`;
+type Account = ApiResponse<'GET /api/account'>;
+import { useDemo } from '../demo.tsx';
+import SearchSettings from './SearchSettings.tsx';
+import FeedbackForm from './FeedbackForm.tsx';
+import AccountControls from './AccountControls.tsx';
+import ResumesSettings from './ResumesSettings.tsx';
+import ExcludedSitesSettings from './ExcludedSitesSettings.tsx';
+import LetterHeaderSettings from './LetterHeaderSettings.tsx';
+import FollowUpSettings from './FollowUpSettings.tsx';
+import PromptsSettings from './PromptsSettings.tsx';
+import SpendingAdmin from './SpendingAdmin.tsx';
+
+const usd = (n: unknown) => `$${Number(n).toFixed(2)}`;
 
 // Every zone the browser knows, for the picker.
 const ZONES = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
 
 /** The zone this user's calendar days follow (applied dates, the funnel's weeks, document dates). */
-function TimeZonePicker({ account, onSaved }) {
+function TimeZonePicker({ account, onSaved }: { account: Account; onSaved: (account: Account) => void }) {
   const device = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const [error, setError] = useState(null);
-  const save = async (zone) => {
+  const [error, setError] = useState<string | null>(null);
+  const save = async (zone: string) => {
     setError(null);
     try {
       onSaved(await api.setTimeZone(zone || null));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
   return (
@@ -62,7 +66,7 @@ export default function SettingsPage() {
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const setTab = (t) => {
+  const setTab = (t: string) => {
     setTabState(t);
     window.history.replaceState(null, '', t === 'prompts' ? '#/settings/prompts' : '#/settings');
   };
@@ -86,19 +90,19 @@ export default function SettingsPage() {
   return <AccountSettings tabs={tabs} />;
 }
 
-function AccountSettings({ tabs }) {
+function AccountSettings({ tabs }: { tabs: ReactNode }) {
   const demo = useDemo();
-  const [account, setAccount] = useState(null);
+  const [account, setAccount] = useState<Account | null>(null);
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-  const [note, setNote] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
   useEffect(() => {
-    api.account().then(setAccount, (err) => setError(err.message));
+    api.account().then(setAccount, (err) => setError((err as Error).message));
   }, []);
 
-  const run = async (action, done) => {
+  const run = async (action: () => Promise<Account>, done: string) => {
     setBusy(true);
     setError(null);
     setNote(null);
@@ -106,12 +110,12 @@ function AccountSettings({ tabs }) {
       setAccount(await action());
       setNote(done);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   };
-  const save = (e) => {
+  const save = (e: FormEvent) => {
     e.preventDefault();
     void run(() => api.saveClaudeKey(key.trim()), 'Key saved. It is stored encrypted and will not be shown again.').then(() => setKey(''));
   };

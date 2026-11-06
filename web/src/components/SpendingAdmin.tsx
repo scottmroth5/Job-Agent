@@ -1,8 +1,12 @@
 import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
+
+type Spending = ApiResponse<'GET /api/spending'>;
 import { isOwner, useMe } from '../me.tsx';
 
-const LABELS = {
+const LABELS: Record<string, string | undefined> = {
   score: 'Scoring full-time jobs',
   'score-fractional': 'Scoring fractional jobs',
   'resume-tweaks': 'Resume tweaks',
@@ -13,29 +17,29 @@ const LABELS = {
   'inbox-classify': 'Reading job email',
   other: 'Other',
 };
-const usd = (n) => `$${n.toFixed(2)}`;
+const usd = (n: number) => `$${n.toFixed(2)}`;
 
 /**
  * This month's Claude spend, by feature. On Admin > Spending the owner sees everything on their key against the cap and
  * sets it; on Settings (embedded) a user on the owner's key sees their allowance, and a user with their own key their
  * spend, with no cap.
  */
-export default function SpendingAdmin({ embedded = false }) {
+export default function SpendingAdmin({ embedded = false }: { embedded?: boolean }) {
   const me = useMe();
-  const [b, setB] = useState(null);
+  const [b, setB] = useState<Spending | null>(null);
   const [draft, setDraft] = useState('');
   const [saved, setSaved] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const show = (data) => {
+  const show = (data: Spending) => {
     setB(data);
     setDraft(String(data.limitUsd ?? ''));
   };
   useEffect(() => {
-    api.budget().then(show, (err) => setError(err.message));
+    api.budget().then(show, (err) => setError((err as Error).message));
   }, []);
 
-  const save = async (e) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
@@ -43,7 +47,7 @@ export default function SpendingAdmin({ embedded = false }) {
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -106,7 +110,7 @@ export default function SpendingAdmin({ embedded = false }) {
             </tr>
           </thead>
           <tbody>
-            {b.byLabel.map((r) => (
+            {b.byLabel.map((r: { label: string; calls: number; costUsd: number }) => (
               <tr key={r.label}>
                 <td>{LABELS[r.label] ?? r.label}</td>
                 <td>{r.calls}</td>

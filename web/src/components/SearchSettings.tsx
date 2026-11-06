@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { api } from '../api.ts';
-import DraftBuilder from './DraftBuilder.jsx';
-import KnowledgeVersions from './KnowledgeVersions.jsx';
+import type { ApiBody, ApiResponse } from '../api.ts';
+
+type SearchData = ApiResponse<'GET /api/account/search'>;
+type Draft = ApiResponse<'POST /api/account/draft'>;
+/** The search form: every field as the text in its box (lists one item per line). */
+type SearchForm = Record<string, string | number>;
+/** One of the knowledge doc's sections (agents/knowledge-sections.ts). */
+type Section = { n: number; title: string; hint?: string };
+import DraftBuilder from './DraftBuilder.tsx';
+import KnowledgeVersions from './KnowledgeVersions.tsx';
 import { useDemo } from '../demo.tsx';
 
 // Lists are edited one item per line.
-const lines = (v) => (v ?? []).join('\n');
-const fromLines = (s) => String(s ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
+const lines = (v: string[] | null | undefined) => (v ?? []).join('\n');
+const fromLines = (s: unknown) => String(s ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
 
-const LIST_FIELDS = [
+const LIST_FIELDS: Array<[key: string, label: string, hint: string]> = [
   ['terms', 'Job titles to search for', 'One per line, e.g. VP Engineering'],
   ['relevantTitleKeywords', 'Words a relevant title contains', 'e.g. engineering, technology, cto'],
   ['noiseTitleKeywords', 'Words that rule a title out (optional)', 'e.g. intern, sales'],
@@ -19,12 +28,12 @@ const LIST_FIELDS = [
 // Which of the knowledge doc's seven sections the text has, by heading (agents/knowledge-sections.ts sectionCheck does the
 // same on the server). A numbered heading counts by its number whatever its title ("SECTION 5: TARGET ROLES"), since the
 // prompts name sections by number; an unnumbered one by the standard title. Plain "1. ..." list items do not count.
-const norm = (t) => String(t).toLowerCase().replace(/[^a-z]+/g, ' ').trim();
-const headingNumber = (l) => {
+const norm = (t: unknown) => String(t).toLowerCase().replace(/[^a-z]+/g, ' ').trim();
+const headingNumber = (l: string) => {
   const m = /^section\s+(\d+)\b/i.exec(l) ?? /^#+\s*(?:section\s+)?(\d+)\s*[.:)\-]/i.exec(l);
   return m ? Number(m[1]) : null;
 };
-function sectionsIn(text, sections) {
+function sectionsIn(text: string | null | undefined, sections: Section[]) {
   const lines = String(text ?? '')
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -35,7 +44,7 @@ function sectionsIn(text, sections) {
 }
 
 /** The seven sections as chips (present or missing), and a button that starts from the template or adds what is missing. */
-function SectionChecklist({ sections, text, template, readOnly, onChange }) {
+function SectionChecklist({ sections, text, template, readOnly = false, onChange }: { sections: Section[]; text: string; template: string; readOnly?: boolean; onChange: (text: string) => void }) {
   if (!sections.length) return null;
   const check = sectionsIn(text, sections);
   const missing = check.filter((c) => !c.found);
@@ -70,15 +79,15 @@ function SectionChecklist({ sections, text, template, readOnly, onChange }) {
  */
 export default function SearchSettings() {
   const demo = useDemo(); // the demo shows the sample candidate's, read-only
-  const [data, setData] = useState(null);
-  const [form, setForm] = useState(null);
+  const [data, setData] = useState<SearchData | null>(null);
+  const [form, setForm] = useState<SearchForm | null>(null);
   const [profile, setProfile] = useState('');
-  const [profileSource, setProfileSource] = useState('typed'); // how the text in the box came: typed, file, or draft
+  const [profileSource, setProfileSource] = useState<ApiBody<'PUT /api/account/profile'>['source']>('typed'); // how the text in the box came: typed, file, or draft
   const [versionsKey, setVersionsKey] = useState(0); // reloads the versions after a save or restore
-  const [error, setError] = useState(null);
-  const [note, setNote] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
 
-  const show = (d) => {
+  const show = (d: SearchData) => {
     setData(d);
     if (d.owner) {
       setProfile(d.profile ?? ''); // the owner's search settings stay in their settings file; the knowledge doc lives here
@@ -94,54 +103,55 @@ export default function SearchSettings() {
     setProfile(d.profile);
   };
   useEffect(() => {
-    api.accountSearch().then(show, (err) => setError(err.message));
+    api.accountSearch().then(show, (err) => setError((err as Error).message));
   }, []);
 
-  const run = async (action, done) => {
+  const run = async (action: () => Promise<SearchData>, done: string) => {
     setError(null);
     setNote(null);
     try {
       show(await action());
       setNote(done);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
   if (!data) return error ? <div className="error">{error}</div> : null;
   const owner = data.owner;
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  const f = form as SearchForm; // set with data for everyone but the owner, whose screen never reads it
+  const set = (k: string) => (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setForm({ ...f, [k]: e.target.value });
   // A draft fills the forms (never saves): the user reviews it and saves each part.
-  const useDraftSearch = (d) => {
+  const useDraftSearch = (d: Draft) => {
     setForm({
-      ...form,
-      name: d.candidate.name || form.name, signoffName: d.candidate.signoffName || form.signoffName,
-      contactLine: d.candidate.contactLine || form.contactLine, linkedin: d.candidate.linkedin || form.linkedin,
+      ...f,
+      name: d.candidate.name || f.name, signoffName: d.candidate.signoffName || f.signoffName,
+      contactLine: d.candidate.contactLine || f.contactLine, linkedin: d.candidate.linkedin || f.linkedin,
       terms: lines(d.search.terms), relevantTitleKeywords: lines(d.search.relevantTitleKeywords), noiseTitleKeywords: lines(d.search.noiseTitleKeywords),
       homeLocations: lines(d.search.homeLocations), fractionalTerms: lines(d.search.fractionalTerms),
     });
     setNote('The draft search is in the form below: check it, then Save search settings.');
   };
-  const useDraftProfile = (text) => {
+  const useDraftProfile = (text: string) => {
     setProfile(text);
     setProfileSource('draft');
     setNote('The draft is in your knowledge doc: edit it, then Save.');
   };
-  const saveSearch = (e) => {
+  const saveSearch = (e: FormEvent) => {
     e.preventDefault();
     void run(
       () =>
         api.saveAccountSearch({
-          candidate: { name: form.name, signoffName: form.signoffName, contactLine: form.contactLine, linkedin: form.linkedin, website: form.website, github: form.github },
-          search: { homeAreaLabel: form.homeAreaLabel, localSearchLocation: form.localSearchLocation, ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, fromLines(form[k])])) },
-          fractional: { targetAnnual: [Number(form.targetLow), Number(form.targetHigh)] },
+          candidate: { name: f.name, signoffName: f.signoffName, contactLine: f.contactLine, linkedin: f.linkedin, website: f.website, github: f.github },
+          search: { homeAreaLabel: f.homeAreaLabel, localSearchLocation: f.localSearchLocation, ...Object.fromEntries(LIST_FIELDS.map(([k]) => [k, fromLines(f[k])])) },
+          fractional: { targetAnnual: [Number(f.targetLow), Number(f.targetHigh)] },
         }),
       'Search settings saved.',
     );
   };
   const chars = profile.trim().length;
   // The required fields still empty, by their labels here.
-  const missing = LIST_FIELDS.filter(([k]) => (data.problems ?? []).some((p) => p.startsWith(`search.${k} `))).map(([, label]) => label);
+  const missing = LIST_FIELDS.filter(([k]) => (data.problems ?? []).some((p: string) => p.startsWith(`search.${k} `))).map(([, label]) => label);
   return (
     <>
       <section className="home-card">
@@ -175,7 +185,7 @@ export default function SearchSettings() {
                       setProfileSource('file');
                       setNote(`Your knowledge doc now holds the text of ${file.name}: check it against the sections, then Save.`);
                     } catch (err) {
-                      setError(err.message);
+                      setError((err as Error).message);
                     }
                   }}
                 />
@@ -228,20 +238,20 @@ export default function SearchSettings() {
         <form className="search-form" onSubmit={saveSearch}>
           <fieldset className="bare">
           <div className="grid2">
-            <label>Your name<input value={form.name} onChange={set('name')} /></label>
+            <label>Your name<input value={f.name} onChange={set('name')} /></label>
           </div>
           <p className="muted small">Your letter's name, contact details, links, and sign-off are under Cover letter header, below.</p>
           {LIST_FIELDS.map(([k, label, hint]) => (
             <label key={k}>
               {label}
-              <textarea rows={3} value={form[k]} onChange={set(k)} placeholder={hint} />
+              <textarea rows={3} value={f[k]} onChange={set(k)} placeholder={hint} />
             </label>
           ))}
           <div className="grid2">
-            <label>Your area, in words (optional)<input value={form.homeAreaLabel} onChange={set('homeAreaLabel')} placeholder="the Anytown area" /></label>
-            <label>LinkedIn search location (optional)<input value={form.localSearchLocation} onChange={set('localSearchLocation')} placeholder="Anytown Metropolitan Area" /></label>
-            <label>Fractional target, low ($ a year)<input type="number" min="0" value={form.targetLow} onChange={set('targetLow')} /></label>
-            <label>Fractional target, high ($ a year)<input type="number" min="0" value={form.targetHigh} onChange={set('targetHigh')} /></label>
+            <label>Your area, in words (optional)<input value={f.homeAreaLabel} onChange={set('homeAreaLabel')} placeholder="the Anytown area" /></label>
+            <label>LinkedIn search location (optional)<input value={f.localSearchLocation} onChange={set('localSearchLocation')} placeholder="Anytown Metropolitan Area" /></label>
+            <label>Fractional target, low ($ a year)<input type="number" min="0" value={f.targetLow} onChange={set('targetLow')} /></label>
+            <label>Fractional target, high ($ a year)<input type="number" min="0" value={f.targetHigh} onChange={set('targetHigh')} /></label>
           </div>
           <button className="primary demo-hide" type="submit">
             Save search settings

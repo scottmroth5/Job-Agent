@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
+
+type Usage = ApiResponse<'GET /api/admin/usage'>;
+type Week = Usage['weeks'][number];
+type Field = Exclude<keyof Week, 'weekEnding'>;
+type Location = Usage['locations'][number];
+/** [label, count] rows for a chart. */
+type Rows = Array<[string, number]>;
 
 // Admin > Usage: the app's weekly totals across every account (GET /api/admin/usage). Counts only, kept in the app;
 // nothing here goes to an analytics service. Weeks run Sunday to Saturday; the first row is this week so far.
 const RANGES = [4, 12, 52];
-const TOTALS = [
+const TOTALS: Array<[Field, string]> = [
   ['accountsSeen', 'Accounts seen'],
   ['pipelineCompleted', 'Pipeline runs completed'],
   ['pipelineFailed', 'Pipeline runs failed'],
@@ -14,14 +22,14 @@ const TOTALS = [
   ['claudeSpendUsd', 'Claude spend'],
   ['feedbackReceived', 'Feedback received'],
 ];
-const TILES = ['accountsSeen', 'pipelineCompleted', 'jobsAdded', 'lettersWritten'];
-const LABEL = Object.fromEntries(TOTALS);
+const TILES: Field[] = ['accountsSeen', 'pipelineCompleted', 'jobsAdded', 'lettersWritten'];
+const LABEL = Object.fromEntries(TOTALS) as Record<Field, string>;
 
-const shortDay = (day) => new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-const show = (key, n) => (key === 'claudeSpendUsd' ? `$${n.toFixed(2)}` : n.toLocaleString());
+const shortDay = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+const show = (key: Field, n: number) => (key === 'claudeSpendUsd' ? `$${n.toFixed(2)}` : n.toLocaleString());
 
 /** One total by week, oldest on the left; screen readers get the same numbers as a table. */
-function WeekBars({ field, weeks }) {
+function WeekBars({ field, weeks }: { field: Field; weeks: Week[] }) {
   const max = Math.max(1, ...weeks.map((w) => w[field]));
   const every = Math.ceil(weeks.length / 6); // about six labels, so they never run together
   return (
@@ -77,16 +85,16 @@ const SOURCE_ORDER = [
   ['other', 'Other'],
   ['direct', 'Direct'],
 ];
-const count = (list, value) => list.find((r) => r.value === value)?.count ?? 0;
+const count = (list: Array<{ value: string; count: number }>, value: string) => list.find((r) => r.value === value)?.count ?? 0;
 /** [value, count] for the largest `limit` (the list comes largest first), the rest summed as "Everything else". */
-const top = (list, limit) => {
-  const rows = list.map((r) => [r.value, r.count]);
+const top = (list: Array<{ value: string; count: number }>, limit: number): Rows => {
+  const rows: Rows = list.map((r) => [r.value, r.count]);
   if (rows.length <= limit) return rows;
   return [...rows.slice(0, limit), ['Everything else', rows.slice(limit).reduce((s, [, n]) => s + n, 0)]];
 };
 
 /** Rows of [label, count] as horizontal bars, with the same numbers as a table for screen readers. */
-function Breakdown({ caption, label, rows }) {
+function Breakdown({ caption, label, rows }: { caption: string; label: string; rows: Rows }) {
   const total = rows.reduce((s, [, n]) => s + n, 0);
   if (!total) return <p className="muted">Nothing counted yet.</p>;
   const max = Math.max(...rows.map(([, n]) => n));
@@ -128,8 +136,8 @@ function Breakdown({ caption, label, rows }) {
 }
 
 /** Totals of [key, count], largest first, the top `limit` (the rest summed as "Everywhere else"). */
-function rollup(locations, keyOf, limit) {
-  const sums = new Map();
+function rollup(locations: Location[], keyOf: (l: Location) => string, limit: number): Rows {
+  const sums = new Map<string, number>();
   for (const l of locations) sums.set(keyOf(l), (sums.get(keyOf(l)) ?? 0) + l.count);
   const sorted = [...sums].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
   if (sorted.length <= limit) return sorted;
@@ -137,10 +145,10 @@ function rollup(locations, keyOf, limit) {
 }
 
 /** Visits by location: countries, then states, then cities, each its own chart; unknown is its own row. */
-function Locations({ locations }) {
+function Locations({ locations }: { locations: Location[] }) {
   const known = locations.filter((l) => l.country);
   const unknown = locations.filter((l) => !l.country).reduce((s, l) => s + l.count, 0);
-  const withUnknown = (rows) => (unknown ? [...rows, ['Unknown', unknown]] : rows);
+  const withUnknown = (rows: Rows): Rows => (unknown ? [...rows, ['Unknown', unknown]] : rows);
   return (
     <section className="funnel-card">
       <h3>Visits by location</h3>
@@ -165,17 +173,18 @@ function Locations({ locations }) {
 
 export default function UsageAdmin() {
   const [range, setRange] = useState(12);
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
+  const [data, setData] = useState<Usage | null>(null);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     setError(null);
-    api.adminUsage(range).then(setData, (err) => setError(err.message));
+    api.adminUsage(range).then(setData, (err) => setError((err as Error).message));
   }, [range]);
 
   const rows = data?.weeks ?? null;
 
-  const latest = rows?.[1]; // the latest full week (row 0 is this week so far)
+  const latest = rows?.[1] as Week; // the latest full week (row 0 is this week so far); read only when rows came, which always has 4 or more
   const oldestFirst = rows ? [...rows].reverse() : [];
+  const usage = data as Usage; // read below only once rows (from data) came
   return (
     <div className="usage-admin">
       <div className="filters">
@@ -213,20 +222,20 @@ export default function UsageAdmin() {
             <section className="funnel-card">
               <h3>Visits by device</h3>
               <p className="muted small">Each account counts once a day.</p>
-              <Breakdown caption="Visits by device" label="Device" rows={DEVICE_ORDER.map(([v, l]) => [l, count(data.devices, v)])} />
+              <Breakdown caption="Visits by device" label="Device" rows={DEVICE_ORDER.map(([v, l]) => [l, count(usage.devices, v)])} />
             </section>
             <section className="funnel-card">
               <h3>Visits by browser</h3>
               <p className="muted small">Browser and major version. Each account counts once a day.</p>
-              <Breakdown caption="Visits by browser, top 10" label="Browser" rows={top(data.browsers, 10)} />
+              <Breakdown caption="Visits by browser, top 10" label="Browser" rows={top(usage.browsers, 10)} />
             </section>
             <section className="funnel-card">
               <h3>Arrivals by source</h3>
               <p className="muted small">Page loads from outside the app; returning from Google sign-in is not counted.</p>
-              <Breakdown caption="Arrivals by source" label="Source" rows={SOURCE_ORDER.map(([v, l]) => [l, count(data.sources, v)])} />
+              <Breakdown caption="Arrivals by source" label="Source" rows={SOURCE_ORDER.map(([v, l]) => [l, count(usage.sources, v)])} />
             </section>
           </div>
-          <Locations locations={data.locations} />
+          <Locations locations={usage.locations} />
 
           <section className="funnel-card">
             <h3>Every total</h3>

@@ -192,7 +192,7 @@ export const api = {
       return sampleHelpAnswer(question, guides);
     });
   },
-  setTimeZone: (timeZone: string) => request('PUT /api/account/timezone', '/api/account/timezone', { timeZone }),
+  setTimeZone: (timeZone: string | null) => request('PUT /api/account/timezone', '/api/account/timezone', { timeZone }),
   resumeAccount: () => request('POST /api/account/resume', '/api/account/resume'),
   deleteAccount: (confirmEmail: string) => request('POST /api/account/delete', '/api/account/delete', { confirmEmail }),
   deleteUser: (id: Id, confirmEmail: string) => request('POST /api/admin/users/:id/delete', `/api/admin/users/${id}/delete`, { confirmEmail }),

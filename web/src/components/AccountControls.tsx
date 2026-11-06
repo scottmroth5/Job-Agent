@@ -1,23 +1,27 @@
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
+
+type Account = ApiResponse<'GET /api/account'>;
 
 /**
  * Settings > Your data and account: download everything that is yours, pause yourself (and resume, when you paused),
  * or delete your account with everything in it. Not for the owner, whose data is the app's own.
  */
-export default function AccountControls({ account, onChange }) {
+export default function AccountControls({ account, onChange }: { account: Account; onChange: (account: Account) => void }) {
   const [confirm, setConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState(null);
-  const act = async (fn) => {
+  const [error, setError] = useState<string | null>(null);
+  const act = async (fn: () => Promise<Account>) => {
     setError(null);
     try {
       onChange(await fn());
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
-  const remove = async (e) => {
+  const remove = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
@@ -25,7 +29,7 @@ export default function AccountControls({ account, onChange }) {
       await api.signOut().catch(() => {});
       window.location.href = '/auth/signed-out';
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
   return (

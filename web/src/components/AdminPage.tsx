@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react';
-import ListsAdmin from './ListsAdmin.jsx';
-import SpendingAdmin from './SpendingAdmin.jsx';
-import UsageAdmin from './UsageAdmin.jsx';
-import UsersAdmin from './UsersAdmin.jsx';
+import ListsAdmin from './ListsAdmin.tsx';
+import SpendingAdmin from './SpendingAdmin.tsx';
+import UsageAdmin from './UsageAdmin.tsx';
+import UsersAdmin from './UsersAdmin.tsx';
 import { useDemo } from '../demo.tsx';
 import { isAdmin, isOwner, useMe } from '../me.tsx';
+import type { Me } from '../me.tsx';
 
 // [key, label, who sees it]: the lists are shared by everyone, so only the owner edits them; Users is for admins.
 // Prompts moved to Settings (each user's own); an old #/admin/prompts link is sent there.
-const SECTIONS = [
+const SECTIONS: Array<[key: string, label: string, shown: (me: Me | null, demo: boolean) => boolean]> = [
   ['lists', 'Lists', (me, demo) => isOwner(me) && !demo],
   ['spending', 'Spending', (me, demo) => isAdmin(me) && !demo],
   ['users', 'Users', (me, demo) => isAdmin(me) && !demo],
@@ -26,7 +27,7 @@ export default function AdminPage() {
   const [asked, setSectionState] = useState(sectionFromHash);
   // The section in the address, once this person may see it (who they are arrives just after the page loads).
   const section = sections.some(([k]) => k === asked) ? asked : sections[0]?.[0];
-  const setSection = (s) => {
+  const setSection = (s: string) => {
     setSectionState(s);
     window.history.replaceState(null, '', `#/admin/${s}`);
   };

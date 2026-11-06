@@ -6,16 +6,16 @@ import JobTable from './components/JobTable.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import AddJobDialog from './components/AddJobDialog.jsx';
 import StackingBar from './components/StackingBar.jsx';
-import AdminPage from './components/AdminPage.jsx';
+import AdminPage from './components/AdminPage.tsx';
 import InboxPage from './components/InboxPage.jsx';
 import HomePage from './components/HomePage.jsx';
 import ActivityPage from './components/ActivityPage.jsx';
 import FunnelPage from './components/FunnelPage.jsx';
 import { DemoBanner, DemoContext, DemoNotice } from './demo.tsx';
 import { MeContext } from './me.tsx';
-import SettingsPage from './components/SettingsPage.jsx';
-import HelpPage from './components/HelpPage.jsx';
-import { DashIcon } from './components/DashIcon.jsx';
+import SettingsPage from './components/SettingsPage.tsx';
+import HelpPage from './components/HelpPage.tsx';
+import { DashIcon } from './components/DashIcon.tsx';
 
 // #/ is the Home page; each screen has its own address.
 const VIEWS = { jobs: 'Jobs', inbox: 'Inbox', funnel: 'Funnel', activity: 'Activity', admin: 'Admin', settings: 'Settings', help: 'Help' };

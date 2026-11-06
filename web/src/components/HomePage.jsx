@@ -3,7 +3,7 @@ import PipelineButton from './PipelineButton.jsx';
 import { api } from '../api.ts';
 import { arranged, moved } from '../layout.ts';
 import { isAdmin, isOwner, useMe } from '../me.tsx';
-import { DashIcon, DASH } from './DashIcon.jsx';
+import { DashIcon, DASH } from './DashIcon.tsx';
 
 // Simple line illustrations for the tiles (inline SVG: nothing to download, and they follow the text color).
 const ICONS = {
