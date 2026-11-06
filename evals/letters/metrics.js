@@ -2,10 +2,22 @@
 // contradicted or unsupported claim mentions one of its words; any other flagged claim is an extra flag, and on a clean
 // letter every flagged claim is a false flag.
 
+/**
+ * @typedef {{ kind: string, mentions: string[] }} PlantedError
+ * @typedef {{ claim: string, verdict: string, evidence?: string | null }} JudgedClaim
+ * @typedef {{ id: string, expect: PlantedError | null, claims: JudgedClaim[] | null, error?: string, costUsd?: number, ms?: number }} LetterResult
+ * @typedef {LetterResult & ReturnType<typeof judgeLetter> & { failed: boolean }} Judged
+ */
+
 const FLAGGED = new Set(['contradicted', 'unsupported']);
+/** @param {unknown} s */
 const lower = (s) => String(s ?? '').toLowerCase();
 
-/** One letter's outcome: { found, flags, extra } (found is null for a clean letter). */
+/**
+ * One letter's outcome: { found, flags, extra } (found is null for a clean letter).
+ * @param {PlantedError | null | undefined} expect
+ * @param {JudgedClaim[] | null | undefined} claims
+ */
 export function judgeLetter(expect, claims) {
   const flags = (claims ?? []).filter((c) => FLAGGED.has(c.verdict));
   if (!expect) return { found: null, flags: flags.length, extra: flags.length };
@@ -16,11 +28,13 @@ export function judgeLetter(expect, claims) {
 /**
  * Totals across letters: results are { id, expect, claims, error?, costUsd, ms }.
  * recall: planted errors found / planted; falseFlagRate: clean letters with any flag / clean letters.
+ * @param {LetterResult[]} results
  */
 export function letterMetrics(results) {
   const judged = results.map((r) => ({ ...r, ...judgeLetter(r.expect, r.claims), failed: Boolean(r.error) }));
-  const planted = judged.filter((r) => r.expect);
+  const planted = judged.filter(/** @param {Judged} r @returns {r is Judged & { expect: PlantedError }} */ (r) => Boolean(r.expect));
   const clean = judged.filter((r) => !r.expect);
+  /** @type {Record<string, { planted: number, found: number }>} */
   const byKind = {};
   for (const r of planted) {
     const k = (byKind[r.expect.kind] ??= { planted: 0, found: 0 });
