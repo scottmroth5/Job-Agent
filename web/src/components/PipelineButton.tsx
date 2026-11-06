@@ -1,24 +1,25 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api, followTask } from '../api.ts';
+import type { ApiResponse, Task } from '../api.ts';
 import { dateTime } from '../format.ts';
 
-const STATUS = { ok: 'finished', partial: 'finished with warnings', failed: 'failed', aborted: 'stopped early' };
+const STATUS: Record<string, string | undefined> = { ok: 'finished', partial: 'finished with warnings', failed: 'failed', aborted: 'stopped early' };
 
 // Runs the whole pipeline (find, score, write materials, archive, email the report) and shows when it last ran.
-export default function PipelineButton({ onFinished }) {
-  const [state, setState] = useState(null);
-  const [task, setTask] = useState(null);
-  const [error, setError] = useState(null);
-  const [lastTaskId, setLastTaskId] = useState(null);
+export default function PipelineButton({ onFinished }: { onFinished?: () => void }) {
+  const [state, setState] = useState<ApiResponse<'GET /api/pipeline'> | null>(null);
+  const [task, setTask] = useState<Task | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [lastTaskId, setLastTaskId] = useState<string | null>(null);
 
   const follow = useCallback(
-    async (taskId) => {
+    async (taskId: string) => {
       setLastTaskId(taskId);
       try {
         const final = await followTask(taskId, setTask);
         if (final.status === 'failed') setError(final.error);
       } catch (err) {
-        setError(err.message);
+        setError((err as Error).message);
       } finally {
         setTask(null);
         setState(await api.pipeline().catch(() => null));
@@ -51,7 +52,7 @@ export default function PipelineButton({ onFinished }) {
       const { taskId } = await api.runPipeline();
       void follow(taskId);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 

@@ -1,15 +1,28 @@
 import { useRef, useState } from 'react';
+import type { KeyboardEvent } from 'react';
 import { api } from '../api.ts';
 import { renderMarkdown } from '../../../tools/markdown.ts';
 import { DashIcon } from './DashIcon.tsx';
+import type { Job } from '../api.ts';
+
+/** One of a job's notes (agents/notes.ts), as the job detail returns it. */
+export interface NoteEntry {
+  id: number;
+  body: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+}
+/** A text change: the new text and the selection to keep. */
+type Edit = { next: string; select: [number, number] };
 
 /** Formatted Markdown, rendered safely (tools/markdown.ts escapes everything first). */
-export function Markdown({ text, className = 'md' }) {
+export function Markdown({ text, className = 'md' }: { text: string | null | undefined; className?: string }) {
   return <div className={className} dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} />;
 }
 
 // Wraps the selection in markers (or inserts them around a placeholder) and keeps the selection on the text.
-function wrap(el, before, after, placeholder) {
+function wrap(el: HTMLTextAreaElement, before: string, after: string, placeholder: string): Edit {
   const { selectionStart: a, selectionEnd: b, value } = el;
   const picked = value.slice(a, b) || placeholder;
   const next = value.slice(0, a) + before + picked + after + value.slice(b);
@@ -17,7 +30,7 @@ function wrap(el, before, after, placeholder) {
 }
 
 // Starts each selected line (or the current line) with a list marker; again removes it.
-function listLines(el, ordered) {
+function listLines(el: HTMLTextAreaElement, ordered: boolean): Edit {
   const { selectionStart: a, selectionEnd: b, value } = el;
   const start = value.lastIndexOf('\n', a - 1) + 1;
   const endAt = value.indexOf('\n', b);
@@ -30,13 +43,13 @@ function listLines(el, ordered) {
 }
 
 /** Markdown text box with Bold, Italic, list, and Link buttons (Ctrl+B, Ctrl+I, Ctrl+K; Ctrl+Enter saves). */
-function NoteEditor({ initial = '', saveLabel, onSave, onCancel }) {
+function NoteEditor({ initial = '', saveLabel, onSave, onCancel }: { initial?: string; saveLabel: string; onSave: (body: string) => Promise<void>; onCancel: () => void }) {
   const [draft, setDraft] = useState(initial);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
-  const area = useRef(null);
+  const [error, setError] = useState<string | null>(null);
+  const area = useRef<HTMLTextAreaElement>(null);
 
-  const apply = (fn) => {
+  const apply = (fn: (el: HTMLTextAreaElement) => Edit) => {
     const el = area.current;
     if (!el) return;
     const { next, select } = fn(el);
@@ -59,11 +72,11 @@ function NoteEditor({ initial = '', saveLabel, onSave, onCancel }) {
     try {
       await onSave(draft);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
       setSaving(false);
     }
   };
-  const onKeyDown = (e) => {
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); bold(); }
     else if (mod && e.key.toLowerCase() === 'i') { e.preventDefault(); italic(); }
@@ -92,12 +105,12 @@ function NoteEditor({ initial = '', saveLabel, onSave, onCancel }) {
   );
 }
 
-const day = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-const time = (iso) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-const stamp = (iso) => new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+const time = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+const stamp = (iso: string) => new Date(iso).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
 /** "Created Oct 16, 2026 · edited Oct 18, 2026", with the exact times on hover. */
-function NoteDates({ note }) {
+function NoteDates({ note }: { note: NoteEntry }) {
   if (note.source === 'earlier') {
     return <span title="These notes were written before notes had dates">Earlier notes, from before {day(note.createdAt)}</span>;
   }
@@ -112,19 +125,19 @@ function NoteDates({ note }) {
 }
 
 /** A job's notes: newest first, each with its dates; add a new one, or edit or delete any of them. */
-export default function Notes({ jobId, entries, onChanged }) {
+export default function Notes({ jobId, entries, onChanged }: { jobId: Job['id']; entries: NoteEntry[]; onChanged: () => unknown }) {
   const [adding, setAdding] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [error, setError] = useState(null);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const remove = async (note) => {
+  const remove = async (note: NoteEntry) => {
     if (!window.confirm(`Delete the note from ${day(note.createdAt)}?`)) return;
     setError(null);
     try {
       await api.deleteNote(note.id);
       await onChanged();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -138,7 +151,7 @@ export default function Notes({ jobId, entries, onChanged }) {
         <NoteEditor
           saveLabel="Add note"
           onCancel={() => setAdding(false)}
-          onSave={async (body) => {
+          onSave={async (body: string) => {
             await api.addNote(jobId, body);
             setAdding(false);
             await onChanged();
@@ -163,7 +176,7 @@ export default function Notes({ jobId, entries, onChanged }) {
                 initial={n.body}
                 saveLabel="Save changes"
                 onCancel={() => setEditing(null)}
-                onSave={async (body) => {
+                onSave={async (body: string) => {
                   await api.updateNote(n.id, body);
                   setEditing(null);
                   await onChanged();

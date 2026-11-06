@@ -1,5 +1,5 @@
-// Type checking for the web page (v3 Phase 2). Vite builds it; this only checks. The page imports a few shared
-// modules from tools/ (markdown.js), which the root config checks too.
+// Type checking for the web page (v3 Phase 2): all TypeScript (.ts, .tsx). Vite builds it; this only checks. The page imports a few shared
+// modules from tools/ (markdown.ts), which the root config checks too.
 {
   "compilerOptions": {
     "noEmit": true,
@@ -8,8 +8,6 @@
     "moduleResolution": "bundler",
     "lib": ["esnext", "dom", "dom.iterable"],
     "jsx": "react-jsx",
-    "allowJs": true,
-    "checkJs": false,
     "strict": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,

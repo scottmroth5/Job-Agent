@@ -246,7 +246,7 @@ Go Fractional is bot-protected: it is never scraped, and search.siteSearch stays
 Letters: Sonnet 5.5 at medium effort; v1's cleanup (strip greeting/sign-off, no dashes) and config.coverLetterChecks run in code,
 plus a word-limit flag. Letter Docs go to the app's own "Job Agent Cover Letters" Drive folder (drive.file scope).
 Nothing is overwritten: --regenerate creates new artifacts and Docs.
-The job panel's Cover letter (web/src/components/LetterSection.jsx, server/letter-routes.ts): Revise with Claude
+The job panel's Cover letter (web/src/components/LetterSection.tsx, server/letter-routes.ts): Revise with Claude
 (agents/hunt/revise-letter.ts, Sonnet at medium effort, the knowledge doc plus the job's resume as system, REVISE_SCHEMA,
 REVISIONS_PER_DAY; saves nothing), saving a kept revision (source v2-revision) or the user's own text (source user; letters.js
 userLetterBody keeps its wording but takes off the header through the greeting and the sign-off on, and rebuilds a
@@ -287,7 +287,8 @@ Sonnet 5.5 and Opus 5.5 always think: keep effort low and maxTokens generous for
 Scripts that need secrets load .env through node --env-file.
 
 ## TypeScript (v3 Phase 2, decision 0002)
-Every new file is TypeScript (.ts, .tsx on the page). Node 22.18 or newer runs .ts files by stripping their types, so there is
+Every new file is TypeScript (.ts, .tsx on the page; web/src is all TypeScript, with Vite's module types from web/src/vite-env.d.ts).
+Node 22.18 or newer runs .ts files by stripping their types, so there is
 no build step for the server: only erasable syntax (no enums, parameter properties, or decorators; tsconfig erasableSyntaxOnly),
 imports name the .ts file, and type-only imports use import type. Typecheck and lint run in CI and fail it.
 `void call()` marks a deliberate fire-and-forget call whose function catches its own errors; a lint finding that is a real

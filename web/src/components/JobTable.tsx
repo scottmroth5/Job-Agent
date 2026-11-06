@@ -1,8 +1,11 @@
 import { useMemo, useState } from 'react';
 import { payText, hoursText, annualText, scoreClass, PAY_FROM, sourceLabel } from '../format.ts';
 import { useLookups } from '../lookups.tsx';
+import type { JobRow } from '../api.ts';
 
-const COLUMNS = [
+type Id = JobRow['id'];
+
+const COLUMNS: Array<{ key: string; label: string; get: (j: JobRow) => string | number }> = [
   { key: 'score', label: 'Score', get: (j) => j.score ?? -1 },
   { key: 'title', label: 'Role', get: (j) => j.title.toLowerCase() },
   { key: 'company', label: 'Company', get: (j) => j.company.toLowerCase() },
@@ -15,13 +18,21 @@ const COLUMNS = [
   { key: 'letter', label: 'Letter', get: (j) => (j.letter ? (j.letter.flags.length ? 1 : 2) : 0) },
 ];
 
-function LetterCell({ letter }) {
+function LetterCell({ letter }: { letter: { flags: string[] } | null | undefined }) {
   if (!letter) return <span className="muted">none</span>;
   if (letter.flags.length) return <span className="badge warn" title={letter.flags.join('; ')}>review</span>;
   return <span className="badge ok">ready</span>;
 }
 
-export default function JobTable({ jobs, loading, onOpen, selectedId, stackable, stack, onToggleStack }) {
+export default function JobTable({ jobs, loading, onOpen, selectedId, stackable, stack, onToggleStack }: {
+  jobs: JobRow[];
+  loading: boolean;
+  onOpen: (id: Id) => void;
+  selectedId: Id | null;
+  stackable: boolean;
+  stack: Id[];
+  onToggleStack: (id: Id) => void;
+}) {
   const lk = useLookups();
   const [sort, setSort] = useState({ key: 'score', dir: -1 });
   const columns = COLUMNS;
@@ -36,7 +47,7 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
   }, [jobs, sort]);
 
   // Scores and dates sort newest/highest first on the first click.
-  const toggleSort = (key) => setSort((s) => ({ key, dir: s.key === key ? -s.dir : ['score', 'discoveredOn', 'appliedOn'].includes(key) ? -1 : 1 }));
+  const toggleSort = (key: string) => setSort((s) => ({ key, dir: s.key === key ? -s.dir : ['score', 'discoveredOn', 'appliedOn'].includes(key) ? -1 : 1 }));
 
   if (!loading && jobs.length === 0) return <div className="empty">No jobs match these filters.</div>;
 

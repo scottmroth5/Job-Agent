@@ -4,7 +4,7 @@ import { deleteUserSetting, getUserSetting, setUserSetting } from '../db/setting
 import type { Database } from '../tools/types.ts';
 import type { App } from './types.ts';
 
-/** Each area's items in their default order. web/src/components/HomePage.jsx draws a tile for each home key. */
+/** Each area's items in their default order. web/src/components/HomePage.tsx draws a tile for each home key. */
 export const LAYOUT_AREAS: Record<string, string[]> = { home: ['jobs', 'inbox', 'funnel', 'activity', 'admin', 'settings', 'help', 'add'] };
 
 const key = (area: string) => `layout:${area}`;

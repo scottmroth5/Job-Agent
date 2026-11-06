@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { api } from '../api.ts';
+import type { Job } from '../api.ts';
+
+type Attachment = { id: number | string; filename: string; sizeBytes: number; createdAt: string; mimeType?: string };
 import { DashIcon } from './DashIcon.tsx';
 
 const MAX_BYTES = 25 * 1024 * 1024;
-const size = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} bytes`);
+const size = (n: number) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} bytes`);
 
 // Files attached to a job: add by picking or dropping files; open, download, or delete each one.
-export default function Attachments({ jobId, items, onChanged }) {
+export default function Attachments({ jobId, items, onChanged }: { jobId: Job['id']; items: Attachment[]; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
 
-  const upload = async (files) => {
+  const upload = async (files: FileList | File[]) => {
     setError(null);
     const list = [...files];
     const tooBig = list.filter((f) => f.size > MAX_BYTES);
@@ -23,19 +26,19 @@ export default function Attachments({ jobId, items, onChanged }) {
       for (const f of ok) await api.uploadAttachment(jobId, f);
       onChanged();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   };
 
-  const remove = async (a) => {
+  const remove = async (a: Attachment) => {
     if (!window.confirm(`Delete "${a.filename}"? This removes the file.`)) return;
     try {
       await api.deleteAttachment(a.id);
       onChanged();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -69,7 +72,7 @@ export default function Attachments({ jobId, items, onChanged }) {
           void upload(e.dataTransfer.files);
         }}
       >
-        <input type="file" multiple disabled={busy} onChange={(e) => { void upload(e.target.files); e.target.value = ''; }} />
+        <input type="file" multiple disabled={busy} onChange={(e) => { void upload(e.target.files as FileList); e.target.value = ''; }} />
         <span>{busy ? 'Uploading…' : 'Drop files here or choose files (25 MB each)'}</span>
       </label>
       {error && <div className="error">{error}</div>}

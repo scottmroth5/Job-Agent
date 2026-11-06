@@ -16,7 +16,7 @@ export default function HelpPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.help().then(setGuides, (err: Error) => setError(err.message));
+    api.help().then(setGuides, (err: Error) => setError((err as Error).message));
   }, []);
 
   const ask = async (e: FormEvent) => {
