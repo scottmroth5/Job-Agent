@@ -15,6 +15,7 @@ import { exitWhenDone } from '../tools/exit.ts';
 import { MODEL_SETTINGS, MIN_KNOWLEDGE_CHARS, PROMOTE_AT } from '../agents/discovery/score.ts';
 import { buildCases } from '../evals/score/build-cases.js';
 import { runEval, estimateEval } from '../evals/score/run.js';
+import { unpriced } from '../evals/estimate.js';
 /** @import { ScoreCase } from '../evals/score/build-cases.js' */
 
 const DIR = dataPath('evals', 'score');
@@ -78,9 +79,14 @@ async function evaluate(argv) {
   const store = openJobStore();
   const knowledge = await ownerBackground(store); // the owner's knowledge doc from Settings
   if (knowledge.length < MIN_KNOWLEDGE_CHARS) throw new Error('The knowledge doc is too short.');
-  const estimate = estimateEval(cases, models, knowledge.length, store.db);
+  const estimate = estimateEval(cases, models, knowledge.length, config, store.db);
   const total = Object.values(estimate).reduce((/** @type {number} */ a, b) => a + (b ?? 0), 0);
-  console.log(`${cases.length} cases x ${models.length} models. Estimated cost: ${Object.entries(estimate).map(([m, u]) => `${m} ~$${/** @type {number} */ (u).toFixed(2)}`).join(', ')} (total ~$${total.toFixed(2)}).`);
+  console.log(`${cases.length} cases x ${models.length} models. Estimated cost: ${Object.entries(estimate).map(([m, u]) => `${m} ~$${u == null ? '?' : u.toFixed(2)}`).join(', ')} (total ~$${total.toFixed(2)}).`);
+  const noPrice = unpriced(estimate);
+  if (noPrice.length) {
+    store.close();
+    throw new Error(`No price for ${noPrice.join(', ')} in agents/discovery/score.ts ESTIMATE_RATES, so --max-usd cannot be checked. Add its rates first.`);
+  }
   if (total > maxUsd) {
     store.close();
     throw new Error(`Estimate is over the $${maxUsd.toFixed(2)} budget. Raise --max-usd or use --limit.`);

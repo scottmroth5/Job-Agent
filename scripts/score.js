@@ -46,7 +46,7 @@ async function main() {
       const rule = postings.filter((p) => p.location_check === 'conflict').length;
       const usd = estimateCost(postings, { model: args.model, config, knowledgeChars: 10000, templateChars: loadScorePrompt('fulltime', store.db).template.length });
       console.log(`DRY RUN: ${postings.length} postings to score with ${args.model} (${rule} by location rule, no AI call).`);
-      console.log(`Estimated cost: about $${/** @type {number} */ (usd).toFixed(2)}.`);
+      console.log(usd == null ? `Estimated cost: unknown (no price for ${args.model} in agents/discovery/score.ts ESTIMATE_RATES).` : `Estimated cost: about $${usd.toFixed(2)}.`);
       /** @type {Record<string, number>} */
       const byCheck = {};
       for (const p of postings) byCheck[p.location_check ?? 'none'] = (byCheck[p.location_check ?? 'none'] ?? 0) + 1;
