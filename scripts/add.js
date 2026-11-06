@@ -18,7 +18,9 @@ import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { addPosting } from '../agents/manual.ts';
 
+/** @param {string[]} argv */
 function parseArgs(argv) {
+  /** @param {string} name */
   const get = (name) => {
     const a = argv.find((x) => x.startsWith(`--${name}=`));
     return a ? a.slice(name.length + 3) : undefined;
@@ -60,7 +62,7 @@ async function main() {
     run.finish('ok', result);
     console.log(result.created ? `Added job #${result.id}: scored ${result.score}${result.promoted ? ', in your pipeline' : ''}.` : `Already saved as job #${result.id}.`);
   } catch (err) {
-    run.finish('failed', { error: err.message });
+    run.finish('failed', { error: /** @type {Error} */ (err).message });
     throw err;
   } finally {
     await browser?.close();

@@ -24,6 +24,10 @@ try {
   if (rekeyed) console.log(`Updated the duplicate key on ${rekeyed} jobs.`);
   const { archived } = archiveListings(store.db, { config, dryRun });
   const { demoted } = demoteWithoutText(store.db, { dryRun });
+  /**
+   * @param {string} would
+   * @param {string} did
+   */
   const verb = (would, did) => (dryRun ? `DRY RUN: would ${would}` : did);
   console.log(`${verb('remove', 'Removed')} ${archived.length} list pages, excluded-site jobs, and duplicates.`);
   for (const p of archived) console.log(`  #${p.id} [${p.stage}/${p.status}] ${p.title} (${p.reason})`);

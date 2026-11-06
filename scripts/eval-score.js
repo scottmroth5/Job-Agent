@@ -15,14 +15,22 @@ import { exitWhenDone } from '../tools/exit.ts';
 import { MODEL_SETTINGS, MIN_KNOWLEDGE_CHARS, PROMOTE_AT } from '../agents/discovery/score.ts';
 import { buildCases } from '../evals/score/build-cases.js';
 import { runEval, estimateEval } from '../evals/score/run.js';
+/** @import { ScoreCase } from '../evals/score/build-cases.js' */
 
 const DIR = dataPath('evals', 'score');
 const CASES = `${DIR}/cases.jsonl`;
 
+/**
+ * @param {string[]} argv
+ * @param {string} name
+ */
 const get = (argv, name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
+/** @param {number | null} x */
 const pct = (x) => (x == null ? '-' : `${Math.round(x * 100)}%`);
+/** @param {number | null} x */
 const num = (x) => (x == null ? '-' : x.toFixed(2));
 
+/** @param {boolean} rebuild */
 async function build(rebuild) {
   // Claim the cases file first ('wx' fails if it exists unless --rebuild), so the check and the write are one step.
   mkdirSync(DIR, { recursive: true });
@@ -30,7 +38,7 @@ async function build(rebuild) {
   try {
     fd = openSync(CASES, rebuild ? 'w' : 'wx');
   } catch (err) {
-    if (err.code === 'EEXIST') throw new Error(`${CASES} already exists. Use --rebuild to recreate it.`);
+    if (/** @type {NodeJS.ErrnoException} */ (err).code === 'EEXIST') throw new Error(`${CASES} already exists. Use --rebuild to recreate it.`);
     throw err;
   }
   const config = loadConfig();
@@ -41,7 +49,7 @@ async function build(rebuild) {
     const { cases, skipped, fetched } = await buildCases({ db: store.db, http: createHttp(), browser, config });
     writeFileSync(fd, cases.map((c) => JSON.stringify(c)).join('\n') + '\n');
     written = true;
-    const count = (l) => cases.filter((c) => c.label === l).length;
+    const count = (/** @type {string} */ l) => cases.filter((c) => c.label === l).length;
     console.log(`Wrote ${cases.length} cases to ${CASES}: ${count('applied')} applied, ${count('passed')} passed.`);
     console.log(`Text: ${cases.length - fetched} from pasted descriptions, ${fetched} fetched again; ${skipped.noText} skipped with no text.`);
     console.log(`With a v1 score: ${cases.filter((c) => c.v1Score != null).length}.`);
@@ -54,6 +62,7 @@ async function build(rebuild) {
   }
 }
 
+/** @param {string[]} argv */
 async function evaluate(argv) {
   if (!existsSync(CASES)) throw new Error('No eval cases yet. Run: npm run eval:score -- --build');
   const models = (get(argv, 'models') ?? 'claude-haiku-4-5,claude-sonnet-5-5').split(',').map((m) => m.trim());
@@ -61,6 +70,7 @@ async function evaluate(argv) {
   if (unknown.length) throw new Error(`Unknown model(s): ${unknown.join(', ')}`);
   const maxUsd = Number(get(argv, 'max-usd') ?? 2);
   const limit = get(argv, 'limit') ? Number(get(argv, 'limit')) : undefined;
+  /** @type {ScoreCase[]} */
   let cases = readFileSync(CASES, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l));
   if (limit) cases = cases.slice(0, limit);
 
@@ -69,8 +79,8 @@ async function evaluate(argv) {
   const knowledge = await ownerBackground(store); // the owner's knowledge doc from Settings
   if (knowledge.length < MIN_KNOWLEDGE_CHARS) throw new Error('The knowledge doc is too short.');
   const estimate = estimateEval(cases, models, knowledge.length, store.db);
-  const total = Object.values(estimate).reduce((a, b) => a + b, 0);
-  console.log(`${cases.length} cases x ${models.length} models. Estimated cost: ${Object.entries(estimate).map(([m, u]) => `${m} ~$${u.toFixed(2)}`).join(', ')} (total ~$${total.toFixed(2)}).`);
+  const total = Object.values(estimate).reduce((/** @type {number} */ a, b) => a + (b ?? 0), 0);
+  console.log(`${cases.length} cases x ${models.length} models. Estimated cost: ${Object.entries(estimate).map(([m, u]) => `${m} ~$${/** @type {number} */ (u).toFixed(2)}`).join(', ')} (total ~$${total.toFixed(2)}).`);
   if (total > maxUsd) {
     store.close();
     throw new Error(`Estimate is over the $${maxUsd.toFixed(2)} budget. Raise --max-usd or use --limit.`);

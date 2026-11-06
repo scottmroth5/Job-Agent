@@ -7,11 +7,13 @@ import { setEnvValues, hasEnvValue, ENV_PATH } from '../tools/env-file.ts';
 import { newKey } from '../agents/inbox/crypto.ts';
 
 async function main() {
+  /** @type {string[]} */
   let wrote = [];
   await signIn({
     scopes: INBOX_SCOPES,
     command: 'npm run inbox:auth',
     save: ({ refreshToken }) => {
+      /** @type {Record<string, string>} */
       const values = { GMAIL_REFRESH_TOKEN: refreshToken };
       if (!hasEnvValue('EMAIL_ENC_KEY')) values.EMAIL_ENC_KEY = newKey();
       wrote = setEnvValues(values);

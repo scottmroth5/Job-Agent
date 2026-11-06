@@ -12,7 +12,9 @@ import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { runLetterEval, estimateLetterEval } from '../evals/letters/run.js';
 
 const argv = process.argv.slice(2);
+/** @param {string} name */
 const get = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
+/** @param {number | null} x */
 const pct = (x) => (x == null ? '-' : `${Math.round(x * 100)}%`);
 
 async function main() {
@@ -22,7 +24,7 @@ async function main() {
   const store = openJobStore();
   try {
     const estimate = estimateLetterEval(cases, models, store.db);
-    const total = Object.values(estimate).reduce((s, x) => s + (x ?? 0), 0);
+    const total = Object.values(estimate).reduce((/** @type {number} */ s, x) => s + (x ?? 0), 0);
     for (const [m, usd] of Object.entries(estimate)) console.log(`${m}: ${cases.letters.length} letters, estimated $${usd == null ? '?' : usd.toFixed(3)}`);
     console.log(`Estimated total: $${total.toFixed(3)} (limit --max-usd=${maxUsd}).`);
     if (argv.includes('--dry-run')) return;

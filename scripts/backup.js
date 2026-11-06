@@ -13,6 +13,7 @@ import { localDate, runBackup } from '../tools/backup/run.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
 import { dataPath } from '../tools/paths.ts';
 
+/** @param {string} flag */
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
   return i > 0 ? process.argv[i + 1] : undefined;
@@ -34,18 +35,20 @@ async function main() {
       passphrase,
       extras: [{ name: 'config/job-search.json', path: dataPath('config', 'job-search.json') }],
       folders: [{ name: 'attachments', dir: ATTACHMENTS_DIR }],
-      drive: toDir ? null : createBackupDrive(getGoogleAuth()),
+      drive: toDir ? undefined : createBackupDrive(getGoogleAuth()),
       toDir,
       date: localDate(),
     });
-    run.finish('ok', { file: r.name, bytes: r.bytes, files: r.fileCount, attachments: r.attachments, ...(toDir ? { savedTo: r.savedTo } : { kept: r.kept, deleted: r.deleted }) });
+    // With toDir the result says where it was saved; without it, what the upload kept and deleted.
+    const { savedTo, kept, deleted } = /** @type {{ savedTo?: string, kept?: number, deleted?: number }} */ (r);
+    run.finish('ok', { file: r.name, bytes: r.bytes, files: r.fileCount, attachments: r.attachments, ...(toDir ? { savedTo } : { kept, deleted }) });
     const kb = Math.round(r.bytes / 1024).toLocaleString();
     const what = `${kb} KB; the database, settings, and ${r.attachments} attachment${r.attachments === 1 ? '' : 's'}`;
     console.log(toDir
-      ? `Encrypted backup written: ${r.savedTo} (${what})`
-      : `Encrypted backup uploaded to Google Drive: ${r.name} (${what}). Kept ${r.kept}, deleted ${r.deleted}.`);
+      ? `Encrypted backup written: ${savedTo} (${what})`
+      : `Encrypted backup uploaded to Google Drive: ${r.name} (${what}). Kept ${kept}, deleted ${deleted}.`);
   } catch (err) {
-    run.finish('error', { error: err.message });
+    run.finish('error', { error: /** @type {Error} */ (err).message });
     throw err;
   } finally {
     store.close();

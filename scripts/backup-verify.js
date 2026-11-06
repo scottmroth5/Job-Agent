@@ -14,7 +14,12 @@ import { DRIVE_FOLDER } from '../tools/backup/run.ts';
 import { newestBackup, restoreTest } from '../tools/backup/restore-check.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
 import { exitWhenDone } from '../tools/exit.ts';
+/**
+ * @import { JobStore } from '../tools/types.ts'
+ * @import { BackupDrive } from '../tools/backup/drive.ts'
+ */
 
+/** @param {string} flag */
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
   return i > 0 ? process.argv[i + 1] : undefined;
@@ -23,6 +28,7 @@ const quiet = { info() {}, warn() {}, error() {}, log() {} };
 
 /**
  * Tests one backup against the live database. drive: a Drive client (tests pass a fake); fromFile: a backup file instead.
+ * @param {{ store: JobStore, passphrase: string, drive?: BackupDrive | null, fromFile?: string | null }} opts
  * @returns the restore test's result plus the file's name
  */
 export async function restoreTestJob({ store, passphrase, drive, fromFile }) {
@@ -34,16 +40,17 @@ export async function restoreTestJob({ store, passphrase, drive, fromFile }) {
       name = fromFile.split(/[\\/]/).pop();
       file = readFileSync(fromFile);
     } else {
-      const newest = await newestBackup(drive, DRIVE_FOLDER);
+      const from = /** @type {BackupDrive} */ (drive); // the caller gives a drive whenever there is no file
+      const newest = await newestBackup(from, DRIVE_FOLDER);
       if (!newest) throw new Error(`No backups found in the "${DRIVE_FOLDER}" Drive folder.`);
       name = newest.name;
-      file = await drive.download(newest.id);
+      file = await from.download(newest.id);
     }
     const r = restoreTest({ file, passphrase, live: store.raw });
     run.finish(r.ok ? 'ok' : 'failed', { file: name, tables: r.tables, rowsBackup: r.rowsBackup, rowsLive: r.rowsLive, differences: r.differences.length, problems: r.problems });
     return { ...r, file: name };
   } catch (err) {
-    run.finish('failed', { error: err.message });
+    run.finish('failed', { error: /** @type {Error} */ (err).message });
     throw err;
   }
 }

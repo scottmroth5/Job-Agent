@@ -297,7 +297,7 @@ results are cast to db/types.ts rows. server/index.js is a one-line launcher for
 and compose.yml run index.js); buildApp's options and services are BuildAppOptions and AppServices in server/app.ts.
 scripts, evals, and test stay JavaScript (deploy.sh, compose.yml, the Windows tasks, and the server run scripts/*.js by name),
 typed with JSDoc (@param, @typedef, /** @import { X } from '...' */, casts as /** @type {T} */ (x)) and checked by
-tsconfig.checkjs.json, whose include lists each directory that passes (evals so far).
+tsconfig.checkjs.json, whose include lists each directory that passes (evals and scripts so far).
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
