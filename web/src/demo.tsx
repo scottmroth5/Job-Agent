@@ -1,15 +1,15 @@
 // The public demo (AUTH_MODE=demo): every control is there, but nothing is saved and no AI is used. Changes are stopped
-// in web/src/api.js before they are sent, and DemoNotice says so each time; AI actions answer with canned samples
+// in web/src/api.ts before they are sent, and DemoNotice says so each time; AI actions answer with canned samples
 // (demo/samples.ts). The server refuses changes too. Components read the flag with useDemo().
 import { createContext, useContext, useEffect, useState } from 'react';
-import { DEMO_NOT_SAVED } from './api.js';
+import { DEMO_NOT_SAVED } from './api.ts';
 
 export const DemoContext = createContext(false);
 export const useDemo = () => useContext(DemoContext);
 
 // The demo sends no Referer to other sites (Referrer-Policy: same-origin), so the link to the app says it came from the
 // demo (the app's usage totals count it as the demo source; server/usage-totals.ts).
-const fromDemo = (url) => {
+const fromDemo = (url: string) => {
   try {
     const u = new URL(url);
     u.searchParams.set('utm_source', 'demo');
@@ -20,7 +20,7 @@ const fromDemo = (url) => {
 };
 
 /** requestAccessUrl (REQUEST_ACCESS_URL): the real app, where someone can sign in and ask for access. */
-export function DemoBanner({ requestAccessUrl = null, supportEmail = null }) {
+export function DemoBanner({ requestAccessUrl = null, supportEmail = null }: { requestAccessUrl?: string | null; supportEmail?: string | null }) {
   return (
     <div className="demo-banner" role="note">
       <strong>Demo</strong> · A fictional candidate&apos;s job search with made-up companies and sample data. Try anything: buttons work, but nothing
@@ -41,11 +41,11 @@ export function DemoBanner({ requestAccessUrl = null, supportEmail = null }) {
   );
 }
 
-/** A short notice each time the demo stops a change (api.js's demo-blocked event), at the bottom of the screen. */
+/** A short notice each time the demo stops a change (api.ts's demo-blocked event), at the bottom of the screen. */
 export function DemoNotice() {
   const [shown, setShown] = useState(0);
   useEffect(() => {
-    let timer;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const on = () => {
       setShown((n) => n + 1);
       clearTimeout(timer);

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { api, followTask } from '../api.js';
+import { api, followTask } from '../api.ts';
 import { Markdown } from './Notes.jsx';
 import TaskProgress from './TaskProgress.jsx';
-import { useDemo } from '../demo.jsx';
+import { useDemo } from '../demo.tsx';
 import { DashIcon } from './DashIcon.jsx';
 
 const KINDS = ['Recruiter or search firm', 'Hiring manager', 'Executive, owner, or investor', 'Panel or team', 'Technical', 'Networking or introduction', 'Other'];

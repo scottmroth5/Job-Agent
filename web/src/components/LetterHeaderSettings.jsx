@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api } from '../api.ts';
 import { headerLines, SEPARATOR } from '../../../tools/letter-header.ts';
 
 const MAX_LINKS = 6;

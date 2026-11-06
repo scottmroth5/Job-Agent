@@ -1,11 +1,11 @@
-// Arranging the Home tiles: the order rule (web/src/layout.js) and the saved order (server/layout.ts, PUT /api/layout/home).
+// Arranging the Home tiles: the order rule (web/src/layout.ts) and the saved order (server/layout.ts, PUT /api/layout/home).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { LAYOUT_AREAS } from '../server/layout.ts';
-import { arranged, moved } from '../web/src/layout.js';
+import { arranged, moved } from '../web/src/layout.ts';
 import { repoPath } from '../tools/paths.ts';
 
 const HOME = LAYOUT_AREAS.home;

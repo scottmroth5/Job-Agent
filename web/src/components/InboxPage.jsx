@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, followTask } from '../api.js';
-import { dateTime } from '../format.js';
-import { useLookups } from '../lookups.jsx';
+import { api, followTask } from '../api.ts';
+import { dateTime } from '../format.ts';
+import { useLookups } from '../lookups.tsx';
 import TaskProgress from './TaskProgress.jsx';
 
 // How sure the model was of the job match (or that none applies). Emails at 0.85 or above link on their own, so

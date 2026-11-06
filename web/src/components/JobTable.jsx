@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { payText, hoursText, annualText, scoreClass, PAY_FROM, sourceLabel } from '../format.js';
-import { useLookups } from '../lookups.jsx';
+import { payText, hoursText, annualText, scoreClass, PAY_FROM, sourceLabel } from '../format.ts';
+import { useLookups } from '../lookups.tsx';
 
 const COLUMNS = [
   { key: 'score', label: 'Score', get: (j) => j.score ?? -1 },

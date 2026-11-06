@@ -1,5 +1,5 @@
 // Screen layouts each user arranges: today the Home page's tile order. Saved on the server (user_settings
-// layout:<area>) so the order follows you to every device. The UI applies it with web/src/layout.js arranged().
+// layout:<area>) so the order follows you to every device. The UI applies it with web/src/layout.ts arranged().
 import { deleteUserSetting, getUserSetting, setUserSetting } from '../db/settings.ts';
 import type { Database } from '../tools/types.ts';
 import type { App } from './types.ts';

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, followTask } from '../api.js';
-import { dateTime } from '../format.js';
+import { api, followTask } from '../api.ts';
+import { dateTime } from '../format.ts';
 
 const STATUS = { ok: 'finished', partial: 'finished with warnings', failed: 'failed', aborted: 'stopped early' };
 

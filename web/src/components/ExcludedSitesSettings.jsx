@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { useDemo } from '../demo.jsx';
+import { api } from '../api.ts';
+import { useDemo } from '../demo.tsx';
 
 const plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 

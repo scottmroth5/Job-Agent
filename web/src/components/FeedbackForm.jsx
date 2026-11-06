@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { api } from '../api.js';
-import { useMe } from '../me.jsx';
+import { api } from '../api.ts';
+import { useMe } from '../me.tsx';
 
 /** Settings > Send feedback: a note to the owner, who can reply by email. */
 export default function FeedbackForm() {

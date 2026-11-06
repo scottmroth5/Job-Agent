@@ -16,7 +16,7 @@ export const ERROR_CATEGORIES = ['network', 'unexpected'];
 export const SOURCES = ['linkedin', 'github', 'personal_site', 'other', 'direct'];
 
 // Each event and the only properties (with their allowed values) it may carry.
-const EVENTS = {
+const EVENTS: Record<string, Record<string, string[]> | undefined> = {
   demo_opened: { source: SOURCES },
   section_viewed: { section: SECTIONS },
   job_viewed: {},
@@ -25,8 +25,8 @@ const EVENTS = {
   ...Object.fromEntries(FEATURES.flatMap((f) => [[`${f}_started`, {}], [`${f}_completed`, {}]])),
 };
 
-let target = null;
-let distinctId = null;
+let target: { key: string; url: string } | null = null;
+let distinctId: string | null = null;
 
 const randomId = () => {
   try {
@@ -39,16 +39,17 @@ const randomId = () => {
 /** Whether the browser sends Global Privacy Control: then the demo sends nothing at all. */
 const privacyControlOn = () => {
   try {
-    return globalThis.navigator?.globalPrivacyControl === true;
+    // Global Privacy Control is not in the DOM types yet (a Navigator field in the browsers that send it).
+    return (globalThis.navigator as (Navigator & { globalPrivacyControl?: boolean }) | undefined)?.globalPrivacyControl === true;
   } catch {
     return true;
   }
 };
 
 /** Starts sending for this page view: { key, host } from /api/me in the demo; anything else leaves it off. */
-export function startAnalytics(config) {
+export function startAnalytics(config: { key?: string; host?: string; site?: string | null } | null | undefined) {
   if (target || privacyControlOn() || !config || !/^phc_[A-Za-z0-9]+$/.test(config.key ?? '') || !/^https:\/\/[a-z0-9.-]+$/.test(config.host ?? '')) return;
-  target = { key: config.key, url: `${config.host}/i/v0/e/` };
+  target = { key: config.key as string, url: `${config.host}/i/v0/e/` }; // both checked just above
   distinctId = randomId();
   let source = 'other';
   try {
@@ -63,11 +64,11 @@ export function startAnalytics(config) {
  * Where a visit came from, as one of SOURCES: a utm_source of linkedin, github, or the personal site's first label
  * first, else the referrer's host (the demo's own host is direct, no referrer is direct, anything unknown is other).
  */
-export function trafficSource({ url, referrer, ownHost, site } = {}) {
+export function trafficSource({ url, referrer, ownHost, site }: { url?: string; referrer?: string; ownHost?: string; site?: string | null } = {}) {
   const siteLabel = site ? site.split('.')[0] : null;
-  let utm = null;
+  let utm: string | null = null;
   try {
-    utm = new URL(url).searchParams.get('utm_source')?.toLowerCase() ?? null;
+    utm = new URL(url as string).searchParams.get('utm_source')?.toLowerCase() ?? null; // a missing url throws, caught below
   } catch {
     // No usable address: go by the referrer.
   }
@@ -89,12 +90,12 @@ export function trafficSource({ url, referrer, ownHost, site } = {}) {
 }
 
 /** The request body for an event, or null when the event or a property value is not on the lists above. */
-export function eventBody(event, props = {}, { key, id, now = new Date() }) {
+export function eventBody(event: string, props: Record<string, unknown> = {}, { key, id, now = new Date() }: { key: string; id: string | null; now?: Date }) {
   const allowed = EVENTS[event];
   if (!allowed) return null;
-  const properties = { app: 'job_hunt_demo' };
+  const properties: Record<string, unknown> = { app: 'job_hunt_demo' };
   for (const [name, values] of Object.entries(allowed)) {
-    if (!values.includes(props[name])) return null;
+    if (!values.includes(props[name] as string)) return null; // a value not on the list (any type) is refused
     properties[name] = props[name];
   }
   // No person profile in PostHog: these are counts, not visitors.
@@ -103,7 +104,7 @@ export function eventBody(event, props = {}, { key, id, now = new Date() }) {
 }
 
 /** Sends one event (see EVENTS); does nothing before startAnalytics or for anything not on the lists. */
-export function track(event, props) {
+export function track(event: string, props?: Record<string, unknown>) {
   try {
     if (!target || privacyControlOn()) return;
     const body = eventBody(event, props, { key: target.key, id: distinctId });
@@ -121,7 +122,7 @@ export function track(event, props) {
 }
 
 /** What a change the demo stopped was about, from its method and path (never the path itself). */
-export function changeFeature(method, path) {
+export function changeFeature(method: string, path: string | null | undefined) {
   const p = String(path ?? '').split('?')[0];
   if (/^\/api\/postings\/\d+\/notes|^\/api\/notes\//.test(p)) return 'note';
   if (/^\/api\/postings\/\d+\/letter/.test(p)) return 'cover_letter';
@@ -136,14 +137,14 @@ export function changeFeature(method, path) {
 }
 
 /** Runs a demo sample feature, counting its start, its completion (only on success), and a failure's category. */
-export async function sampled(feature, run) {
+export async function sampled<T>(feature: string, run: () => Promise<T>): Promise<T> {
   track(`${feature}_started`);
   try {
     const out = await run();
     track(`${feature}_completed`);
     return out;
   } catch (err) {
-    track('feature_failed', { feature, error_category: /reach the Job Agent server/.test(err?.message ?? '') ? 'network' : 'unexpected' });
+    track('feature_failed', { feature, error_category: /reach the Job Agent server/.test((err as Error | null)?.message ?? '') ? 'network' : 'unexpected' });
     throw err;
   }
 }

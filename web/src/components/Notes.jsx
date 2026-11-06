@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { api } from '../api.js';
+import { api } from '../api.ts';
 import { renderMarkdown } from '../../../tools/markdown.ts';
 import { DashIcon } from './DashIcon.jsx';
 

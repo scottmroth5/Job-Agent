@@ -1,14 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { api, followTask } from '../api.js';
-import { useLookups } from '../lookups.jsx';
-import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM, sourceLabel } from '../format.js';
+import { api, followTask } from '../api.ts';
+import { useLookups } from '../lookups.tsx';
+import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM, sourceLabel } from '../format.ts';
 import TaskProgress from './TaskProgress.jsx';
 import Attachments from './Attachments.jsx';
 import Notes, { Markdown } from './Notes.jsx';
 import MeetingPrep from './MeetingPrep.jsx';
 import LetterSection from './LetterSection.jsx';
-import { useDemo } from '../demo.jsx';
-import { isOwner, useMe } from '../me.jsx';
+import { useDemo } from '../demo.tsx';
+import { isOwner, useMe } from '../me.tsx';
 import { DashIcon } from './DashIcon.jsx';
 
 

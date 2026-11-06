@@ -3,8 +3,8 @@ import ListsAdmin from './ListsAdmin.jsx';
 import SpendingAdmin from './SpendingAdmin.jsx';
 import UsageAdmin from './UsageAdmin.jsx';
 import UsersAdmin from './UsersAdmin.jsx';
-import { useDemo } from '../demo.jsx';
-import { isAdmin, isOwner, useMe } from '../me.jsx';
+import { useDemo } from '../demo.tsx';
+import { isAdmin, isOwner, useMe } from '../me.tsx';
 
 // [key, label, who sees it]: the lists are shared by everyone, so only the owner edits them; Users is for admins.
 // Prompts moved to Settings (each user's own); an old #/admin/prompts link is sent there.
