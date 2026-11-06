@@ -10,6 +10,7 @@ import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { runLetterEval, estimateLetterEval } from '../evals/letters/run.js';
+import { unpriced } from '../evals/estimate.js';
 
 const argv = process.argv.slice(2);
 /** @param {string} name */
@@ -28,6 +29,8 @@ async function main() {
     for (const [m, usd] of Object.entries(estimate)) console.log(`${m}: ${cases.letters.length} letters, estimated $${usd == null ? '?' : usd.toFixed(3)}`);
     console.log(`Estimated total: $${total.toFixed(3)} (limit --max-usd=${maxUsd}).`);
     if (argv.includes('--dry-run')) return;
+    const noPrice = unpriced(estimate);
+    if (noPrice.length) throw new Error(`No price for ${noPrice.join(', ')} in evals/letters/run.js ESTIMATE_RATES, so --max-usd cannot be checked. Add its rates first.`);
     if (total > maxUsd) throw new Error(`Estimated cost is over --max-usd=${maxUsd}.`);
 
     const run = createJobTracer({ store }).startRun('eval-letters', { models });

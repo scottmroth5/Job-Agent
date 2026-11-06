@@ -4,6 +4,7 @@
 // The settings and attachments are written to a "restored" folder next to the database.
 import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { checkPassphrase } from '../tools/backup/crypto.ts';
 import { createBackupDrive } from '../tools/backup/drive.ts';
 import { DRIVE_FOLDER, isBackupName, restoreBackup } from '../tools/backup/run.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
@@ -18,6 +19,9 @@ async function main() {
   const which = arg('--file');
   const out = arg('--out');
   if (!which || !out) throw new Error('Give --file <path or latest> and --out <new database file>');
+  // Before any download: a missing or short passphrase says so, instead of failing inside decryption.
+  const passphrase = process.env.JOB_BACKUP_PASSPHRASE;
+  checkPassphrase(passphrase);
   let file;
   if (which === 'latest') {
     const drive = createBackupDrive(getGoogleAuth());
@@ -30,7 +34,7 @@ async function main() {
     file = readFileSync(which);
   }
   mkdirSync(dirname(resolve(out)), { recursive: true });
-  const r = restoreBackup({ file, passphrase: /** @type {string} */ (process.env.JOB_BACKUP_PASSPHRASE), outPath: resolve(out) });
+  const r = restoreBackup({ file, passphrase, outPath: resolve(out) });
   console.log(`Restored and checked: ${r.database}${r.restoredDir ? `, plus ${r.files} files in ${r.restoredDir}` : ''}`);
   console.log('To use it: stop the server, move data\\job-agent.db (and data\\attachments) aside, then put the restored');
   console.log('database at data\\job-agent.db, restored\\attachments at data\\attachments, and restored\\config\\job-search.json');
