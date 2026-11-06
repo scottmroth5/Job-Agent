@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { useLookups } from '../lookups.jsx';
-import { api, followTask } from '../api.js';
+import { useLookups } from '../lookups.tsx';
+import { api, followTask } from '../api.ts';
 import TaskProgress from './TaskProgress.jsx';
 
 const EMPTY = { url: '', title: '', company: '', location: '', description: '', notes: '', track: '', rateText: '', hoursText: '', writeMaterials: false };

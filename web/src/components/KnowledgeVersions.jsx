@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api } from '../api.ts';
 import { Markdown } from './Notes.jsx';
 
 const HOW = { typed: 'Typed or edited', file: 'From an uploaded file', draft: 'From Build a draft', restore: 'Restored', earlier: 'Saved before versions were kept', sample: 'The sample' };

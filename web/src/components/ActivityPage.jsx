@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api.js';
-import { dateTime } from '../format.js';
+import { api } from '../api.ts';
+import { dateTime } from '../format.ts';
 
 const KIND_LABELS = {
   pipeline: 'Run pipeline',

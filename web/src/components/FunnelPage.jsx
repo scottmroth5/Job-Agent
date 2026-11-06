@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { useLookups } from '../lookups.jsx';
-import { sourceLabel } from '../format.js';
+import { api } from '../api.ts';
+import { useLookups } from '../lookups.tsx';
+import { sourceLabel } from '../format.ts';
 
 const WINDOWS = [
   ['30', 'Last 30 days'],

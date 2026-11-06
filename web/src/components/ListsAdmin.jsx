@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { useLookups } from '../lookups.jsx';
+import { api } from '../api.ts';
+import { useLookups } from '../lookups.tsx';
 
 const LIST_NAMES = { status: 'Status', stage: 'Stage', track: 'Track' };
 const LIST_HELP = {
@@ -86,7 +86,7 @@ export default function ListsAdmin() {
     setError(null);
     try {
       setData(await fn());
-      shared.refresh();
+      void shared.refresh(); // refresh catches its own errors
     } catch (err) {
       setError(err.message);
     } finally {

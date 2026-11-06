@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { useDemo } from '../demo.jsx';
+import { api } from '../api.ts';
+import { useDemo } from '../demo.tsx';
 
 /**
  * Settings: follow-ups. An application with no reply is worth a follow-up from followUpFrom days until the stale days;

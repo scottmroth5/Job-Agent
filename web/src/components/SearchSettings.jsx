@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api } from '../api.ts';
 import DraftBuilder from './DraftBuilder.jsx';
 import KnowledgeVersions from './KnowledgeVersions.jsx';
-import { useDemo } from '../demo.jsx';
+import { useDemo } from '../demo.tsx';
 
 // Lists are edited one item per line.
 const lines = (v) => (v ?? []).join('\n');
