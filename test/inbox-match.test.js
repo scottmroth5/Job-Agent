@@ -4,10 +4,12 @@ import { openJobStore } from '../db/index.ts';
 import { storedKey } from '../agents/identity.ts';
 import { matchEmail, listOpenApplications } from '../agents/inbox/match.ts';
 import { loadInboxConfig } from '../agents/inbox/config.ts';
+/** @import { Database } from '../tools/types.ts' */
 
 const atsDomains = loadInboxConfig().atsDomains;
 const now = '2026-10-02T00:00:00Z';
 
+/** @param {Database} db @param {string} company @param {string} title @param {{ status?: string, stage?: string, company_domain?: string | null }} [o] */
 function app(db, company, title, o = {}) {
   const row = { status: 'applied', stage: 'pipeline', company_domain: null, ...o };
   return Number(
@@ -18,6 +20,7 @@ function app(db, company, title, o = {}) {
   );
 }
 
+/** @param {{ threadId?: string, senderEmail?: string, senderDomain?: string, subject?: string, body?: string }} o */
 const email = (o) => ({ threadId: 't-new', senderEmail: 'someone@unknown.example', senderDomain: 'unknown.example', subject: '', body: '', ...o });
 
 function setup() {
@@ -67,7 +70,7 @@ test('rule 3: the company domain of exactly one open application, never an ATS d
 
 test('rule 4: ATS subject parsing, by company and title or by company alone', () => {
   const { store, db, ids } = setup();
-  const ats = (subject) => matchEmail(db, email({ senderDomain: 'greenhouse.io', subject }), { atsDomains });
+  const ats = (/** @type {string} */ subject) => matchEmail(db, email({ senderDomain: 'greenhouse.io', subject }), { atsDomains });
   assert.deepEqual(ats('Your application for VP Engineering at Example Co, Inc.'), { postingId: ids.acme, rule: 'ats_subject' });
   assert.deepEqual(ats('Your application for Director of Engineering at Sample Labs'), { postingId: ids.sample, rule: 'ats_subject' });
   assert.equal(ats('Thank you for applying to Sample Labs'), null, 'two open Sample Labs applications');

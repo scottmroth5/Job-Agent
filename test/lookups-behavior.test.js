@@ -10,6 +10,7 @@ import { planStatus } from '../agents/inbox/actions.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { listPostings, summary, updatePosting } from '../server/queries.ts';
 import { buildScoreRequest, loadScorePrompts } from '../agents/discovery/score.ts';
+import { fakeConfig } from './fixtures/fakes.js';
 
 // Synthetic data only.
 function setup() {
@@ -43,9 +44,9 @@ test('an added status behaves like the built-in ones in its group', () => {
 
   // The inbox ranks by group: an interview request on a phone-screen job is not a step forward.
   const lk = lookups(db);
-  assert.match(planStatus('phone_screen', 'interview_request', lk).review, /backward/);
+  assert.match(String(planStatus('phone_screen', 'interview_request', lk).review), /backward/);
   assert.deepEqual(planStatus('referred', 'interview_request', lk), { change: { from: 'referred', to: 'interviewing' } });
-  assert.match(planStatus('ghosted', 'offer', lk).review, /reopen/);
+  assert.match(String(planStatus('ghosted', 'offer', lk).review), /reopen/);
   updatePosting(db, add({ status: 'new' }), { status: 'referred' });
   assert.ok(db.prepare("SELECT applied_on FROM postings WHERE status = 'referred' AND applied_on IS NOT NULL").get(), 'a waiting status sets the applied date');
   store.close();
@@ -56,7 +57,7 @@ test('an archived inbox target sends the email to review instead of setting it',
   // Archived before 023 gave it a role (the migration keeps such a value as the role's).
   store.raw.prepare("UPDATE lookup_values SET archived_at = 'x' WHERE list = 'status' AND id = 'interviewing'").run();
   invalidateLookups(db);
-  assert.match(planStatus('applied', 'interview_request', lookups(db)).review, /"Interviewing" status is archived/);
+  assert.match(String(planStatus('applied', 'interview_request', lookups(db)).review), /"Interviewing" status is archived/);
   store.close();
 });
 
@@ -68,7 +69,7 @@ test('status roles: the inbox, duplicates, cleanup, and the funnel use the value
   const lk = lookups(db);
   assert.deepEqual(planStatus('new', 'confirmation', lk), { change: { from: 'new', to: 'moved_forward' } });
   assert.deepEqual(planStatus('moved_forward', 'rejection', lk), { change: { from: 'moved_forward', to: 'turned_down' } });
-  assert.match(planStatus('offer', 'rejection', lk).review, /after an offer/);
+  assert.match(String(planStatus('offer', 'rejection', lk).review), /after an offer/);
 
   const keep = add();
   const copy = add();
@@ -103,7 +104,7 @@ test('an added track chooses its scoring prompt', () => {
   const { store, db } = setup();
   addValue(db, 'track', { label: 'Contract', settings: { scorePrompt: 'score-fractional', terms: true } });
   const prompts = loadScorePrompts(db);
-  const config = { candidate: { name: 'Pat Example' }, search: { homeLocations: ['Anytown, ST'] }, fractional: { targetAnnual: [1, 2] } };
+  const config = fakeConfig({ candidate: { name: 'Pat Example' }, search: { homeLocations: ['Anytown, ST'] }, fractional: { targetAnnual: [1, 2] } });
   const posting = { company: 'Example Co', title: 'CTO', track: 'contract', scorePrompt: lookups(db).scorePrompt('contract'), location_check: 'remote', fetched_text: 'Text' };
   assert.equal(buildScoreRequest(posting, { config, knowledge: 'k', model: 'claude-sonnet-5-5', prompts }).label, 'score-fractional');
   assert.equal(buildScoreRequest({ ...posting, track: 'fulltime', scorePrompt: 'score' }, { config, knowledge: 'k', model: 'claude-sonnet-5-5', prompts }).label, 'score');

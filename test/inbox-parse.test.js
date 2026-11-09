@@ -7,8 +7,9 @@ import { loadInboxConfig } from '../agents/inbox/config.ts';
 
 // Synthetic addresses and companies only.
 const ats = loadInboxConfig().atsDomains;
+/** @param {Parameters<typeof prefilter>[1]} [o] */
 const ctx = (o = {}) => ({ threadStartedByMe: false, isContact: () => false, isCompanyDomain: () => false, atsDomains: ats, ...o });
-const mail = (from) => ({ senderEmail: from, senderDomain: domainOf(from) });
+const mail = (/** @type {string} */ from) => ({ senderEmail: from, senderDomain: domainOf(from) });
 
 test('domainOf and domainIn handle display names and subdomains', () => {
   assert.equal(domainOf('Example Recruiting <jobs@Mail.Example.com>'), 'mail.example.com');
@@ -32,6 +33,7 @@ test('prefilter skips newsletters and unknown senders', () => {
 });
 
 test('ATS subjects give company and title', () => {
+  /** @type {Array<[string, { company: string | null, title: string | null }]>} */
   const cases = [
     ['Thank you for applying to Example Co', { company: 'Example Co', title: null }],
     ['Thanks for applying to Example Co!', { company: 'Example Co', title: null }],
@@ -66,6 +68,7 @@ test('trimBody converts HTML, drops quoted replies and signatures, and caps the 
 
 test('events carry IDs only, and the emitter counts them', () => {
   const emitter = createEmitter();
+  /** @type {object[]} */
   const seen = [];
   emitter.on('email.matched', (e) => seen.push(e));
   emitter.emit(makeEvent('email.received', { emailId: 'e1' }));

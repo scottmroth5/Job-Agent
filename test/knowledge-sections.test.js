@@ -9,19 +9,19 @@ import { defaultPrompt } from '../agents/prompts.ts';
 import { DEMO_ABOUT_YOU } from '../demo/sample-data.ts';
 import { repoPath } from '../tools/paths.ts';
 
-const all = (text) => sectionCheck(text).every((s) => s.found);
-const byTitle = (t) => KNOWLEDGE_SECTIONS.find((s) => s.title === t);
+const all = (/** @type {string} */ text) => sectionCheck(text).every((s) => s.found);
+const byTitle = (/** @type {string} */ t) => KNOWLEDGE_SECTIONS.find((s) => s.title === t);
 
 test('the section numbers are the ones the default prompts name', () => {
-  assert.equal(byTitle('Job Targets').n, 5);
-  assert.equal(byTitle('Cover Letter Rules').n, 6);
+  assert.equal(byTitle('Job Targets')?.n, 5);
+  assert.equal(byTitle('Cover Letter Rules')?.n, 6);
   assert.match(defaultPrompt('score').template, /Section 5: Job Targets/);
   assert.match(defaultPrompt('cover-letter').template, /Section 6 \(Cover Letter Rules\)/);
   assert.match(defaultPrompt('cover-letter').template, /positioning from Section 5/);
 });
 
 test('sectionCheck finds headings written several ways, and only headings', () => {
-  const found = (text) => sectionCheck(text).filter((s) => s.found).map((s) => s.n);
+  const found = (/** @type {string} */ text) => sectionCheck(text).filter((s) => s.found).map((s) => s.n);
   assert.deepEqual(found('## 5. Job Targets\nRoles'), [5]);
   assert.deepEqual(found('Section 6: Cover Letter Rules\n- short'), [6]);
   assert.deepEqual(found('# Summary\nText\n**Strengths**'), [1, 3], 'a bold line on its own counts as a heading');

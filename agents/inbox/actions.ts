@@ -37,7 +37,7 @@ const APPLICATION_TYPES = ['confirmation', 'rejection', 'interview_request', 'as
 /**
  * The confidence gate. A rule match counts as certain.
  */
-export function decideLink({ ruleMatch, classification: c, threshold }: { ruleMatch: { postingId: number; rule: string } | null; classification: Pick<Classification, 'applicationId' | 'confidence' | 'type'>; threshold: number }): LinkDecision {
+export function decideLink({ ruleMatch, classification: c, threshold }: { ruleMatch?: { postingId: number; rule: string } | null; classification: Pick<Classification, 'applicationId' | 'confidence' | 'type'>; threshold: number }): LinkDecision {
   if (ruleMatch) return { postingId: ruleMatch.postingId, rule: ruleMatch.rule, confidence: 1, reviewStatus: 'auto', reason: null, bestGuess: null, opportunity: false };
   if (c.applicationId != null) {
     if (c.confidence >= threshold) return { postingId: c.applicationId, rule: 'model', confidence: c.confidence, reviewStatus: 'auto', reason: null, bestGuess: null, opportunity: false };

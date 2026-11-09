@@ -35,7 +35,7 @@ test('loadKey accepts base64 or hex 32-byte keys and never echoes a bad one', ()
   const bad = 'c2hvcnQ=';
   assert.throws(
     () => loadKey({ EMAIL_ENC_KEY: bad }),
-    (err) => /32 bytes/.test(err.message) && !err.message.includes(bad),
+    (/** @type {Error} */ err) => /32 bytes/.test(err.message) && !err.message.includes(bad),
   );
 });
 

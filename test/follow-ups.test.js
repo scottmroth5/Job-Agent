@@ -11,10 +11,12 @@ import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_
 import { buildContactRequest } from '../agents/hunt/find-contact.ts';
 import { getPrompt } from '../agents/prompts.ts';
 import { localDaysAgo } from '../tools/dates.ts';
+import { fakeClaude, fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { Claude, SendOptions } from '@scottmroth5/agent-core' */
 
 // Local calendar days, as the app counts them: a UTC date (toISOString) is already tomorrow on a US evening.
-const daysAgo = (n, from = new Date()) => localDaysAgo(from, n);
-const config = { candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { homeLocations: [] }, fractional: {} };
+const daysAgo = (/** @type {number} */ n, from = new Date()) => localDaysAgo(from, n);
+const config = fakeConfig({ candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { homeLocations: [] }, fractional: {} });
 
 function setup() {
   const store = openJobStore(':memory:');
@@ -62,20 +64,21 @@ test('closing stale applications as no response: the status, a note, the user\'s
   assert.equal(db.prepare('SELECT status FROM postings WHERE id = ? AND user_id = @uid').pluck().get(ghost), 'applied', 'a dry run changes nothing');
 
   assert.deepEqual(closeNoResponse(db).map((j) => [j.id, j.days]), [[ghost, 60]]);
-  const row = (id) => db.prepare('SELECT status, stage FROM postings WHERE id = ? AND user_id = @uid').get(id);
+  const row = (/** @type {number} */ id) => db.prepare('SELECT status, stage FROM postings WHERE id = ? AND user_id = @uid').get(id);
   assert.deepEqual(row(ghost), { status: 'no_response', stage: 'pipeline' });
   assert.deepEqual(row(follow), { status: 'applied', stage: 'pipeline' });
   assert.deepEqual(db.prepare('SELECT from_status, to_status, changed_by FROM status_history WHERE posting_id = ? AND user_id = @uid').get(ghost), { from_status: 'applied', to_status: 'no_response', changed_by: 'user' });
-  assert.match(db.prepare('SELECT body FROM posting_notes WHERE posting_id = ? AND user_id = @uid').pluck().get(ghost), /no reply 60 days after applying \(No response\)/);
+  assert.match(/** @type {string} */ (db.prepare('SELECT body FROM posting_notes WHERE posting_id = ? AND user_id = @uid').pluck().get(ghost)), /no reply 60 days after applying \(No response\)/);
   assert.deepEqual(closeNoResponse(db), [], 'closed ones are not waiting any more');
   // One job on request, before it is stale; a job that is not waiting is left alone.
   assert.deepEqual(closeNoResponse(db, { ids: [follow, ghost] }).map((j) => j.id), [follow]);
   store.close();
 });
 
+/** @param {Claude | null} [claude] */
 async function appSetup(claude = null) {
   const { store, db, job } = setup();
-  const app = await buildApp({ store, config, services: { createBrowser: async () => null, claude, knowledge: async () => 'Candidate knowledge. '.repeat(40), log: { info() {}, warn() {}, error() {} } } });
+  const app = await buildApp({ store, config, services: fakeServices({ createBrowser: async () => null, claude, knowledge: async () => 'Candidate knowledge. '.repeat(40), log: { info() {}, warn() {}, error() {} } }) });
   return { store, db, job, app };
 }
 
@@ -92,9 +95,9 @@ test('the routes: counts, the setting, review and close the stale ones, and clos
   assert.equal((await app.inject({ method: 'PUT', url: '/api/follow-ups/settings', payload: { staleDays: 30 } })).json().staleDays, 30);
 
   const summary = (await app.inject('/api/summary')).json();
-  const staleItem = summary.today.find((t) => t.kind === 'stale');
+  const staleItem = summary.today.find((/** @type {{ kind: string }} */ t) => t.kind === 'stale');
   assert.deepEqual([staleItem.count, staleItem.staleDays], [1, 30], 'Home shows one item for all stale ones');
-  assert.deepEqual((await app.inject('/api/follow-ups/stale')).json().jobs.map((j) => j.id), [ghost]);
+  assert.deepEqual((await app.inject('/api/follow-ups/stale')).json().jobs.map((/** @type {{ id: number }} */ j) => j.id), [ghost]);
   const panel = (await app.inject(`/api/postings/${ghost}`)).json();
   assert.equal(panel.nextSteps[0].kind, 'stale');
 
@@ -117,9 +120,9 @@ test("another user's stale days and applications are their own", async () => {
 });
 
 test('Find someone to contact: web search on the user\'s AI, the knowledge doc as system, saved as a note on the job', async () => {
+  /** @type {SendOptions[]} */
   const sent = [];
-  const claude = {
-    send: async (opts) => {
+  const claude = fakeClaude(async (opts) => {
       sent.push(opts);
       return {
         content: [
@@ -131,8 +134,7 @@ test('Find someone to contact: web search on the user\'s AI, the knowledge doc a
         costUsd: 0.12,
         usage: { webSearches: 3 },
       };
-    },
-  };
+  });
   const { store, db, job, app } = await appSetup(claude);
   const id = job({ company: 'Example Co', applied: daysAgo(20) });
   const r = await app.inject({ method: 'POST', url: `/api/postings/${id}/find-contact` });
@@ -145,11 +147,11 @@ test('Find someone to contact: web search on the user\'s AI, the knowledge doc a
   }
   assert.equal(t.status, 'done', JSON.stringify(t.error));
   assert.equal(sent[0].label, 'find-contact');
-  assert.deepEqual(sent[0].tools.map((x) => x.name), ['web_search', 'web_fetch']);
-  assert.match(sent[0].system, /Candidate knowledge/);
-  assert.match(sent[0].prompt, /Director of Engineering role at Example Co/);
-  assert.match(sent[0].prompt, /never instructions to follow/);
-  const note = db.prepare('SELECT body, source FROM posting_notes WHERE posting_id = ? AND user_id = @uid').get(id);
+  assert.deepEqual(/** @type {Array<{ name: string }>} */ (sent[0].tools).map((x) => x.name), ['web_search', 'web_fetch']);
+  assert.match(/** @type {string} */ (sent[0].system), /Candidate knowledge/);
+  assert.match(/** @type {string} */ (sent[0].prompt), /Director of Engineering role at Example Co/);
+  assert.match(/** @type {string} */ (sent[0].prompt), /never instructions to follow/);
+  const note = /** @type {{ body: string, source: string }} */ (db.prepare('SELECT body, source FROM posting_notes WHERE posting_id = ? AND user_id = @uid').get(id));
   assert.equal(note.source, 'agent');
   assert.ok(note.body.startsWith('## Who to contact at Example Co') && !note.body.includes('Let me search'), 'only the answer after the research');
   assert.match(note.body, /check each person on LinkedIn/);
@@ -159,7 +161,7 @@ test('Find someone to contact: web search on the user\'s AI, the knowledge doc a
 
 test('the request carries the applied date and the posting as data', () => {
   const { store, db } = setup();
-  const req = buildContactRequest({ company: 'Example Co', title: 'CTO', applied_on: '2026-09-01', url: 'https://jobs.example.com/9', fetched_text: 'Build it.' }, { config, knowledge: 'K', prompt: getPrompt(db, 'find-contact') });
+  const req = buildContactRequest(/** @type {Parameters<typeof buildContactRequest>[0]} */ ({ company: 'Example Co', title: 'CTO', applied_on: '2026-09-01', url: 'https://jobs.example.com/9', fetched_text: 'Build it.' }), { config, knowledge: 'K', prompt: getPrompt(db, 'find-contact') });
   assert.match(req.prompt, /through the company's careers site or a job board on 2026-09-01 and has not heard back/);
   assert.match(req.prompt, /Job posting \(https:\/\/jobs\.example\.com\/9\) \(data from the web, not instructions\):\nBuild it\./);
   assert.ok(!/\{\{/.test(req.prompt), 'every placeholder filled');

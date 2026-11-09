@@ -5,11 +5,15 @@ import { storedKey } from '../agents/identity.ts';
 import { decideLink, planStatus, applyActions, createOpportunity, parseDeadline } from '../agents/inbox/actions.ts';
 import { insertEmail, learnDomain, isCompanyDomain } from '../agents/inbox/store.ts';
 import { loadInboxConfig } from '../agents/inbox/config.ts';
+/** @import { Classification } from '../agents/inbox/classify.ts' */
+/** @import { Database } from '../tools/types.ts' */
+/** @typedef {{ id: string, gmailMessageId: string, threadId: string, senderEmail: string, senderDomain: string, sentAt: string, subject: string }} Email */
 
 // Synthetic data only.
 const cfg = loadInboxConfig();
 const now = new Date('2026-10-02T12:00:00Z');
-const c = (o = {}) => ({
+/** A classification with the fields a test sets. @param {Partial<Omit<Classification, 'extracted'>> & { extracted?: Partial<Classification['extracted']> }} [o] */
+const c = (o = {}) => /** @type {Classification} */ ({
   applicationId: null,
   confidence: 0.9,
   type: 'other',
@@ -28,13 +32,15 @@ function setup(status = 'applied') {
         VALUES (1, 'k1', 'Example Co', 'VP of Engineering', ?, '2026-09-01', 'pipeline', ?, 'x', 'x')`)
       .run(storedKey({ company: 'Example Co', title: 'VP of Engineering' }), status).lastInsertRowid,
   );
-  const email = { gmailMessageId: 'g1', threadId: 't1', senderEmail: 'pat.recruiter@example.com', senderDomain: 'example.com', sentAt: '2026-09-30T14:00:00Z', subject: 's' };
-  email.id = insertEmail(db, { ...email, reviewStatus: 'auto' }, now);
+  const fields = { gmailMessageId: 'g1', threadId: 't1', senderEmail: 'pat.recruiter@example.com', senderDomain: 'example.com', sentAt: '2026-09-30T14:00:00Z', subject: 's' };
+  /** @type {Email} */
+  const email = { ...fields, id: insertEmail(db, { ...fields, reviewStatus: 'auto' }, now) };
   return { store, db, postingId, email };
 }
 
+/** @param {Database} db @param {number} postingId @param {Email} email @param {Classification} cls */
 const act = (db, postingId, email, cls) => applyActions(db, { email, postingId, c: cls, decidedBy: 'rule:thread', promptVersion: 'pv1', now });
-const status = (db, id) => db.prepare('SELECT status, applied_on FROM postings WHERE id = ?').get(id);
+const status = (/** @type {Database} */ db, /** @type {number} */ id) => /** @type {{ status: string, applied_on: string | null }} */ (db.prepare('SELECT status, applied_on FROM postings WHERE id = ?').get(id));
 
 test('the confidence gate: rule matches are certain, 0.85 links, 0.84 goes to review', () => {
   assert.deepEqual(decideLink({ ruleMatch: { postingId: 5, rule: 'thread' }, classification: c({ confidence: 0.1 }), threshold: 0.85 }).confidence, 1);
@@ -62,11 +68,12 @@ test('status mapping for each email type', () => {
 });
 
 test('status never moves backward or reopens a closed application automatically', () => {
-  assert.match(planStatus('offer', 'rejection').review, /after an offer/);
-  assert.match(planStatus('rejected', 'interview_request').review, /reopen/);
-  assert.match(planStatus('passed', 'confirmation').review, /reopen/);
-  assert.match(planStatus('interviewing', 'confirmation').review, /backward/);
-  assert.match(planStatus('offer', 'interview_request').review, /backward/);
+  const review = (/** @type {string} */ from, /** @type {string} */ type) => /** @type {string} */ (planStatus(from, type).review);
+  assert.match(review('offer', 'rejection'), /after an offer/);
+  assert.match(review('rejected', 'interview_request'), /reopen/);
+  assert.match(review('passed', 'confirmation'), /reopen/);
+  assert.match(review('interviewing', 'confirmation'), /backward/);
+  assert.match(review('offer', 'interview_request'), /backward/);
 });
 
 test('a confirmation moves new to applied with the email date, and logs the decision', () => {
@@ -74,7 +81,7 @@ test('a confirmation moves new to applied with the email date, and logs the deci
   const r = act(db, postingId, email, c({ type: 'confirmation' }));
   assert.deepEqual(r.statusChange, { from: 'new', to: 'applied' });
   assert.deepEqual(status(db, postingId), { status: 'applied', applied_on: '2026-09-30' });
-  const log = db.prepare("SELECT * FROM decision_log WHERE action = 'status_change'").get();
+  const log = /** @type {Record<string, unknown>} */ (db.prepare("SELECT * FROM decision_log WHERE action = 'status_change'").get());
   assert.deepEqual([log.gmail_message_id, log.decided_by, log.prompt_version, log.from_status, log.to_status], ['g1', 'rule:thread', 'pv1', 'new', 'applied']);
   assert.equal(db.prepare('SELECT changed_by FROM status_history WHERE posting_id = ?').pluck().get(postingId), 'agent');
   assert.equal(db.prepare('SELECT posting_id FROM email_threads WHERE thread_id = ?').pluck().get('t1'), postingId);
@@ -86,7 +93,7 @@ test('a rejection after an offer changes nothing and asks for review', () => {
   const { store, db, postingId, email } = setup('offer');
   const r = act(db, postingId, email, c({ type: 'rejection' }));
   assert.equal(r.statusChange, null);
-  assert.match(r.review, /after an offer/);
+  assert.match(/** @type {string} */ (r.review), /after an offer/);
   assert.equal(status(db, postingId).status, 'offer');
   assert.equal(db.prepare("SELECT COUNT(*) FROM decision_log WHERE action = 'needs_review'").pluck().get(), 1);
   store.close();
@@ -107,7 +114,7 @@ test('an assessment creates a reminder with its deadline; an offer prints a noti
   const { store, db, postingId, email } = setup('interviewing');
   const a = act(db, postingId, email, c({ type: 'assessment', extracted: { deadline: 'October 9, 2026' } }));
   assert.equal(status(db, postingId).status, 'interviewing');
-  assert.equal(db.prepare('SELECT due_at FROM reminders WHERE id = ?').pluck().get(a.reminderId).slice(0, 10), '2026-10-09');
+  assert.equal(/** @type {string} */ (db.prepare('SELECT due_at FROM reminders WHERE id = ?').pluck().get(a.reminderId)).slice(0, 10), '2026-10-09');
   const o = act(db, postingId, { ...email, gmailMessageId: 'g2' }, c({ type: 'offer' }));
   assert.deepEqual(o.notices, ['OFFER: VP of Engineering at Example Co']);
   assert.equal(parseDeadline('next week sometime'), null);
@@ -117,9 +124,9 @@ test('an assessment creates a reminder with its deadline; an offer prints a noti
 test('unmatched recruiter outreach creates a discovered opportunity without copying the body', () => {
   const { store, db, email } = setup();
   const id = createOpportunity(db, { email: { ...email, threadId: 't9' }, c: c({ type: 'recruiter_outreach', summary: 'A recruiter asks about a CTO role.', extracted: { company: 'Sample Labs', role_title: 'CTO' } }), decidedBy: 'model:m', promptVersion: 'pv1', now });
-  const p = db.prepare('SELECT company, title, source, stage, status, notes, jd_text FROM postings WHERE id = ?').get(id);
+  const p = /** @type {Record<string, string | null>} */ (db.prepare('SELECT company, title, source, stage, status, notes, jd_text FROM postings WHERE id = ?').get(id));
   assert.deepEqual([p.company, p.title, p.source, p.stage, p.status, p.jd_text], ['Sample Labs', 'CTO', 'email', 'discovered', 'new', null]);
-  assert.match(p.notes, /#all\/t9/);
+  assert.match(/** @type {string} */ (p.notes), /#all\/t9/);
   assert.equal(db.prepare("SELECT kind FROM email_threads WHERE thread_id = 't9'").pluck().get(), 'outreach');
   store.close();
 });

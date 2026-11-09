@@ -2,6 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLetter, letterDocName, letterHtml, paragraphsFromLines, userLetterBody } from '../agents/hunt/letters.ts';
 import { escapeHtml } from '../tools/html.ts';
+/** @import { JobSearchConfig } from '../tools/config.ts' */
+/** @import { LetterHeader } from '../tools/letter-header.ts' */
 
 // Synthetic names and rules only.
 test('roleTypeText picks executive positioning by title', () => {
@@ -26,7 +28,7 @@ test("your own letter keeps only its body: the header, greeting, and sign-off go
   const word = `Pat Example\n\npat@example.com | 555-0100\n\nOctober 29, 2026\n\nRe: VP Engineering at Example Co\n\nDear Example Co Hiring Team,\n\n${p1}\n\n${p2}\n\nSincerely,\n\nPat Example`;
   assert.equal(userLetterBody(word, names), `${p1}\n\n${p2}`);
   // A PDF: lines wrapped at the page edge, no blank lines; a paragraph ends on a short line that ends a sentence.
-  const wrap = (p) => p.match(/.{1,60}(\s|$)/g).map((l) => l.trim()).join('\n');
+  const wrap = (/** @type {string} */ p) => /** @type {RegExpMatchArray} */ (p.match(/.{1,60}(\s|$)/g)).map((l) => l.trim()).join('\n');
   const pdf = `Pat Example\npat@example.com | 555-0100\nOctober 29, 2026\nRe: VP Engineering at Example Co\nDear Example Co Hiring Team,\n${wrap(p1)}\n${wrap(p2)}\nSincerely,\nPat Example`;
   assert.equal(userLetterBody(pdf, names), `${p1}\n\n${p2}`, 'wrapped lines join into their paragraph');
   // The header run into the first paragraph on one line (lines joined), and a sign-off with contact lines after it.
@@ -49,6 +51,7 @@ test('stripSalutationAndSignoff removes model-added greetings and sign-offs', ()
 });
 
 test('checkCoverLetter reports text and same-sentence rules once each', () => {
+  /** @type {JobSearchConfig['coverLetterChecks']} */
   const rules = [
     { label: 'confident', text: '\\bi am confident\\b' },
     { label: 'wrong title at Globex', sentence: ['globex', '\\bCTO\\b'] },
@@ -65,7 +68,8 @@ test('letterDocName and letterHtml build the v1 layout safely', () => {
   assert.equal(letterDocName('Pat Example', 'VP / Engineering 🚀', 'Example & Co. "Labs"'), 'Pat Example VP Engineering at Example & Co. Labs Cover Letter');
   assert.equal(letterDocName('José Núñez', 'CTO', ''), 'Jose Nunez CTO Cover Letter');
   const html = letterHtml({
-    candidate: { name: 'Pat Example', contactLine: 'pat@example.com', linkedin: 'linkedin.com/in/example', signoffName: 'Pat' },
+    // Older settings: the candidate fields, read through headerLines.
+    candidate: /** @type {LetterHeader} */ (/** @type {unknown} */ ({ name: 'Pat Example', contactLine: 'pat@example.com', linkedin: 'linkedin.com/in/example', signoffName: 'Pat' })),
     company: 'Example <Co>',
     title: 'CTO',
     date: 'September 30, 2026',

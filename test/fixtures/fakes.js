@@ -3,7 +3,7 @@
 // nothing at run time; they only tell the type checker that a partial value is meant.
 /** @import { AppServices } from '../../server/app.ts' */
 /** @import { UserConfig } from '../../agents/user-config.ts' */
-/** @import { Claude, SendOptions, SendResult } from '@scottmroth5/agent-core' */
+/** @import { Claude, Run, SendOptions, SendResult, Usage } from '@scottmroth5/agent-core' */
 /** @import { Http } from '../../tools/http.ts' */
 /** @import { JobItem } from '../../agents/discovery/types.ts' */
 
@@ -29,7 +29,7 @@ export const fakeServices = (services) => /** @type {AppServices} */ (services);
 
 /**
  * A Claude client whose send answers with only the result fields a test needs.
- * @param {(opts: SendOptions) => Promise<Partial<SendResult>>} send
+ * @param {(opts: SendOptions) => Promise<Omit<Partial<SendResult>, 'usage'> & { usage?: Partial<Usage> }>} send
  * @returns {Claude}
  */
 export const fakeClaude = (send) => /** @type {Claude} */ ({ send });
@@ -46,8 +46,8 @@ export const fakeClaude = (send) => /** @type {Claude} */ ({ send });
  */
 
 /**
- * An http client with only the calls a test answers (get, sleep, ...).
- * @param {Partial<Http>} http
+ * An http client with only the calls a test answers (get, sleep, ...); a reply from get may leave out url.
+ * @param {Omit<Partial<Http>, 'get'> & { get?: (url: string, options?: Parameters<Http['get']>[1]) => Promise<{ status: number, text: string, url?: string }> }} http
  * @returns {Http}
  */
 export const fakeHttp = (http) => /** @type {Http} */ (http);
@@ -58,3 +58,10 @@ export const fakeHttp = (http) => /** @type {Http} */ (http);
  * @returns {JobItem}
  */
 export const fakeItem = (item) => /** @type {JobItem} */ (item);
+
+/**
+ * A traced run with only what a test reads (its id, its log lines).
+ * @param {Partial<Run>} run
+ * @returns {Run}
+ */
+export const fakeRun = (run) => /** @type {Run} */ (run);

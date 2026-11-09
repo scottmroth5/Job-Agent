@@ -5,20 +5,25 @@ import { openJobStore } from '../db/index.ts';
 import { getUserSetting as getSetting } from '../db/settings.ts';
 import { ensureLetterFolder } from '../tools/google/drive.ts';
 import { generateForPostings, selectForHunt, buildLetterRequest, loadHuntPrompts, finishLetter, estimateHuntCost } from '../agents/hunt/generate.ts';
+import { fakeConfig } from './fixtures/fakes.js';
+/** @import { Database } from '../tools/types.ts' */
+/** @typedef {{ model: string, messages: Array<{ content: string }> }} Params */
 
 // Synthetic config, knowledge and postings only.
-const config = {
+const config = fakeConfig({
   candidate: { name: 'Pat Example', signoffName: 'Pat', contactLine: 'pat@example.com', linkedin: 'linkedin.com/in/example' },
   coverLetterChecks: [{ label: 'confident', text: '\\bi am confident\\b' }],
-};
+});
 const KNOWLEDGE = 'Section 6: Cover Letter Rules. '.repeat(30);
 const analysis = { score: 8, reason: 'Strong fit', roleType: 'Full time', locationConcern: 'none', strengths: ['Scale'], watchOuts: ['Domain'], topTalkingPoint: 'Platform growth', suggestedStatus: 'worth_pursuing' };
 
+/** A real agent-core client over a fake SDK that answers with respond's text. @param {(params: Params) => string | Error} respond */
 function fakeClaude(respond) {
+  /** @type {Params[]} */
   const requests = [];
   const client = {
     messages: {
-      create: async (params) => {
+      create: async (/** @type {Params} */ params) => {
         requests.push(params);
         const text = respond(params);
         if (text instanceof Error) throw text;
@@ -30,6 +35,7 @@ function fakeClaude(respond) {
 }
 
 function fakeDrive({ failDocs = false } = {}) {
+  /** @type {{ folders: number, docs: Array<{ name: string, html: string, folderId: string }> }} */
   const calls = { folders: 0, docs: [] };
   return {
     calls,
@@ -38,7 +44,7 @@ function fakeDrive({ failDocs = false } = {}) {
       calls.folders += 1;
       return 'folder-1';
     },
-    createDocFromHtml: async (doc) => {
+    createDocFromHtml: async (/** @type {{ name: string, html: string, folderId: string }} */ doc) => {
       if (failDocs) throw Object.assign(new Error('quota'), { name: 'GaxiosError' });
       calls.docs.push(doc);
       return { id: `doc-${calls.docs.length}`, url: `https://docs.example.com/${calls.docs.length}` };
@@ -46,6 +52,7 @@ function fakeDrive({ failDocs = false } = {}) {
   };
 }
 
+/** @param {Database} db @param {{ stage?: string, status?: string, score?: number | null, title?: string }} [o] */
 function addPosting(db, { stage = 'pipeline', status = 'new', score = 8, title = 'VP Engineering' } = {}) {
   const url = `https://jobs.example.com/${Math.random()}`;
   const id = Number(
@@ -58,13 +65,13 @@ function addPosting(db, { stage = 'pipeline', status = 'new', score = 8, title =
   return id;
 }
 
-const reply = (params) =>
+const reply = (/** @type {Params} */ params) =>
   params.messages[0].content.includes('resume tailoring')
     ? 'HEADLINE TWEAK: Platform leader — scaled teams'
     : 'Dear Hiring Team,\n\nI am confident this is a fit -- truly.\n\nSecond paragraph.\n\nSincerely,\nPat Example';
 
 test('finishLetter strips the greeting and sign-off, removes dashes, and flags rules', () => {
-  const { body, flags } = finishLetter(reply({ messages: [{ content: '' }] }), config);
+  const { body, flags } = finishLetter(reply(/** @type {Params} */ ({ messages: [{ content: '' }] })), config);
   assert.equal(body, 'I am confident this is a fit, truly.\n\nSecond paragraph.');
   assert.deepEqual(flags, ['confident']);
 });
@@ -75,7 +82,7 @@ test('finishLetter flags letters over the word limit', () => {
 });
 
 test('buildLetterRequest fills the approved prompt with executive positioning and Sonnet settings', () => {
-  const req = buildLetterRequest({ company: 'Example Co', title: 'CTO', fetched_text: 'Build it.', notes: null }, analysis, { config, knowledge: KNOWLEDGE, prompts: loadHuntPrompts() });
+  const req = buildLetterRequest(/** @type {Parameters<typeof buildLetterRequest>[0]} */ ({ company: 'Example Co', title: 'CTO', fetched_text: 'Build it.', notes: null }), analysis, { config, knowledge: KNOWLEDGE, prompts: loadHuntPrompts() });
   assert.equal(req.model, 'claude-sonnet-5-5');
   assert.deepEqual([req.effort, req.maxTokens], ['medium', 12000]);
   assert.match(req.prompt, /for Pat Example applying for CTO at Example Co/);
@@ -103,7 +110,7 @@ test('generateForPostings writes tweaks and a letter Doc for promoted jobs only,
   assert.match(drive.calls.docs[0].html, /September 30, 2026/);
   assert.equal(drive.calls.docs[0].folderId, 'folder-1');
 
-  const arts = store.db.prepare('SELECT kind, content, doc_id, doc_url, flags_json, model FROM artifacts ORDER BY id').all();
+  const arts = /** @type {Array<Record<string, string | null>>} */ (store.db.prepare('SELECT kind, content, doc_id, doc_url, flags_json, model FROM artifacts ORDER BY id').all());
   assert.equal(arts[0].kind, 'resume_tweaks');
   assert.equal(arts[0].content, 'HEADLINE TWEAK: Platform leader, scaled teams');
   assert.deepEqual([arts[1].kind, arts[1].doc_id, arts[1].flags_json, arts[1].model], ['cover_letter', 'doc-1', '["confident"]', 'claude-sonnet-5-5']);
@@ -152,7 +159,8 @@ test('ensureLetterFolder creates the folder once and remembers it', async () => 
 });
 
 test('estimateHuntCost counts only the calls still needed', () => {
-  const both = estimateHuntCost([{ has_tweaks: 0, has_letter: 0, fetched_text: 'x'.repeat(4000) }], 10000);
-  const one = estimateHuntCost([{ has_tweaks: 1, has_letter: 0, fetched_text: 'x'.repeat(4000) }], 10000);
+  /** @typedef {Parameters<typeof estimateHuntCost>[0][number]} HuntCase */
+  const both = estimateHuntCost([/** @type {HuntCase} */ ({ has_tweaks: 0, has_letter: 0, fetched_text: 'x'.repeat(4000) })], 10000);
+  const one = estimateHuntCost([/** @type {HuntCase} */ ({ has_tweaks: 1, has_letter: 0, fetched_text: 'x'.repeat(4000) })], 10000);
   assert.ok(Math.abs(both - 2 * one) < 1e-9 && one > 0.02 && one < 0.05, `${one}`);
 });

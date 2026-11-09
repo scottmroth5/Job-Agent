@@ -5,8 +5,10 @@ import { buildQueries, GO_FRACTIONAL } from '../agents/discovery/sources/serper.
 import { resolveDetails } from '../agents/discovery/details.ts';
 import { runDiscovery } from '../agents/discovery/discover.ts';
 import { openJobStore } from '../db/index.ts';
+import { fakeConfig, fakeHttp } from './fixtures/fakes.js';
 
 // Made-up listings in the real markup shape.
+/** @param {{ slug: string, company: string, title: string, hours: string, rate: string, location: string, date: string }} c */
 const card = ({ slug, company, title, hours, rate, location, date }) => `
   <div role="listitem" class="job-item w-dyn-item"><div class="job-item_flex"><div class="job-item_name_url">
     <h3 class="text-size-regular text-inline">${company}</h3><h3 class="text-size-regular text-inline">-</h3>
@@ -43,33 +45,33 @@ test('parseListing reads company, title, hours, pay, location and date from each
 
 test('parsePosting reads the description and labeled terms; details use it', async () => {
   const p = fractionaljobs.parsePosting(JOB_PAGE);
-  assert.match(p.description, /harden production/);
-  assert.match(p.description, /- Own the roadmap/);
+  assert.match(/** @type {string} */ (p.description), /harden production/);
+  assert.match(/** @type {string} */ (p.description), /- Own the roadmap/);
   assert.equal(p.hoursText, '10 - 15 hrs');
   assert.equal(p.rateText, '$150 - $200 / hr');
   assert.deepEqual(p.extra, { companyStage: 'Seed', industry: 'Analytics', notes: ['convert full-time'] });
 
   const [item] = fractionaljobs.parseListing(LISTING);
-  const http = { get: async () => ({ status: 200, text: JOB_PAGE }), sleep: async () => {} };
+  const http = fakeHttp({ get: async () => ({ status: 200, text: JOB_PAGE }), sleep: async () => {} });
   await resolveDetails(item, { http });
   assert.deepEqual([item.fetchStatus, item.fetchMethod], ['ok', 'source-page']);
-  assert.equal(item.extra.industry, 'Analytics');
+  assert.equal(item.extra?.industry, 'Analytics');
 });
 
 test('Serper queries include fractional terms and a Go Fractional site search', () => {
-  assert.equal(buildQueries({ search: { terms: ['CTO'], fractionalTerms: ['Fractional CTO'] } }).length, 2, 'site search is off by default');
-  const queries = buildQueries({ search: { terms: ['CTO'], fractionalTerms: ['Fractional CTO'], siteSearch: true } });
+  assert.equal(buildQueries(fakeConfig({ search: { terms: ['CTO'], fractionalTerms: ['Fractional CTO'] } })).length, 2, 'site search is off by default');
+  const queries = buildQueries(fakeConfig({ search: { terms: ['CTO'], fractionalTerms: ['Fractional CTO'], siteSearch: true } }));
   assert.deepEqual(queries, [
     { term: 'CTO', q: 'CTO remote jobs' },
     { term: 'Fractional CTO', q: 'Fractional CTO remote', searchTrack: 'fractional' },
     { term: 'Fractional CTO', q: 'site:gofractional.com/jobs Fractional CTO', searchTrack: 'fractional', source: GO_FRACTIONAL },
   ]);
-  assert.equal(buildQueries({ search: { terms: ['CTO'] } }).length, 1);
+  assert.equal(buildQueries(fakeConfig({ search: { terms: ['CTO'] } })).length, 1);
 });
 
 test('discovery stores fractional postings with track, pay, hours and extras; fractional keywords pass CISO titles', async () => {
   const store = openJobStore(':memory:');
-  const config = {
+  const config = fakeConfig({
     search: {
       terms: ['CTO'],
       relevantTitleKeywords: ['cto', 'vp'],
@@ -77,18 +79,18 @@ test('discovery stores fractional postings with track, pay, hours and extras; fr
       noiseTitleKeywords: [],
       homeLocations: ['Anytown, ST'],
     },
-  };
-  const http = { get: async () => ({ status: 200, text: JOB_PAGE }), sleep: async () => {} };
+  });
+  const http = fakeHttp({ get: async () => ({ status: 200, text: JOB_PAGE }), sleep: async () => {} });
   const sources = {
     fractionaljobs: { SOURCE: 'Fractional Jobs', search: async () => ({ items: fractionaljobs.parseListing(LISTING), requests: 1, errors: [], rateLimited: false }) },
   };
   const summary = await runDiscovery({ store, config, http, sources, now: new Date('2026-09-30T12:00:00Z'), options: { pauseMs: 0, linkedinPauseMs: 0 } });
   assert.equal(summary.inserted, 2, 'the bookkeeper role is not relevant');
-  const rows = store.db.prepare('SELECT title, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, location_check FROM postings ORDER BY id').all();
+  const rows = /** @type {Array<Record<string, string | number | null>>} */ (store.db.prepare('SELECT title, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, location_check FROM postings ORDER BY id').all());
   assert.deepEqual(rows.map((r) => [r.title, r.track, r.rate_unit, r.hours_max, r.location_check]), [
     ['Fractional CTO', 'fractional', 'hour', 15, 'remote'],
     ['Chief Information Security Officer', 'fractional', 'hour', 10, 'remote'],
   ]);
-  assert.equal(JSON.parse(rows[0].extra_json).companyStage, 'Seed');
+  assert.equal(JSON.parse(String(rows[0].extra_json)).companyStage, 'Seed');
   store.close();
 });

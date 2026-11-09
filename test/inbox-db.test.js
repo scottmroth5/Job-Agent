@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
+/** @import { Database } from '../tools/types.ts' */
 
 const now = '2026-10-02T12:00:00.000Z';
 
+/** @param {Database} db */
 function posting(db) {
   return Number(
     db
@@ -14,6 +16,7 @@ function posting(db) {
   );
 }
 
+/** @param {Database} db @param {Record<string, unknown>} [o] */
 function email(db, o = {}) {
   const row = {
     id: randomUUID(),
@@ -38,7 +41,7 @@ test('007 adds the inbox tables and the company domain column; 013 drops its fun
   const names = store.db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").pluck().all();
   for (const n of ['contacts', 'email_threads', 'emails', 'decision_log', 'reminders']) assert.ok(names.includes(n), n);
   assert.ok(!names.includes('application_funnel'), 'server/funnel.ts computes the funnel per user instead');
-  assert.ok(store.db.prepare('PRAGMA table_info(postings)').all().some((c) => c.name === 'company_domain'));
+  assert.ok(/** @type {Array<{ name: string }>} */ (store.db.prepare('PRAGMA table_info(postings)').all()).some((c) => c.name === 'company_domain'));
   store.close();
 });
 

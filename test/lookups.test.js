@@ -41,10 +41,10 @@ test('adding, renaming, regrouping, and ordering values', () => {
   assert.throws(() => addValue(db, 'status', { label: 'Ghosted', group: 'nowhere' }), /Choose a group/);
   assert.throws(() => addValue(db, 'colors', { label: 'Red' }), /Unknown list/);
 
-  const last = () => lookups(db).values('status').at(-1).id;
+  const last = () => lookups(db).values('status').at(-1)?.id;
   assert.equal(last(), 'phone_screen');
   moveValue(db, 'status', 'phone_screen', -1);
-  assert.equal(lookups(db).values('status').at(-2).id, 'phone_screen');
+  assert.equal(lookups(db).values('status').at(-2)?.id, 'phone_screen');
 
   const track = addValue(db, 'track', { label: 'Contract', settings: { scorePrompt: 'score-fractional', terms: true } });
   lk = lookups(db);

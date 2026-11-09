@@ -6,6 +6,13 @@ import { interpretResult, ruleScore, isRuleScored, NO_TEXT_CAP } from '../agents
 import { archiveListings, demoteWithoutText } from '../agents/hunt/archive.ts';
 import { validateManualInput, addPosting } from '../agents/manual.ts';
 import { listPostings, summary } from '../server/queries.ts';
+import { fakeConfig, fakeHttp } from './fixtures/fakes.js';
+/** @import { ScoreInput } from '../agents/discovery/score.ts' */
+/** @import { Database } from '../tools/types.ts' */
+/** @import { PostingsRow } from '../db/types.ts' */
+
+/** A posting with only the fields a test sets (scoring reads title, url, location check, and text). */
+const scoreInput = (/** @type {Partial<ScoreInput>} */ p) => /** @type {ScoreInput} */ (p);
 
 // Synthetic titles and links in the shapes seen in Google results; no real data.
 test('list-of-jobs titles and search links are recognized', () => {
@@ -42,18 +49,18 @@ test('single jobs are not mistaken for lists', () => {
 });
 
 test('a list page scores 1 by rule; a job with no text is capped below promotion', () => {
-  const listing = { title: 'Remote CTO Jobs', location_check: 'remote' };
+  const listing = scoreInput({ title: 'Remote CTO Jobs', location_check: 'remote' });
   assert.ok(isRuleScored(listing));
-  const r = ruleScore(listing, {});
+  const r = ruleScore(listing, fakeConfig({}));
   assert.equal(r.score, 1);
   assert.match(r.reason, /Skipped: not a single job/);
 
   const analysis = { score: 9, reason: 'Great title.', locationConcern: 'none' };
-  const capped = interpretResult(analysis, { location_check: 'remote' });
+  const capped = interpretResult(analysis, scoreInput({ location_check: 'remote' }));
   assert.equal(capped.score, NO_TEXT_CAP);
   assert.equal(capped.analysis.uncappedScore, 9);
-  assert.match(capped.reason, /no posting text/);
-  assert.equal(interpretResult({ ...analysis }, { location_check: 'remote', jd_text: 'Pasted text.' }).score, 9);
+  assert.match(String(capped.reason), /no posting text/);
+  assert.equal(interpretResult({ ...analysis }, scoreInput({ location_check: 'remote', jd_text: 'Pasted text.' })).score, 9);
 });
 
 test('manual add refuses a list page', () => {
@@ -61,6 +68,7 @@ test('manual add refuses a list page', () => {
   assert.throws(() => validateManualInput({ title: 'CTO Jobs', company: 'X', description: 'x'.repeat(300) }), /list of jobs/);
 });
 
+/** @param {Database} db @param {{ title: string, url?: string, stage?: string, status?: string }} o */
 function insert(db, o) {
   const row = { url: `https://example.com/${Math.random()}`, stage: 'pipeline', status: 'new', ...o };
   return Number(
@@ -83,9 +91,9 @@ test('archiveListings removes list pages, keeps them for dedupe, and leaves acte
   assert.equal(db.prepare("SELECT COUNT(*) FROM postings WHERE stage = 'archived'").pluck().get(), 0, 'dry run changes nothing');
 
   archiveListings(db, { now: new Date('2026-10-01T12:00:00Z') });
-  const row = (id) => db.prepare('SELECT stage, status, notes FROM postings WHERE id = ?').get(id);
+  const row = (/** @type {number} */ id) => /** @type {Pick<PostingsRow, 'stage' | 'status' | 'notes'>} */ (db.prepare('SELECT stage, status, notes FROM postings WHERE id = ?').get(id));
   assert.deepEqual([row(newList).stage, row(newList).status], ['archived', 'passed']);
-  assert.match(row(newList).notes, /Removed 2026-10-01: not a single job/);
+  assert.match(String(row(newList).notes), /Removed 2026-10-01: not a single job/);
   assert.deepEqual([row(rejectedList).stage, row(rejectedList).status], ['archived', 'rejected']);
   assert.deepEqual([row(appliedList).stage, row(appliedList).status], ['pipeline', 'applied']);
   assert.equal(row(realJob).stage, 'pipeline');
@@ -98,7 +106,7 @@ test("status groups: Needs action is new and offer; In progress is applied, inte
   const store = openJobStore(':memory:');
   const { db } = store;
   for (const status of ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected']) insert(db, { title: `Job ${status}`, status });
-  const statuses = (filters) => listPostings(db, filters).map((r) => r.status).sort();
+  const statuses = (/** @type {Parameters<typeof listPostings>[1]} */ filters) => listPostings(db, filters).map((r) => r.status).sort();
   assert.deepEqual(statuses({ status: 'active' }), ['new', 'offer']);
   assert.deepEqual(statuses({ status: 'progress' }), ['applied', 'interviewing', 'offer']);
   assert.equal(statuses({ status: 'all' }).length, 7);
@@ -106,7 +114,7 @@ test("status groups: Needs action is new and offer; In progress is applied, inte
   store.close();
 });
 
-const excluding = { search: { excludedSites: ['payjobs.example'] } };
+const excluding = fakeConfig({ search: { excludedSites: ['payjobs.example'] } });
 
 test('excluded sites match the domain and its subdomains only', () => {
   assert.equal(excludedSite('https://www.payjobs.example/job/vp-1.html', ['payjobs.example']), 'payjobs.example');
@@ -115,14 +123,16 @@ test('excluded sites match the domain and its subdomains only', () => {
   assert.equal(excludedSite('not a url', ['payjobs.example']), null);
   assert.equal(skipReason({ title: 'VP Engineering', url: 'https://www.payjobs.example/j/1' }, excluding), 'excluded site (payjobs.example)');
   assert.equal(skipReason({ title: 'VP Engineering', url: 'https://www.payjobs.example/j/1' }, {}), null, 'no setting, no exclusion');
-  assert.equal(ruleScore({ title: 'VP Engineering', url: 'https://payjobs.example/j/1' }, excluding).score, 1);
-  assert.ok(isRuleScored({ title: 'VP Engineering', url: 'https://payjobs.example/j/1' }, excluding));
+  assert.equal(ruleScore(scoreInput({ title: 'VP Engineering', url: 'https://payjobs.example/j/1' }), excluding).score, 1);
+  assert.ok(isRuleScored(scoreInput({ title: 'VP Engineering', url: 'https://payjobs.example/j/1' }), excluding));
 });
 
 test('manual add refuses an excluded site before fetching anything', async () => {
   const store = openJobStore(':memory:');
-  const http = { get: () => assert.fail('no fetch for an excluded site') };
-  await assert.rejects(addPosting({ url: 'https://www.payjobs.example/job/1' }, { store, config: excluding, http }), /skipped in your settings/);
+  const http = fakeHttp({ get: () => assert.fail('no fetch for an excluded site') });
+  // Refused before anything else in the context is used.
+  const ctx = /** @type {Parameters<typeof addPosting>[1]} */ ({ store, config: excluding, http });
+  await assert.rejects(addPosting({ url: 'https://www.payjobs.example/job/1' }, ctx), /skipped in your settings/);
   store.close();
 });
 
@@ -137,11 +147,11 @@ test('cleanup archives excluded-site jobs and moves pipeline jobs without a desc
 
   const { archived } = archiveListings(db, { config: excluding, now: new Date('2026-10-01T12:00:00Z') });
   assert.deepEqual(archived.map((p) => p.id), [paid]);
-  assert.match(db.prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(paid), /^Removed 2026-10-01: excluded site \(payjobs\.example\)\.$/);
+  assert.match(/** @type {string} */ (db.prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(paid)), /^Removed 2026-10-01: excluded site \(payjobs\.example\)\.$/);
 
   assert.deepEqual(demoteWithoutText(db, { dryRun: true }).demoted.map((p) => p.id), [noText]);
   demoteWithoutText(db);
-  const stage = (id) => db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
+  const stage = (/** @type {number} */ id) => db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
   assert.deepEqual([stage(noText), stage(appliedNoText), stage(withText)], ['discovered', 'pipeline', 'pipeline']);
   store.close();
 });
@@ -150,11 +160,13 @@ test('jobs judged 7+ without a description are flagged and counted; others are n
   const store = openJobStore(':memory:');
   const { db } = store;
   const today = new Date().toISOString().slice(0, 10);
+  /** @param {string} title @param {{ status?: string, discoveredOn?: string }} [o] */
   const add = (title, o = {}) => {
     const id = insert(db, { title, stage: 'discovered', ...o });
     db.prepare('UPDATE postings SET discovered_on = ? WHERE id = ?').run(o.discoveredOn ?? today, id);
     return id;
   };
+  /** @param {number} id @param {number} value @param {string} source @param {object} [analysis] */
   const score = (id, value, source, analysis = {}) =>
     db.prepare("INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, created_at) VALUES (1, ?, ?, 'r', ?, ?, 'x')").run(id, value, JSON.stringify(analysis), source);
   const v1High = add('VP Engineering');
@@ -178,6 +190,7 @@ test('jobs judged 7+ without a description are flagged and counted; others are n
 test('duplicates: the copy the user acted on is kept, extra new copies are archived with a pointer', () => {
   const store = openJobStore(':memory:');
   const { db } = store;
+  /** @param {string} title @param {string} company @param {{ status?: string, stage?: string }} [o] */
   const add = (title, company, o = {}) => {
     const id = insert(db, { title, stage: 'discovered', ...o });
     db.prepare('UPDATE postings SET company = ?, company_title_key = ? WHERE id = ?').run(company, `${company}|${title}`.toLowerCase(), id);
@@ -192,8 +205,8 @@ test('duplicates: the copy the user acted on is kept, extra new copies are archi
 
   const { archived } = archiveListings(db, { now: new Date('2026-10-01T12:00:00Z') });
   assert.deepEqual(archived.map((p) => p.id), [googleCopy, plainCopy]);
-  assert.match(archived[0].reason, new RegExp(`^duplicate of #${applied}, Director of Engineering at Example Co, pipeline/applied$`));
-  const stage = (id) => db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
+  assert.match(String(archived[0].reason), new RegExp(`^duplicate of #${applied}, Director of Engineering at Example Co, pipeline/applied$`));
+  const stage = (/** @type {number} */ id) => db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
   assert.deepEqual([applied, other, unknownA, unknownB].map(stage), ['pipeline', 'discovered', 'discovered', 'discovered'], 'placeholder companies never match each other');
 
   // Two new copies, no acted-on one: the oldest stays. Running again must not flip to the removed copy.
@@ -216,10 +229,10 @@ test('rows carry pay from the job terms, the source salary, or the description, 
   db.prepare("UPDATE postings SET rate_min = 150, rate_max = 200, rate_unit = 'hour', rate_text = '$150 - $200/hr', hours_min = 10, hours_max = 10 WHERE id = ?").run(terms);
   const none = insert(db, { title: 'VP Engineering C' });
 
-  const rows = Object.fromEntries(listPostings(db, {}, { fractional: { weeksPerYear: 48 } }).map((r) => [r.id, r]));
-  assert.deepEqual([rows[listed].pay.min, rows[listed].pay.from], [200000, 'source']);
-  assert.deepEqual([rows[described].pay.max, rows[described].pay.from], [220000, 'description']);
-  assert.deepEqual([rows[terms].pay.unit, rows[terms].pay.from, rows[terms].annualized.low], ['hour', 'terms', 72000]);
+  const rows = Object.fromEntries(listPostings(db, {}, fakeConfig({ fractional: { weeksPerYear: 48 } })).map((r) => [r.id, r]));
+  assert.deepEqual([rows[listed].pay?.min, rows[listed].pay?.from], [200000, 'source']);
+  assert.deepEqual([rows[described].pay?.max, rows[described].pay?.from], [220000, 'description']);
+  assert.deepEqual([rows[terms].pay?.unit, rows[terms].pay?.from, rows[terms].annualized?.low], ['hour', 'terms', 72000]);
   assert.equal(rows[none].pay, null);
   store.close();
 });
@@ -229,7 +242,7 @@ test('editing the company finds the earlier copy, and duplicateOf archives this 
   const { rekeyPostings, findCopies } = await import('../agents/identity.ts');
   const store = openJobStore(':memory:');
   const { db } = store;
-  const set = (id, company, title) => db.prepare('UPDATE postings SET company = ?, title = ? WHERE id = ?').run(company, title, id);
+  const set = (/** @type {number} */ id, /** @type {string} */ company, /** @type {string} */ title) => db.prepare('UPDATE postings SET company = ?, title = ? WHERE id = ?').run(company, title, id);
   const applied = insert(db, { title: 'x', status: 'applied' });
   set(applied, 'Example Health', 'VP of Engineering');
   const copy = insert(db, { title: 'x' });
@@ -237,27 +250,28 @@ test('editing the company finds the earlier copy, and duplicateOf archives this 
   const other = insert(db, { title: 'x' });
   set(other, 'See posting', 'Vice President, Engineering (Remote)');
   rekeyPostings(db);
-  assert.deepEqual(findCopies(db, db.prepare('SELECT * FROM postings WHERE id = ?').get(copy)), [], 'a placeholder company matches nothing');
-  assert.equal(listPostings(db, {}).find((r) => r.id === copy).hasCopies, false, 'two "See posting" rows are not flagged as copies');
+  assert.deepEqual(findCopies(db, /** @type {PostingsRow} */ (db.prepare('SELECT * FROM postings WHERE id = ?').get(copy))), [], 'a placeholder company matches nothing');
+  assert.equal(listPostings(db, {}).find((r) => r.id === copy)?.hasCopies, false, 'two "See posting" rows are not flagged as copies');
 
   const edited = updatePosting(db, copy, { company: 'Example Health, Inc.' });
-  assert.deepEqual(edited.copies.map((c) => [c.id, c.status]), [[applied, 'applied']]);
-  assert.equal(listPostings(db, {}).find((r) => r.id === copy).hasCopies, true);
+  assert.deepEqual(edited?.copies.map((c) => [c.id, c.status]), [[applied, 'applied']]);
+  assert.equal(listPostings(db, {}).find((r) => r.id === copy)?.hasCopies, true);
 
   const archived = updatePosting(db, copy, { duplicateOf: applied }, {}, new Date('2026-10-01T12:00:00Z'));
+  assert.ok(archived);
   assert.equal(archived.stage, 'archived');
   assert.equal(archived.status, 'duplicate');
   assert.equal(db.prepare('SELECT changed_by FROM status_history WHERE posting_id = ? ORDER BY id DESC LIMIT 1').pluck().get(copy), 'user');
-  assert.ok(archived.notes.endsWith(`Duplicate of #${applied}, VP of Engineering at Example Health (pipeline/applied); archived 2026-10-01.`), archived.notes);
+  assert.ok(String(archived.notes).endsWith(`Duplicate of #${applied}, VP of Engineering at Example Health (pipeline/applied); archived 2026-10-01.`), String(archived.notes));
   assert.throws(() => updatePosting(db, copy, { duplicateOf: copy }), /not found/);
-  assert.equal(getPosting(db, other).copies.length, 0);
+  assert.equal(getPosting(db, other)?.copies.length, 0);
   store.close();
 });
 
 test('duplicates: a new pipeline copy is kept over an old copy archived for age or left in Discovered', () => {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const add = (o) => {
+  const add = (/** @type {{ stage?: string, status?: string }} */ o) => {
     const id = insert(db, { title: 'x', ...o });
     db.prepare("UPDATE postings SET company = 'Example Co', title = 'Engineering Manager', company_title_key = 'example|engineering manager' WHERE id = ?").run(id);
     return id;
@@ -273,7 +287,7 @@ test('duplicates: a new pipeline copy is kept over an old copy archived for age 
 test("discovery's first status entry does not count as removed by cleanup", () => {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const add = (stage) => {
+  const add = (/** @type {string} */ stage) => {
     const id = insert(db, { title: 'x', stage });
     db.prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
     db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, 'new', 'agent', 'x')").run(id);
@@ -290,27 +304,27 @@ test('copies already archived as duplicates are not pointed out again', async ()
   const { updatePosting, getPosting } = await import('../server/queries.ts');
   const store = openJobStore(':memory:');
   const { db } = store;
-  const add = (o) => {
+  const add = (/** @type {{ stage?: string, status?: string }} */ o) => {
     const id = insert(db, { title: 'x', ...o });
     db.prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
     return id;
   };
   const kept = add({ stage: 'pipeline' });
   const copy = add({ stage: 'discovered' });
-  assert.equal(listPostings(db, {}).find((r) => r.id === kept).hasCopies, true);
+  assert.equal(listPostings(db, {}).find((r) => r.id === kept)?.hasCopies, true);
   updatePosting(db, copy, { duplicateOf: kept });
-  assert.equal(listPostings(db, {}).find((r) => r.id === kept).hasCopies, false);
-  assert.deepEqual(getPosting(db, kept).copies, []);
+  assert.equal(listPostings(db, {}).find((r) => r.id === kept)?.hasCopies, false);
+  assert.deepEqual(getPosting(db, kept)?.copies, []);
   const passedEarlier = add({ stage: 'archived', status: 'passed' });
   db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, 'new', 'passed', 'user', 'x')").run(passedEarlier);
-  assert.deepEqual(getPosting(db, kept).copies.map((c) => c.id), [passedEarlier], 'a copy the user passed on is shown');
+  assert.deepEqual(getPosting(db, kept)?.copies.map((c) => c.id), [passedEarlier], 'a copy the user passed on is shown');
   store.close();
 });
 
 test('discoveredAfter keeps jobs found on or after the date', () => {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const on = (day) => {
+  const on = (/** @type {string} */ day) => {
     const id = insert(db, { title: `Job ${day}` });
     db.prepare('UPDATE postings SET discovered_on = ? WHERE id = ?').run(day, id);
     return id;

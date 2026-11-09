@@ -7,7 +7,7 @@ import { INBOX_SCOPES, getInboxAuth } from '../tools/google/auth.ts';
 test('the inbox asks for exactly gmail.readonly and gmail.modify, offline, with PKCE', () => {
   const client = new OAuth2Client({ clientId: 'test-client.apps.example', clientSecret: 'x', redirectUri: 'http://127.0.0.1:5555' });
   const url = new URL(buildAuthUrl(client, { scopes: INBOX_SCOPES, state: 's1', codeChallenge: 'c1' }));
-  assert.deepEqual(url.searchParams.get('scope').split(' ').sort(), [
+  assert.deepEqual(/** @type {string} */ (url.searchParams.get('scope')).split(' ').sort(), [
     'https://www.googleapis.com/auth/gmail.modify',
     'https://www.googleapis.com/auth/gmail.readonly',
   ]);
