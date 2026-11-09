@@ -2,17 +2,23 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, followTask } from '../api.ts';
 import { dateTime } from '../format.ts';
 import { useLookups } from '../lookups.tsx';
-import TaskProgress from './TaskProgress.jsx';
+import TaskProgress from './TaskProgress.tsx';
+import type { ApiBody, ApiResponse, Job, Task } from '../api.ts';
+
+type Inbox = ApiResponse<'GET /api/inbox'>;
+type Email = Inbox['needsReview'][number];
+type Choice = ApiBody<'POST /api/inbox/emails/:id/review'>['choice'];
+type Review = ApiResponse<'POST /api/inbox/emails/:id/review'>;
 
 // How sure the model was of the job match (or that none applies). Emails at 0.85 or above link on their own, so
 // anything here is below that; the number stays for anyone comparing.
-const confidenceText = (c) => {
+const confidenceText = (c: number | null | undefined) => {
   const n = Number(c ?? 0);
   const level = n >= 0.7 ? 'Fairly sure' : n >= 0.4 ? 'Low confidence' : 'Very low confidence';
   return `${level} in the job match (${n.toFixed(2)})`;
 };
 
-export const TYPE_LABELS = {
+export const TYPE_LABELS: Record<string, string | undefined> = {
   confirmation: 'Application received',
   rejection: 'Rejection',
   recruiter_outreach: 'Recruiter outreach',
@@ -22,22 +28,27 @@ export const TYPE_LABELS = {
   follow_up: 'Follow-up',
   other: 'Other',
 };
-const RULES = { thread: 'same thread', contact: 'known contact', domain: 'company domain', ats_subject: 'subject', model: 'Claude', user: 'you' };
+const RULES: Record<string, string | undefined> = { thread: 'same thread', contact: 'known contact', domain: 'company domain', ats_subject: 'subject', model: 'Claude', user: 'you' };
 
-function ReviewCard({ email, applications, onDone, onOpenJob }) {
+function ReviewCard({ email, applications, onDone, onOpenJob }: {
+  email: Email;
+  applications: Array<{ id: Job['id']; company: string; title: string; status: string }>;
+  onDone: (review: Review, email: Email) => Promise<void>;
+  onOpenJob: (id: Job['id']) => void;
+}) {
   const lk = useLookups();
   const [reassigning, setReassigning] = useState(false);
   const [postingId, setPostingId] = useState('');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const resolve = async (choice, id) => {
+  const resolve = async (choice: Choice, id?: number) => {
     setBusy(true);
     setError(null);
     try {
-      onDone(await api.reviewEmail(email.id, choice, id), email);
+      void onDone(await api.reviewEmail(email.id, choice, id), email); // shows the result and reloads the inbox, which catches its own errors
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
       setBusy(false);
     }
   };
@@ -95,25 +106,25 @@ function ReviewCard({ email, applications, onDone, onOpenJob }) {
 }
 
 // Inbox: check Gmail, resolve emails the agent was unsure about, and keep track of reminders.
-export default function InboxPage({ onOpenJob, onChanged }) {
+export default function InboxPage({ onOpenJob, onChanged }: { onOpenJob: (id: Job['id']) => void; onChanged?: () => void }) {
   const lk = useLookups();
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-  const [task, setTask] = useState(null);
-  const [messages, setMessages] = useState([]);
+  const [data, setData] = useState<Inbox | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [task, setTask] = useState<Task | null>(null);
+  const [messages, setMessages] = useState<string[]>([]);
 
   const load = useCallback(async () => {
     try {
       setData(await api.inbox());
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   }, []);
 
   const follow = useCallback(
-    async (taskId) => {
-      const final = await followTask(taskId, setTask).catch((err) => ({ status: 'failed', error: err.message, steps: [] }));
+    async (taskId: string) => {
+      const final = await followTask(taskId, setTask).catch((err: Error) => ({ status: 'failed', error: err.message, steps: [] as Task['steps'] }) as Task); // TaskProgress reads only these
       setTask(final);
       if (final.status === 'done') setMessages(final.result.notices ?? []);
       await load();
@@ -129,7 +140,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
         setData(d);
         if (d.checkTaskId) void follow(d.checkTaskId);
       })
-      .catch((err) => setError(err.message));
+      .catch((err) => setError((err as Error).message));
   }, [follow]);
 
   const check = async () => {
@@ -139,12 +150,12 @@ export default function InboxPage({ onOpenJob, onChanged }) {
       const { taskId } = await api.checkInbox();
       void follow(taskId);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
-  const reviewed = async (r, email) => {
-    const notes = [];
+  const reviewed = async (r: Review, email: Email) => {
+    const notes: string[] = [];
     if (r.statusChange) notes.push(`Status changed: ${lk.label('status', r.statusChange.from)} to ${lk.label('status', r.statusChange.to)}`);
     if (r.review) notes.push(`Status not changed: ${r.review}. Change it on the job if needed.`);
     notes.push(...r.notices);
@@ -153,8 +164,8 @@ export default function InboxPage({ onOpenJob, onChanged }) {
     onChanged?.();
   };
 
-  const closeReminder = async (id, status) => {
-    await api.closeReminder(id, status).catch((err) => setError(err.message));
+  const closeReminder = async (id: string, status: ApiBody<'PATCH /api/inbox/reminders/:id'>['status']) => {
+    await api.closeReminder(id, status).catch((err) => setError((err as Error).message));
     await load();
   };
 
@@ -188,7 +199,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
         {data.needsReview.length === 0 ? (
           <p className="muted">Nothing to review.</p>
         ) : (
-          data.needsReview.map((e) => <ReviewCard key={e.id} email={e} applications={data.openApplications} onDone={reviewed} onOpenJob={onOpenJob} />)
+          data.needsReview.map((e: Email) => <ReviewCard key={e.id} email={e} applications={data.openApplications} onDone={reviewed} onOpenJob={onOpenJob} />)
         )}
       </section>
 
@@ -199,7 +210,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
         ) : (
           <table className="history">
             <tbody>
-              {data.reminders.map((r) => (
+              {data.reminders.map((r: Inbox['reminders'][number]) => (
                 <tr key={r.id}>
                   <td>{r.kind === 'assessment' ? 'Assessment' : 'Interview'}</td>
                   <td>
@@ -223,7 +234,7 @@ export default function InboxPage({ onOpenJob, onChanged }) {
         ) : (
           <table className="history">
             <tbody>
-              {data.recent.map((e) => (
+              {data.recent.map((e: Inbox['recent'][number]) => (
                 <tr key={e.id}>
                   <td className="nowrap muted">{dateTime(e.sentAt)}</td>
                   <td><span className={`badge type-${e.type}`}>{TYPE_LABELS[e.type] ?? e.type}</span></td>

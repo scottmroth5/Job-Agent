@@ -1,18 +1,30 @@
 import { useEffect, useRef, useState } from 'react';
+import type { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode } from 'react';
 import { api, followTask } from '../api.ts';
+import type { ApiBody, Job, Task } from '../api.ts';
+
+/** One of the job's next steps (GET /api/postings/:id nextSteps; server/today.ts). */
+type Step = { id?: string | null; kind: string; text: string; due?: string | null; overdue?: boolean };
+/** Skip this site: asking for a note, then the site skipped with its saved jobs, then those removed. */
+type SkipState = { site?: string; savedJobs?: number; removed?: number; from?: string };
+type SkipMode = null | 'ask' | SkipState;
+/** The title and company while they are being edited. */
+type Ident = { title: string; company: string };
+/** The demo's sample result for Write, Regenerate, or Re-score (never saved). */
+type ActionResult = { action: string; score?: { score: number; reason: string; note?: string }; letter?: string; tweaks?: string };
 import { useLookups } from '../lookups.tsx';
 import { rateText, hoursText, annualText, scoreClass, payText, PAY_FROM, sourceLabel } from '../format.ts';
-import TaskProgress from './TaskProgress.jsx';
-import Attachments from './Attachments.jsx';
-import Notes, { Markdown } from './Notes.jsx';
-import MeetingPrep from './MeetingPrep.jsx';
-import LetterSection from './LetterSection.jsx';
+import TaskProgress from './TaskProgress.tsx';
+import Attachments from './Attachments.tsx';
+import Notes, { Markdown } from './Notes.tsx';
+import MeetingPrep from './MeetingPrep.tsx';
+import LetterSection from './LetterSection.tsx';
 import { useDemo } from '../demo.tsx';
 import { isOwner, useMe } from '../me.tsx';
 import { DashIcon } from './DashIcon.tsx';
 
 
-function List({ items }) {
+function List({ items }: { items: ReactNode[] | null | undefined }) {
   if (!items?.length) return <p className="muted">None noted.</p>;
   return (
     <ul>
@@ -25,13 +37,13 @@ function List({ items }) {
 
 // How the current score was made (server/queries.ts scoreDetails): when, by which model, from the posting text or the
 // title alone, and with which prompt, so a reader can judge it and knows when a re-score would change it.
-const modelName = (id) => {
+const modelName = (id: string | null | undefined) => {
   const m = /^claude-([a-z]+)-(\d+)(?:-(\d{1,2}))?(?:-\d{8})?$/.exec(id ?? '');
   return m ? `${m[1][0].toUpperCase()}${m[1].slice(1)} ${m[2]}${m[3] ? `.${m[3]}` : ''}` : id;
 };
-const dayText = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+const dayText = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
-function ScoreDetails({ d }) {
+function ScoreDetails({ d }: { d: Job['scoreDetails'] }) {
   if (!d || d.from === 'v1' || String(d.source).startsWith('v1')) return null; // v1 imports have their own line below
   const parts = [];
   if (d.from === 'rule') parts.push(`Scored ${dayText(d.at)} by a rule, not AI (a list of jobs or a site you skip)`);
@@ -54,11 +66,11 @@ function ScoreDetails({ d }) {
 
 // The job's next steps (server/today.ts, the same rules as Home's Today list): open reminders with their due dates, an
 // offer to answer, or a follow-up due. Opening a job from Today or the Inbox lands here, on the task.
-const STEP_LABELS = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up', stale: 'Stale' };
-const dueText = (iso) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+const STEP_LABELS: Record<string, string | undefined> = { assessment: 'Assessment', interview: 'Interview', offer: 'Offer', follow_up: 'Follow up', stale: 'Stale' };
+const dueText = (iso: string) => new Date(iso).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 
 // The link without its scheme and "www.", shortened for the header: "execthread.com/jobs/1234".
-const shortUrl = (url) => {
+const shortUrl = (url: string) => {
   try {
     const u = new URL(url);
     const text = `${u.hostname.replace(/^www\./, '')}${u.pathname === '/' ? '' : u.pathname}${u.search}`;
@@ -72,23 +84,24 @@ const shortUrl = (url) => {
  * The posting's link, and Skip this site: a note on why, then the site is on Settings > Job sites to skip, and the
  * saved jobs from it (this one included, unless you applied) can be removed in one step.
  */
-function PostingLink({ url, demo, onChanged }) {
-  const [mode, setMode] = useState(null); // null | 'ask' | { site, savedJobs } | { removed }
+function PostingLink({ url, demo, onChanged }: { url: string; demo: boolean; onChanged: () => unknown }) {
+  const [mode, setMode] = useState<SkipMode>(null); // null | 'ask' | { site, savedJobs } | { removed }
+  const shown = mode as SkipState | null; // 'ask' has none of these fields, as before
   const [note, setNote] = useState('');
-  const [error, setError] = useState(null);
-  const act = async (fn) => {
+  const [error, setError] = useState<string | null>(null);
+  const act = async (fn: () => Promise<unknown>) => {
     setError(null);
     try {
       await fn();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
-  const skip = (e) => {
+  const skip = (e: FormEvent) => {
     e.preventDefault();
     void act(async () => {
       const r = await api.skipSite(url, note.trim());
-      setMode({ site: r.site, savedJobs: r.sites.find((s) => s.site === r.site)?.savedJobs ?? 0 });
+      setMode({ site: r.site, savedJobs: r.sites.find((s: { site: string; savedJobs: number }) => s.site === r.site)?.savedJobs ?? 0 });
     });
   };
   return (
@@ -106,35 +119,35 @@ function PostingLink({ url, demo, onChanged }) {
           <button type="button" className="link" onClick={() => setMode(null)}>Cancel</button>
         </form>
       )}
-      {mode?.site && (
+      {shown?.site && (
         <div className="row">
           <span>
-            Skipping {mode.site}: new jobs from it are never kept (Settings &gt; Job sites to skip).
+            Skipping {shown.site}: new jobs from it are never kept (Settings &gt; Job sites to skip).
           </span>
-          {mode.savedJobs > 0 && (
+          {(shown.savedJobs ?? 0) > 0 && (
             <button
               type="button"
               onClick={() =>
                 act(async () => {
-                  const r = await api.removeSiteJobs(mode.site);
-                  setMode({ removed: r.removed, from: mode.site });
+                  const r = await api.removeSiteJobs(shown.site as string);
+                  setMode({ removed: r.removed, from: shown.site });
                   await onChanged();
                 })
               }
             >
-              Remove the {mode.savedJobs === 1 ? 'saved job' : `${mode.savedJobs} saved jobs`} from it
+              Remove the {shown.savedJobs === 1 ? 'saved job' : `${shown.savedJobs} saved jobs`} from it
             </button>
           )}
         </div>
       )}
-      {mode?.removed !== undefined && <span>Removed {mode.removed === 1 ? '1 saved job' : `${mode.removed} saved jobs`} from {mode.from} (archived and marked passed).</span>}
+      {shown?.removed !== undefined && <span>Removed {shown.removed === 1 ? '1 saved job' : `${shown.removed} saved jobs`} from {shown.from} (archived and marked passed).</span>}
       {error && <span className="error">{error}</span>}
     </div>
   );
 }
 
 /** The demo's sample result for Write resume tweaks and cover letter, Regenerate, or Re-score: shown, never saved. */
-function ActionSample({ sample, onHide }) {
+function ActionSample({ sample, onHide }: { sample: ActionResult; onHide: () => void }) {
   return (
     <section className="sample-result" aria-label="Sample result">
       <p className="small">
@@ -160,7 +173,14 @@ function ActionSample({ sample, onHide }) {
   );
 }
 
-function NextSteps({ steps, busy, onPrepare, onDone, onFindContact, onCloseNoResponse }) {
+function NextSteps({ steps, busy, onPrepare, onDone, onFindContact, onCloseNoResponse }: {
+  steps: Step[] | null | undefined;
+  busy: boolean;
+  onPrepare: () => void;
+  onDone: (id: string) => void;
+  onFindContact: () => void;
+  onCloseNoResponse: () => void;
+}) {
   if (!steps?.length) return null;
   return (
     <section className="next-steps" aria-label="Next step">
@@ -179,7 +199,7 @@ function NextSteps({ steps, busy, onPrepare, onDone, onFindContact, onCloseNoRes
               </button>
             )}
             {t.id && (
-              <button type="button" className="demo-hide" onClick={() => onDone(t.id)}>
+              <button type="button" className="demo-hide" onClick={() => onDone(t.id as string)}>
                 Done
               </button>
             )}
@@ -200,17 +220,17 @@ function NextSteps({ steps, busy, onPrepare, onDone, onFindContact, onCloseNoRes
   );
 }
 
-export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
+export default function DetailPanel({ id, onClose, onChanged, onOpen }: { id: Job['id']; onClose: () => void; onChanged: () => unknown; onOpen: (id: Job['id']) => void }) {
   const lk = useLookups();
   const demo = useDemo();
   const me = useMe();
-  const [job, setJob] = useState(null);
-  const [error, setError] = useState(null);
+  const [job, setJob] = useState<Job | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [terms, setTerms] = useState({ rateText: '', hoursText: '' });
   const [paste, setPaste] = useState('');
-  const [task, setTask] = useState(null);
-  const [contactSample, setContactSample] = useState(null); // the demo's canned Find someone to contact answer
-  const [actionSample, setActionSample] = useState(null); // the demo's canned Write, Regenerate, or Re-score result
+  const [task, setTask] = useState<Task | null>(null);
+  const [contactSample, setContactSample] = useState<string | null>(null); // the demo's canned Find someone to contact answer
+  const [actionSample, setActionSample] = useState<ActionResult | null>(null); // the demo's canned Write, Regenerate, or Re-score result
   useEffect(() => {
     setContactSample(null);
     setActionSample(null);
@@ -219,7 +239,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
   const [askPrep, setAskPrep] = useState(0); // the Next step box's Prepare for a meeting opens the prep form
   // With a Google Doc, the letter's text is shown on request; without one (other users), always.
   const [showText, setShowText] = useState(false);
-  const [ident, setIdent] = useState(null); // { title, company } while editing
+  const [ident, setIdent] = useState<Ident | null>(null); // { title, company } while editing
 
   const load = async () => {
     try {
@@ -228,7 +248,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
       setTerms({ rateText: j.rateText ?? rateText(j), hoursText: hoursText(j).replace(' hrs/wk', ' hrs') });
       setError(null);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -238,25 +258,25 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
     setShowText(false);
     setIdent(null);
     void load();
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [id]);
 
   // A dialog for the keyboard and screen readers: focus moves into the panel when it opens, Tab stays inside it, and
   // closing it puts focus back on whatever opened it (a job's title, a Today row, an Inbox link).
-  const panelRef = useRef(null);
+  const panelRef = useRef<HTMLElement>(null);
   useEffect(() => {
-    const opener = document.activeElement;
+    const opener = document.activeElement as HTMLElement | null;
     panelRef.current?.focus();
     return () => {
       if (opener && document.contains(opener)) opener.focus();
     };
   }, []);
-  const trapTab = (e) => {
+  const trapTab = (e: ReactKeyboardEvent) => {
     if (e.key !== 'Tab' || !panelRef.current) return;
-    const items = [...panelRef.current.querySelectorAll('a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')].filter(
-      (el) => !el.disabled && el.offsetParent !== null,
+    const items = [...panelRef.current.querySelectorAll<HTMLElement>('a[href], button, input, select, textarea, summary, [tabindex]:not([tabindex="-1"])')].filter(
+      (el) => !(el as HTMLButtonElement).disabled && el.offsetParent !== null,
     );
     if (!items.length) return;
     const first = items[0];
@@ -270,18 +290,18 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
     }
   };
 
-  const save = async (patch) => {
+  const save = async (patch: ApiBody<'PATCH /api/postings/:id'>) => {
     try {
       const j = await api.update(id, patch);
       setJob(j);
       setError(null);
       onChanged();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
-  const run = async (action) => {
+  const run = async (action: string) => {
     setError(null);
     try {
       const { taskId } = await api.action(id, action);
@@ -292,7 +312,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
         onChanged();
       }
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -338,11 +358,11 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                   >
                     <label>
                       Title
-                      <input value={ident.title} onChange={(e) => setIdent((v) => ({ ...v, title: e.target.value }))} required autoFocus />
+                      <input value={ident.title} onChange={(e) => setIdent((v) => ({ ...(v as Ident), title: e.target.value }))} required autoFocus />
                     </label>
                     <label>
                       Company
-                      <input value={ident.company} onChange={(e) => setIdent((v) => ({ ...v, company: e.target.value }))} required />
+                      <input value={ident.company} onChange={(e) => setIdent((v) => ({ ...(v as Ident), company: e.target.value }))} required />
                     </label>
                     <div className="row">
                       <button type="submit" className="primary">Save</button>
@@ -376,7 +396,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
               steps={job.nextSteps}
               onPrepare={() => setAskPrep((n) => n + 1)}
               onDone={async (id) => {
-                await api.closeReminder(id, 'done').catch((err) => setError(err.message));
+                await api.closeReminder(id, 'done').catch((err) => setError((err as Error).message));
                 await load();
                 onChanged();
               }}
@@ -392,7 +412,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                     onChanged();
                   }
                 } catch (err) {
-                  setError(err.message);
+                  setError((err as Error).message);
                 }
               }}
               onCloseNoResponse={async () => {
@@ -402,7 +422,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
                   await load();
                   onChanged();
                 } catch (err) {
-                  setError(err.message);
+                  setError((err as Error).message);
                 }
               }}
             />
@@ -430,7 +450,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }) {
             {job.copies?.length > 0 && (
               <div className="warn-box copies">
                 <strong>Looks like the same job as:</strong>
-                {job.copies.map((c) => (
+                {job.copies.map((c: Job['copies'][number]) => (
                   <div key={c.id} className="copy-row">
                     <span>
                       {c.title} at {c.company} · {lk.label('stage', c.stage)}, {lk.label('status', c.status)}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import type { ApiResponse } from '../api.ts';
-import { Markdown } from './Notes.jsx';
+import { Markdown } from './Notes.tsx';
 
 const HOW: Record<string, string | undefined> = { typed: 'Typed or edited', file: 'From an uploaded file', draft: 'From Build a draft', restore: 'Restored', earlier: 'Saved before versions were kept', sample: 'The sample' };
 const when = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'date unknown');

@@ -1,8 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api.ts';
 import { dateTime } from '../format.ts';
+import type { ApiResponse } from '../api.ts';
 
-const KIND_LABELS = {
+type TaskSummary = ApiResponse<'GET /api/tasks'>[number];
+type LogLine = { at: string; level: string; text: string };
+/** The log's latest answer, or a failure to reach it. */
+type LogState = { status: string; error?: string | null; next?: number };
+
+const KIND_LABELS: Record<string, string | undefined> = {
   pipeline: 'Run pipeline',
   inbox: 'Check inbox',
   add: 'Add job',
@@ -11,17 +17,17 @@ const KIND_LABELS = {
   regenerate: 'Regenerate letter and tweaks',
   refetch: 'Refetch posting',
 };
-const STATUS_TEXT = { running: 'running', done: 'finished', failed: 'failed' };
+const STATUS_TEXT: Record<string, string | undefined> = { running: 'running', done: 'finished', failed: 'failed' };
 
-export const taskLabel = (t) => `${KIND_LABELS[t.kind] ?? t.kind}${t.meta?.id ? ` (job #${t.meta.id})` : ''}`;
+export const taskLabel = (t: { kind: string; meta?: { id?: number | string } | null }) => `${KIND_LABELS[t.kind] ?? t.kind}${t.meta?.id ? ` (job #${t.meta.id})` : ''}`;
 
-const time = (iso) => (iso ? new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '');
+const time = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '');
 
 /** Live output of one task, fetched in pieces (only new lines) while it runs. */
-function TaskOutput({ id, onFinished }) {
-  const [lines, setLines] = useState([]);
-  const [state, setState] = useState(null);
-  const box = useRef(null);
+function TaskOutput({ id, onFinished }: { id: string; onFinished?: () => void }) {
+  const [lines, setLines] = useState<LogLine[]>([]);
+  const [state, setState] = useState<LogState | null>(null);
+  const box = useRef<HTMLDivElement>(null);
   const stick = useRef(true);
 
   useEffect(() => {
@@ -40,7 +46,7 @@ function TaskOutput({ id, onFinished }) {
         if (r.status === 'running') setTimeout(poll, 1000);
         else onFinished?.();
       } catch (err) {
-        if (!stop) setState({ status: 'failed', error: err.message });
+        if (!stop) setState({ status: 'failed', error: (err as Error).message });
       }
     };
     void poll();
@@ -77,10 +83,10 @@ function TaskOutput({ id, onFinished }) {
 }
 
 // Activity: output of the actions started from this web page (pipeline, inbox checks, adds, re-scores...).
-export default function ActivityPage({ selectedId }) {
-  const [tasks, setTasks] = useState(null);
-  const [error, setError] = useState(null);
-  const reload = useRef(null);
+export default function ActivityPage({ selectedId }: { selectedId: string | null }) {
+  const [tasks, setTasks] = useState<TaskSummary[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const reload = useRef<(() => Promise<unknown>) | null>(null);
 
   useEffect(() => {
     let stop = false;
@@ -88,7 +94,7 @@ export default function ActivityPage({ selectedId }) {
       api
         .tasks()
         .then((t) => !stop && setTasks(t))
-        .catch((err) => !stop && setError(err.message));
+        .catch((err) => !stop && setError((err as Error).message));
     void load();
     reload.current = load;
     const timer = setInterval(load, 3000);

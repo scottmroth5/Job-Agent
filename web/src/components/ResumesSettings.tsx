@@ -117,7 +117,7 @@ export default function ResumesSettings() {
   const [list, setList] = useState<Resume[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const load = () => api.resumes().then(setList, (err: Error) => setError(err.message));
+  const load = () => api.resumes().then(setList, (err: Error) => setError((err as Error).message));
   useEffect(() => {
     void load();
   }, []);

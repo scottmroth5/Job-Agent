@@ -20,6 +20,9 @@ type Loosen<T> = unknown extends T
         : { [K in keyof T]: Loosen<T[K]> }
       : T;
 export type ApiResponse<R extends ApiRoute> = Loosen<Op<R>['response']>;
+/** A job as GET /api/postings/:id returns it, and a row of the Jobs list (GET /api/postings). */
+export type Job = ApiResponse<'GET /api/postings/:id'>;
+export type JobRow = ApiResponse<'GET /api/postings'>[number];
 
 const OFFLINE = 'Cannot reach the Job Agent server. Start it with npm run ui, then try again.';
 

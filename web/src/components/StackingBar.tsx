@@ -1,14 +1,15 @@
 import { moneyShort } from '../format.ts';
+import type { JobRow } from '../api.ts';
 
 // Tick fractional engagements in the table to see how they stack against the annual target
 // (the tracker's math: hourly rate x hours x weeks, or monthly x 12).
-export default function StackingBar({ jobs, target, onClear }) {
+export default function StackingBar({ jobs, target, onClear }: { jobs: JobRow[]; target: [number, number]; onClear: () => void }) {
   const known = jobs.filter((j) => j.annualized);
-  const low = known.reduce((s, j) => s + j.annualized.low, 0);
-  const high = known.reduce((s, j) => s + j.annualized.high, 0);
+  const low = known.reduce((s: number, j) => s + j.annualized.low, 0);
+  const high = known.reduce((s: number, j) => s + j.annualized.high, 0);
   const [tLow, tHigh] = target;
   const pct = Math.min(100, Math.round((((low + high) / 2) / tHigh) * 100));
-  const hours = jobs.reduce((s, j) => s + (j.hours ? (j.hours.min + j.hours.max) / 2 : 0), 0);
+  const hours = jobs.reduce((s: number, j) => s + (j.hours ? (j.hours.min + j.hours.max) / 2 : 0), 0);
 
   return (
     <div className="stacking">

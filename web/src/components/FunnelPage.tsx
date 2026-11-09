@@ -2,16 +2,21 @@ import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useLookups } from '../lookups.tsx';
 import { sourceLabel } from '../format.ts';
+import type { ReactNode } from 'react';
+import type { ApiResponse, Job } from '../api.ts';
+
+type Funnel = ApiResponse<'GET /api/funnel'>;
+type Week = Funnel['weeks'][number];
 
 const WINDOWS = [
   ['30', 'Last 30 days'],
   ['90', 'Last 90 days'],
   ['all', 'All time'],
 ];
-const pct = (x) => (x == null ? '–' : `${Math.round(x * 100)}%`);
-const days = (x) => (x == null ? '–' : `${Math.round(x * 10) / 10} days`);
+const pct = (x: number | null | undefined) => (x == null ? '–' : `${Math.round(x * 100)}%`);
+const days = (x: number | null | undefined) => (x == null ? '–' : `${Math.round(x * 10) / 10} days`);
 
-function Stat({ label, value, note }) {
+function Stat({ label, value, note }: { label: string; value: ReactNode; note?: ReactNode }) {
   return (
     <div className="stat">
       <div className="stat-value">{value}</div>
@@ -22,19 +27,19 @@ function Stat({ label, value, note }) {
 }
 
 // Funnel: how applications turn into responses, interviews, and offers, and which job sites work.
-export default function FunnelPage({ onOpenJob }) {
+export default function FunnelPage({ onOpenJob }: { onOpenJob: (id: Job['id']) => void }) {
   const lk = useLookups();
   const [range, setRange] = useState('30');
   const [track, setTrack] = useState('all');
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
+  const [data, setData] = useState<Funnel | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setError(null);
     api
       .funnel(range, track)
       .then(setData)
-      .catch((err) => setError(err.message));
+      .catch((err) => setError((err as Error).message));
   }, [range, track]);
 
   if (error) return <div className="error">{error}</div>;
@@ -46,7 +51,7 @@ export default function FunnelPage({ onOpenJob }) {
     ['Interview', t.interview],
     ['Offer', t.offer],
   ];
-  const maxWeek = Math.max(1, ...data.weeks.map((w) => w.applied));
+  const maxWeek = Math.max(1, ...data.weeks.map((w: Week) => w.applied));
 
   return (
     <div className="funnel">
@@ -129,7 +134,7 @@ export default function FunnelPage({ onOpenJob }) {
               </tr>
             </thead>
             <tbody>
-              {data.bySource.map((s) => (
+              {data.bySource.map((s: Funnel['bySource'][number]) => (
                 <tr key={s.source}>
                   <td>{sourceLabel(s.source)}</td>
                   <td>{s.applied}</td>
@@ -156,7 +161,7 @@ export default function FunnelPage({ onOpenJob }) {
             </tr>
           </thead>
           <tbody>
-            {data.weeks.map((w) => (
+            {data.weeks.map((w: Week) => (
               <tr key={w.weekStart}>
                 <td>{w.weekStart}</td>
                 <td>{w.applied}</td>
@@ -165,7 +170,7 @@ export default function FunnelPage({ onOpenJob }) {
           </tbody>
         </table>
         <div className="weeks" aria-hidden="true">
-          {data.weeks.map((w) => (
+          {data.weeks.map((w: Week) => (
             <div key={w.weekStart} className="week" title={`Week of ${w.weekStart}: ${w.applied}`}>
               <span className="week-count">{w.applied || ''}</span>
               <span className="week-bar" style={{ height: `${(w.applied / maxWeek) * 100}%` }} />
@@ -183,7 +188,7 @@ export default function FunnelPage({ onOpenJob }) {
         ) : (
           <table className="history">
             <tbody>
-              {data.followUps.map((f) => (
+              {data.followUps.map((f: Funnel['followUps'][number]) => (
                 <tr key={f.id}>
                   <td>
                     <button className="link" onClick={() => onOpenJob(f.id)}>{f.title} at {f.company}</button>
