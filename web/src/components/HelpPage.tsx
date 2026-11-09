@@ -1,23 +1,25 @@
 import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
 import { useDemo } from '../demo.tsx';
 import { renderMarkdown } from '../../../tools/markdown.ts';
 
 /** Help: the guides (help/*.md, through the app's one safe Markdown renderer) and Ask, answered from them by AI. */
 export default function HelpPage() {
   const demo = useDemo();
-  const [guides, setGuides] = useState(null);
+  const [guides, setGuides] = useState<ApiResponse<'GET /api/help'> | null>(null);
   const [open, setOpen] = useState('getting-started');
   const [question, setQuestion] = useState('');
-  const [answer, setAnswer] = useState(null);
+  const [answer, setAnswer] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    api.help().then(setGuides, (err) => setError(err.message));
+    api.help().then(setGuides, (err: Error) => setError(err.message));
   }, []);
 
-  const ask = async (e) => {
+  const ask = async (e: FormEvent) => {
     e.preventDefault();
     setAsking(true);
     setError(null);
@@ -25,7 +27,7 @@ export default function HelpPage() {
     try {
       setAnswer((await api.askHelp(question.trim())).answer);
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setAsking(false);
     }

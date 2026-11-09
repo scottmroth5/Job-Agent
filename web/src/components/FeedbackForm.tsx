@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
 import { useMe } from '../me.tsx';
 
@@ -6,8 +7,8 @@ import { useMe } from '../me.tsx';
 export default function FeedbackForm() {
   const support = useMe()?.supportEmail;
   const [body, setBody] = useState('');
-  const [state, setState] = useState(null); // null, 'sending', 'sent', or an error message
-  const send = async (e) => {
+  const [state, setState] = useState<string | null>(null); // null, 'sending', 'sent', or an error message
+  const send = async (e: FormEvent) => {
     e.preventDefault();
     setState('sending');
     try {
@@ -15,7 +16,7 @@ export default function FeedbackForm() {
       setBody('');
       setState('sent');
     } catch (err) {
-      setState(err.message);
+      setState((err as Error).message);
     }
   };
   return (

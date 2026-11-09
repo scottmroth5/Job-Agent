@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api.ts';
-import { DashIcon } from './DashIcon.jsx';
+import { DashIcon } from './DashIcon.tsx';
 
 const MAX_BYTES = 25 * 1024 * 1024;
 const size = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)} MB` : n >= 1024 ? `${Math.round(n / 1024)} KB` : `${n} bytes`);

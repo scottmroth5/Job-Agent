@@ -1,5 +1,5 @@
 // The dashboard pictures in web/public/dash (160 px PNGs): Home tiles, the Home link, and the job panel's section headings.
-export const DASH = {
+export const DASH: Record<string, string | undefined> = {
   home: 'home',
   jobs: 'job-listings',
   inbox: 'files',
@@ -16,6 +16,6 @@ export const DASH = {
   attachments: 'files',
 };
 
-export function DashIcon({ name, className = 'dash-icon' }) {
+export function DashIcon({ name, className = 'dash-icon' }: { name: string; className?: string }) {
   return <img src={`/dash/${DASH[name]}.png`} alt="" aria-hidden="true" className={className} draggable="false" />;
 }

@@ -9,7 +9,7 @@ import MeetingPrep from './MeetingPrep.jsx';
 import LetterSection from './LetterSection.jsx';
 import { useDemo } from '../demo.tsx';
 import { isOwner, useMe } from '../me.tsx';
-import { DashIcon } from './DashIcon.jsx';
+import { DashIcon } from './DashIcon.tsx';
 
 
 function List({ items }) {

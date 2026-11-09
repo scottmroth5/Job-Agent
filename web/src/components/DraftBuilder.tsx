@@ -1,15 +1,19 @@
 import { useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
+
+type Draft = ApiResponse<'POST /api/account/draft'>;
 import { renderMarkdown } from '../../../tools/markdown.ts';
 
 const MAX_FILES = 4;
 const MAX_MB = 8;
 const ACCEPT = '.pdf,.txt,.md,application/pdf,text/plain,text/markdown';
-const typeOf = (f) => (f.type === 'application/pdf' || /\.pdf$/i.test(f.name) ? 'application/pdf' : /\.md$/i.test(f.name) ? 'text/markdown' : f.type === 'text/plain' || /\.txt$/i.test(f.name) ? 'text/plain' : f.type);
+const typeOf = (f: File) => (f.type === 'application/pdf' || /\.pdf$/i.test(f.name) ? 'application/pdf' : /\.md$/i.test(f.name) ? 'text/markdown' : f.type === 'text/plain' || /\.txt$/i.test(f.name) ? 'text/plain' : f.type);
 
 /** A file's contents as base64 (what the draft route takes). */
-const readBase64 = (file) =>
-  new Promise((resolve, reject) => {
+const readBase64 = (file: File) =>
+  new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result).split(',')[1] ?? '');
     reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
@@ -21,14 +25,14 @@ const readBase64 = (file) =>
  * starting search. Nothing is saved: onUseProfile and onUseSearch put the draft in the forms for you to review and save.
  * The owner's search settings live in their settings file, so they get the knowledge doc only (no onUseSearch).
  */
-export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
+export default function DraftBuilder({ onUseProfile, onUseSearch = null }: { onUseProfile: (text: string) => void; onUseSearch?: ((draft: Draft) => void) | null }) {
   const [open, setOpen] = useState(false);
-  const [files, setFiles] = useState([]);
+  const [files, setFiles] = useState<File[]>([]);
   const [pasted, setPasted] = useState('');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
-  const [draft, setDraft] = useState(null);
-  const [error, setError] = useState(null);
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   if (!open) {
     return (
@@ -40,14 +44,14 @@ export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
     );
   }
 
-  const add = (list) => {
+  const add = (list: File[]) => {
     setError(null);
     const next = [...files, ...list].slice(0, MAX_FILES);
     const big = next.find((f) => f.size > MAX_MB * 1024 * 1024);
     if (big) return setError(`${big.name} is over ${MAX_MB} MB.`);
     setFiles(next);
   };
-  const build = async (e) => {
+  const build = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
@@ -60,7 +64,7 @@ export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
       };
       setDraft(await api.buildDraft(payload));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
@@ -76,7 +80,7 @@ export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
       <form onSubmit={build} className="search-form">
         <label>
           Your resume and LinkedIn profile (PDF), or text files: up to {MAX_FILES}
-          <input type="file" multiple accept={ACCEPT} onChange={(e) => add([...e.target.files])} />
+          <input type="file" multiple accept={ACCEPT} onChange={(e) => add([...(e.target.files as FileList)])} />
         </label>
         {files.length > 0 && (
           <ul className="draft-files">
@@ -113,7 +117,7 @@ export default function DraftBuilder({ onUseProfile, onUseSearch = null }) {
             <div className="warn-box">
               <b>To make it better, answer these in your knowledge doc:</b>
               <ul>
-                {draft.questions.map((q) => (
+                {draft.questions.map((q: string) => (
                   <li key={q}>{q}</li>
                 ))}
               </ul>

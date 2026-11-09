@@ -1,32 +1,44 @@
 import { useEffect, useState } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
 import { headerLines, SEPARATOR } from '../../../tools/letter-header.ts';
 
 const MAX_LINKS = 6;
-const EMPTY = { name: '', email: '', phone: '', location: '', signoffName: '', links: [] };
+interface HeaderForm {
+  name: string;
+  email: string;
+  phone: string;
+  location: string;
+  signoffName: string;
+  links: string[];
+}
+const EMPTY: HeaderForm = { name: '', email: '', phone: '', location: '', signoffName: '', links: [] };
 
 /**
  * Settings: the cover letter header (agents/letter-header.ts): name, email, phone, an optional location, the sign-off
  * name, and links, shown on every letter's Word, PDF, and Google Doc. Until saved it is filled in from your settings.
  */
 export default function LetterHeaderSettings() {
-  const [form, setForm] = useState(null);
+  const [form, setForm] = useState<HeaderForm | null>(null);
   const [saved, setSaved] = useState(true);
-  const [note, setNote] = useState(null);
-  const [error, setError] = useState(null);
-  const show = (h) => {
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const show = (h: ApiResponse<'GET /api/letter-header'>) => {
     setForm({ ...EMPTY, ...h, links: h.links?.length ? h.links : [''] });
     setSaved(Boolean(h.saved));
   };
   useEffect(() => {
-    api.letterHeader().then(show, (err) => setError(err.message));
+    api.letterHeader().then(show, (err) => setError((err as Error).message));
   }, []);
   if (!form) return <section className="home-card">{error ? <div className="error">{error}</div> : <p className="muted">Loading…</p>}</section>;
 
-  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
-  const setLink = (i, v) => setForm((f) => ({ ...f, links: f.links.map((l, k) => (k === i ? v : l)) }));
+  // The form exists by the time any field can change.
+  const edit = (fn: (f: HeaderForm) => HeaderForm) => setForm((f) => fn(f as HeaderForm));
+  const set = (key: keyof HeaderForm) => (e: ChangeEvent<HTMLInputElement>) => edit((f) => ({ ...f, [key]: e.target.value }));
+  const setLink = (i: number, v: string) => edit((f) => ({ ...f, links: f.links.map((l, k) => (k === i ? v : l)) }));
   const links = form.links.map((l) => l.trim()).filter(Boolean);
-  const save = async (e) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setNote(null);
@@ -34,7 +46,7 @@ export default function LetterHeaderSettings() {
       show(await api.saveLetterHeader({ ...form, links }));
       setNote('Saved. New downloads and letters use it.');
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 
@@ -73,13 +85,13 @@ export default function LetterHeaderSettings() {
           {form.links.map((l, i) => (
             <div className="row header-link" key={i}>
               <input aria-label={`Link ${i + 1}`} value={l} maxLength={300} onChange={(e) => setLink(i, e.target.value)} placeholder="https://www.linkedin.com/in/…, your site, github.com/…" />
-              <button type="button" className="link" onClick={() => setForm((f) => ({ ...f, links: f.links.filter((_, k) => k !== i) }))}>
+              <button type="button" className="link" onClick={() => edit((f) => ({ ...f, links: f.links.filter((_, k) => k !== i) }))}>
                 Remove
               </button>
             </div>
           ))}
           {form.links.length < MAX_LINKS && (
-            <button type="button" onClick={() => setForm((f) => ({ ...f, links: [...f.links, ''] }))}>
+            <button type="button" onClick={() => edit((f) => ({ ...f, links: [...f.links, ''] }))}>
               + Add a link
             </button>
           )}

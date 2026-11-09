@@ -42,7 +42,7 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
                     placeholder companies ("See posting") are read from the Google title. Rule changes need npm run cleanup to rekey
 /web                React (Vite) UI: Home (#/, a tile per screen with its count, Run pipeline, the Claude budget), Jobs (#/jobs: stage,
                     status, and search; track, needs description, discovered since, and score under Advanced filters), detail panel,
-                    add-job dialog, fractional stacking bar. Pictures: web/public/dash (160 px PNGs) through DashIcon.jsx's map (Home tiles, the Home link, panel headings) Phones get a back link to Home and the screen name instead of tabs
+                    add-job dialog, fractional stacking bar. Pictures: web/public/dash (160 px PNGs) through DashIcon.tsx's map (Home tiles, the Home link, panel headings) Phones get a back link to Home and the screen name instead of tabs
 /evals              eval runner and rubric code; real eval cases live in data/evals; evals/inbox/cases.json is synthetic. Results: EVALS.md
 /test               node:test suites with synthetic fixtures only
 /data               gitignored: job-agent.db, config/, google/ (OAuth client and token), attachments/, v1-export/
@@ -231,7 +231,7 @@ data/attachments/<posting id>/<uuid>, never by its name; only PDFs and images op
 
 ## Prompts
 agents/prompts.ts is the single way to load a prompt: getPrompt(db, name) returns the admin-screen edit if one is active
-(prompt_versions table, with history), else the repo file, which stays the default. Settings > Prompts (#/settings/prompts, web/src/components/PromptsSettings.jsx, routes /api/prompts in server/admin.ts)
+(prompt_versions table, with history), else the repo file, which stays the default. Settings > Prompts (#/settings/prompts, web/src/components/PromptsSettings.tsx, routes /api/prompts in server/admin.ts)
 edits every template in PROMPTS for the current user only (prompt_versions is a user table); Admin keeps Lists, Spending,
 and Users (all app-wide: the shared lists, the cap on the owner's key, accounts) and is shown to admins only, never in the demo; each
 user's own spend by feature is on Settings (GET /api/spending; setting the cap stays PUT /api/admin/budget, owner only); placeholders are validated on save, and output schemas stay read-only in the repo because code reads
@@ -346,7 +346,7 @@ Global Privacy Control. demo_opened carries source (SOURCES: trafficSource reads
 host in the browser; the URL, referrer, and utm text are never sent); the personal site is the parent domain of the
 demo's PUBLIC_URL (DEMO_SITE_ADDRESS), never written in the repo. A new event goes on its EVENTS list and in PRIVACY.md's demo section. The demo banner links
 /privacy. test/demo-analytics.test.js.
-Usage (Admin > Usage, web/src/components/UsageAdmin.jsx; GET /api/admin/usage?weeks=4..52, ADMIN_ONLY, never in the
+Usage (Admin > Usage, web/src/components/UsageAdmin.tsx; GET /api/admin/usage?weeks=4..52, ADMIN_ONLY, never in the
 demo): server/admin-queries.ts usageByWeek gives one row per Sunday to Saturday week in the app's zone (never the asking
 admin's own), newest first, the first being this week so far: weekEnding, accounts seen (this week: users.last_seen_at;
 earlier weeks: distinct users with a run or added job), pipeline runs completed (ok, partial) and failed, jobs added,

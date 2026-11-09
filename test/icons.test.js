@@ -76,7 +76,7 @@ test('signed out with Google sign-in on: the manifest, icons, and favicons load;
 });
 
 test('dashboard pictures: every name the UI maps is a small PNG in web/public/dash', () => {
-  const src = readFileSync(repoPath('web', 'src', 'components', 'DashIcon.jsx'), 'utf8');
+  const src = readFileSync(repoPath('web', 'src', 'components', 'DashIcon.tsx'), 'utf8');
   const files = [...src.matchAll(/^\s+\w+: '([\w-]+)',$/gm)].map((m) => m[1]);
   assert.ok(files.length >= 10, 'the map was read');
   for (const file of files) {

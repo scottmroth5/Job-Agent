@@ -1,9 +1,14 @@
 import { useEffect, useState } from 'react';
+import type { FormEvent } from 'react';
 import { api } from '../api.ts';
+import type { ApiResponse } from '../api.ts';
 
-const usd = (n) => `$${Number(n ?? 0).toFixed(2)}`;
-const day = (iso) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
-const ago = (iso) => {
+type User = ApiResponse<'GET /api/admin/users'>[number];
+type FeedbackItem = ApiResponse<'GET /api/admin/feedback'>[number];
+
+const usd = (n: number | null | undefined) => `$${Number(n ?? 0).toFixed(2)}`;
+const day = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');
+const ago = (iso: string | null | undefined) => {
   if (!iso) return 'never';
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
   if (mins < 60) return mins <= 1 ? 'just now' : `${mins} minutes ago`;
@@ -11,7 +16,7 @@ const ago = (iso) => {
   return day(iso);
 };
 // Which decisions each status offers, as [decision, button label, needs a confirm].
-const ACTIONS = {
+const ACTIONS: Record<string, Array<[decision: string, label: string, confirmFirst: boolean]> | undefined> = {
   pending: [['approve', 'Approve', false], ['reject', 'Reject', true]],
   active: [['pause', 'Pause', true]],
   paused: [['resume', 'Resume', false]],
@@ -19,7 +24,7 @@ const ACTIONS = {
 };
 
 /** A user's setup at a glance: what is done, and what they still need for their pipeline. */
-function Setup({ u }) {
+function Setup({ u }: { u: User }) {
   const items = [
     [u.setup.searchReady, 'search'],
     [u.setup.profileReady, 'Knowledge doc'],
@@ -37,22 +42,22 @@ function Setup({ u }) {
   );
 }
 
-function AiSetup({ user, onSaved }) {
+function AiSetup({ user, onSaved }: { user: User; onSaved: () => Promise<unknown> | void }) {
   const [source, setSource] = useState(user.aiSource);
   const [cap, setCap] = useState(user.aiCapUsd ?? 10);
   const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const granting = source === 'owner' && user.aiSource !== 'owner';
   const changed = source !== user.aiSource || (source === 'owner' && Number(cap) !== user.aiCapUsd);
-  const save = async (e) => {
+  const save = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
       await api.setUserAi(user.id, source, source === 'owner' ? Number(cap) : null, granting ? confirm.trim() : undefined);
       setConfirm('');
-      onSaved();
+      void onSaved(); // refresh catches its own errors
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
   return (
@@ -88,10 +93,10 @@ function AiSetup({ user, onSaved }) {
 }
 
 /** Deletes a user's account and everything in it, once their address is typed. */
-function DeleteUser({ user, onDeleted }) {
+function DeleteUser({ user, onDeleted }: { user: User; onDeleted: () => Promise<unknown> | void }) {
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   if (!open) {
     return (
       <p>
@@ -101,14 +106,14 @@ function DeleteUser({ user, onDeleted }) {
       </p>
     );
   }
-  const remove = async (e) => {
+  const remove = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     try {
       await api.deleteUser(user.id, confirm.trim());
-      onDeleted();
+      void onDeleted(); // refresh catches its own errors
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
   return (
@@ -129,9 +134,9 @@ function DeleteUser({ user, onDeleted }) {
 }
 
 function Feedback() {
-  const [items, setItems] = useState(null);
-  const [error, setError] = useState(null);
-  const refresh = () => api.adminFeedback().then(setItems, (err) => setError(err.message));
+  const [items, setItems] = useState<FeedbackItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () => api.adminFeedback().then(setItems, (err) => setError((err as Error).message));
   useEffect(() => {
     void refresh();
   }, []);
@@ -149,7 +154,7 @@ function Feedback() {
                 <b>{f.name || f.email}</b> <span className="muted small">{ago(f.createdAt)}{f.page ? ` · ${f.page}` : ''}</span>
               </span>
               {f.status === 'open' ? (
-                <button type="button" onClick={() => api.feedbackDone(f.id).then(refresh, (err) => setError(err.message))}>
+                <button type="button" onClick={() => api.feedbackDone(f.id).then(refresh, (err) => setError((err as Error).message))}>
                   Mark done
                 </button>
               ) : (
@@ -167,21 +172,21 @@ function Feedback() {
 
 /** Admin > Users: requests for access, accounts and how far each has got, how each user's AI is paid for, and feedback. */
 export default function UsersAdmin() {
-  const [users, setUsers] = useState(null);
-  const [error, setError] = useState(null);
-  const refresh = () => api.users().then(setUsers, (err) => setError(err.message));
+  const [users, setUsers] = useState<User[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const refresh = () => api.users().then(setUsers, (err) => setError((err as Error).message));
   useEffect(() => {
     void refresh();
   }, []);
 
-  const decide = async (user, decision, confirmFirst) => {
+  const decide = async (user: User, decision: string, confirmFirst: boolean) => {
     if (confirmFirst && !window.confirm(`${decision[0].toUpperCase()}${decision.slice(1)} ${user.email}?`)) return;
     setError(null);
     try {
       await api.decideUser(user.id, decision);
       await refresh();
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     }
   };
 

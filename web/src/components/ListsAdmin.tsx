@@ -1,16 +1,31 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useLookups } from '../lookups.tsx';
+import type { ListName, LookupValue } from '../lookups.tsx';
+import type { ApiBody, ApiResponse } from '../api.ts';
 
-const LIST_NAMES = { status: 'Status', stage: 'Stage', track: 'Track' };
-const LIST_HELP = {
+type Patch = ApiBody<'PATCH /api/admin/lookups/:list/:id'>;
+type Group = { key: string; label: string; help?: string };
+type RoleDefinition = { role: string; label: string; groups?: string[] | null };
+
+const LIST_NAMES: Record<ListName, string> = { status: 'Status', stage: 'Stage', track: 'Track' };
+const LIST_HELP: Record<ListName, string> = {
   status: 'Where each job stands. The group decides which filter shows it, whether it is archived automatically, and how the inbox moves it.',
   stage: 'Where a job sits in your workflow. The group decides whether scoring promotes from it, whether it counts as your working list, or whether it is archived.',
   track: 'The kind of role. Each track chooses its scoring prompt and whether pay and hours show.',
 };
 const PROMPTS = { score: 'Full-time scoring', 'score-fractional': 'Fractional scoring' };
 
-function ValueRow({ list, v, first, last, groups, roleNames, onChange, busy }) {
+function ValueRow({ list, v, first, last, groups, roleNames, onChange, busy }: {
+  list: ListName;
+  v: LookupValue;
+  first: boolean;
+  last: boolean;
+  groups: Group[];
+  roleNames: string[];
+  onChange: (patch: Patch) => void;
+  busy: boolean;
+}) {
   const [label, setLabel] = useState(v.label);
   useEffect(() => setLabel(v.label), [v.label]);
   return (
@@ -33,7 +48,7 @@ function ValueRow({ list, v, first, last, groups, roleNames, onChange, busy }) {
       <td>
         {list === 'track' ? (
           <>
-            <select value={v.settings.scorePrompt ?? 'score'} onChange={(e) => onChange({ settings: { scorePrompt: e.target.value } })} disabled={busy} aria-label="Scoring prompt">
+            <select value={v.settings.scorePrompt ?? 'score'} onChange={(e) => onChange({ settings: { scorePrompt: e.target.value as 'score' | 'score-fractional' } })} disabled={busy} aria-label="Scoring prompt">
               {Object.entries(PROMPTS).map(([k, l]) => (
                 <option key={k} value={k}>{l}</option>
               ))}
@@ -70,43 +85,43 @@ function ValueRow({ list, v, first, last, groups, roleNames, onChange, busy }) {
 // Admin > Lists: add, rename, regroup, reorder, archive, and restore status, stage, and track values.
 export default function ListsAdmin() {
   const shared = useLookups();
-  const [data, setData] = useState(null);
-  const [list, setList] = useState('status');
+  const [data, setData] = useState<ApiResponse<'GET /api/admin/lookups'> | null>(null);
+  const [list, setList] = useState<ListName>('status');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const [newLabel, setNewLabel] = useState('');
   const [newGroup, setNewGroup] = useState('');
 
   useEffect(() => {
-    api.adminLookups().then(setData).catch((err) => setError(err.message));
+    api.adminLookups().then(setData).catch((err) => setError((err as Error).message));
   }, []);
 
-  const run = async (fn) => {
+  const run = async (fn: () => Promise<ApiResponse<'GET /api/admin/lookups'>>) => {
     setBusy(true);
     setError(null);
     try {
       setData(await fn());
       void shared.refresh(); // refresh catches its own errors
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
     } finally {
       setBusy(false);
     }
   };
 
   if (!data) return <div className="muted">{error ?? 'Loading…'}</div>;
-  const values = data.lists[list];
-  const groups = data.groups[list];
-  const roles = data.roles[list];
-  const roleDefs = data.roleDefinitions[list];
-  const roleNamesOf = (id) => roleDefs.filter((r) => roles[r.role] === id).map((r) => r.label);
+  const values: LookupValue[] = data.lists[list];
+  const groups: Group[] = data.groups[list];
+  const roles: Record<string, string | null | undefined> = data.roles[list];
+  const roleDefs: RoleDefinition[] = data.roleDefinitions[list];
+  const roleNamesOf = (id: string) => roleDefs.filter((r) => roles[r.role] === id).map((r) => r.label);
   const groupKey = newGroup || groups[0].key;
 
   return (
     <div className="lists-admin">
       <div className="segmented" role="tablist" aria-label="List">
         {Object.entries(LIST_NAMES).map(([k, l]) => (
-          <button key={k} role="tab" aria-selected={list === k} className={list === k ? 'on' : ''} onClick={() => setList(k)}>
+          <button key={k} role="tab" aria-selected={list === k} className={list === k ? 'on' : ''} onClick={() => setList(k as ListName)}>
             {l}
           </button>
         ))}

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api.ts';
 import { useDemo } from '../demo.tsx';
-import { DashIcon } from './DashIcon.jsx';
+import { DashIcon } from './DashIcon.tsx';
 
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
 
