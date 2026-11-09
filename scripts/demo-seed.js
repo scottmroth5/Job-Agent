@@ -23,20 +23,36 @@ import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_
 import { saveCheck } from '../agents/letter-checks.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.ts';
+/** @import { Database as Db } from '../tools/types.ts' */
+
+/** @typedef {typeof JOBS[number]} Job one sample job (demo/sample-data.ts) */
 
 const MARKER = 'demo_database';
 const LETTER_MODEL = 'claude-sonnet-5-5';
 
-/** Builds the demo database at dbPath (and its config beside it). Returns counts. now is injectable for tests. */
+/**
+ * Builds the demo database at dbPath (and its config beside it). Returns counts. now is injectable for tests.
+ * @param {{ dbPath?: string, configPath?: string, now?: Date, prompts?: ReturnType<typeof samplePrompts> }} [opts]
+ */
 export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataPath('config', 'job-search.json'), now = new Date(), prompts = samplePrompts() } = {}) {
+  /**
+   * @param {number} days
+   * @param {number} [hour]
+   * @param {number} [minute]
+   */
   const at = (days, hour = 9, minute = 0) => {
     const d = new Date(now);
     d.setDate(d.getDate() - days);
     d.setHours(hour, minute, 0, 0);
     return d;
   };
+  /**
+   * @param {number} days
+   * @param {number} [hour]
+   * @param {number} [minute]
+   */
   const iso = (days, hour, minute) => at(days, hour, minute).toISOString();
-  const day = (days) => localDay(at(days));
+  const day = (/** @type {number} */ days) => localDay(at(days));
 
   mkdirSync(dirname(configPath), { recursive: true });
   writeFileSync(configPath, `${JSON.stringify(DEMO_CONFIG, null, 2)}\n`);
@@ -55,7 +71,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?)`);
   // Each sample score records the version of the scoring prompt in effect (the sample edit where there is one), as a
   // real score does, so the job panel's score details show it.
-  const scoreVersion = (job) => {
+  const scoreVersion = (/** @type {Job} */ job) => {
     const name = job.track === 'fractional' ? 'score-fractional' : 'score';
     return versionOf(name, prompts.find((p) => p.name === name)?.template ?? defaultPrompt(name).template);
   };
@@ -74,6 +90,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
       duration_ms, created_at) VALUES (?, ?, ?, 'end_turn', ?, ?, ?, ?, ?, ?)`);
 
   // Pipeline history: Monday and Thursday mornings over the last nine weeks, plus the inbox checks after each.
+  /** @type {Array<{ id: number, days: number }>} */
   const runIds = [];
   for (let days = 63; days >= 0; days -= 1) {
     const d = at(days, 6, 0);
@@ -96,7 +113,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     insertCall.run(Number(inbox), 'inbox-classify', 'claude-haiku-4-5', 2400, 150, 0, 0.004, 1500, finished);
     runIds.push({ id, days });
   }
-  const runFor = (days) => (runIds.find((r) => r.days <= days + 3 && r.days >= days) ?? runIds.at(-1)).id;
+  const runFor = (/** @type {number} */ days) => (runIds.find((r) => r.days <= days + 3 && r.days >= days) ?? /** @type {{ id: number }} */ (runIds.at(-1))).id; // the history above always has runs
 
   let postings = 0;
   let emails = 0;
@@ -157,16 +174,17 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
       insertHistory.run(id, status, 'applied', 'user', iso(job.applied, 10, 15));
       status = 'applied';
     }
-    for (const [to, days] of job.history ?? []) {
+    for (const [to, days] of /** @type {Array<[string, number]>} */ (job.history ?? [])) {
       insertHistory.run(id, status, to, ['passed', 'closed'].includes(to) ? 'user' : 'agent', iso(days, 14, 30));
       status = to;
     }
 
-    for (const [daysAgo, body] of job.notes ?? []) addNote(db, id, body, { source: 'user', now: at(daysAgo, 17, 10) });
-    if (job.closeNote) addNote(db, id, job.closeNote, { source: 'user', now: at((job.history?.at(-1)?.[1] ?? job.days) - 0, 18, 0) });
+    // The sample data's tuples ([days ago, text], [type, days ago, subject, summary], [kind, due in, note]) infer as arrays.
+    for (const [daysAgo, body] of /** @type {Array<[number, string]>} */ (job.notes ?? [])) addNote(db, id, body, { source: 'user', now: at(daysAgo, 17, 10) });
+    if (job.closeNote) addNote(db, id, job.closeNote, { source: 'user', now: at((/** @type {Array<[string, number]> | undefined} */ (job.history)?.at(-1)?.[1] ?? job.days) - 0, 18, 0) });
 
     const threadId = `demo-thread-${id}`;
-    for (const [type, days, subject, summary] of job.emails ?? []) {
+    for (const [type, days, subject, summary] of /** @type {Array<[string, number, string, string]>} */ (job.emails ?? [])) {
       const emailId = randomUUID();
       insertEmail.run({
         id: emailId,
@@ -188,7 +206,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     }
     // An open reminder (an interview or a take home exercise coming up), tied to the job's latest email.
     if (job.reminder) {
-      const [kind, dueIn, note] = job.reminder;
+      const [kind, dueIn, note] = /** @type {[string, number, string]} */ (job.reminder);
       const lastEmail = db.prepare('SELECT id FROM emails WHERE posting_id = ? AND user_id = @uid ORDER BY sent_at DESC LIMIT 1').pluck().get(id) ?? null;
       insertReminder.run(randomUUID(), id, lastEmail, kind, at(dueIn, 13, 0).toISOString(), note, 'open', iso(1, 9, 0));
     }
@@ -230,7 +248,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
   db.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (@uid, 'search.excludedSites', ?, ?)").run(JSON.stringify(skipped), iso(12, 9, 0));
 
   const setResume = db.prepare('UPDATE artifacts SET resume_id = ? WHERE id = ? AND user_id = @uid');
-  for (const a of db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all()) {
+  for (const a of /** @type {Array<{ id: number, title: string }>} */ (db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all())) {
     setResume.run(pickResume(db, a.title)?.id ?? null, a.id);
   }
 
@@ -238,7 +256,10 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
   return { postings, emails, runs: runIds.length, prompts: prompts.length };
 }
 
-/** True when the database at path was made by this script (or does not exist yet). Opens it read-only. */
+/**
+ * True when the database at path was made by this script (or does not exist yet). Opens it read-only.
+ * @param {string} path
+ */
 export function isDemoDatabase(path) {
   if (!existsSync(path)) return true;
   const db = new Database(path, { readonly: true, fileMustExist: true });
@@ -260,8 +281,9 @@ export function samplePrompts() {
   });
 }
 
-const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const slug = (/** @type {string} */ s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+/** @param {Job} job */
 function description(job) {
   const what = companyBlurb(job.company);
   const lead = job.track === 'fractional' ? `${job.company} is looking for a part time engineering leader` : `${job.company} is hiring a ${job.title}`;
@@ -288,11 +310,20 @@ What you bring
 Location: ${job.location}.${pay}`;
 }
 
+/**
+ * @param {Job} job
+ * @param {number} i
+ * @param {string | null} text
+ */
 function analysisFor(job, i, text) {
+  /**
+   * @param {string[]} list
+   * @param {number} n
+   */
   const pick = (list, n) => Array.from({ length: n }, (_, k) => list[(i + k * 3) % list.length]);
   const strengths = pick(STRENGTHS, 3);
   // A location watch-out only where the job's own location says so, so no sample contradicts its posting.
-  const place = { hybrid: 'Hybrid schedule two days a week in the office', onsite: 'Onsite every day' }[job.workplace];
+  const place = /** @type {Record<string, string | undefined>} */ ({ hybrid: 'Hybrid schedule two days a week in the office', onsite: 'Onsite every day' })[job.workplace];
   const watchOuts = [...(place ? [place] : []), ...pick(WATCH_OUTS, job.score >= 8 ? 1 : 2)].slice(0, 2);
   const capped = !text && job.score > 5;
   const score = capped ? 5 : job.score;
@@ -326,6 +357,7 @@ function analysisFor(job, i, text) {
   };
 }
 
+/** @param {Job} job */
 function letter(job) {
   return `When I read that ${job.company} is ${companyBlurb(job.company)}, I recognized the stage you are in: the product works, customers depend on it, and the platform and team now have to grow faster than they were built to.
 
@@ -336,6 +368,10 @@ For the ${job.title} role, I would start by listening: to customers, to the team
 I would welcome a conversation about where ${job.company} is headed and how I can help it get there.`;
 }
 
+/**
+ * @param {Job} job
+ * @param {number} i
+ */
 function tweaks(job, i) {
   return `Summary: lead with regulated platform scaling and team growth; name ${job.company.split(' ')[0]}'s market in the first line.
 
@@ -346,6 +382,13 @@ function tweaks(job, i) {
 }
 
 // A case discussion (Arbor's 90 day plan): the CEO, with what the plan should cover and what is still unknown.
+/**
+ * @param {Db} db
+ * @param {number} postingId
+ * @param {Job} job
+ * @param {string} createdAt
+ * @param {number} runId
+ */
 function insertCasePrep(db, postingId, job, createdAt, runId) {
   const attendees = [{ name: 'Avery Brooks', role: 'CEO', firm: job.company, link: null, notes: 'Ran the first conversation; former site operations lead' }];
   const content = `# Meeting prep: ${job.company}, ${job.title}
@@ -382,6 +425,13 @@ A 60 minute video session with Avery Brooks (CEO) to walk through your 90 day pl
   );
 }
 
+/**
+ * @param {Db} db
+ * @param {number} postingId
+ * @param {Job} job
+ * @param {string} createdAt
+ * @param {number} runId
+ */
 function insertPrep(db, postingId, job, createdAt, runId) {
   if (job.prep === 'case') return insertCasePrep(db, postingId, job, createdAt, runId);
   const attendees = [

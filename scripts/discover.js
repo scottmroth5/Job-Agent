@@ -13,7 +13,9 @@ import { exitWhenDone } from '../tools/exit.ts';
 import { assertNoRunningRun } from '../tools/runs.ts';
 import { runDiscovery, SOURCES } from '../agents/discovery/discover.ts';
 
+/** @param {string[]} argv */
 function parseArgs(argv) {
+  /** @param {string} name */
   const get = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
   const names = get('sources')?.split(',').map((s) => s.trim().toLowerCase());
   const unknown = names?.filter((n) => !SOURCES[n]);

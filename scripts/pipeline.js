@@ -24,6 +24,12 @@ import { scorePostings, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts
 import { generateForPostings } from '../agents/hunt/generate.ts';
 import { archivePostings } from '../agents/hunt/archive.ts';
 import { collectReport, renderReport, sendReport } from '../agents/hunt/report.ts';
+/**
+ * @import { Run } from '@scottmroth5/agent-core'
+ * @import { OAuth2Client } from 'google-auth-library'
+ * @import { JobSearchConfig } from '../tools/config.ts'
+ * @import { UsersRow } from '../db/types.ts'
+ */
 
 const noEmail = process.argv.includes('--no-email');
 const userArg = process.argv.find((a) => a.startsWith('--user='));
@@ -32,8 +38,16 @@ const owner = uid === OWNER_ID;
 
 const STEPS = ['discover', 'score', 'hunt', 'archive', 'report'];
 
-/** Runs one step as its own traced run; returns its summary, or null when it failed. */
-async function step(tracer, name, fn, statusOf = () => 'ok') {
+/**
+ * Runs one step as its own traced run; returns its summary, or null when it failed.
+ * @template {object} T
+ * @param {ReturnType<typeof createJobTracer>} tracer
+ * @param {string} name
+ * @param {(run: Run) => Promise<T>} fn
+ * @param {(summary: T) => string} [statusOf]
+ * @returns {Promise<T | null>}
+ */
+async function step(tracer, name, fn, statusOf = (/** @type {T} */ _summary) => 'ok') {
   console.log(`[pipeline] Step ${STEPS.indexOf(name) + 1}/${STEPS.length}: ${name}`);
   const run = tracer.startRun(name);
   try {
@@ -41,8 +55,9 @@ async function step(tracer, name, fn, statusOf = () => 'ok') {
     run.finish(statusOf(summary), summary);
     return summary;
   } catch (err) {
-    run.log('error', `${name} failed: ${err.name}: ${err.message}`);
-    run.finish('failed', { error: `${err.name}: ${err.message}` });
+    const e = /** @type {Error} */ (err);
+    run.log('error', `${name} failed: ${e.name}: ${e.message}`);
+    run.finish('failed', { error: `${e.name}: ${e.message}` });
     return null;
   }
 }
@@ -51,9 +66,9 @@ async function main() {
   const started = new Date().toISOString();
   if (!Number.isInteger(uid) || uid < 1) throw new Error(`--user must be a user id, not "${userArg}"`);
   const store = openJobStore(undefined, { fallbackUid: uid });
-  const config = configFor(store.raw, uid, owner ? loadConfig() : null); // either way with the skipped sites from Settings
+  const config = configFor(store.raw, uid, owner ? loadConfig() : /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null))); // either way with the skipped sites from Settings; the file config is read for the owner only
   if (!owner) {
-    const user = store.raw.prepare('SELECT status FROM users WHERE id = ?').get(uid);
+    const user = /** @type {Pick<UsersRow, 'status'> | undefined} */ (store.raw.prepare('SELECT status FROM users WHERE id = ?').get(uid));
     if (user?.status !== 'active') throw new Error(`User ${uid} is not an active account.`);
     if (!config.ready) throw new Error('Set up your search (terms, title keywords, and locations) under Settings first.');
   }
@@ -62,6 +77,7 @@ async function main() {
   const pipelineRun = tracer.startRun('pipeline');
   // Google (Docs, Drive, the report email) is the owner's sign-in; others' runs never touch it.
   const auth = owner ? getGoogleAuth() : null;
+  const ownerAuth = /** @type {OAuth2Client} */ (auth); // read only where owner is true
   const { serper, ...freeSources } = SOURCES;
   const browser = await createBrowser();
 
@@ -76,18 +92,19 @@ async function main() {
       (s) => (Object.values(s.bySource).some((x) => x.errors.length || x.rateLimited) ? 'partial' : 'ok'),
     );
 
+    /** @type {string | null} */
     let knowledge = null;
     try {
       knowledge = owner ? await ownerBackground(store) : profileForAI(store.raw, uid);
     } catch (err) {
-      pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${err.message}`);
+      pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${/** @type {Error} */ (err).message}`);
     }
     const claude = createJobClaude(store.db);
     if (knowledge) {
       await step(tracer, 'score', (run) => scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run }), (s) =>
         s.aborted ? 'aborted' : s.failures.length ? 'partial' : 'ok',
       );
-      await step(tracer, 'hunt', (run) => generateForPostings({ store, config, claude, knowledge, drive: owner ? createDriveClient(auth) : null, run }), (s) =>
+      await step(tracer, 'hunt', (run) => generateForPostings({ store, config, claude, knowledge, drive: owner ? createDriveClient(ownerAuth) : null, run }), (s) =>
         s.aborted ? 'aborted' : s.failures.length || s.docFailures.length ? 'partial' : 'ok',
       );
     }
@@ -105,7 +122,7 @@ async function main() {
     } else {
       const to = process.env.EMAIL_ADDRESS;
       if (!to) throw new Error('EMAIL_ADDRESS is not set in .env; the report was not sent.');
-      const r = await sendReport({ db: store.db, auth, to, since: started });
+      const r = await sendReport({ db: store.db, auth: ownerAuth, to, since: started });
       console.log(`Sent "${r.subject}" (${r.text}).`);
     }
   } catch (err) {
@@ -118,11 +135,15 @@ async function main() {
 }
 
 // The user's own time zone for their calendar days (read before the store is opened in main; none for the owner).
+/**
+ * @param {number} id
+ * @returns {string | null}
+ */
 function timeZoneOf(id) {
   if (id === OWNER_ID || !Number.isInteger(id)) return null;
   const store = openJobStore(undefined, { fallbackUid: id, snapshot: false });
   try {
-    return store.raw.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(id) ?? null;
+    return /** @type {string | null | undefined} */ (store.raw.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(id)) ?? null;
   } finally {
     store.close();
   }

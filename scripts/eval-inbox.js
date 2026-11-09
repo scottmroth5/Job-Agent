@@ -11,9 +11,12 @@ import { loadInboxConfig } from '../agents/inbox/config.ts';
 import { getPrompt } from '../agents/prompts.ts';
 import { runInboxEval, estimateInboxEval } from '../evals/inbox/run.js';
 import { inboxMetrics } from '../evals/inbox/metrics.js';
+/** @import { ClassifiedResult } from '../evals/inbox/metrics.js' */
 
 const argv = process.argv.slice(2);
+/** @param {string} name */
 const get = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
+/** @param {number | null} x */
 const pct = (x) => (x == null ? '-' : `${Math.round(x * 100)}%`);
 
 async function main() {
@@ -41,7 +44,8 @@ async function main() {
     console.log(`Match accuracy:          ${pct(m.matchAccuracy)} of ${m.classified} classified emails (${m.wrongLinks} linked to the wrong application)`);
     console.log(`Classification accuracy: ${pct(m.classificationAccuracy)}`);
     console.log(`Sent to review: ${pct(m.reviewRate)}; matched by rule: ${pct(m.ruleMatchRate)}`);
-    const misses = results.filter((r) => r.passed && (r.predicted.type !== r.expected.type || (r.predicted.applicationId ?? null) !== (r.expected.applicationId ?? null)));
+    const classified = /** @type {ClassifiedResult[]} */ (results.filter((r) => r.passed)); // a passed email was classified
+    const misses = classified.filter((r) => (r.predicted.type !== r.expected.type || (r.predicted.applicationId ?? null) !== (r.expected.applicationId ?? null)));
     if (misses.length) {
       console.log('\nMisses (synthetic case ids):');
       for (const r of misses) console.log(`  ${r.id}: expected ${r.expected.type} #${r.expected.applicationId ?? '-'}, got ${r.predicted.type} #${r.predicted.applicationId ?? '-'}${r.predicted.reviewStatus === 'needs_review' ? ' (review)' : ''}`);

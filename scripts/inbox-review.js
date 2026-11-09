@@ -11,9 +11,18 @@ import { loadKey } from '../agents/inbox/crypto.ts';
 import { trimBody } from '../agents/inbox/atsParse.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { listNeedsReview, resolveReview } from '../agents/inbox/review.ts';
+/**
+ * @import { Interface } from 'node:readline/promises'
+ * @import { Database } from '../tools/types.ts'
+ */
 
+/** @type {Record<string, string | undefined>} */
 const TYPE_LABEL = { confirmation: 'Confirmation', rejection: 'Rejection', recruiter_outreach: 'Recruiter outreach', interview_request: 'Interview request', assessment: 'Assessment', offer: 'Offer', follow_up: 'Follow-up', other: 'Other' };
 
+/**
+ * @param {Interface} rl
+ * @param {Database} db
+ */
 async function pickApplication(rl, db) {
   const open = listOpenApplications(db);
   for (;;) {
@@ -52,7 +61,7 @@ async function main() {
     for (const [i, e] of queue.entries()) {
       console.log(`${'-'.repeat(70)}\n${i + 1}/${queue.length}  ${e.sent_at.slice(0, 10)}  ${e.sender}`);
       console.log(`  Subject:  ${e.subject ?? ''}`);
-      console.log(`  Type:     ${TYPE_LABEL[e.type] ?? e.type} (confidence ${Number(e.confidence ?? 0).toFixed(2)})`);
+      console.log(`  Type:     ${TYPE_LABEL[e.type ?? ''] ?? e.type} (confidence ${Number(e.confidence ?? 0).toFixed(2)})`);
       console.log(`  Summary:  ${e.summary ?? ''}`);
       if (e.review_reason) console.log(`  Why:      ${e.review_reason}`);
       console.log(`  Guess:    ${e.guess ? `#${e.guess.id} ${e.guess.title} at ${e.guess.company} (${e.guess.status})` : 'none'}`);
@@ -74,7 +83,7 @@ async function main() {
         for (const n of r.notices.filter((n) => !n.startsWith('Needs review'))) console.log(`  ${n}`);
         if (choice === 'opportunity') console.log(`  Created job #${r.postingId} in Discovered.`);
       } catch (err) {
-        console.log(`  Not saved: ${err.message}`);
+        console.log(`  Not saved: ${/** @type {Error} */ (err).message}`);
       }
     }
     console.log(`\nResolved ${done} of ${queue.length}.`);

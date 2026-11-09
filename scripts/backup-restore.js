@@ -8,6 +8,7 @@ import { createBackupDrive } from '../tools/backup/drive.ts';
 import { DRIVE_FOLDER, isBackupName, restoreBackup } from '../tools/backup/run.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
 
+/** @param {string} flag */
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
   return i > 0 ? process.argv[i + 1] : undefined;
@@ -29,7 +30,7 @@ async function main() {
     file = readFileSync(which);
   }
   mkdirSync(dirname(resolve(out)), { recursive: true });
-  const r = restoreBackup({ file, passphrase: process.env.JOB_BACKUP_PASSPHRASE, outPath: resolve(out) });
+  const r = restoreBackup({ file, passphrase: /** @type {string} */ (process.env.JOB_BACKUP_PASSPHRASE), outPath: resolve(out) });
   console.log(`Restored and checked: ${r.database}${r.restoredDir ? `, plus ${r.files} files in ${r.restoredDir}` : ''}`);
   console.log('To use it: stop the server, move data\\job-agent.db (and data\\attachments) aside, then put the restored');
   console.log('database at data\\job-agent.db, restored\\attachments at data\\attachments, and restored\\config\\job-search.json');

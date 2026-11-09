@@ -15,6 +15,11 @@ import { CONTENT_SECURITY_POLICY } from '../server/security.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SKIP = ['node_modules', '.git', 'data', 'legacy', 'dist'];
+/**
+ * @param {string} dir
+ * @param {string[]} [out]
+ * @returns {string[]}
+ */
 const files = (dir, out = []) => {
   for (const name of readdirSync(dir)) {
     if (SKIP.includes(name)) continue;
@@ -25,6 +30,7 @@ const files = (dir, out = []) => {
   return out;
 };
 
+/** @type {Array<[RegExp, string]>} */
 const BROWSER_SINKS = [
   [/\.innerHTML\s*[+]?=/, 'innerHTML assignment'],
   [/\.outerHTML\s*[+]?=/, 'outerHTML assignment'],
@@ -37,6 +43,7 @@ const BROWSER_SINKS = [
 ];
 
 // Where a child process may start, and why: each runs fixed commands, never text from a request.
+/** @type {Record<string, string | undefined>} */
 const CHILD_PROCESS_ALLOWED = {
   'server/main.ts': 'runs scripts/pipeline.js and scripts/backup.js as their own processes',
   'scripts/check-personal.js': 'reads staged files from git in the pre-commit hook',
@@ -46,11 +53,16 @@ const CHILD_PROCESS_ALLOWED = {
 
 /** Every problem found: [{ file, line, rule }]. */
 export function securityProblems(root = ROOT) {
+  /** @type {Array<{ file: string, line: number, rule: string }>} */
   const problems = [];
   for (const file of files(root)) {
     const rel = relative(root, file).replaceAll('\\', '/');
     if (rel === 'scripts/security-check.js' || rel.startsWith('test/')) continue;
     const lines = readFileSync(file, 'utf8').split(/\r?\n/);
+    /**
+     * @param {number} i
+     * @param {string} rule
+     */
     const add = (i, rule) => problems.push({ file: rel, line: i + 1, rule });
     lines.forEach((text, i) => {
       // Raw control characters hide in code (write them as \u escapes); tab and the line ending are fine.

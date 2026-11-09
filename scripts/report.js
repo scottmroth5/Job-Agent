@@ -20,7 +20,7 @@ try {
     console.log(`Sent "${r.subject}" (${r.text}).`);
   }
 } catch (err) {
-  console.error(err.message);
+  console.error(/** @type {Error} */ (err).message);
   process.exitCode = 1;
 } finally {
   store.close();

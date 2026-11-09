@@ -4,5 +4,5 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "checkJs": true },
-  "include": ["evals", "types"]
+  "include": ["evals", "scripts", "types"]
 }

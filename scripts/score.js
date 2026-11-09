@@ -21,7 +21,9 @@ import {
   selectPostings,
 } from '../agents/discovery/score.ts';
 
+/** @param {string[]} argv */
 function parseArgs(argv) {
+  /** @param {string} name */
   const get = (name) => argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
   const model = get('model') ?? process.env.SCORE_MODEL ?? DEFAULT_SCORE_MODEL;
   if (!MODEL_SETTINGS[model]) throw new Error(`Unknown model "${model}". Known: ${Object.keys(MODEL_SETTINGS).join(', ')}`);
@@ -44,7 +46,8 @@ async function main() {
       const rule = postings.filter((p) => p.location_check === 'conflict').length;
       const usd = estimateCost(postings, { model: args.model, config, knowledgeChars: 10000, templateChars: loadScorePrompt('fulltime', store.db).template.length });
       console.log(`DRY RUN: ${postings.length} postings to score with ${args.model} (${rule} by location rule, no AI call).`);
-      console.log(`Estimated cost: about $${usd.toFixed(2)}.`);
+      console.log(`Estimated cost: about $${/** @type {number} */ (usd).toFixed(2)}.`);
+      /** @type {Record<string, number>} */
       const byCheck = {};
       for (const p of postings) byCheck[p.location_check ?? 'none'] = (byCheck[p.location_check ?? 'none'] ?? 0) + 1;
       console.log(`By location check: ${Object.entries(byCheck).map(([k, v]) => `${k} ${v}`).join(', ')}`);
@@ -68,7 +71,7 @@ async function main() {
       const totals = run.finish(summary.aborted ? 'aborted' : summary.failures.length ? 'partial' : 'ok', summary);
 
       console.log(`\nScored ${summary.scored} of ${summary.selected} postings with ${args.model} (${summary.ruleScored} by location rule).`);
-      const dist = Object.entries(summary.distribution).sort(([a], [b]) => b - a).map(([s, n]) => `${s}: ${n}`).join('  ');
+      const dist = Object.entries(summary.distribution).sort(([a], [b]) => Number(b) - Number(a)).map(([s, n]) => `${s}: ${n}`).join('  ');
       console.log(`Scores: ${dist || 'none'}`);
       console.log(`Promoted to pipeline (score ${PROMOTE_AT}+): ${summary.promoted.length}`);
       if (summary.failures.length) {

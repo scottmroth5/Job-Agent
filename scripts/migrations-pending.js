@@ -15,6 +15,6 @@ try {
     process.exitCode = 10;
   }
 } catch (err) {
-  console.error(`migrations pending: check failed: ${err.name}: ${err.message}`);
+  console.error(`migrations pending: check failed: ${/** @type {Error} */ (err).name}: ${/** @type {Error} */ (err).message}`);
   process.exitCode = 1;
 }
