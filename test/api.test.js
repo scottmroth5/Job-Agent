@@ -4,39 +4,41 @@ import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { assertSafeBinding } from '../server/auth.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { JsonRow } from './fixtures/fakes.js' */
 
 // Synthetic config, knowledge and postings only.
-const config = {
+const config = fakeConfig({
   candidate: { name: 'Pat Example', signoffName: 'Pat' },
   search: { homeAreaLabel: 'the Anytown area', homeLocations: ['Anytown, ST'] },
   fractional: { targetAnnual: [200000, 250000], weeksPerYear: 48 },
   coverLetterChecks: [],
-};
+});
 const KNOWLEDGE = 'Section 5: Job Targets. Engineering leadership. '.repeat(20);
 const DESCRIPTION = 'Lead the platform engineering team through a growth phase with hands on architecture reviews. '.repeat(3);
 
 function services() {
   const client = {
     messages: {
-      create: async (params) => {
+      create: async (/** @type {{ model: string, output_config?: { format?: object } }} */ params) => {
         const scoring = Boolean(params.output_config?.format);
         const data = { score: 8, fit: 'High', reason: 'Strong fit', whyItFits: 'w', caveats: '', rate: { min: null, max: null, unit: 'unknown' }, hoursPerWeek: { min: null, max: null }, roleType: 'Full time', locationConcern: 'none', strengths: ['Scale'], watchOuts: [], topTalkingPoint: 'Growth', suggestedStatus: 'worth_pursuing' };
         return { id: 'm', model: params.model, stop_reason: 'end_turn', content: [{ type: 'text', text: scoring ? JSON.stringify(data) : 'Body paragraph.' }], usage: { input_tokens: 10, output_tokens: 5 } };
       },
     },
   };
-  return {
+  return fakeServices({
     claude: createClaude({ client }),
     knowledge: async () => KNOWLEDGE,
     drive: { getFile: async () => ({}), createFolder: async () => 'f', createDocFromHtml: async () => ({ id: 'd', url: 'https://docs.example.com/d' }) },
     http: { get: async () => { throw new Error('no network in tests'); }, sleep: async () => {} },
     createBrowser: async () => null,
-  };
+  });
 }
 
 async function setup() {
   const store = openJobStore(':memory:');
-  const add = (o) =>
+  const add = (/** @type {Record<string, string | number | null>} */ o) =>
     Number(
       store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, rate_text, rate_min, rate_max, rate_unit,
           hours_min, hours_max, fetched_text, location, discovered_on, created_at, updated_at)
@@ -57,7 +59,7 @@ test('list filters by track and stage and shows fit, pay, annualized estimate an
   const all = (await app.inject('/api/postings')).json();
   assert.equal(all.length, 3);
   const fractional = (await app.inject('/api/postings?track=fractional')).json();
-  assert.deepEqual(fractional.map((p) => p.id), [ids.frac]);
+  assert.deepEqual(fractional.map((/** @type {JsonRow} */ p) => p.id), [ids.frac]);
   const row = fractional[0];
   assert.deepEqual([row.score, row.fit, row.rate.unit, row.hours.min], [9, 'High', 'hour', 15]);
   assert.deepEqual(row.annualized, { low: 144000, mid: 144000, high: 144000 });
@@ -98,21 +100,25 @@ test('adding a job runs as a task with progress steps; actions score and write m
   const res = await app.inject({ method: 'POST', url: '/api/postings', payload: { title: 'Head of Engineering', company: 'Added Co', description: DESCRIPTION, url: '' } });
   assert.equal(res.statusCode, 202);
   const task = await app.tasks.wait(res.json().taskId);
-  assert.equal(task.status, 'done', task.error);
-  assert.equal(task.result.created, true);
+  assert.ok(task);
+  assert.equal(task.status, 'done', task.error ?? undefined);
+  assert.equal(/** @type {{ created: boolean }} */ (task.result).created, true);
   assert.ok(task.steps.some((s) => /Scored 8 of 10/.test(s.message)));
   assert.equal((await app.inject(`/api/tasks/${res.json().taskId}`)).json().status, 'done');
 
   const bad = await app.inject({ method: 'POST', url: '/api/postings', payload: { description: 'short' } });
   const badTask = await app.tasks.wait(bad.json().taskId);
+  assert.ok(badTask);
   assert.equal(badTask.status, 'failed');
-  assert.match(badTask.error, /enter the job title and company|very short/);
+  assert.match(badTask.error ?? '', /enter the job title and company|very short/);
 
   const scoreTask = await app.tasks.wait((await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/score` })).json().taskId);
-  assert.equal(scoreTask.status, 'done', scoreTask.error);
+  assert.ok(scoreTask);
+  assert.equal(scoreTask.status, 'done', scoreTask.error ?? undefined);
   const writeTask = await app.tasks.wait((await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/write-materials` })).json().taskId);
-  assert.equal(writeTask.status, 'done', writeTask.error);
-  assert.equal(writeTask.result.docs, 1);
+  assert.ok(writeTask);
+  assert.equal(writeTask.status, 'done', writeTask.error ?? undefined);
+  assert.equal(/** @type {{ docs: number }} */ (writeTask.result).docs, 1);
   assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/explode` })).statusCode, 400);
 
   const runs = store.db.prepare("SELECT name FROM runs WHERE name LIKE 'ui-%' ORDER BY id").pluck().all();
@@ -125,7 +131,8 @@ test('writing materials for a Discovered job moves it to the promote stage first
   const { app, store, ids } = await setup();
   store.db.prepare('UPDATE postings SET fetched_text = ? WHERE id = ?').run(DESCRIPTION, ids.found);
   const task = await app.tasks.wait((await app.inject({ method: 'POST', url: `/api/postings/${ids.found}/actions/write-materials` })).json().taskId);
-  assert.equal(task.status, 'done', task.error);
+  assert.ok(task);
+  assert.equal(task.status, 'done', task.error ?? undefined);
   assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(ids.found), 'pipeline');
   await app.close();
   store.close();
@@ -135,7 +142,7 @@ test('with no AI here, adding a job and the AI actions are refused with 503 befo
   const store = openJobStore(':memory:');
   const id = Number(store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, discovered_on, created_at, updated_at)
     VALUES (1, 'https://jobs.example.com/9', 'k9', 'Nine Co', 'CTO', 'k9', 'LinkedIn', 'pipeline', 'new', 'fulltime', '2026-09-30', 'x', 'x')`).run().lastInsertRowid);
-  const app = await buildApp({ store, config, services: { ...services(), claude: null } });
+  const app = await buildApp({ store, config, services: fakeServices({ ...services(), claude: null }) });
   const add = await app.inject({ method: 'POST', url: '/api/postings', payload: { title: 'CTO', company: 'Added Co', description: DESCRIPTION } });
   assert.equal(add.statusCode, 503);
   for (const action of ['score', 'write-materials', 'regenerate']) {
@@ -160,7 +167,7 @@ test('actions are refused while a pipeline run is in progress', async () => {
 test('admin: list, view, preview, save (validated), and restore prompts', async () => {
   const { app, store, ids } = await setup();
   const list = (await app.inject('/api/prompts')).json();
-  assert.deepEqual(list.map((p) => [p.name, p.source]), [['score', 'default'], ['score-fractional', 'default'], ['resume-tweaks', 'default'], ['cover-letter', 'default'], ['verify-letter', 'default'], ['meeting-prep', 'default'], ['find-contact', 'default'], ['inbox-classify', 'default']]);
+  assert.deepEqual(list.map((/** @type {JsonRow} */ p) => [p.name, p.source]), [['score', 'default'], ['score-fractional', 'default'], ['resume-tweaks', 'default'], ['cover-letter', 'default'], ['verify-letter', 'default'], ['meeting-prep', 'default'], ['find-contact', 'default'], ['inbox-classify', 'default']]);
 
   const score = (await app.inject('/api/prompts/score')).json();
   assert.ok(score.template.includes('{{company}}') && score.schema.includes('"score"') && score.required.includes('jobContentBlock'));

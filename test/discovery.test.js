@@ -8,6 +8,10 @@ import { resolveDetails } from '../agents/discovery/details.ts';
 import { runDiscovery } from '../agents/discovery/discover.ts';
 import { openJobStore } from '../db/index.ts';
 import { RateLimitedError, HttpError } from '../tools/http.ts';
+import { fakeConfig, fakeHttp as asHttp, fakeItem } from './fixtures/fakes.js';
+/** @import { JobItem, PageRenderer } from '../agents/discovery/types.ts' */
+/** @import { Source } from '../agents/discovery/discover.ts' */
+/** @import { Database } from '../tools/types.ts' */
 
 // All data below is made up; only the response shapes mirror the real sources.
 const LONG = 'Lead a platform engineering organization of forty engineers. '.repeat(10);
@@ -46,6 +50,7 @@ test('remoteok skips the metadata element and maps jobs', () => {
   );
 });
 
+/** @param {{ id: string, title: string, company: string, location: string, date: string }} c */
 const card = ({ id, title, company, location, date }) => `<li>
   <div class="base-card" data-entity-urn="urn:li:jobPosting:${id}">
     <a class="base-card__full-link" href="https://www.linkedin.com/jobs/view/x-at-y-${id}?refId=abc&amp;trk=z"></a>
@@ -98,10 +103,16 @@ test('serper parses company and title from common result formats', () => {
 });
 
 // ---------- details ----------
-const fakeHttp = (routes) => ({
-  calls: [],
+/**
+ * An http client that answers from routes ([url part, page text or an error]) and records each URL.
+ * @param {Array<[string, string | Error]>} routes
+ */
+const fakeHttp = (routes) => {
+  /** @type {string[]} */
+  const calls = [];
+  return Object.assign(asHttp({
   async get(url) {
-    this.calls.push(url);
+    calls.push(url);
     for (const [pattern, reply] of routes) {
       if (url.includes(pattern)) {
         if (reply instanceof Error) throw reply;
@@ -111,85 +122,94 @@ const fakeHttp = (routes) => ({
     throw new HttpError(url, 404);
   },
   sleep: async () => {},
-});
+  }), { calls });
+};
 
 test('details: source text, LinkedIn endpoint, JSON-LD, page text, then browser', async () => {
-  const fromSource = await resolveDetails({ description: LONG }, { http: fakeHttp([]) });
+  const fromSource = await resolveDetails(fakeItem({ description: LONG }), { http: fakeHttp([]) });
   assert.equal(fromSource.fetchMethod, 'source');
 
   const li = await resolveDetails(
-    { linkedinJobId: '4000000004' },
+    fakeItem({ linkedinJobId: '4000000004' }),
     { http: fakeHttp([['jobPosting/4000000004', `<div class="show-more-less-html__markup">${LONG}</div>`]]) },
   );
   assert.equal(li.fetchMethod, 'linkedin');
 
   const ld = { '@type': 'JobPosting', title: 'CTO', hiringOrganization: { name: 'Example Co' }, description: LONG, jobLocationType: 'TELECOMMUTE' };
   const viaLd = await resolveDetails(
-    { url: 'https://jobs.example.com/1', company: null, title: 'CTO' },
+    fakeItem({ url: 'https://jobs.example.com/1', company: null, title: 'CTO' }),
     { http: fakeHttp([['jobs.example.com/1', `<script type="application/ld+json">${JSON.stringify(ld)}</script>`]]) },
   );
   assert.deepEqual([viaLd.fetchMethod, viaLd.company, viaLd.workplace], ['jsonld', 'Example Co', 'remote']);
 
   // A Google redirect keeps the job site it lands on; other links keep their own address.
-  const landing = (to) => ({ get: async () => ({ status: 200, text: `<script type="application/ld+json">${JSON.stringify(ld)}</script>`, url: to }), sleep: async () => {} });
-  const viaGoogle = await resolveDetails({ url: 'https://www.google.com/goto?url=CAESabc' }, { http: landing('https://board.example.com/jobs/cto') });
+  const landing = (/** @type {string} */ to) => asHttp({ get: async () => ({ status: 200, text: `<script type="application/ld+json">${JSON.stringify(ld)}</script>`, url: to }), sleep: async () => {} });
+  const viaGoogle = await resolveDetails(fakeItem({ url: 'https://www.google.com/goto?url=CAESabc' }), { http: landing('https://board.example.com/jobs/cto') });
   assert.equal(viaGoogle.url, 'https://board.example.com/jobs/cto');
-  const direct = await resolveDetails({ url: 'https://jobs.example.com/9' }, { http: landing('https://jobs.example.com/moved') });
+  const direct = await resolveDetails(fakeItem({ url: 'https://jobs.example.com/9' }), { http: landing('https://jobs.example.com/moved') });
   assert.equal(direct.url, 'https://jobs.example.com/9');
 
-  const viaHtml = await resolveDetails({ url: 'https://jobs.example.com/2' }, { http: fakeHttp([['jobs.example.com/2', `<p>${LONG.repeat(2)}</p>`]]) });
+  const viaHtml = await resolveDetails(fakeItem({ url: 'https://jobs.example.com/2' }), { http: fakeHttp([['jobs.example.com/2', `<p>${LONG.repeat(2)}</p>`]]) });
   assert.equal(viaHtml.fetchMethod, 'html');
 
   const shell = fakeHttp([['jobs.example.com/3', '<div id="app"></div>']]);
-  assert.equal((await resolveDetails({ url: 'https://jobs.example.com/3' }, { http: shell })).fetchStatus, 'needs_browser');
+  assert.equal((await resolveDetails(fakeItem({ url: 'https://jobs.example.com/3' }), { http: shell })).fetchStatus, 'needs_browser');
+  /** @type {PageRenderer} */
   const browser = { renderPage: async () => ({ html: '<p>rendered</p>', text: LONG }) };
-  assert.equal((await resolveDetails({ url: 'https://jobs.example.com/3' }, { http: shell, browser })).fetchMethod, 'browser');
+  assert.equal((await resolveDetails(fakeItem({ url: 'https://jobs.example.com/3' }), { http: shell, browser })).fetchMethod, 'browser');
 });
 
 test('details: bot-check pages are marked blocked, not treated as posting text', async () => {
   const check = 'example.com\nPerforming security verification\nThis website uses a security service to protect against malicious bots.';
   const shell = fakeHttp([['jobs.example.com/4', '<div id="app"></div>']]);
+  /** @type {PageRenderer} */
   const browser = { renderPage: async () => ({ html: '', text: check }) };
-  const item = await resolveDetails({ url: 'https://jobs.example.com/4' }, { http: shell, browser });
+  const item = await resolveDetails(fakeItem({ url: 'https://jobs.example.com/4' }), { http: shell, browser });
   assert.equal(item.fetchStatus, 'blocked');
   assert.equal(item.description, undefined);
 });
 
 test('details: a second LinkedIn 429 stops further LinkedIn requests', async () => {
   const http = fakeHttp([['jobPosting/', new RateLimitedError('https://www.linkedin.com/x')]]);
+  /** @type {{ linkedinBlocked?: boolean }} */
   const state = {};
-  assert.equal((await resolveDetails({ linkedinJobId: '1' }, { http, state })).fetchStatus, 'rate_limited');
+  assert.equal((await resolveDetails(fakeItem({ linkedinJobId: '1' }), { http, state })).fetchStatus, 'rate_limited');
   assert.equal(state.linkedinBlocked, true);
-  await resolveDetails({ linkedinJobId: '2' }, { http, state });
+  await resolveDetails(fakeItem({ linkedinJobId: '2' }), { http, state });
   assert.equal(http.calls.length, 2, 'the original request and one retry after the pause; none for the second job');
 });
 
 // ---------- full run ----------
-const config = {
+const config = fakeConfig({
   search: {
     terms: ['VP Engineering'],
     relevantTitleKeywords: ['vp', 'cto', 'head of engineering'],
     noiseTitleKeywords: ['intern'],
     homeLocations: ['Portland, OR', 'Beaverton, OR'],
   },
-};
+});
 
-const fakeSource = (SOURCE, items) => ({ SOURCE, search: async () => ({ items: items.map((i) => ({ source: SOURCE, ...i })), requests: 1, errors: [], rateLimited: false }) });
+/** @param {string} SOURCE @param {Partial<JobItem>[]} items @returns {Source} */
+const fakeSource = (SOURCE, items) => ({ SOURCE, search: async () => ({ items: items.map((i) => fakeItem({ source: SOURCE, ...i })), requests: 1, errors: [], rateLimited: false }) });
+/** @param {Partial<JobItem>} o @returns {Partial<JobItem>} */
 const base = (o) => ({ company: 'Example Co', location: 'Remote', workplace: 'remote', postedOn: '2026-09-28', description: LONG, ...o });
 
 test('a Google redirect is stored as the site it lands on, and dropped when that site is skipped', async () => {
   const store = openJobStore(':memory:');
   const page = `<script type="application/ld+json">${JSON.stringify({ '@type': 'JobPosting', title: 'CTO', hiringOrganization: { name: 'Example Co' }, description: LONG })}</script>`;
+  /** @type {Record<string, string>} */
   const lands = { 'CAESkept': 'https://jobs.example.com/cto', 'CAESskip': 'https://board.example.net/jobs/vp' };
-  const http = { get: async (url) => ({ status: 200, text: page, url: lands[new URL(url).searchParams.get('url')] }), sleep: async () => {} };
+  const http = asHttp({ get: async (url) => ({ status: 200, text: page, url: lands[String(new URL(url).searchParams.get('url'))] }), sleep: async () => {} });
+  /** @param {string} token @param {string} title */
   const google = (token, title) => ({ title, company: null, location: null, workplace: null, postedOn: '2026-09-28', url: `https://www.google.com/goto?url=${token}` });
   const sources = { serper: fakeSource('Google Jobs', [google('CAESkept', 'CTO'), google('CAESskip', 'VP Engineering')]) };
   const skipping = { ...config, search: { ...config.search, excludedSites: ['board.example.net'] } };
   const summary = await runDiscovery({ store, config: skipping, http, sources, now: new Date('2026-09-30T12:00:00Z'), options: { pauseMs: 0 } });
   assert.equal(summary.inserted, 1);
-  assert.deepEqual(store.db.prepare('SELECT url, title FROM postings').all().map((r) => [r.url, r.title]), [['https://jobs.example.com/cto', 'CTO']]);
+  assert.deepEqual(/** @type {Array<{ url: string, title: string }>} */ (store.db.prepare('SELECT url, title FROM postings').all()).map((r) => [r.url, r.title]), [['https://jobs.example.com/cto', 'CTO']]);
 });
 
+/** @param {Database} db @param {{ url: string, company: string, title: string, source?: string, stage?: string }} p */
 function seedPosting(db, { url, company, title, source = 'LinkedIn', stage = 'discovered' }) {
   db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage, created_at, updated_at)
     VALUES (1, ?, ?, ?, ?, ?, ?, '2026-09-01', ?, 'x', 'x')`).run(url, url.replace('https://', ''), company, title, `${company.toLowerCase()}|${title.toLowerCase()}`, source, stage);
@@ -214,7 +234,7 @@ test('runDiscovery filters, dedupes by priority, checks location, and stores new
   const summary = await runDiscovery({
     store,
     config,
-    http: { sleep: async () => {} },
+    http: asHttp({ sleep: async () => {} }),
     sources,
     now: new Date('2026-09-30T12:00:00Z'),
     options: { pauseMs: 0 },
@@ -228,7 +248,7 @@ test('runDiscovery filters, dedupes by priority, checks location, and stores new
   assert.equal(summary.bySource.LinkedIn.fresh, 3);
   assert.equal(summary.bySource.Himalayas.duplicates, 1);
 
-  const rows = store.db.prepare("SELECT source, title, location_check, stage, status, fetch_method FROM postings WHERE discovered_on = '2026-09-30' ORDER BY id").all();
+  const rows = /** @type {Array<{ source: string, title: string, location_check: string, stage: string, status: string, fetch_method: string }>} */ (store.db.prepare("SELECT source, title, location_check, stage, status, fetch_method FROM postings WHERE discovered_on = '2026-09-30' ORDER BY id").all());
   assert.deepEqual(rows.map((r) => [r.source, r.title, r.location_check]), [
     ['Himalayas', 'VP Engineering', 'remote'],
     ['LinkedIn', 'Head of Engineering', 'home'],
@@ -236,35 +256,38 @@ test('runDiscovery filters, dedupes by priority, checks location, and stores new
   ]);
   assert.ok(rows.every((r) => r.stage === 'discovered' && r.status === 'new' && r.fetch_method === 'source'));
   // The existing posting got a sighting from Himalayas and was upgraded to it.
-  const old = store.db.prepare("SELECT source FROM postings WHERE company = 'Old Co'").get();
+  const old = /** @type {{ source: string }} */ (store.db.prepare("SELECT source FROM postings WHERE company = 'Old Co'").get());
   assert.equal(old.source, 'Himalayas');
   assert.equal(store.db.prepare('SELECT COUNT(*) FROM posting_sightings').pluck().get(), 4);
 
   // A second identical run inserts nothing.
-  const again = await runDiscovery({ store, config, http: { sleep: async () => {} }, sources, now: new Date('2026-09-30T13:00:00Z'), options: { pauseMs: 0 } });
+  const again = await runDiscovery({ store, config, http: asHttp({ sleep: async () => {} }), sources, now: new Date('2026-09-30T13:00:00Z'), options: { pauseMs: 0 } });
   assert.equal(again.inserted, 0);
   store.close();
 });
 
 test('details: after the first LinkedIn 429 the run waits once and retries', async () => {
   let calls = 0;
+  /** @type {number[]} */
   const slept = [];
-  const http = {
+  const http = asHttp({
     async get() {
       calls += 1;
       if (calls === 1) throw new RateLimitedError('https://www.linkedin.com/x');
-      return { status: 200, text: `<div class="show-more-less-html__markup">${LONG}</div>` };
+      return /** @type {{ status: number, text: string, url: string }} */ ({ status: 200, text: `<div class="show-more-less-html__markup">${LONG}</div>` }); // no url, as before
     },
     sleep: async (ms) => slept.push(ms),
-  };
+  });
+  /** @type {{ linkedinBlocked?: boolean }} */
   const state = {};
-  assert.equal((await resolveDetails({ linkedinJobId: '5' }, { http, state })).fetchMethod, 'linkedin');
+  assert.equal((await resolveDetails(fakeItem({ linkedinJobId: '5' }), { http, state })).fetchMethod, 'linkedin');
   assert.deepEqual(slept, [60000]);
   assert.equal(state.linkedinBlocked, undefined);
 });
 
 test('runDiscovery retries recent postings whose text failed earlier, then stops after 3 attempts', async () => {
   const store = openJobStore(':memory:');
+  /** @param {string} url @param {number} attempts @param {string} [discoveredOn] */
   const insertPending = (url, attempts, discoveredOn = '2026-09-29') =>
     store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage,
       fetch_status, fetch_attempts, location, location_check, created_at, updated_at)
@@ -290,7 +313,7 @@ test('runDiscovery dry run writes nothing and a failing source does not stop the
     himalayas: { SOURCE: 'Himalayas', search: async () => { throw new Error('boom'); } },
     remoteok: fakeSource('RemoteOK', [base({ url: 'https://remoteok.com/1', title: 'CTO' })]),
   };
-  const summary = await runDiscovery({ store, config, http: { sleep: async () => {} }, sources, now: new Date('2026-09-30T12:00:00Z'), options: { dryRun: true } });
+  const summary = await runDiscovery({ store, config, http: asHttp({ sleep: async () => {} }), sources, now: new Date('2026-09-30T12:00:00Z'), options: { dryRun: true } });
   assert.equal(summary.wouldInsert, 1);
   assert.equal(summary.inserted, 0);
   assert.deepEqual(summary.bySource.Himalayas.errors, ['boom']);

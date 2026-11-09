@@ -5,9 +5,10 @@ import { readFileSync } from 'node:fs';
 import { judgeLetter, letterMetrics } from '../evals/letters/metrics.js';
 import { estimateLetterEval } from '../evals/letters/run.js';
 import { KINDS } from '../agents/hunt/verify-letter.ts';
+/** @import { JsonRow } from './fixtures/fakes.js' */
 
 const cases = JSON.parse(readFileSync(new URL('../evals/letters/cases.json', import.meta.url), 'utf8'));
-const flag = (claim, verdict = 'contradicted') => ({ claim, kind: 'other', verdict, evidence: '' });
+const flag = (/** @type {string} */ claim, verdict = 'contradicted') => ({ claim, kind: 'other', verdict, evidence: '' });
 
 test('a planted error is found only by a flagged claim that mentions it; other flags are extra', () => {
   const expect = { kind: 'credential', mentions: ['pmp'] };
@@ -31,6 +32,7 @@ test('totals: recall by kind, clean letters flagged, cost, and failures', () => 
 });
 
 test('the cases: every letter names a posting, every planted kind is real, each kind has two or more, and all addresses are examples', () => {
+  /** @type {Record<string, number>} */
   const kinds = {};
   for (const l of cases.letters) {
     assert.ok(cases.postings[l.posting], l.id);
@@ -40,8 +42,9 @@ test('the cases: every letter names a posting, every planted kind is real, each 
     }
   }
   for (const k of ['title', 'employer', 'number', 'credential', 'date']) assert.ok(kinds[k] >= 2, k);
-  assert.ok(cases.letters.filter((l) => !l.expect).length >= 4, 'clean letters');
+  assert.ok(cases.letters.filter((/** @type {JsonRow} */ l) => !l.expect).length >= 4, 'clean letters');
   for (const email of JSON.stringify(cases).match(/[\w.]+@[\w-]+(?:\.[\w-]+)+/g) ?? []) assert.match(email, /@example\.com$/);
   const est = estimateLetterEval(cases, ['claude-haiku-4-5', 'claude-sonnet-5-5']);
-  assert.ok(est['claude-sonnet-5-5'] > est['claude-haiku-4-5'] && est['claude-sonnet-5-5'] < 1);
+  const [sonnet, haiku] = [est['claude-sonnet-5-5'], est['claude-haiku-4-5']];
+  assert.ok(sonnet != null && haiku != null && sonnet > haiku && sonnet < 1);
 });

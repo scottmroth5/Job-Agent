@@ -4,6 +4,10 @@ import { randomBytes } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { assertSafeBinding, authSettings, safeNext } from '../server/auth.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { LightMyRequestResponse } from 'fastify' */
+/** @import { Exchange } from '../server/auth.ts' */
+/** @import { TokenPayload } from 'google-auth-library' */
 
 // Synthetic accounts and a fake Google exchange; no network.
 const SITE = 'http://localhost:5178';
@@ -16,21 +20,26 @@ const settings = authSettings({
   SESSION_SECRET: randomBytes(48).toString('base64'),
 });
 
+/** @param {{ claims?: { email_verified?: boolean, nonce?: string, email?: string }, exchangeError?: Error | null }} [o] */
 async function setup({ claims = {}, exchangeError = null } = {}) {
   const store = openJobStore(':memory:');
+  /** @type {Parameters<Exchange>[0][]} */
   const seen = [];
+  /** @type {Exchange} */
   const exchange = async (req) => {
     seen.push(req);
     if (exchangeError) throw exchangeError;
-    return { email: 'pat@example.com', email_verified: true, nonce: claims.nonce ?? currentNonce, ...claims };
+    // Only the claims sign-in reads; a real token has more.
+    return /** @type {TokenPayload} */ ({ email: 'pat@example.com', email_verified: true, nonce: claims.nonce ?? currentNonce, ...claims });
   };
+  /** @type {string | null} */
   let currentNonce = null;
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null }, authMode: 'google', auth: { settings, exchange } });
-  const cookiesFrom = (res) => [res.headers['set-cookie']].flat().filter(Boolean).map((c) => c.split(';')[0]).join('; ');
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }), authMode: 'google', auth: { settings, exchange } });
+  const cookiesFrom = (/** @type {LightMyRequestResponse} */ res) => /** @type {string[]} */ ([res.headers['set-cookie']].flat().filter(Boolean)).map((c) => c.split(';')[0]).join('; ');
   /** Starts a login and returns the login cookie plus Google's state and nonce. */
   const startLogin = async (next = '/') => {
     const res = await app.inject(`/auth/login?next=${encodeURIComponent(next)}`);
-    const url = new URL(res.headers.location);
+    const url = new URL(/** @type {string} */ (res.headers.location));
     currentNonce = url.searchParams.get('nonce');
     return { res, url, loginCookie: cookiesFrom(res), state: url.searchParams.get('state') };
   };
@@ -39,7 +48,7 @@ async function setup({ claims = {}, exchangeError = null } = {}) {
     const res = await app.inject({ url: `/auth/google/callback?state=${state}&code=abc`, headers: { cookie: loginCookie } });
     return { res, session: cookiesFrom(res).split('; ').find((c) => c.startsWith('ja_session=')) };
   };
-  return { store, app, seen, startLogin, signIn, setNonce: (n) => (currentNonce = n) };
+  return { store, app, seen, startLogin, signIn, setNonce: (/** @type {string | null} */ n) => (currentNonce = n) };
 }
 
 test('signed out: API routes return 401, pages redirect to sign-in, and /healthz stays open', async () => {
@@ -62,7 +71,7 @@ test('login sends you to Google with state, nonce, PKCE, and only openid email',
   assert.equal(url.searchParams.get('redirect_uri'), `${SITE}/auth/google/callback`);
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   for (const p of ['state', 'nonce', 'code_challenge', 'client_id']) assert.ok(url.searchParams.get(p), p);
-  assert.match(res.headers['set-cookie'], /^ja_login=.*HttpOnly; SameSite=Lax; Max-Age=600$/);
+  assert.match(/** @type {string} */ (res.headers['set-cookie']), /^ja_login=.*HttpOnly; SameSite=Lax; Max-Age=600$/);
   await app.close();
   store.close();
 });
@@ -79,23 +88,25 @@ test('an allowed, verified account gets a session and reaches the API; sign out 
   assert.equal((await app.inject({ url: '/api/postings', headers: { cookie: session } })).statusCode, 200);
 
   // Writes need this site's Origin.
-  const write = (origin) => app.inject({ method: 'PATCH', url: '/api/postings/999', headers: { cookie: session, ...(origin ? { origin } : {}) }, payload: { notes: 'x' } });
+  const write = (/** @type {string | null} */ origin) => app.inject({ method: 'PATCH', url: '/api/postings/999', headers: { cookie: session, ...(origin ? { origin } : {}) }, payload: { notes: 'x' } });
   assert.equal((await write('https://evil.example')).statusCode, 403);
   assert.equal((await write(null)).statusCode, 403);
   assert.equal((await write(SITE)).statusCode, 404, 'allowed through to the route (no such job)');
 
   const out = await app.inject({ method: 'POST', url: '/auth/logout', headers: { cookie: session, origin: SITE } });
   assert.equal(out.statusCode, 204);
-  assert.match(out.headers['set-cookie'], /^ja_session=; .*Max-Age=0/);
+  assert.match(/** @type {string} */ (out.headers['set-cookie']), /^ja_session=; .*Max-Age=0/);
   await app.close();
   store.close();
 });
 
 test('refused: unverified email, wrong state or nonce, expired login, Google errors (other addresses: test/registration.test.js)', async () => {
-  for (const [claims, status, text] of [
+  /** @type {Array<[{ email_verified?: boolean, nonce?: string }, number, RegExp]>} */
+  const cases = [
     [{ email_verified: false }, 403, /not verified/],
     [{ nonce: 'other' }, 400, /did not match/],
-  ]) {
+  ];
+  for (const [claims, status, text] of cases) {
     const { app, store, signIn } = await setup({ claims });
     const { res, session } = await signIn();
     assert.equal(res.statusCode, status, JSON.stringify(claims));
@@ -159,7 +170,7 @@ test('binding rules: none stays on localhost; google needs complete settings and
 
 test('open mode: /api/me reports no login', async () => {
   const store = openJobStore(':memory:');
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   assert.deepEqual((await app.inject('/api/me')).json(), { authMode: 'none', email: null, supportEmail: null, owner: true, role: 'admin' });
   assert.equal((await app.inject('/api/postings')).statusCode, 200);
   await app.close();

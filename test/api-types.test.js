@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { apiTypes, buildSpec, schemaToTs } from '../scripts/api-types.ts';
+/** @import { Schema } from '../scripts/api-types.ts' */
 
 test('schemas become TypeScript types', () => {
   assert.equal(schemaToTs({ type: 'string' }), 'string');
@@ -13,7 +14,7 @@ test('schemas become TypeScript types', () => {
   assert.equal(schemaToTs({ enum: ['a', 'b'] }), '"a" | "b"');
   assert.equal(schemaToTs({ const: 3 }), '3');
   assert.equal(schemaToTs({ type: 'object', nullable: true, enum: [null] }), 'null', "swagger's form of type null");
-  assert.equal(schemaToTs({ anyOf: [{ type: 'string' }, { type: 'object', nullable: true, enum: [null] }, { type: 'string', maxLength: 0 }] }), 'string | null');
+  assert.equal(schemaToTs({ anyOf: [{ type: 'string' }, { type: 'object', nullable: true, enum: [null] }, /** @type {Schema} */ ({ type: 'string', maxLength: 0 })] }), 'string | null');
   assert.equal(schemaToTs({ allOf: [{ type: 'string' }, { enum: ['x'] }] }), '(string) & ("x")');
   assert.equal(schemaToTs({ type: 'array', items: { type: 'integer' } }), 'number[]');
   assert.equal(schemaToTs({ type: 'array', items: { enum: ['a', 'b'] } }), 'Array<"a" | "b">');

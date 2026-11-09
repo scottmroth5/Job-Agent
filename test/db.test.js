@@ -1,9 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
+/** @import { Database } from '../tools/types.ts' */
 
 const now = '2026-01-01T00:00:00.000Z';
 
+/** @param {Database} db @param {Record<string, string>} [overrides] */
 function insertPosting(db, overrides = {}) {
   const row = {
     url: 'https://example.com/jobs/1',
@@ -42,7 +44,7 @@ test('defaults new postings to discovered/new and enforces allowed values', () =
 test('scores must be 1 to 10 and follow their posting on delete', () => {
   const store = openJobStore(':memory:');
   const id = insertPosting(store.db);
-  const addScore = (score) =>
+  const addScore = (/** @type {number} */ score) =>
     store.db.prepare("INSERT INTO scores (user_id, posting_id, score, source, created_at) VALUES (1, ?, ?, 'v2', ?)").run(id, score, now);
   addScore(8);
   assert.throws(() => addScore(11), /CHECK/);

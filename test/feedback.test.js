@@ -12,6 +12,8 @@ import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { FEEDBACK_PER_DAY } from '../server/feedback-routes.ts';
 import { saveUserConfig, saveUserProfile } from '../agents/user-config.ts';
 import { buildRawEmail } from '../tools/google/gmail.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { JsonRow, SentEmail } from './fixtures/fakes.js' */
 
 const SITE = 'http://localhost:5178';
 const OWNER = 'owner@example.com';
@@ -20,17 +22,18 @@ async function setup() {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: OWNER, SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
+  /** @type {SentEmail[]} */
   const sent = [];
   const notices = createNotices({ send: async (e) => sent.push(e), owner: () => OWNER, appUrl: () => SITE, log: {} });
-  const app = await buildApp({ store, config: { candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }, authMode: 'google', auth: { settings }, services: { createBrowser: async () => null, notices, log: { info() {}, warn() {}, error() {} } } });
-  const as = (email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
+  const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, notices, log: { info() {}, warn() {}, error() {} } }) });
+  const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
   const pat = addUser(store.raw, { email: 'pat@example.com', name: 'Pat' });
   return { store, app, sent, pat, asOwner: as(OWNER), asPat: as('pat@example.com'), done: async () => { await app.close(); store.close(); } };
 }
 
 test('feedback: saved as the sender\'s, emailed to the owner with the sender as reply-to, listed and closed by the admin', async () => {
   const { store, app, sent, pat, asOwner, asPat, done } = await setup();
-  const send = (headers, body) => app.inject({ method: 'POST', url: '/api/feedback', headers, payload: body });
+  const send = (/** @type {Record<string, string>} */ headers, /** @type {object} */ body) => app.inject({ method: 'POST', url: '/api/feedback', headers, payload: body });
   assert.equal((await send(asPat, { body: '   ' })).statusCode, 400);
   const res = await send(asPat, { body: 'The Settings page could use an example.', page: '#/settings<script>' });
   assert.equal(res.statusCode, 201);
@@ -65,17 +68,17 @@ test('the Users screen: last seen, last pipeline run, and setup; no one\'s backg
   saveUserProfile(store.raw, pat, 'A private background sentence. '.repeat(30));
   store.raw.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('pipeline', 'ok', '2026-10-26T10:00:00Z', ?)").run(pat);
   const res = await app.inject({ url: '/api/admin/users', headers: asOwner });
-  const p = res.json().find((u) => u.email === 'pat@example.com');
+  const p = res.json().find((/** @type {JsonRow} */ u) => u.email === 'pat@example.com');
   assert.ok(p.lastSeenAt, 'seen');
   assert.deepEqual(p.lastRun, { status: 'ok', startedAt: '2026-10-26T10:00:00Z' });
   assert.deepEqual(p.setup, { searchReady: true, profileReady: true, scheduled: false });
-  assert.equal(res.json().find((u) => u.owner).setup, null);
+  assert.equal(res.json().find((/** @type {JsonRow} */ u) => u.owner).setup, null);
   assert.ok(!res.body.includes('private background'), "the admin sees whether it is filled in, not what it says");
   await done();
 });
 
 test('reply-to is one plain address or nothing', () => {
-  const raw = (o) => Buffer.from(buildRawEmail({ to: OWNER, subject: 's', text: 'x', ...o }), 'base64url').toString('utf8');
+  const raw = (/** @type {{ replyTo?: string }} */ o) => Buffer.from(buildRawEmail({ to: OWNER, subject: 's', text: 'x', ...o }), 'base64url').toString('utf8');
   assert.match(raw({ replyTo: 'pat@example.com' }), /\r\nReply-To: pat@example\.com\r\n/);
   assert.ok(!/Reply-To/.test(raw({})));
   for (const bad of ['pat@example.com\r\nBcc: x@example.com', 'a@example.com, b@example.com', 'Pat <pat@example.com>']) {

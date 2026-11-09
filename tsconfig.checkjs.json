@@ -1,8 +1,39 @@
 // checkJs for the JavaScript that stays JavaScript (v3 Phase 2, step 10): scripts, evals, and test keep their .js
 // names (deploy.sh, compose.yml, and the Windows tasks run scripts/*.js by name) and are typed with JSDoc. Each
-// directory joins this list as it passes; when all have, the root config turns checkJs on and this file goes.
+// directory joins this list as it passes (test file by file, in three parts); when all have, the root config turns
+// checkJs on and this file goes.
 {
   "extends": "./tsconfig.json",
   "compilerOptions": { "checkJs": true },
-  "include": ["evals", "scripts", "types"]
+  "include": [
+    "evals",
+    "scripts",
+    "types",
+    "test/fixtures",
+    "test/about-you.test.js",
+    "test/account-data.test.js",
+    "test/alerts.test.js",
+    "test/api-inbox.test.js",
+    "test/api-lookups.test.js",
+    "test/api-types.test.js",
+    "test/api.test.js",
+    "test/attachments.test.js",
+    "test/auth.test.js",
+    "test/backup.test.js",
+    "test/browser.test.js",
+    "test/budget.test.js",
+    "test/db.test.js",
+    "test/demo-analytics.test.js",
+    "test/demo-samples.test.js",
+    "test/demo.test.js",
+    "test/discovery-tools.test.js",
+    "test/discovery.test.js",
+    "test/doc-text.test.js",
+    "test/duplicate-status.test.js",
+    "test/estimates.test.js",
+    "test/eval-letters.test.js",
+    "test/eval-score.test.js",
+    "test/excluded-sites.test.js",
+    "test/feedback.test.js"
+  ]
 }

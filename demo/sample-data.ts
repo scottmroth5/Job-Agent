@@ -28,7 +28,7 @@ export const DEMO_CONFIG = {
     siteSearch: false,
     excludedSites: [],
   },
-  fractional: { targetAnnual: [200000, 250000], weeksPerYear: 48 },
+  fractional: { targetAnnual: [200000, 250000] as [number, number], weeksPerYear: 48 },
   coverLetterChecks: [{ label: '"I am confident"', text: "\\bi am confident\\b|\\bi'm confident\\b" }],
   privateTerms: [],
   allowTerms: [],

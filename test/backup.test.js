@@ -8,21 +8,30 @@ import Database from 'better-sqlite3';
 import { decrypt, encrypt, pack, unpack } from '../tools/backup/crypto.ts';
 import { createBackupDrive } from '../tools/backup/drive.ts';
 import { backupName, localDate, restoreBackup, retention, runBackup, DRIVE_FOLDER } from '../tools/backup/run.ts';
+/** @import { BackupDrive } from '../tools/backup/drive.ts' */
+/** @import { OAuth2Client } from 'google-auth-library' */
 
 const PASS = 'correct horse battery staple';
 const FAST = { logN: 14, r: 8, p: 1 }; // test speed only; real backups use the default (2^17)
 
+/** @typedef {{ id: string, name: string, data: Buffer, folder?: string }} FakeFile */
+/** @typedef {BackupDrive & { files: Map<string, FakeFile>, calls: Array<[string, string?]> }} FakeDrive */
+
+/** Drive in memory. @returns {FakeDrive} */
 function fakeDrive() {
+  /** @type {Map<string, FakeFile>} */
   const files = new Map();
   let n = 0;
+  /** @type {Array<[string, string?]>} */
   const calls = [];
   return {
     files,
     calls,
-    async ensureFolder(name) { calls.push(['folder', name]); return 'folder-1'; },
-    async upload(folder, name, data) { calls.push(['upload', name]); const id = `f${++n}`; files.set(id, { id, name, data, folder }); return { id, name, size: data.length }; },
-    async list() { calls.push(['list']); return [...files.values()].map(({ id, name, data }) => ({ id, name, size: data.length })); },
-    async remove(id) { calls.push(['remove', id]); files.delete(id); },
+    async ensureFolder(/** @type {string} */ name) { calls.push(['folder', name]); return 'folder-1'; },
+    async upload(/** @type {string} */ folder, /** @type {string} */ name, /** @type {Buffer} */ data) { calls.push(['upload', name]); const id = `f${++n}`; files.set(id, { id, name, data, folder }); return { id, name, size: String(data.length) }; },
+    async list() { calls.push(['list']); return [...files.values()].map(({ id, name, data }) => ({ id, name, size: String(data.length) })); },
+    async remove(/** @type {string} */ id) { calls.push(['remove', id]); files.delete(id); },
+    async download() { throw new Error('a backup never downloads'); },
   };
 }
 
@@ -89,9 +98,10 @@ test('backup: uploads one encrypted, verified file with the database, settings, 
   const tmpBefore = readdirSync(tmpdir()).filter((n) => n.startsWith('ja-backup-')).length;
 
   const r = await runBackup({ db, passphrase: PASS, ...data, drive, date: '2026-10-06', kdf: FAST });
+  assert.ok('driveFileId' in r);
   assert.deepEqual([r.name, r.fileCount, r.attachments, r.kept], ['jobs-2026-10-06.jabk', 4, 2, 7]);
   assert.equal(drive.calls[0][1], DRIVE_FOLDER);
-  const uploaded = drive.files.get(r.driveFileId).data;
+  const uploaded = /** @type {FakeFile} */ (drive.files.get(r.driveFileId)).data;
   assert.equal(uploaded.subarray(0, 5).toString(), 'JABK1');
   for (const plain of ['SQLite format 3', 'synthetic a', 'synthetic resume', 'synthetic offer']) assert.ok(!uploaded.includes(Buffer.from(plain)), `nothing readable: ${plain}`);
   assert.deepEqual(unpack(decrypt(uploaded, PASS)).map((f) => f.name), ['job-agent.db', 'config/job-search.json', 'attachments/12/bbbb', 'attachments/7/aaaa']);
@@ -111,6 +121,7 @@ test('backup: no passphrase or a short one stops before anything is written; --t
   assert.equal(drive.calls.length, 0);
   const dir = mkdtempSync(join(tmpdir(), 'ja-usb-'));
   const r = await runBackup({ db, passphrase: PASS, toDir: dir, date: '2026-10-06', kdf: FAST });
+  assert.ok('savedTo' in r);
   assert.equal(r.savedTo, join(dir, 'jobs-2026-10-06.jabk'));
   assert.equal(readFileSync(r.savedTo).subarray(0, 5).toString(), 'JABK1');
   db.close();
@@ -120,11 +131,12 @@ test('restore: the database, settings, and attachments come back identical; noth
   const db = sampleDb();
   const data = sampleData();
   const r = await runBackup({ db, passphrase: PASS, ...data, toDir: data.dir, date: '2026-10-06', kdf: FAST });
+  assert.ok('savedTo' in r);
   const outDir = mkdtempSync(join(tmpdir(), 'ja-restore-'));
   const out = join(outDir, 'job-agent.db');
   const res = restoreBackup({ file: readFileSync(r.savedTo), passphrase: PASS, outPath: out });
   const restored = new Database(out, { readonly: true });
-  assert.deepEqual(restored.prepare('SELECT v FROM t ORDER BY id').all().map((x) => x.v), ['synthetic a', 'synthetic b']);
+  assert.deepEqual(/** @type {Array<{ v: string }>} */ (restored.prepare('SELECT v FROM t ORDER BY id').all()).map((x) => x.v), ['synthetic a', 'synthetic b']);
   restored.close();
   assert.equal(res.files, 3);
   assert.equal(readFileSync(join(outDir, 'restored', 'attachments', '7', 'aaaa'), 'utf8'), '%PDF-1.4 synthetic resume');
@@ -150,19 +162,22 @@ test('restore: refuses archive names that would land outside the restore folder'
 });
 
 test('drive client: resumable upload sends metadata, then the bytes to the session URL', async () => {
+  /** @typedef {{ url?: string, method?: string, params?: { uploadType?: string }, data?: unknown, headers?: Record<string, string>, body?: unknown }} Request */
+  /** @type {Request[]} */
   const calls = [];
   const auth = {
-    async request(opts) {
+    async request(/** @type {Request} */ opts) {
       calls.push(opts);
       if (opts.params?.uploadType === 'resumable') return { headers: new Headers({ location: 'https://upload.example/session-1' }), data: {} };
       return { headers: new Headers(), data: { id: 'file-1', name: 'jobs-2026-10-06.jabk', size: '3' } };
     },
   };
-  const drive = createBackupDrive(auth);
+  // Only request, answering with the fields the client reads.
+  const drive = createBackupDrive(/** @type {Pick<OAuth2Client, 'request'>} */ (/** @type {unknown} */ (auth)));
   const res = await drive.upload('folder-1', 'jobs-2026-10-06.jabk', Buffer.from('abc'));
   assert.equal(res.id, 'file-1');
   assert.deepEqual(calls[0].data, { name: 'jobs-2026-10-06.jabk', parents: ['folder-1'], mimeType: 'application/octet-stream' });
-  assert.equal(calls[0].headers['X-Upload-Content-Length'], '3');
+  assert.equal(calls[0].headers?.['X-Upload-Content-Length'], '3');
   assert.equal(calls[1].url, 'https://upload.example/session-1');
   assert.equal(calls[1].method, 'PUT');
   assert.deepEqual(calls[1].body, Buffer.from('abc'));

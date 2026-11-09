@@ -14,11 +14,21 @@ import { authSettings } from '../server/auth.ts';
 import { createNotices } from '../server/notices.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { saveUserProfile } from '../agents/user-config.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { Database } from '../tools/types.ts' */
+/** @import { SentEmail } from './fixtures/fakes.js' */
+/** @import { LightMyRequestResponse } from 'fastify' */
 
 const SITE = 'http://localhost:5178';
 const OWNER = 'owner@example.com';
 
-/** One job with a note, a score, a file, and a run for a user. */
+/**
+ * One job with a note, a score, a file, and a run for a user.
+ * @param {Database} raw
+ * @param {number} uid
+ * @param {string} dir
+ * @param {string} tag
+ */
 function seedUser(raw, uid, dir, tag) {
   const job = Number(raw.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
     VALUES (?, ?, ?, 'CTO', ?, '2026-10-01', 'x', 'x')`).run(uid, `k-${tag}`, `${tag} Co`, `k-${tag}`).lastInsertRowid);
@@ -37,10 +47,11 @@ async function setup() {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: OWNER, SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
+  /** @type {SentEmail[]} */
   const sent = [];
   const notices = createNotices({ send: async (e) => sent.push(e), owner: () => OWNER, appUrl: () => SITE, log: {} });
-  const app = await buildApp({ store, config: { candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }, authMode: 'google', auth: { settings }, services: { createBrowser: async () => null, notices, attachmentsDir: dir, log: { info() {}, warn() {}, error() {} } } });
-  const as = (email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
+  const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, notices, attachmentsDir: dir, log: { info() {}, warn() {}, error() {} } }) });
+  const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
   const pat = addUser(store.raw, { email: 'pat@example.com', name: 'Pat' });
   const sam = addUser(store.raw, { email: 'sam@example.com', name: 'Sam', aiSource: 'owner' });
   const seeded = { owner: seedUser(store.raw, OWNER_ID, dir, 'Owner'), pat: seedUser(store.raw, pat, dir, 'Pat'), sam: seedUser(store.raw, sam, dir, 'Sam') };
@@ -48,18 +59,18 @@ async function setup() {
   store.raw.prepare("UPDATE users SET claude_key_enc = 'v1.sealed.value.here' WHERE id = ?").run(pat);
   return { store, app, dir, sent, pat, sam, seeded, asOwner: as(OWNER), asPat: as('pat@example.com'), asSam: as('sam@example.com'), done: async () => { await app.close(); store.close(); rmSync(dir, { recursive: true, force: true }); } };
 }
-const snapshot = (raw, uid) => JSON.stringify(USER_TABLES.map((t) => raw.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid)));
+const snapshot = (/** @type {Database} */ raw, /** @type {number} */ uid) => JSON.stringify(USER_TABLES.map((t) => raw.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid)));
 
 test('export: everything that is yours and nothing else; never the sealed key', async () => {
   const { app, asPat, done } = await setup();
   const res = await app.inject({ url: '/api/account/export', headers: asPat });
   assert.equal(res.statusCode, 200);
-  assert.match(res.headers['content-disposition'], /^attachment; filename="job-hunt-export-\d{4}-\d{2}-\d{2}\.json"$/);
+  assert.match(/** @type {string} */ (res.headers['content-disposition']), /^attachment; filename="job-hunt-export-\d{4}-\d{2}-\d{2}\.json"$/);
   const data = res.json();
   assert.deepEqual([data.account.email, data.account.claudeKeySaved], ['pat@example.com', true]);
-  assert.deepEqual(data.tables.postings.map((p) => p.company), ['Pat Co']);
+  assert.deepEqual(data.tables.postings.map((/** @type {{ company: string }} */ p) => p.company), ['Pat Co']);
   assert.equal(data.tables.posting_notes[0].body, 'Pat private note');
-  assert.ok(data.tables.user_settings.some((s) => s.key === 'profile.text'));
+  assert.ok(data.tables.user_settings.some((/** @type {{ key: string }} */ s) => s.key === 'profile.text'));
   assert.equal(data.runs.length, 1);
   assert.ok(!res.body.includes('Owner Co') && !res.body.includes('Sam Co'), "no one else's rows");
   assert.ok(!res.body.includes('v1.sealed'), 'never the sealed key');
@@ -69,7 +80,7 @@ test('export: everything that is yours and nothing else; never the sealed key', 
 test('deleting your account: your address typed; every row and file gone; nobody else touched', async () => {
   const { store, app, dir, sent, pat, seeded, asOwner, asPat, done } = await setup();
   const others = [snapshot(store.raw, OWNER_ID), snapshot(store.raw, 3)];
-  const del = (headers, confirmEmail) => app.inject({ method: 'POST', url: '/api/account/delete', headers, payload: { confirmEmail } });
+  const del = (/** @type {Record<string, string>} */ headers, /** @type {string} */ confirmEmail) => app.inject({ method: 'POST', url: '/api/account/delete', headers, payload: { confirmEmail } });
   assert.equal((await del(asPat, 'someone@example.com')).statusCode, 400);
   assert.equal((await del(asOwner, OWNER)).statusCode, 400, 'the owner cannot delete themselves');
   const res = await del(asPat, ' PAT@example.com ');
@@ -88,7 +99,7 @@ test('deleting your account: your address typed; every row and file gone; nobody
 
 test('the owner deletes an account; runs the owner paid for keep their cost (not their details)', async () => {
   const { store, app, sent, sam, seeded, asOwner, asSam, done } = await setup();
-  const del = (headers, confirmEmail) => app.inject({ method: 'POST', url: `/api/admin/users/${sam}/delete`, headers, payload: { confirmEmail } });
+  const del = (/** @type {Record<string, string>} */ headers, /** @type {string} */ confirmEmail) => app.inject({ method: 'POST', url: `/api/admin/users/${sam}/delete`, headers, payload: { confirmEmail } });
   assert.equal((await del(asSam, 'sam@example.com')).statusCode, 403, 'admins only');
   assert.equal((await del(asOwner, 'pat@example.com')).statusCode, 400, 'the right address');
   assert.equal((await del(asOwner, 'sam@example.com')).statusCode, 200);
@@ -100,6 +111,7 @@ test('the owner deletes an account; runs the owner paid for keep their cost (not
 
 test('pausing yourself: you can still look, export, resume, or delete; a pause by the owner is theirs to lift', async () => {
   const { store, app, pat, asOwner, asPat, done } = await setup();
+  /** @type {(url: string, headers: Record<string, string>, payload?: object) => Promise<LightMyRequestResponse>} */
   const post = (url, headers, payload) => app.inject({ method: 'POST', url, headers, ...(payload ? { payload } : {}) });
   assert.equal((await post('/api/account/pause', asPat)).json().status, 'paused');
   assert.equal((await app.inject({ url: '/api/postings', headers: asPat })).statusCode, 200);

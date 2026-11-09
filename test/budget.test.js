@@ -9,9 +9,18 @@ import { runAsUser } from '../db/scope.ts';
 import { addUser, OWNER_ID, setAiAccess, setClaudeKey } from '../db/users.ts';
 import { createJobClaude, NoClaudeKeyError } from '../tools/claude.ts';
 import { boxKey, seal } from '../tools/secret-box.ts';
+import { fakeClaude, fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { Database } from '../tools/types.ts' */
+/** @import { Claude } from '@scottmroth5/agent-core' */
 
-const local = (y, mo, d, h = 12) => new Date(y, mo - 1, d, h);
+/** A local time; one caller gives the minutes too (0:30). */
+const local = (/** @type {number} */ y, /** @type {number} */ mo, /** @type {number} */ d, h = 12, min = 0) => new Date(y, mo - 1, d, h, min);
 
+/**
+ * @param {Database} db
+ * @param {Array<[string, number, Date]>} calls label, cost, when
+ * @param {number | null} [uid]
+ */
 function seed(db, calls, uid = null) {
   const runId = Number(db.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('score', 'ok', ?, ?)").run(new Date().toISOString(), uid).lastInsertRowid);
   const insert = db.prepare('INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, ?, ?, ?, ?)');
@@ -45,11 +54,12 @@ test('limit: the Admin setting beats .env, which beats the default; bad values a
 });
 
 const SECRET = 'a test secret for sealing user keys, 32+ characters';
-const fakeClient = (name, sent) => ({ send: async () => { sent.push(name); return { text: name }; } });
-const ask = (claude) => claude.send({ model: 'm', maxTokens: 1, prompt: 'x' });
+const fakeClient = (/** @type {string} */ name, /** @type {string[]} */ sent) => fakeClaude(async () => { sent.push(name); return { text: name }; });
+const ask = (/** @type {Claude} */ claude) => claude.send({ model: 'm', maxTokens: 1, prompt: 'x' });
 
 test('the owner: calls go through under the cap and are refused, without calling Claude, once it is reached', async () => {
   const { db } = openJobStore(':memory:');
+  /** @type {string[]} */
   const sent = [];
   const claude = createJobClaude(db, { ownerClient: fakeClient('owner', sent), env: { MONTHLY_CLAUDE_BUDGET_USD: '10' } });
   assert.equal((await ask(claude)).text, 'owner');
@@ -65,7 +75,9 @@ test('the owner: calls go through under the cap and are refused, without calling
 test('who pays: the owner and users on the owner\'s key use it; others their own key; no key, no AI', async () => {
   process.env.USER_KEY_SECRET = SECRET;
   const { db } = openJobStore(':memory:');
+  /** @type {string[]} */
   const sent = [];
+  /** @type {string[]} */
   const keys = [];
   const claude = createJobClaude(db, {
     ownerClient: fakeClient('owner', sent),
@@ -98,7 +110,9 @@ test('who pays: the owner and users on the owner\'s key use it; others their own
 
 test('caps: a user on the owner\'s key stops at their allowance (told once), and the owner\'s cap counts their spend', async () => {
   const { db } = openJobStore(':memory:');
+  /** @type {string[]} */
   const sent = [];
+  /** @type {number[]} */
   const reached = [];
   const claude = createJobClaude(db, { ownerClient: fakeClient('owner', sent), env: { MONTHLY_CLAUDE_BUDGET_USD: '20' }, onCapReached: (uid) => reached.push(uid) });
   const given = addUser(db, { email: 'given@example.com' });
@@ -130,7 +144,7 @@ test('caps: a user on the owner\'s key stops at their allowance (told once), and
 test('API: header summary and Admin > Spending show and change the cap', async () => {
   const store = openJobStore(':memory:');
   seed(store.db, [['score', 4, new Date()]]);
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   const header = (await app.inject('/api/summary')).json().budget;
   assert.deepEqual([header.spentUsd, header.limitUsd, header.level], [4, DEFAULT_MONTHLY_BUDGET_USD, 'ok']);
   const set = await app.inject({ method: 'PUT', url: '/api/admin/budget', payload: { limitUsd: 5 } });

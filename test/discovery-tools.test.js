@@ -7,18 +7,25 @@ import { checkLocation, matchesHome, statesIn, hasRemoteSignal } from '../tools/
 import { openJobStore } from '../db/index.ts';
 
 // ---------- http ----------
-const response = (status, text = '') => ({ status, url: '', text: async () => text });
+const response = (/** @type {number} */ status, text = '') => ({ status, url: '', text: async () => text });
+
+/**
+ * fetch with only what createHttp reads of a reply (status, url, text) and sends (headers as an object).
+ * @param {(url: string, init: { headers: Record<string, string> }) => Promise<ReturnType<typeof response> | undefined>} fn
+ */
+const fakeFetch = (fn) => /** @type {typeof fetch} */ (/** @type {unknown} */ (fn));
 
 test('http retries once on 5xx and network errors, then succeeds', async () => {
+  /** @type {string[]} */
   const calls = [];
   const replies = [new Error('socket hang up'), response(503), response(200, 'ok')];
   const http = createHttp({
-    fetchImpl: async (url, init) => {
+    fetchImpl: fakeFetch(async (url, init) => {
       calls.push(init.headers['User-Agent']);
       const r = replies.shift();
       if (r instanceof Error) throw r;
       return r;
-    },
+    }),
     sleepImpl: async () => {},
   });
   await assert.rejects(http.get('https://a.example.com/x', { retries: 0 }), /socket hang up/);
@@ -27,7 +34,7 @@ test('http retries once on 5xx and network errors, then succeeds', async () => {
 });
 
 test('http reports 429 and other errors distinctly', async () => {
-  const http = (status) => createHttp({ fetchImpl: async () => response(status), sleepImpl: async () => {} });
+  const http = (/** @type {number} */ status) => createHttp({ fetchImpl: fakeFetch(async () => response(status)), sleepImpl: async () => {} });
   await assert.rejects(http(429).get('https://b.example.com/'), RateLimitedError);
   await assert.rejects(http(404).get('https://b.example.com/'), (e) => e instanceof HttpError && e.status === 404);
 });
@@ -120,7 +127,7 @@ test('checkLocation classifies each case', () => {
 // ---------- migration ----------
 test('002 migration adds discovery columns and sightings', () => {
   const store = openJobStore(':memory:');
-  const cols = store.db.prepare('PRAGMA table_info(postings)').all().map((c) => c.name);
+  const cols = /** @type {Array<{ name: string }>} */ (store.db.prepare('PRAGMA table_info(postings)').all()).map((c) => c.name);
   for (const c of ['workplace', 'location_check', 'fetch_method', 'source_job_id']) assert.ok(cols.includes(c), c);
   const tables = store.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").pluck().all();
   assert.ok(tables.includes('posting_sightings'));
