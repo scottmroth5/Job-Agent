@@ -1,0 +1,8 @@
+// checkJs for the JavaScript that stays JavaScript (v3 Phase 2, step 10): scripts, evals, and test keep their .js
+// names (deploy.sh, compose.yml, and the Windows tasks run scripts/*.js by name) and are typed with JSDoc. Each
+// directory joins this list as it passes; when all have, the root config turns checkJs on and this file goes.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "checkJs": true },
+  "include": ["evals", "types"]
+}
