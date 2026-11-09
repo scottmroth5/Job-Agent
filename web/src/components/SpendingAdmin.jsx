@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { isOwner, useMe } from '../me.jsx';
+import { api } from '../api.ts';
+import { isOwner, useMe } from '../me.tsx';
 
 const LABELS = {
   score: 'Scoring full-time jobs',

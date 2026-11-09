@@ -1,4 +1,4 @@
-// The public demo's usage counts (server/demo-analytics.ts, web/src/analytics.js): only the demo is ever configured,
+// The public demo's usage counts (server/demo-analytics.ts, web/src/analytics.ts): only the demo is ever configured,
 // the page may reach the PostHog host and nothing else, and every event carries fixed names and values only.
 // A made-up key; no network (fetch is replaced).
 import { test } from 'node:test';
@@ -11,7 +11,7 @@ import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
 import { demoAnalytics } from '../server/demo-analytics.ts';
 import { CONTENT_SECURITY_POLICY } from '../server/security.ts';
-import { SECTIONS, SOURCES, changeFeature, eventBody, sampled, startAnalytics, track, trafficSource } from '../web/src/analytics.js';
+import { SECTIONS, SOURCES, changeFeature, eventBody, sampled, startAnalytics, track, trafficSource } from '../web/src/analytics.ts';
 import { DEMO_CONFIG } from '../demo/sample-data.ts';
 
 const KEY = 'phc_ExampleKey0123456789abcdefABCDEF';

@@ -1,6 +1,6 @@
 // The public demo's usage counts, sent to PostHog: which screens and sample features visitors try. Only the demo
 // (AUTH_MODE=demo) ever has a configuration, so the app itself sends nothing to anyone. The browser builds every
-// event from fixed names and values (web/src/analytics.js); /api/me hands it the project key and host, and the
+// event from fixed names and values (web/src/analytics.ts); /api/me hands it the project key and host, and the
 // page's Content-Security-Policy lets it reach that host and no other.
 import { hostIs } from '../tools/urls.ts';
 

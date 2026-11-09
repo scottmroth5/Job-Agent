@@ -198,7 +198,7 @@ find-contact, the result saved as an agent note) and Close: no response; from th
 a time or all at once (Home: Review via GET /api/follow-ups/stale, then POST close-stale) to the status list's noResponse
 role (018: "No response", closed group) with a note and changed_by user history. The Funnel's list uses the same window.
 test/follow-ups.test.js. Arrange tiles saves the order (server/layout.ts, PUT /api/layout/home, returned
-with /api/summary; web/src/layout.js arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
+with /api/summary; web/src/layout.ts arranged() applies it). Installable on an iPhone: web/public/manifest.webmanifest and
 icons in web/public (install icons full-bleed, favicons as drawn) made from assets/app-icon-1024.png (kept out of the image);
 test/icons.test.js checks their sizes and that they load before sign-in.
 AUTH_MODE=none (default) binds to 127.0.0.1 with no login. AUTH_MODE=google (server/auth.ts) is "Sign in with Google":
@@ -206,7 +206,9 @@ any verified address gets a session and its account decides the rest (Users abov
 (server/session.ts, SESSION_SECRET); every route but /auth/*, /healthz, /privacy and /terms (server/pages.ts, from
 PRIVACY.md and TERMS.md), and the Add to Home Screen files (manifest.webmanifest, icon-180/192/512.png) needs it, and writes must come from PUBLIC_URL's origin. Settings live only in .env; npm run auth:setup creates the secret.
 server/app.ts holds every route with a JSON schema; keep /api/openapi.json the source of truth for the UI;
-web/src/api-types.ts is generated from it (npm run api:types after a route schema change).
+web/src/api-types.ts is generated from it (npm run api:types after a route schema change); web/src/api.ts names each call by its
+route key ("PATCH /api/postings/:id"), so bodies and fully declared responses are checked, and open response schemas read
+as ApiResponse's one Loose (any) type until the route schema is tightened.
 The Run pipeline button (server/pipeline-routes.ts) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.ts) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.ts, and closes reminders.
@@ -321,8 +323,8 @@ deploy/cloud.env.example.
 AUTH_MODE=demo (server/auth.ts): no sign-in; every non-read request gets 403 except POST /api/prompts/:name/preview,
 which writes nothing; server/main.ts starts with demo services (no Google auth, Claude, browser, or schedule) and replays
 demo/sample-data.ts SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI shows every
-control: web/src/api.js (setDemoMode from /api/me) stops every non-GET request before it is sent (prompt preview aside),
-rejects with DEMO_NOT_SAVED, and fires demo-blocked, which DemoNotice (web/src/demo.jsx) shows; the server's refusal is
+control: web/src/api.ts (setDemoMode from /api/me) stops every non-GET request before it is sent (prompt preview aside),
+rejects with DEMO_NOT_SAVED, and fires demo-blocked, which DemoNotice (web/src/demo.tsx) shows; the server's refusal is
 what protects it. Only Open posting (sample links) and the admin pages stay hidden.
 The demo's /api/me names the sample candidate (DEMO_EMAIL, an example.com address) so the header reads like production's.
 Demo Settings shows the sample candidate's About you and search, editable but never saved (DEMO_ABOUT_YOU and DEMO_CONFIG, served by
@@ -334,10 +336,10 @@ npm run demo previews it locally (demo-data/, gitignored); test/demo.test.js wal
 A new route that changes data is refused in the demo automatically; a new read route must not call an outside service.
 The demo never calls Claude (no client, no key). Its AI actions answer with canned samples in the real response shapes,
 labeled as samples and never saved: demo/samples.ts (prep, letter, tweaks, re-score, revision, Help answer, draft; loaded
-by api.js only in the demo, its own chunk) through local stand-in tasks, and Find someone to contact from the demo-only
+by api.ts only in the demo, its own chunk) through local stand-in tasks, and Find someone to contact from the demo-only
 GET /api/postings/:id/find-contact/sample (demoContactResult). test/demo-samples.test.js holds them to the real rules.
 Demo usage counts (optional): DEMO_POSTHOG_KEY/HOST on the demo container only (server/demo-analytics.ts returns null outside
-AUTH_MODE=demo); /api/me hands them to the page and the CSP's connect-src adds that host. web/src/analytics.js sends
+AUTH_MODE=demo); /api/me hands them to the page and the CSP's connect-src adds that host. web/src/analytics.ts sends
 to PostHog's capture endpoint itself (no SDK, cookies, storage, referrer, or URLs): fixed event names and property values
 from its lists only, anything else dropped; never text, job details, or paths; nothing at all when the browser sends
 Global Privacy Control. demo_opened carries source (SOURCES: trafficSource reads a listed utm_source or the referrer's

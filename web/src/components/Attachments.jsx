@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../api.js';
+import { api } from '../api.ts';
 import { DashIcon } from './DashIcon.jsx';
 
 const MAX_BYTES = 25 * 1024 * 1024;

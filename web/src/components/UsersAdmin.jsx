@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api } from '../api.ts';
 
 const usd = (n) => `$${Number(n ?? 0).toFixed(2)}`;
 const day = (iso) => (iso ? new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '');

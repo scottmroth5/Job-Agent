@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { api } from '../api.js';
-import { useDemo } from '../demo.jsx';
-import { isOwner, useMe } from '../me.jsx';
+import { api } from '../api.ts';
+import { useDemo } from '../demo.tsx';
+import { isOwner, useMe } from '../me.tsx';
 
 // Settings > Prompts: each user's own prompt edits (prompt_versions rows are theirs; agents/prompts.ts getPrompt reads
 // the current user's active edit, else the repo default). Saved versions, restore, a no-AI preview, and the output

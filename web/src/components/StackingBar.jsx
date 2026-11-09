@@ -1,4 +1,4 @@
-import { moneyShort } from '../format.js';
+import { moneyShort } from '../format.ts';
 
 // Tick fractional engagements in the table to see how they stack against the annual target
 // (the tracker's math: hourly rate x hours x weeks, or monthly x 12).

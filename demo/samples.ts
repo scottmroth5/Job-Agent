@@ -1,6 +1,6 @@
 // The demo's AI answers: canned samples, written to read like what Claude returns for the real prompts, built from the
 // sample job and the fictional candidate's knowledge doc (demo/sample-data.ts). The web app loads this file only in the
-// demo (web/src/api.js) and calls no model, so the demo never spends anything; nothing here is saved. Every person and
+// demo (web/src/api.ts) and calls no model, so the demo never spends anything; nothing here is saved. Every person and
 // company is invented.
 import { CANDIDATE, DEMO_ABOUT_YOU, DEMO_CONFIG, SAMPLE_CHECK_CLAIMS, companyBlurb } from './sample-data.ts';
 
@@ -17,7 +17,7 @@ const senior = (title: string) => /\b(cto|chief|vp|vice president|head|svp)\b/i.
 const list = (items: Array<string | null | undefined | false>) => items.filter(Boolean).map((x) => `- ${x}`).join('\n');
 
 /** The letter fact check (Check again): the seeded letter's claims, as the real route answers. */
-export const sampleCheck = (now = new Date()) => ({ status: 'checked', claims: SAMPLE_CHECK_CLAIMS.map((c) => ({ ...c, dismissed: false })), checkedAt: now.toISOString(), sample: true });
+export const sampleCheck = (now = new Date()) => ({ status: 'checked' as const, claims: SAMPLE_CHECK_CLAIMS.map((c) => ({ ...c, dismissed: false })), checkedAt: now.toISOString(), sample: true });
 
 /** Meeting prep: the real prompt's ten sections, for the people and meeting the visitor entered. */
 export function samplePrep(job: SampleJob, input: PrepInput = {}) {

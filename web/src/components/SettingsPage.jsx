@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { useDemo } from '../demo.jsx';
+import { api } from '../api.ts';
+import { useDemo } from '../demo.tsx';
 import SearchSettings from './SearchSettings.jsx';
 import FeedbackForm from './FeedbackForm.jsx';
 import AccountControls from './AccountControls.jsx';

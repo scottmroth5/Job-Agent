@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
+import { api } from '../api.ts';
 
 // Admin > Usage: the app's weekly totals across every account (GET /api/admin/usage). Counts only, kept in the app;
 // nothing here goes to an analytics service. Weeks run Sunday to Saturday; the first row is this week so far.

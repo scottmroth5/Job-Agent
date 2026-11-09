@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../api.js';
+import { api } from '../api.ts';
 
 /**
  * Settings > Your data and account: download everything that is yours, pause yourself (and resume, when you paused),

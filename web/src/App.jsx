@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, setDemoMode } from './api.js';
-import { startAnalytics, track } from './analytics.js';
-import { useLookups } from './lookups.jsx';
+import { api, setDemoMode } from './api.ts';
+import { startAnalytics, track } from './analytics.ts';
+import { useLookups } from './lookups.tsx';
 import JobTable from './components/JobTable.jsx';
 import DetailPanel from './components/DetailPanel.jsx';
 import AddJobDialog from './components/AddJobDialog.jsx';
@@ -11,8 +11,8 @@ import InboxPage from './components/InboxPage.jsx';
 import HomePage from './components/HomePage.jsx';
 import ActivityPage from './components/ActivityPage.jsx';
 import FunnelPage from './components/FunnelPage.jsx';
-import { DemoBanner, DemoContext, DemoNotice } from './demo.jsx';
-import { MeContext } from './me.jsx';
+import { DemoBanner, DemoContext, DemoNotice } from './demo.tsx';
+import { MeContext } from './me.tsx';
 import SettingsPage from './components/SettingsPage.jsx';
 import HelpPage from './components/HelpPage.jsx';
 import { DashIcon } from './components/DashIcon.jsx';
@@ -46,7 +46,7 @@ export default function App() {
     api
       .me()
       .then((m) => {
-        setDemoMode(m?.demo); // before any change can be made: the demo stops changes and samples AI (api.js)
+        setDemoMode(m?.demo); // before any change can be made: the demo stops changes and samples AI (api.ts)
         if (m?.demo) startAnalytics(m.analytics); // the demo's usage counts, when configured (analytics.js)
         setMe(m);
       })

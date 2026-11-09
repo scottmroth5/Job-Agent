@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { api } from '../api.js';
-import { useDemo } from '../demo.jsx';
+import { api } from '../api.ts';
+import { useDemo } from '../demo.tsx';
 
 const ACCEPT = '.pdf,.docx,.txt,.md';
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
