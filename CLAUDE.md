@@ -45,7 +45,7 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
                     add-job dialog, fractional stacking bar. Pictures: web/public/dash (160 px PNGs) through DashIcon.tsx's map (Home tiles, the Home link, panel headings) Phones get a back link to Home and the screen name instead of tabs
 /evals              eval runner and rubric code; real eval cases live in data/evals; evals/inbox/cases.json is synthetic. Results: EVALS.md
 /test               node:test suites with synthetic fixtures only; test/fixtures/fakes.js types partial stand-ins (fakeConfig,
-                    fakeServices, fakeClaude, fakeHttp, fakeItem, fakeRun) and returns them unchanged
+                    fakeServices, fakeClaude, fakeHttp, fakeItem, fakeRun, noTimer) and returns them unchanged
 /data               gitignored: job-agent.db, config/, google/ (OAuth client and token), attachments/, v1-export/
 /legacy contains the v1 scripts for reference only. Do not modify or import from them.
 
@@ -301,7 +301,7 @@ results are cast to db/types.ts rows. server/index.js is a one-line launcher for
 and compose.yml run index.js); buildApp's options and services are BuildAppOptions and AppServices in server/app.ts.
 scripts, evals, and test stay JavaScript (deploy.sh, compose.yml, the Windows tasks, and the server run scripts/*.js by name),
 typed with JSDoc (@param, @typedef, /** @import { X } from '...' */, casts as /** @type {T} */ (x)) and checked by
-tsconfig.checkjs.json, whose include lists each directory that passes (evals, scripts, and test file by file so far).
+tsconfig.checkjs.json, whose include lists each directory that passes (evals, scripts, and test).
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),

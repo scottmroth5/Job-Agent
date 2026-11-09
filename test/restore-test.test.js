@@ -9,16 +9,20 @@ import { openJobStore } from '../db/index.ts';
 import { runBackup } from '../tools/backup/run.ts';
 import { restoreTest, EMPTY_TABLE_MIN_ROWS } from '../tools/backup/restore-check.ts';
 import { restoreTestJob } from '../scripts/backup-verify.js';
+/** @import { BackupDrive } from '../tools/backup/drive.ts' */
+/** @import { JobStore } from '../tools/types.ts' */
 
 const PASS = 'a made-up passphrase for these tests';
 const KDF = { logN: 14, r: 8, p: 1 }; // the lowest the decrypter accepts (test speed only)
 
+/** @param {string} dir @param {number} jobs */
 function liveStore(dir, jobs) {
   const store = openJobStore(join(dir, 'job-agent.db'), { log: {} });
   const insert = store.raw.prepare("INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at) VALUES (1, ?, 'Example Co', 'CTO', ?, '2026-10-01', 'x', 'x')");
   for (let i = 0; i < jobs; i += 1) insert.run(`k${i}`, `k${i}`);
   return store;
 }
+/** @param {JobStore} store @param {string} dir */
 async function backupOf(store, dir) {
   const out = join(dir, 'out');
   mkdirSync(out, { recursive: true });
@@ -60,8 +64,10 @@ test('a backup missing its data fails; the newest backup comes from Drive', asyn
     assert.match(r.problems.join(' '), /table postings is empty in the backup but has 12 rows/);
 
     const files = [{ id: 'old', name: 'jobs-2026-10-20.jabk' }, { id: 'new', name: 'jobs-2026-10-26.jabk' }, { id: 'x', name: 'notes.txt' }];
+    /** @type {string[]} */
     const asked = [];
-    const drive = { ensureFolder: async () => 'folder', list: async () => files, download: async (id) => { asked.push(id); return file; } };
+    // Only the calls the restore test makes.
+    const drive = /** @type {BackupDrive} */ (/** @type {unknown} */ ({ ensureFolder: async () => 'folder', list: async () => files, download: async (/** @type {string} */ id) => { asked.push(id); return file; } }));
     const job = await restoreTestJob({ store: full, passphrase: PASS, drive });
     assert.deepEqual([asked, job.file, job.ok], [['new'], 'jobs-2026-10-26.jabk', false]);
     assert.equal(full.raw.prepare("SELECT status FROM runs WHERE name = 'restore-test'").pluck().get(), 'failed');

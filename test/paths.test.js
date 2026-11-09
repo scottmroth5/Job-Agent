@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 import { ROOT } from '../tools/paths.ts';
 
 // DATA_DIR is read once at startup, so each case runs in its own process.
-const pathsWith = (env) =>
+const pathsWith = (/** @type {Record<string, string>} */ env) =>
   JSON.parse(
     execFileSync(
       process.execPath,

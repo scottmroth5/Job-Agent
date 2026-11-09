@@ -11,11 +11,12 @@ import { USER_TABLES } from '../db/migrations/013-users.ts';
 import { runAsUser, scopeDb } from '../db/scope.ts';
 import { accountFor, addUser, OWNER_ID, syncOwnerEmail } from '../db/users.ts';
 
+/** @param {string} path */
 function before013(path) {
   const store = openStore(path, { app: 'job-agent', migrations: loadMigrations().filter((m) => m.id < '013') });
   const { db } = store;
-  const run = (sql, ...args) => db.prepare(sql).run(...args);
-  const job = (key) => Number(run(`INSERT INTO postings (url, url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
+  const run = (/** @type {string} */ sql, /** @type {unknown[]} */ ...args) => db.prepare(sql).run(...args);
+  const job = (/** @type {string} */ key) => Number(run(`INSERT INTO postings (url, url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
     VALUES (?, ?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'applied', 'A note', 'x', 'x')`, `https://jobs.example.com/${key}`, key, `example|cto|${key}`).lastInsertRowid);
   const a = job('a');
   const b = job('b');
@@ -81,14 +82,14 @@ test('keys are unique per user, and user_id is required', () => {
   const store = openJobStore(':memory:');
   const raw = store.raw;
   const second = addUser(raw, { email: 'second@example.com' });
-  const job = (uid, key) => raw.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
+  const job = (/** @type {number} */ uid, /** @type {string} */ key) => raw.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
     VALUES (?, ?, 'Example Co', 'CTO', 'k', '2026-10-01', 'x', 'x')`).run(uid, key);
   job(OWNER_ID, 'same');
   job(second, 'same');
   assert.throws(() => job(OWNER_ID, 'same'), /UNIQUE/);
   assert.throws(() => raw.prepare("INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, created_at, updated_at) VALUES ('x', 'C', 'T', 'k', 'd', 'x', 'x')").run(), /NOT NULL constraint failed: postings.user_id/);
   assert.throws(() => job(99, 'ghost'), /FOREIGN KEY/);
-  const contact = (uid) => raw.prepare("INSERT INTO contacts (user_id, id, email, source, created_at, updated_at) VALUES (?, ?, 'hr@example.com', 'email', 'x', 'x')").run(uid, `c${uid}`);
+  const contact = (/** @type {number} */ uid) => raw.prepare("INSERT INTO contacts (user_id, id, email, source, created_at, updated_at) VALUES (?, ?, 'hr@example.com', 'email', 'x', 'x')").run(uid, `c${uid}`);
   contact(OWNER_ID);
   contact(second);
   assert.throws(() => raw.prepare("INSERT INTO contacts (user_id, id, email, source, created_at, updated_at) VALUES (?, 'c9', 'hr@example.com', 'email', 'x', 'x')").run(OWNER_ID), /UNIQUE/);
@@ -98,7 +99,7 @@ test('keys are unique per user, and user_id is required', () => {
 test('scopeDb binds the current user, and a user-table query with no user throws', () => {
   const store = openJobStore(':memory:', { fallbackUid: null });
   const second = addUser(store.raw, { email: 'second@example.com' });
-  const add = (uid, key) => store.raw.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
+  const add = (/** @type {number} */ uid, /** @type {string} */ key) => store.raw.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
     VALUES (?, ?, 'Example Co', 'CTO', 'k', '2026-10-01', 'x', 'x')`).run(uid, key);
   add(OWNER_ID, 'mine');
   add(second, 'theirs');
@@ -109,7 +110,7 @@ test('scopeDb binds the current user, and a user-table query with no user throws
   // Named and positional values together, and a statement with no @uid runs anywhere.
   assert.equal(runAsUser(second, () => store.db.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid AND url_key = ?').pluck().get('theirs')), 1);
   assert.equal(runAsUser(second, () => store.db.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid AND url_key = @k').pluck().get({ k: 'mine' })), 0);
-  assert.ok(store.db.prepare('SELECT COUNT(*) FROM lookup_values').pluck().get() > 0);
+  assert.ok(/** @type {number} */ (store.db.prepare('SELECT COUNT(*) FROM lookup_values').pluck().get()) > 0);
   // The user flows through awaits and into promises the request starts.
   return runAsUser(second, async () => {
     await new Promise((r) => setTimeout(r, 5));
@@ -126,10 +127,10 @@ test('sign-in: an owner address is the owner; any other address is its own row (
   const owners = ['Owner@Example.com', 'other-owner@example.com'];
   assert.deepEqual(accountFor(store.raw, 'second@example.com', owners), { uid: second, status: 'active', role: 'user' });
   assert.deepEqual(accountFor(store.raw, 'owner@example.com', owners), { uid: OWNER_ID, status: 'active', role: 'admin' });
-  assert.equal(accountFor(store.raw, 'other-owner@example.com', owners).uid, OWNER_ID);
+  assert.equal(accountFor(store.raw, 'other-owner@example.com', owners)?.uid, OWNER_ID);
   assert.equal(accountFor(store.raw, 'stranger@example.com', owners), null);
   store.raw.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(second);
-  assert.equal(accountFor(store.raw, 'second@example.com', owners).status, 'paused');
+  assert.equal(accountFor(store.raw, 'second@example.com', owners)?.status, 'paused');
   syncOwnerEmail(store.raw, owners);
   assert.equal(store.raw.prepare('SELECT email FROM users WHERE id = ?').pluck().get(OWNER_ID), 'owner@example.com');
   store.close();

@@ -15,15 +15,16 @@ import { authSettings } from '../server/auth.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { cleanConfig, configFor, saveUserConfig, saveUserProfile, scheduledUsers, setScheduledForUser, userConfigView } from '../agents/user-config.ts';
 import { repoPath } from '../tools/paths.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 const SITE = 'http://localhost:5178';
-const OWNER_CONFIG = {
+const OWNER_CONFIG = fakeConfig({
   candidate: { name: 'Owner Example' },
   search: { terms: ['Owner Term'], relevantTitleKeywords: ['owner'], homeLocations: ['Ownertown, ST'] },
   fractional: { targetAnnual: [100000, 200000], weeksPerYear: 48 },
   coverLetterChecks: [{ label: 'x', text: 'owner-only pattern' }],
   privateTerms: ['owner example'],
-};
+});
 const B_SEARCH = { candidate: { name: 'Sam' }, search: { terms: ['Head of Data'], relevantTitleKeywords: ['data'], homeLocations: ['Remote'] } };
 
 test('a user sets plain text only: no patterns, no site search, no private terms; the owner keeps their file', () => {
@@ -38,7 +39,7 @@ test('a user sets plain text only: no patterns, no site search, no private terms
   assert.deepEqual(c.privateTerms, []);
   assert.equal(c.search.siteSearch, false);
   assert.deepEqual(c.search.terms.map((t) => t.length), [12, 200], 'trimmed, blanks dropped, long values cut');
-  assert.deepEqual(c.fractional.targetAnnual, [150000, 300000]);
+  assert.deepEqual(c.fractional?.targetAnnual, [150000, 300000]);
   assert.equal(c.ready, true);
   assert.equal(cleanConfig({}).ready, false);
 
@@ -66,13 +67,14 @@ async function setup() {
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: 'owner@example.com', SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
   const b = addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+  /** @type {Array<number | undefined>} */
   const runs = [];
   const app = await buildApp({
     store,
     config: OWNER_CONFIG,
     authMode: 'google',
     auth: { settings },
-    services: {
+    services: fakeServices({
       createBrowser: async () => null,
       knowledge: async () => 'the owner knowledge doc',
       runPipeline: async ({ user }) => {
@@ -80,15 +82,15 @@ async function setup() {
         return { code: 0, lastError: null };
       },
       log: { info() {}, warn() {}, error() {} },
-    },
+    }),
   });
-  const as = (email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
+  const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
   return { store, app, b, runs, asA: as('owner@example.com'), asB: as('b@example.com'), done: async () => { await app.close(); store.close(); } };
 }
 
 test('Settings: a user saves their search, background, and schedule; the owner is pointed at their file', async () => {
   const { store, app, b, asA, asB, done } = await setup();
-  const get = (headers) => app.inject({ url: '/api/account/search', headers });
+  const get = (/** @type {Record<string, string>} */ headers) => app.inject({ url: '/api/account/search', headers });
   // The owner: search settings stay in their file; their knowledge doc lives here, like everyone's.
   const own = (await get(asA)).json();
   assert.deepEqual({ owner: own.owner, profile: own.profile }, { owner: true, profile: '' });
@@ -127,7 +129,7 @@ test('Settings: a user saves their search, background, and schedule; the owner i
 
 test('the pipeline button runs the pipeline as whoever pressed it, one at a time', async () => {
   const { app, b, runs, asA, asB, done } = await setup();
-  const start = async (headers) => app.inject({ method: 'POST', url: '/api/pipeline/run', headers });
+  const start = async (/** @type {Record<string, string>} */ headers) => app.inject({ method: 'POST', url: '/api/pipeline/run', headers });
   assert.equal((await start(asB)).statusCode, 202);
   await new Promise((r) => setTimeout(r, 30));
   assert.equal((await start(asA)).statusCode, 202);
@@ -146,7 +148,7 @@ test('the pipeline script refuses a user who has not set up a search, before any
     const b = addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
     const paused = addUser(store.raw, { email: 'c@example.com', status: 'paused' });
     store.close();
-    const run = (args) => spawnSync(process.execPath, [repoPath('scripts', 'pipeline.js'), ...args, '--no-email'], { env: { ...process.env, DATA_DIR: dir }, encoding: 'utf8', timeout: 30000 });
+    const run = (/** @type {string[]} */ args) => spawnSync(process.execPath, [repoPath('scripts', 'pipeline.js'), ...args, '--no-email'], { env: { ...process.env, DATA_DIR: dir }, encoding: 'utf8', timeout: 30000 });
     const notReady = run([`--user=${b}`]);
     assert.equal(notReady.status, 1);
     assert.match(notReady.stderr, /Set up your search/);

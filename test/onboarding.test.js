@@ -12,6 +12,8 @@ import { draftContent, validateDraft, DRAFT_MODEL, DRAFT_SCHEMA, MAX_FILES } fro
 import { DRAFTS_PER_DAY } from '../server/draft-routes.ts';
 import { saveUserConfig, saveUserProfile } from '../agents/user-config.ts';
 import { createJobClaude } from '../tools/claude.ts';
+import { fakeClaude, fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { SendOptions } from '@scottmroth5/agent-core' */
 
 const SITE = 'http://localhost:5178';
 const pdf = Buffer.from('%PDF-1.4\nMade-up resume for tests\n%%EOF').toString('base64');
@@ -23,9 +25,9 @@ const DRAFT = {
 };
 
 test('draft materials: PDFs become documents, text stays text, and anything else is refused with a fix', () => {
-  const blocks = draftContent({ files: [{ name: 'resume.pdf', type: 'application/pdf', data: pdf }, { name: 'notes.md', type: 'text/markdown', data: Buffer.from('# Notes').toString('base64') }], texts: [{ label: 'LinkedIn About', text: 'I build teams.' }], notes: 'Remote only.' });
+  const blocks = /** @type {Array<{ type: string, text: string, source: { media_type: string } }>} */ (draftContent({ files: [{ name: 'resume.pdf', type: 'application/pdf', data: pdf }, { name: 'notes.md', type: 'text/markdown', data: Buffer.from('# Notes').toString('base64') }], texts: [{ label: 'LinkedIn About', text: 'I build teams.' }], notes: 'Remote only.' }));
   assert.equal(blocks.filter((b) => b.type === 'document').length, 1);
-  assert.equal(blocks.find((b) => b.type === 'document').source.media_type, 'application/pdf');
+  assert.equal(blocks.find((b) => b.type === 'document')?.source.media_type, 'application/pdf');
   assert.ok(blocks.some((b) => b.type === 'text' && b.text.includes('# Notes')));
   assert.ok(blocks.some((b) => b.type === 'text' && b.text.startsWith('LinkedIn About:')));
   assert.ok(blocks.some((b) => b.type === 'text' && b.text.includes('Remote only.')));
@@ -46,10 +48,11 @@ async function setup() {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: 'owner@example.com', SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
+  /** @type {SendOptions[]} */
   const sent = [];
-  const claude = createJobClaude(store.db, { ownerClient: { send: async (opts) => { sent.push(opts); return { data: DRAFT, text: '' }; } }, env: {} });
-  const app = await buildApp({ store, config: { candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }, authMode: 'google', auth: { settings }, services: { createBrowser: async () => null, claude, log: { info() {}, warn() {}, error() {} } } });
-  const as = (email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
+  const claude = createJobClaude(store.db, { ownerClient: fakeClaude(async (opts) => { sent.push(opts); return { data: DRAFT, text: '' }; }), env: {} });
+  const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, claude, log: { info() {}, warn() {}, error() {} } }) });
+  const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
   const pat = addUser(store.raw, { email: 'pat@example.com', name: 'Pat', aiSource: 'owner' });
   store.raw.prepare('UPDATE users SET ai_cap_usd = 5 WHERE id = ?').run(pat);
   return { store, app, sent, pat, asPat: as('pat@example.com'), asOwner: as('owner@example.com'), done: async () => { await app.close(); store.close(); } };
@@ -61,8 +64,9 @@ test('Build a draft: the materials go to Claude as data on the user\'s own AI; n
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.json().search.terms, ['VP Engineering', 'Head of Engineering']);
   assert.equal(sent[0].model, DRAFT_MODEL);
-  assert.match(sent[0].system, /not instructions to you/);
-  assert.equal(sent[0].messages[0].content.find((b) => b.type === 'document').source.data, pdf);
+  assert.match(/** @type {string} */ (sent[0].system), /not instructions to you/);
+  const content = /** @type {Array<{ content: Array<{ type: string, source: { data: string } }> }>} */ (sent[0].messages)[0].content;
+  assert.equal(content.find((b) => b.type === 'document')?.source.data, pdf);
   assert.deepEqual(store.raw.prepare("SELECT user_id, status FROM runs WHERE name = 'draft-profile'").get(), { user_id: pat, status: 'ok' });
   assert.equal(store.raw.prepare('SELECT COUNT(*) FROM user_settings WHERE user_id = ?').pluck().get(pat), 0, 'nothing saved');
   assert.equal((await app.inject({ method: 'POST', url: '/api/account/draft', headers: asPat, payload: {} })).statusCode, 400);

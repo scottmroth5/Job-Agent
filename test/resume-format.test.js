@@ -8,6 +8,7 @@ import { openJobStore } from '../db/index.ts';
 import { addResume } from '../agents/resumes.ts';
 import { buildApp } from '../server/app.ts';
 import { DEMO_RESUMES } from '../demo/sample-data.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 const RESUME = `Pat Example
 Anytown, ST | pat@example.com | 555-0100
@@ -54,9 +55,11 @@ test("the demo's sample resumes are full length and lay out with roles and bulle
 
 test('the download route serves the original, text, Word, and PDF, each named and typed for its format', async () => {
   const store = openJobStore(':memory:');
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   const r = await addResume(store.db, { bytes: Buffer.from(RESUME), filename: 'Pat resume.md' });
-  const get = (format) => app.inject(`/api/resumes/${r.id}/file${format ? `?format=${format}` : ''}`);
+  assert.ok(r);
+  const get = (/** @type {string | null} */ format) => app.inject(`/api/resumes/${r.id}/file${format ? `?format=${format}` : ''}`);
+  /** @type {Array<[string | null, RegExp, string]>} */
   const cases = [
     [null, /text\/plain/, 'Pat resume.md'],
     ['text', /text\/plain/, 'Pat resume.txt'],
@@ -66,8 +69,8 @@ test('the download route serves the original, text, Word, and PDF, each named an
   for (const [format, type, name] of cases) {
     const res = await get(format);
     assert.equal(res.statusCode, 200, String(format));
-    assert.match(res.headers['content-type'], type, String(format));
-    assert.match(res.headers['content-disposition'], new RegExp(`^attachment; filename="${name.replace('.', '\\.')}"`), String(format));
+    assert.match(/** @type {string} */ (res.headers['content-type']), type, String(format));
+    assert.match(/** @type {string} */ (res.headers['content-disposition']), new RegExp(`^attachment; filename="${name.replace('.', '\\.')}"`), String(format));
     assert.equal(res.headers['x-content-type-options'], 'nosniff');
   }
   assert.equal((await get('rtf')).statusCode, 400, 'only the four formats');

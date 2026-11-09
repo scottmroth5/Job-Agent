@@ -20,9 +20,9 @@ function olderDatabase() {
   store.db.prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
     VALUES (${owned ? '1, ' : ''}'k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')`).run();
   store.close();
-  return { dir, path, last: all.at(-1).id };
+  return { dir, path, last: all.at(-1)?.id };
 }
-const copiesIn = (dir) => (existsSync(join(dir, 'backups')) ? readdirSync(join(dir, 'backups')).filter((n) => n.startsWith('pre-migration-')) : []);
+const copiesIn = (/** @type {string} */ dir) => (existsSync(join(dir, 'backups')) ? readdirSync(join(dir, 'backups')).filter((n) => n.startsWith('pre-migration-')) : []);
 
 test('the pending check lists what would change and leaves the real file alone', () => {
   const { dir, path, last } = olderDatabase();
@@ -36,6 +36,7 @@ test('the pending check lists what would change and leaves the real file alone',
 
 test('opening a database that needs a migration takes a checked copy first; an up-to-date one takes none', () => {
   const { dir, path, last } = olderDatabase();
+  /** @type {string[]} */
   const logged = [];
   const store = openJobStore(path, { log: { info: (m) => logged.push(m) } });
   store.close();

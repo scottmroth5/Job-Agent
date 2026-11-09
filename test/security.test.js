@@ -10,8 +10,12 @@ import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
 import { CONTENT_SECURITY_POLICY, createRateLimiter, errorReply } from '../server/security.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { AppServices } from '../server/app.ts' */
+/** @import { InjectOptions } from 'fastify' */
+/** @import { TokenPayload } from 'google-auth-library' */
 
-const settingsFor = (publicUrl) =>
+const settingsFor = (/** @type {string} */ publicUrl) =>
   authSettings({
     AUTH_MODE: 'google',
     PUBLIC_URL: publicUrl,
@@ -21,46 +25,51 @@ const settingsFor = (publicUrl) =>
     SESSION_SECRET: randomBytes(48).toString('base64'),
   });
 
-/** An app with every optional route group turned on, and a built page to serve. */
+/**
+ * An app with every optional route group turned on, and a built page to serve.
+ * @param {{ authMode?: string, publicUrl?: string, log?: AppServices['log'] }} [o]
+ */
 async function fullApp({ authMode = 'google', publicUrl = 'https://jobs.example.com', log } = {}) {
   const store = openJobStore(':memory:');
   const webDir = mkdtempSync(join(tmpdir(), 'web-'));
   writeFileSync(join(webDir, 'index.html'), '<!doctype html><title>Job Hunt</title>');
   const app = await buildApp({
     store,
-    config: { candidate: { name: 'P' }, search: { homeLocations: [] }, fractional: {}, coverLetterChecks: [] },
+    config: fakeConfig({ candidate: { name: 'P' }, search: { homeLocations: [] }, fractional: {}, coverLetterChecks: [] }),
     webDir,
     authMode,
-    auth: authMode === 'google' ? { settings: settingsFor(publicUrl), exchange: async () => ({}) } : {},
-    services: {
+    auth: authMode === 'google' ? { settings: settingsFor(publicUrl), exchange: async () => /** @type {TokenPayload} */ ({}) } : {},
+    services: fakeServices({
       createBrowser: async () => null,
       runPipeline: async () => ({ code: 0, lastError: null }),
       runScript: async () => ({ code: 0, lastError: null }),
-      inbox: { ready: () => false, gmail: () => ({}), key: () => Buffer.alloc(32), cfg: {} },
+      // Gmail is never reached: ready() says it is not signed in.
+      inbox: /** @type {NonNullable<AppServices['inbox']>} */ (/** @type {unknown} */ ({ ready: () => false, gmail: () => ({}), key: () => Buffer.alloc(32), cfg: {} })),
       log: log ?? { info() {}, warn() {}, error() {} },
-    },
+    }),
   });
   return { app, store };
 }
 
 // Public on purpose: sign-in itself, the health check, and the privacy policy and terms (linked before sign-in).
 const OPEN = [/^\/auth\//, /^\/healthz$/, /^\/(privacy|terms)$/];
-const sampleUrl = (url) => url.replace(/:(\w+)/g, (_, name) => (name === 'id' ? '1' : name === 'action' ? 'score' : name === 'list' ? 'status' : name === 'name' ? 'score' : 'x')).replaceAll('*', 'index.html');
+const sampleUrl = (/** @type {string} */ url) => url.replace(/:(\w+)/g, (_, /** @type {string} */ name) => (name === 'id' ? '1' : name === 'action' ? 'score' : name === 'list' ? 'status' : name === 'name' ? 'score' : 'x')).replaceAll('*', 'index.html');
 
 test('every route except sign-in and /healthz needs sign-in: API routes answer 401, pages redirect to sign-in', async () => {
   const { app, store } = await fullApp();
   await app.ready();
+  /** @type {string[]} */
   const checked = [];
   for (const r of app.routeList) {
     if (OPEN.some((re) => re.test(r.url))) continue;
     for (const method of [r.method].flat()) {
       if (method === 'OPTIONS') continue;
       const url = sampleUrl(r.url);
-      const res = await app.inject({ method, url, payload: ['POST', 'PUT', 'PATCH'].includes(method) ? {} : undefined, remoteAddress: `10.0.${checked.length >> 8}.${checked.length & 255}` });
+      const res = await app.inject({ method: /** @type {InjectOptions['method']} */ (method), url, payload: ['POST', 'PUT', 'PATCH'].includes(method) ? {} : undefined, remoteAddress: `10.0.${checked.length >> 8}.${checked.length & 255}` });
       if (url.startsWith('/api/')) assert.equal(res.statusCode, 401, `${method} ${r.url} must need sign-in`);
       else {
         assert.equal(res.statusCode, 302, `${method} ${r.url} must redirect to sign-in`);
-        assert.match(res.headers.location, /^\/auth\/login\?next=/);
+        assert.match(/** @type {string} */ (res.headers.location), /^\/auth\/login\?next=/);
       }
       checked.push(`${method} ${r.url}`);
     }
@@ -87,12 +96,12 @@ test('security headers on every response; HTTPS adds HSTS; a route with its own 
   const job = Number(store.db.prepare("INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at) VALUES (1, 'k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')").run().lastInsertRowid);
   const up = (await app.inject({ method: 'POST', url: `/api/postings/${job}/attachments`, headers: { 'content-type': 'application/octet-stream', 'x-filename': 'a.pdf', 'x-file-type': 'application/pdf' }, payload: Buffer.from('%PDF') })).json();
   const file = await app.inject(`/api/attachments/${up.id}/file`);
-  assert.match(file.headers['content-security-policy'], /^sandbox/, 'attachments keep their sandbox policy');
+  assert.match(/** @type {string} */ (file.headers['content-security-policy']), /^sandbox/, 'attachments keep their sandbox policy');
   await app.close();
   store.close();
 
   const secure = await fullApp({ publicUrl: 'https://jobs.example.com' });
-  assert.match((await secure.app.inject('/healthz')).headers['strict-transport-security'], /max-age=31536000/);
+  assert.match(/** @type {string} */ ((await secure.app.inject('/healthz')).headers['strict-transport-security']), /max-age=31536000/);
   await secure.app.close();
   secure.store.close();
 });
@@ -124,6 +133,7 @@ test('rate limiter windows reset', () => {
 });
 
 test('server errors never reveal internals; caller errors still say what is wrong', async () => {
+  /** @type {string[]} */
   const logged = [];
   const { app, store } = await fullApp({ authMode: 'none', log: { error: (m) => logged.push(m), info() {}, warn() {} } });
   app.get('/api/test-boom', async () => {

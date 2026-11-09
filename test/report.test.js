@@ -3,8 +3,10 @@ import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { collectReport, renderReport } from '../agents/hunt/report.ts';
 import { archivePostings, findArchivable } from '../agents/hunt/archive.ts';
+/** @import { Database } from '../tools/types.ts' */
 
 // Synthetic postings only.
+/** @param {Database} db @param {{ stage?: string, status?: string, discovered?: string, company?: string, title?: string }} [o] */
 function addPosting(db, { stage = 'pipeline', status = 'new', discovered = '2026-09-29', company = 'Example Co', title = 'VP Engineering' } = {}) {
   const url = `https://jobs.example.com/${Math.random()}`;
   return Number(

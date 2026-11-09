@@ -6,6 +6,7 @@ import { buildApp } from '../server/app.ts';
 import { page } from '../server/auth.ts';
 import { loadGuides } from '../server/help-routes.ts';
 import { supportEmail, withSupport } from '../tools/support.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 test('the address: a plain address or nothing; the placeholder becomes a link or the fallback', () => {
   assert.equal(supportEmail({ SUPPORT_EMAIL: ' support@example.com ' }), 'support@example.com');
@@ -19,10 +20,10 @@ test('with SUPPORT_EMAIL set: the policy, terms, Help, sign-in pages, and /api/m
   process.env.SUPPORT_EMAIL = 'support@example.com';
   try {
     const store = openJobStore(':memory:');
-    const app = await buildApp({ store, config: { candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+    const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
     for (const path of ['/privacy', '/terms']) assert.match((await app.inject(path)).body, /<a href="mailto:support@example\.com"[^>]*>support@example\.com<\/a>/, path);
     assert.equal((await app.inject('/api/me')).json().supportEmail, 'support@example.com');
-    assert.match(loadGuides().find((g) => g.id === 'account').markdown, /mailto:support@example\.com/);
+    assert.match(String(loadGuides().find((g) => g.id === 'account')?.markdown), /mailto:support@example\.com/);
     assert.match(page('Waiting for approval', '<p>x</p>'), /Questions\? Email <a href="mailto:support@example\.com">/);
     await app.close();
     store.close();

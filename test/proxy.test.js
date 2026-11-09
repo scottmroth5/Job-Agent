@@ -7,6 +7,7 @@ import { randomBytes } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 const compose = readFileSync(new URL('../deploy/compose.yml', import.meta.url), 'utf8');
 const values = [...compose.matchAll(/TRUST_PROXY: (\S+)/g)].map((m) => m[1]);
@@ -24,8 +25,8 @@ test('with the production setting, req.ip is the visitor, and rate limits count 
   const store = openJobStore(':memory:');
   const app = await buildApp({
     store,
-    config: { search: { homeLocations: [] }, fractional: {} },
-    services: { createBrowser: async () => null },
+    config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }),
+    services: fakeServices({ createBrowser: async () => null }),
     authMode: 'google',
     auth: {
       settings: authSettings({
@@ -36,11 +37,11 @@ test('with the production setting, req.ip is the visitor, and rate limits count 
         AUTH_ALLOWED_EMAILS: 'pat@example.com',
         SESSION_SECRET: randomBytes(48).toString('base64'),
       }),
-      exchange: async () => ({}),
+      exchange: async () => /** @type {import('google-auth-library').TokenPayload} */ ({}),
     },
     trustProxy: values[0],
   });
-  const via = (visitor, url = '/auth/login') => app.inject({ url, remoteAddress: CADDY, headers: { 'x-forwarded-for': visitor } });
+  const via = (/** @type {string} */ visitor, url = '/auth/login') => app.inject({ url, remoteAddress: CADDY, headers: { 'x-forwarded-for': visitor } });
 
   // A bot uses up its own sign-in allowance...
   for (let i = 0; i < 30; i += 1) await via('198.51.100.20');

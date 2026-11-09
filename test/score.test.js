@@ -12,16 +12,24 @@ import {
   selectPostings,
   estimateCost,
 } from '../agents/discovery/score.ts';
+import { fakeConfig } from './fixtures/fakes.js';
+/** @import { Claude } from '@scottmroth5/agent-core' */
+/** @import { ScoreInput } from '../agents/discovery/score.ts' */
+/** @import { Database } from '../tools/types.ts' */
+/** @typedef {{ model: string, messages: Array<{ content: string }> }} Params */
+
+/** A posting with only the fields a test sets. */
+const scoreInput = (/** @type {Partial<ScoreInput>} */ p) => /** @type {ScoreInput} */ (p);
 
 // Synthetic config and knowledge; no real data.
-const config = {
+const config = fakeConfig({
   candidate: { name: 'Pat Example' },
   search: { homeAreaLabel: 'the Anytown area', homeLocations: ['Anytown, ST'], terms: ['x'], relevantTitleKeywords: ['x'] },
-};
+});
 const KNOWLEDGE = 'Section 5: Job Targets. Senior engineering leadership roles. '.repeat(20);
 const prompt = loadScorePrompt();
 
-const result = (o = {}) => ({
+const result = (/** @type {Record<string, unknown>} */ o = {}) => ({
   score: 8,
   reason: 'Strong match — scaled teams',
   roleType: 'Full time',
@@ -33,12 +41,16 @@ const result = (o = {}) => ({
   ...o,
 });
 
-/** Fake Anthropic client: answers every request with the next result (or throws it). */
+/**
+ * Fake Anthropic client: answers every request with the next result (or throws it).
+ * @param {Array<object | Error> | ((params: Params) => object | Error)} replies
+ */
 function fakeClaude(replies) {
+  /** @type {Params[]} */
   const requests = [];
   const client = {
     messages: {
-      create: async (params) => {
+      create: async (/** @type {Params} */ params) => {
         requests.push(params);
         const r = typeof replies === 'function' ? replies(params) : replies.shift();
         if (r instanceof Error) throw r;
@@ -55,6 +67,7 @@ function fakeClaude(replies) {
   return { requests, claude: createClaude({ client }) };
 }
 
+/** @param {Database} db @param {Record<string, string | number | null>} [o] */
 function addPosting(db, o = {}) {
   const row = {
     url: `https://jobs.example.com/${Math.random()}`,
@@ -107,15 +120,15 @@ test('buildScoreRequest fills every placeholder and applies model settings', () 
 
 test('interpretResult removes dashes and enforces location caps', () => {
   const text = { fetched_text: 'Lead the platform team.' };
-  const clean = interpretResult(result(), { location_check: 'remote', ...text });
+  const clean = interpretResult(result(), scoreInput({ location_check: 'remote', ...text }));
   assert.equal(clean.reason, 'Strong match, scaled teams');
   assert.deepEqual(clean.analysis.strengths, ['Scaled a platform, twice']);
-  assert.equal(interpretResult(result({ score: 9 }), { location_check: 'unverified', ...text }).score, 7);
-  assert.equal(interpretResult(result({ score: 9, locationConcern: 'conflict' }), { location_check: 'unknown', ...text }).score, 2);
+  assert.equal(interpretResult(result({ score: 9 }), scoreInput({ location_check: 'unverified', ...text })).score, 7);
+  assert.equal(interpretResult(result({ score: 9, locationConcern: 'conflict' }), scoreInput({ location_check: 'unknown', ...text })).score, 2);
 });
 
 test('ruleScore explains a conflict without an AI call', () => {
-  const r = ruleScore({ location: 'Faraway, ZZ' }, config);
+  const r = ruleScore(scoreInput({ location: 'Faraway, ZZ' }), config);
   assert.equal(r.score, 2);
   assert.match(r.reason, /Faraway, ZZ.*the Anytown area.*without an AI call/);
 });
@@ -127,7 +140,7 @@ test('scorePostings stores scores, applies the rule, promotes 8+, and skips scor
   const conflict = addPosting(store.db, { location: 'Faraway, ZZ', location_check: 'conflict' });
   addPosting(store.db, { status: 'passed' }); // never scored
   addPosting(store.db, { fetch_status: null }); // v1 history, not selected by default
-  const { claude, requests } = fakeClaude((params) => (params.messages[0].content.includes('Lead a team') ? result({ score: requests.length === 1 ? 9 : 5 }) : result()));
+  const { claude, requests } = fakeClaude((/** @type {Params} */ params) => (params.messages[0].content.includes('Lead a team') ? result({ score: requests.length === 1 ? 9 : 5 }) : result()));
 
   const summary = await scorePostings({ store, config, claude, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5', options: { concurrency: 1 } });
   assert.equal(summary.selected, 3);
@@ -136,13 +149,13 @@ test('scorePostings stores scores, applies the rule, promotes 8+, and skips scor
   assert.equal(requests.length, 2, 'the conflict posting made no Claude call');
   assert.deepEqual(summary.promoted, [high]);
 
-  const rows = store.db.prepare('SELECT posting_id, score, source, model, prompt_version FROM scores ORDER BY posting_id').all();
+  const rows = /** @type {Array<Record<string, string | number | null>>} */ (store.db.prepare('SELECT posting_id, score, source, model, prompt_version FROM scores ORDER BY posting_id').all());
   assert.deepEqual(rows.map((r) => [r.posting_id, r.score, r.source]), [[high, 9, 'v2'], [low, 5, 'v2'], [conflict, 2, 'v2-rule']]);
   assert.equal(rows[0].model, 'claude-haiku-4-5');
   assert.equal(rows[0].prompt_version, prompt.version);
   assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(high), 'pipeline');
   assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(low), 'discovered');
-  assert.equal(JSON.parse(store.db.prepare('SELECT analysis_json FROM scores WHERE posting_id = ?').pluck().get(high)).topTalkingPoint, 'Platform growth');
+  assert.equal(JSON.parse(/** @type {string} */ (store.db.prepare('SELECT analysis_json FROM scores WHERE posting_id = ?').pluck().get(high))).topTalkingPoint, 'Platform growth');
 
   assert.equal(selectPostings(store.db).length, 0, 'a second run scores nothing');
   assert.equal(selectPostings(store.db, { allUnscored: true }).length, 1, '--all-unscored includes v1 history');
@@ -167,20 +180,21 @@ test('scorePostings leaves failures unscored and stops after repeated failures',
 
 test('scorePostings refuses to run without usable knowledge', async () => {
   const store = openJobStore(':memory:');
-  await assert.rejects(scorePostings({ store, config, claude: {}, knowledge: 'too short', model: 'claude-haiku-4-5' }), /Candidate Knowledge/);
+  const neverCalled = /** @type {Claude} */ (/** @type {unknown} */ ({})); // refused before any call
+  await assert.rejects(scorePostings({ store, config, claude: neverCalled, knowledge: 'too short', model: 'claude-haiku-4-5' }), /Candidate Knowledge/);
   store.close();
 });
 
 test('fractional postings use the fractional prompt with stacking target and posted terms', () => {
   const prompts = { fulltime: prompt, fractional: loadScorePrompt('fractional') };
-  const fcfg = { ...config, fractional: { targetAnnual: [200000, 250000], weeksPerYear: 48 } };
+  const fcfg = fakeConfig({ ...config, fractional: { targetAnnual: [200000, 250000], weeksPerYear: 48 } });
   const posting = { track: 'fractional', company: 'Example Co', title: 'Fractional CTO', location: 'Remote', location_check: 'remote', rate_text: '$5K - $6K / mo', hours_min: 5, hours_max: 8, fetched_text: 'x' };
   const req = buildScoreRequest(posting, { config: fcfg, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5', prompts });
   assert.equal(req.label, 'score-fractional');
   assert.ok(!/\{\{/.test(req.prompt));
   assert.match(req.prompt, /The target is \$200K to \$250K per year/);
   assert.match(req.prompt, /Posted terms: pay \$5K - \$6K \/ mo, 5 to 8 hours per week/);
-  assert.deepEqual(Object.keys(req.schema.properties).slice(0, 3), ['score', 'fit', 'reason']);
+  assert.deepEqual(Object.keys(/** @type {{ properties: object }} */ (req.schema).properties).slice(0, 3), ['score', 'fit', 'reason']);
   const full = buildScoreRequest({ ...posting, track: 'fulltime' }, { config: fcfg, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5', prompts });
   assert.equal(full.label, 'score');
 });
@@ -198,19 +212,20 @@ test('scoring a fractional posting stores pay and hours only where the source le
     hoursPerWeek: { min: 5, max: 8 },
   });
   const { claude, requests } = fakeClaude([fractionalResult]);
-  await scorePostings({ store, config: { ...config, fractional: { targetAnnual: [200000, 250000] } }, claude, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5' });
+  await scorePostings({ store, config: fakeConfig({ ...config, fractional: { targetAnnual: [200000, 250000] } }), claude, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5' });
   assert.match(requests[0].messages[0].content, /fractional engagement/);
   const row = store.db.prepare('SELECT rate_min, rate_max, rate_unit, hours_min, hours_max, stage FROM postings WHERE id = ?').get(id);
   assert.deepEqual(row, { rate_min: 175, rate_max: 225, rate_unit: 'hour', hours_min: 10, hours_max: 20, stage: 'pipeline' });
-  assert.equal(JSON.parse(store.db.prepare('SELECT analysis_json FROM scores').pluck().get()).fit, 'High');
+  assert.equal(JSON.parse(/** @type {string} */ (store.db.prepare('SELECT analysis_json FROM scores').pluck().get())).fit, 'High');
   store.close();
 });
 
 test('estimateCost skips rule-scored postings and knows only listed models', () => {
-  const postings = [{ location_check: 'remote', fetched_text: 'x'.repeat(4000) }, { location_check: 'conflict' }];
-  const usd = estimateCost(postings, { model: 'claude-haiku-4-5', knowledgeChars: 10000, templateChars: 2000 });
-  assert.ok(usd > 0.004 && usd < 0.01, String(usd));
-  assert.equal(estimateCost(postings, { model: 'other', knowledgeChars: 1, templateChars: 1 }), null);
+  const noSkips = fakeConfig({ search: {} }); // no excluded sites
+  const postings = [scoreInput({ location_check: 'remote', fetched_text: 'x'.repeat(4000) }), scoreInput({ location_check: 'conflict' })];
+  const usd = estimateCost(postings, { model: 'claude-haiku-4-5', knowledgeChars: 10000, templateChars: 2000, config: noSkips });
+  assert.ok(usd != null && usd > 0.004 && usd < 0.01, String(usd));
+  assert.equal(estimateCost(postings, { model: 'other', knowledgeChars: 1, templateChars: 1, config: noSkips }), null);
 });
 
 test('sanitizeDashes runs in linear time on long runs of spaces (letter text can come from a request)', () => {

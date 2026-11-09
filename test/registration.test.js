@@ -10,6 +10,9 @@ import { authSettings, MAX_PENDING } from '../server/auth.ts';
 import { createNotices } from '../server/notices.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { boxKey, open, seal } from '../tools/secret-box.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { SentEmail } from './fixtures/fakes.js' */
+/** @import { UsersRow } from '../db/types.ts' */
 
 const SITE = 'http://localhost:5178';
 const OWNER = 'owner@example.com';
@@ -23,18 +26,20 @@ async function setup({ keyWorks = true } = {}) {
     AUTH_ALLOWED_EMAILS: OWNER, SESSION_SECRET: secret,
   });
   const store = openJobStore(':memory:', { fallbackUid: null });
+  /** @type {SentEmail[]} */
   const sent = [];
   const notices = createNotices({ send: async (email) => sent.push(email), owner: () => OWNER, appUrl: () => SITE, log: {} });
+  /** @type {string[]} */
   const checked = [];
   const app = await buildApp({
     store,
-    config: { search: { homeLocations: [] }, fractional: {} },
+    config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }),
     authMode: 'google',
     auth: { settings, exchange: async () => assert.fail('no Google here') },
-    services: { createBrowser: async () => null, notices, checkClaudeKey: async (k) => { checked.push(k); return keyWorks; }, log: { info() {}, warn() {}, error() {} } },
+    services: fakeServices({ createBrowser: async () => null, notices, checkClaudeKey: async (k) => { checked.push(k); return keyWorks; }, log: { info() {}, warn() {}, error() {} } }),
   });
-  const as = (email) => `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`;
-  const form = (cookie, body) => app.inject({ method: 'POST', url: '/auth/register', headers: { cookie, origin: SITE, 'content-type': 'application/x-www-form-urlencoded' }, payload: new URLSearchParams(body).toString() });
+  const as = (/** @type {string} */ email) => `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`;
+  const form = (/** @type {string} */ cookie, /** @type {Record<string, string>} */ body) => app.inject({ method: 'POST', url: '/auth/register', headers: { cookie, origin: SITE, 'content-type': 'application/x-www-form-urlencoded' }, payload: new URLSearchParams(body).toString() });
   return { store, app, sent, checked, as, form, done: async () => { await app.close(); store.close(); } };
 }
 
@@ -61,7 +66,7 @@ test('a new address is sent to request access; the request makes a pending accou
   assert.equal(other.statusCode, 403, 'only from this site');
   const ok = await form(pat, { name: 'Pat <b>Example</b>', note: 'Former colleague', age: 'yes', terms: 'yes' });
   assert.deepEqual([ok.statusCode, ok.headers.location], [303, '/auth/waiting']);
-  const row = store.raw.prepare("SELECT * FROM users WHERE email = 'pat@example.com'").get();
+  const row = /** @type {UsersRow} */ (store.raw.prepare("SELECT * FROM users WHERE email = 'pat@example.com'").get());
   assert.deepEqual([row.status, row.role, row.ai_source, Boolean(row.terms_accepted_at)], ['pending', 'user', 'own', true]);
   assert.equal(sent.length, 1, JSON.stringify(sent.map((e) => [e.to, e.subject])));
   assert.equal(sent[0].to, OWNER, 'the request goes to the owner');
@@ -80,7 +85,7 @@ test('a new address is sent to request access; the request makes a pending accou
   assert.equal(store.raw.prepare('SELECT COUNT(*) FROM users').pluck().get(), 2);
   // The name is shown escaped wherever it appears.
   const list = (await app.inject({ url: '/api/admin/users', headers: { cookie: as(OWNER) } })).json();
-  assert.equal(list.find((u) => u.email === 'pat@example.com').name, 'Pat <b>Example</b>');
+  assert.equal(list.find((/** @type {{ email: string }} */ u) => u.email === 'pat@example.com').name, 'Pat <b>Example</b>');
   await done();
 });
 
@@ -89,24 +94,24 @@ test('the owner approves, pauses, resumes, and rejects; each person is emailed a
   const owner = as(OWNER);
   await form(as('pat@example.com'), { name: 'Pat', age: 'yes', terms: 'yes' });
   await form(as('sam@example.com'), { name: 'Sam', age: 'yes', terms: 'yes' });
-  const ids = Object.fromEntries(store.raw.prepare('SELECT email, id FROM users').all().map((u) => [u.email, u.id]));
-  const act = (id, decision, cookie = owner) => app.inject({ method: 'POST', url: `/api/admin/users/${id}/${decision}`, headers: { cookie, origin: SITE } });
+  const ids = Object.fromEntries(/** @type {Array<{ email: string, id: number }>} */ (store.raw.prepare('SELECT email, id FROM users').all()).map((u) => [u.email, u.id]));
+  const act = (/** @type {number} */ id, /** @type {string} */ decision, cookie = owner) => app.inject({ method: 'POST', url: `/api/admin/users/${id}/${decision}`, headers: { cookie, origin: SITE } });
 
   assert.equal((await act(ids['pat@example.com'], 'approve', as('sam@example.com'))).statusCode, 403, 'a pending account cannot');
   assert.equal((await act(ids['pat@example.com'], 'approve')).json().status, 'active');
-  assert.deepEqual([sent.at(-1).to, sent.at(-1).subject], ['pat@example.com', 'Job Hunt: your access is approved']);
+  assert.deepEqual([sent.at(-1)?.to, sent.at(-1)?.subject], ['pat@example.com', 'Job Hunt: your access is approved']);
   const pat = as('pat@example.com');
   assert.equal((await app.inject({ url: '/api/postings', headers: { cookie: pat } })).statusCode, 200);
   assert.equal((await app.inject({ url: '/api/admin/users', headers: { cookie: pat } })).statusCode, 403, 'a user is not an admin');
   assert.equal((await act(ids['sam@example.com'], 'approve', pat)).statusCode, 403);
 
   assert.equal((await act(ids['sam@example.com'], 'reject')).json().status, 'rejected');
-  assert.equal(sent.at(-1).to, 'sam@example.com');
+  assert.equal(sent.at(-1)?.to, 'sam@example.com');
   assert.equal((await app.inject({ url: '/', headers: { cookie: as('sam@example.com') } })).headers.location, '/auth/not-approved');
   assert.equal((await act(ids['sam@example.com'], 'pause')).statusCode, 400, 'only an active account can be paused');
 
   assert.equal((await act(ids['pat@example.com'], 'pause')).json().status, 'paused');
-  assert.equal(sent.at(-1).to, 'pat@example.com');
+  assert.equal(sent.at(-1)?.to, 'pat@example.com');
   assert.equal((await act(ids['pat@example.com'], 'resume')).json().status, 'active');
   assert.equal((await act(OWNER_ID, 'pause')).statusCode, 404, 'the owner cannot be paused');
   assert.equal((await act(999, 'approve')).statusCode, 404);
@@ -116,18 +121,18 @@ test('the owner approves, pauses, resumes, and rejects; each person is emailed a
   for (const e of sent) assert.ok([OWNER, 'pat@example.com', 'sam@example.com'].includes(e.to), e.to);
 
   // AI access: their own key, or the owner's key with a cap.
-  const ai = (body) => app.inject({ method: 'PUT', url: `/api/admin/users/${ids['pat@example.com']}/ai`, headers: { cookie: owner, origin: SITE }, payload: body });
+  const ai = (/** @type {object} */ body) => app.inject({ method: 'PUT', url: `/api/admin/users/${ids['pat@example.com']}/ai`, headers: { cookie: owner, origin: SITE }, payload: body });
   const unconfirmed = await ai({ source: 'owner', capUsd: 10 });
-  assert.deepEqual([unconfirmed.statusCode, getUser(store.raw, ids['pat@example.com']).ai_source], [400, 'own'], 'paying needs their address typed');
+  assert.deepEqual([unconfirmed.statusCode, getUser(store.raw, ids['pat@example.com'])?.ai_source], [400, 'own'], 'paying needs their address typed');
   assert.equal((await ai({ source: 'owner', capUsd: 10, confirmEmail: 'sam@example.com' })).statusCode, 400, 'the wrong address is refused');
   const sentBefore = sent.length;
-  assert.deepEqual([(await ai({ source: 'owner', capUsd: 10, confirmEmail: ' Pat@Example.com ' })).json().ai_source, getUser(store.raw, ids['pat@example.com']).ai_cap_usd], ['owner', 10]);
-  assert.deepEqual([sent.at(-1).to, sent.at(-1).subject], ['pat@example.com', 'Job Hunt: your AI is covered']);
+  assert.deepEqual([(await ai({ source: 'owner', capUsd: 10, confirmEmail: ' Pat@Example.com ' })).json().ai_source, getUser(store.raw, ids['pat@example.com'])?.ai_cap_usd], ['owner', 10]);
+  assert.deepEqual([sent.at(-1)?.to, sent.at(-1)?.subject], ['pat@example.com', 'Job Hunt: your AI is covered']);
   assert.equal((await ai({ source: 'owner', capUsd: 25 })).json().ai_cap_usd, 25, 'changing the cap needs no retyping');
-  assert.match(sent.at(-1).text, /\$25\.00 a month/);
+  assert.match(String(sent.at(-1)?.text), /\$25\.00 a month/);
   assert.equal((await ai({ source: 'owner' })).statusCode, 400, 'a cap is needed');
   assert.equal((await ai({ source: 'own' })).json().ai_cap_usd, null);
-  assert.equal(sent.at(-1).subject, 'Job Hunt: your AI uses your own key again');
+  assert.equal(sent.at(-1)?.subject, 'Job Hunt: your AI uses your own key again');
   assert.equal(sent.length, sentBefore + 3);
   await done();
 });
@@ -135,10 +140,10 @@ test('the owner approves, pauses, resumes, and rejects; each person is emailed a
 test('Settings: a user saves their own key (checked, sealed, never returned) and removes it; the owner cannot', async () => {
   const { store, app, checked, as, form, done } = await setup();
   await form(as('pat@example.com'), { name: 'Pat', age: 'yes', terms: 'yes' });
-  const id = store.raw.prepare("SELECT id FROM users WHERE email = 'pat@example.com'").pluck().get();
+  const id = /** @type {number} */ (store.raw.prepare("SELECT id FROM users WHERE email = 'pat@example.com'").pluck().get());
   store.raw.prepare("UPDATE users SET status = 'active' WHERE id = ?").run(id);
   const pat = as('pat@example.com');
-  const put = (key, cookie = pat) => app.inject({ method: 'PUT', url: '/api/account/claude-key', headers: { cookie, origin: SITE }, payload: { key } });
+  const put = (/** @type {string | null} */ key, cookie = pat) => app.inject({ method: 'PUT', url: '/api/account/claude-key', headers: { cookie, origin: SITE }, payload: { key } });
   const madeUp = 'sk-ant-api03-made-up-key-for-tests-0123456789';
 
   assert.equal((await put('not a key')).statusCode, 400);
@@ -147,7 +152,7 @@ test('Settings: a user saves their own key (checked, sealed, never returned) and
   assert.equal(saved.statusCode, 200);
   assert.deepEqual([saved.json().ai.keySet, saved.json().ai.paidBy], [true, 'own']);
   assert.ok(!saved.body.includes(madeUp), 'the key is never sent back');
-  const sealed = store.raw.prepare('SELECT claude_key_enc FROM users WHERE id = ?').pluck().get(id);
+  const sealed = /** @type {string} */ (store.raw.prepare('SELECT claude_key_enc FROM users WHERE id = ?').pluck().get(id));
   assert.ok(!sealed.includes(madeUp) && sealed.startsWith('v1.'));
   assert.equal(open(sealed, id, boxKey(KEY_SECRET)), madeUp);
   assert.throws(() => open(sealed, id + 1, boxKey(KEY_SECRET)), 'bound to its user');
@@ -178,7 +183,7 @@ test('requests close when too many are waiting; the privacy policy and terms are
   for (const path of ['/privacy', '/terms']) {
     const res = await app.inject(path);
     assert.equal(res.statusCode, 200, path);
-    assert.match(res.headers['content-type'], /text\/html/);
+    assert.match(/** @type {string} */ (res.headers['content-type']), /text\/html/);
   }
   await done();
 });
