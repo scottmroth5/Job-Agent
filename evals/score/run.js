@@ -27,19 +27,17 @@ async function mapLimit(items, limit, fn) {
   );
 }
 
-// No search settings here, so the estimate leaves no excluded site out (as before; estimateCost reads none).
-const NO_CONFIG = /** @type {Pick<JobSearchConfig, 'search'>} */ (/** @type {unknown} */ (undefined));
-
 /**
  * Estimated total cost of running these models over these cases.
  * @param {ScoreCase[]} cases
  * @param {string[]} models
  * @param {number} knowledgeChars
+ * @param {Pick<JobSearchConfig, 'search'>} config the search settings runEval scores with, so excluded-site cases count as rule scored (free)
  * @param {Database | null} [db]
  */
-export function estimateEval(cases, models, knowledgeChars, db = null) {
+export function estimateEval(cases, models, knowledgeChars, config, db = null) {
   const templateChars = loadScorePrompt('fulltime', db).template.length;
-  return Object.fromEntries(models.map((m) => [m, estimateCost(cases, { model: m, knowledgeChars, templateChars, config: NO_CONFIG })]));
+  return Object.fromEntries(models.map((m) => [m, estimateCost(cases, { model: m, knowledgeChars, templateChars, config })]));
 }
 
 /**
