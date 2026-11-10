@@ -97,6 +97,10 @@ npm run db:pending                migrations a database open would apply, tried 
 npm run report:baseline           v3 baseline (tools/baseline.ts): rows per table, database and attachment sizes, Claude spend by
                                   month, accounts by status, outcome data gaps; counts only, opened read-only (no migrations).
                                   -- --json; output stays out of the repo
+npm run bench                     response times (v3 Phase 3): the main routes on a fresh demo database in the OS temp folder,
+                                  through app.inject; median, p95, mean ms (-- --runs=N, --json). Sample data only
+npm run bench:demo -- --url=<demo address>   times a few read requests to the public demo (network included, at most 50
+                                  runs a route); the address is passed in, never written in the repo
 npm run backup:restore -- --file latest --out data/restore/job-agent.db   decrypt into NEW files (never over the live database)
 npm run backup:test               restore test: the newest Drive backup (or -- --file <path>) decrypted into the OS temp folder,
                                   integrity-checked, table counts compared with the live database, then deleted. Counts only.
