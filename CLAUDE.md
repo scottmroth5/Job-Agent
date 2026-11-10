@@ -300,8 +300,9 @@ server/types.ts holds App, RouteServices, StartTask, Notices, and declares req.u
 results are cast to db/types.ts rows. server/index.js is a one-line launcher for server/main.ts (npm run ui, the Dockerfile,
 and compose.yml run index.js); buildApp's options and services are BuildAppOptions and AppServices in server/app.ts.
 scripts, evals, and test stay JavaScript (deploy.sh, compose.yml, the Windows tasks, and the server run scripts/*.js by name),
-typed with JSDoc (@param, @typedef, /** @import { X } from '...' */, casts as /** @type {T} */ (x)) and checked by
-tsconfig.checkjs.json, whose include lists each directory that passes (evals, scripts, and test).
+typed with JSDoc (@param, @typedef, /** @import { X } from '...' */, casts as /** @type {T} */ (x)) and checked by the
+root tsconfig.json (checkJs: true), so a new .js file there is checked too. Tests build stand-ins through test/fixtures/fakes.js.
+The any count and each reason are in docs/v3/PLAN.md (Phase 2); a new any updates that table.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
