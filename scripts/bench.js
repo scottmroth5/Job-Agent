@@ -2,12 +2,14 @@
 // app.inject, so the async data layer can be compared with the synchronous one. Sample data only: it seeds a fresh
 // demo database in the OS temp folder, deletes it afterwards, and touches no real data, network, or Claude.
 //
-//   node scripts/bench.js                 200 timed runs per route after 20 warm-up runs
-//   node scripts/bench.js --runs=500      more runs
+//   node scripts/bench.js                 3 rounds of 200 timed runs per route, each after 20 warm-up runs
+//   node scripts/bench.js --runs=500      more runs per round
+//   node scripts/bench.js --rounds=5      more rounds
 //   node scripts/bench.js --json          machine-readable output
 //
-// Prints median, p95, and mean milliseconds per route. Nothing is written to the repo or logged elsewhere.
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+// Prints median, p95, and mean milliseconds per route from its best round (the lowest median): a busy computer slows
+// whole rounds, so the best round is the steadiest number to compare. Nothing is written to the repo or logged.
+import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -20,6 +22,7 @@ import { seedDemo } from './demo-seed.js';
 
 const arg = (/** @type {string} */ name) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split('=')[1];
 const RUNS = Number(arg('runs') ?? 200);
+const ROUNDS = Math.max(1, Number(arg('rounds') ?? 3));
 const WARMUP = 20;
 
 /** Milliseconds at the given quantile of sorted times. @param {number[]} sorted @param {number} q */
@@ -82,23 +85,26 @@ try {
 
   /** @type {Record<string, ReturnType<typeof stats>>} */
   const results = {};
-  for (const r of routes) {
-    for (let i = 0; i < WARMUP; i += 1) await r.run();
-    /** @type {number[]} */
-    const times = [];
-    for (let i = 0; i < RUNS; i += 1) {
-      const start = performance.now();
-      await r.run();
-      times.push(performance.now() - start);
+  for (let round = 0; round < ROUNDS; round += 1) {
+    for (const r of routes) {
+      for (let i = 0; i < WARMUP; i += 1) await r.run();
+      /** @type {number[]} */
+      const times = [];
+      for (let i = 0; i < RUNS; i += 1) {
+        const start = performance.now();
+        await r.run();
+        times.push(performance.now() - start);
+      }
+      const s = stats(times);
+      if (!results[r.name] || s.median < results[r.name].median) results[r.name] = s;
     }
-    results[r.name] = stats(times);
   }
   await app.close();
   store.close();
 
-  if (process.argv.includes('--json')) console.log(JSON.stringify({ runs: RUNS, jobs: JOBS.length, node: process.version, results }, null, 2));
+  if (process.argv.includes('--json')) console.log(JSON.stringify({ runs: RUNS, rounds: ROUNDS, jobs: JOBS.length, node: process.version, results }, null, 2));
   else {
-    console.log(`${RUNS} runs per route on the demo's ${JOBS.length} sample jobs (Node ${process.version}); milliseconds`);
+    console.log(`Best of ${ROUNDS} rounds of ${RUNS} runs per route on the demo's ${JOBS.length} sample jobs (Node ${process.version}); milliseconds`);
     console.log('route'.padEnd(26) + 'median'.padStart(9) + 'p95'.padStart(9) + 'mean'.padStart(9));
     for (const [name, s] of Object.entries(results)) console.log(name.padEnd(26) + String(s.median).padStart(9) + String(s.p95).padStart(9) + String(s.mean).padStart(9));
   }

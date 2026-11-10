@@ -98,7 +98,8 @@ npm run report:baseline           v3 baseline (tools/baseline.ts): rows per tabl
                                   month, accounts by status, outcome data gaps; counts only, opened read-only (no migrations).
                                   -- --json; output stays out of the repo
 npm run bench                     response times (v3 Phase 3): the main routes on a fresh demo database in the OS temp folder,
-                                  through app.inject; median, p95, mean ms (-- --runs=N, --json). Sample data only
+                                  through app.inject; median, p95, mean ms from the best of 3 rounds (-- --runs=N, --rounds=N,
+                                  --json). Sample data only. Timings on a busy PC swing between runs: compare several runs
 npm run bench:demo -- --url=<demo address>   times a few read requests to the public demo (network included, at most 50
                                   runs a route); the address is passed in, never written in the repo
 npm run backup:restore -- --file latest --out data/restore/job-agent.db   decrypt into NEW files (never over the live database)
