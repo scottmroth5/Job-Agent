@@ -1,5 +1,7 @@
 // Small HTTP layer for job sources: browser-like User-Agent, timeouts, one retry on
 // 5xx/network errors, and a distinct error for rate limiting so a source can stop early.
+// It refuses to run inside a database transaction (db/engine/sqlite.ts), which would hold every other statement.
+import { assertOutsideTransaction } from '../db/engine/sqlite.ts';
 
 export const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36';
@@ -46,6 +48,7 @@ export interface Http {
 
 export function createHttp({ fetchImpl = globalThis.fetch, sleepImpl = sleep, retryDelayMs = 2000 }: { fetchImpl?: typeof fetch; sleepImpl?: (ms: number) => Promise<unknown>; retryDelayMs?: number } = {}): Http {
   async function get(url: string, { headers = {}, timeoutMs = 20000, retries = 1, method = 'GET', body }: RequestOptions = {}) {
+    assertOutsideTransaction('An HTTP request');
     for (let attempt = 0; ; attempt++) {
       let res;
       try {
