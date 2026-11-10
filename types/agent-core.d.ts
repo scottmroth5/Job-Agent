@@ -102,6 +102,7 @@ declare module '@scottmroth5/agent-core' {
   }
 
   export interface Logger {
+    // any: loggers that take only a message, (msg: string) => void, must fit; unknown[] would refuse them.
     info: (...args: any[]) => void;
     warn: (...args: any[]) => void;
     error: (...args: any[]) => void;

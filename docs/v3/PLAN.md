@@ -213,10 +213,25 @@ Goal: type checking across the codebase, with no change in behavior. Convert in 
 8. Rule from now on: every new file is TypeScript.
 
 Done when:
-- [ ] `tools`, `db`, `agents`, and `server` are TypeScript and pass strict checks. `scripts`, `evals`, `test`, and `web/src` pass at least `checkJs`
-- [ ] Any `any` or `@ts-expect-error` has a reason beside it, and the count is reported
-- [ ] Typecheck and lint fail CI
+- [x] `tools`, `db`, `agents`, and `server` are TypeScript and pass strict checks. `scripts`, `evals`, `test`, and `web/src` pass at least `checkJs`
+- [x] Any `any` or `@ts-expect-error` has a reason beside it, and the count is reported
+- [x] Typecheck and lint fail CI
 - [ ] Production runs the converted code with all checks passing and a clean week of scheduled runs
+
+Status at the close-out (November 10, 2026):
+- `web/src` is TypeScript (`.ts` and `.tsx`). `scripts`, `evals`, and `test` stay JavaScript, because `deploy.sh`, `compose.yml`, and the Windows tasks run `scripts/*.js` by name. They are typed with JSDoc and checked by the root `tsconfig.json` (`checkJs: true`).
+- `any` count: 12 lines plus one alias, each with its reason beside it. There are no `@ts-expect-error`, `@ts-ignore`, or `@ts-nocheck` comments.
+
+  | File | Lines | Reason |
+  |---|---|---|
+  | `tools/backup/drive.ts` | 3 | A Google or test-fake response, a thrown error, and Drive's JSON replies; each reads only the fields it needs |
+  | `tools/config.ts` | 2 | `validateConfig` checks JSON of unknown shape, and every read is guarded |
+  | `tools/html.ts` | 1 | JSON-LD from a web page has no fixed shape; every field is checked before use |
+  | `tools/http.ts` | 2 | JSON from another site; each caller checks the fields it reads |
+  | `types/agent-core.d.ts` | 4 | `SendResult.data` takes its shape from the schema given; `Logger` accepts loggers that take only a message |
+  | `web/src/api.ts` | 1 alias | `Loose`: open API response schemas say nothing about their fields; tightening a route's schema types it |
+
+- The clean week of scheduled runs is confirmed from the run reports, on or after November 12, 2026.
 
 ### Phase 3: Async data layer on SQLite
 
