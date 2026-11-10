@@ -11,6 +11,8 @@ import { authSettings } from '../server/auth.ts';
 import { usageByWeek } from '../server/admin-queries.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { localDay } from '../tools/dates.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { Database } from '../tools/types.ts' */
 
 const SITE = 'http://localhost:5178';
 const OWNER = 'owner@example.com';
@@ -20,23 +22,25 @@ const FIELDS = ['accountsSeen', 'claudeSpendUsd', 'feedbackReceived', 'jobsAdded
 // Saturday evening in the Americas, already Sunday in UTC: which week it lands in follows the app's zone.
 const EDGE = '2026-10-25T03:00:00Z';
 
+/** @param {Database} db */
 function seed(db) {
   const pat = addUser(db, { email: 'pat@example.com', name: 'Pat' });
   const sam = addUser(db, { email: 'sam@example.com', name: 'Sam' });
   let n = 0;
-  const job = (uid, at) =>
+  const job = (/** @type {number} */ uid, /** @type {string} */ at) =>
     Number(
       db.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
           VALUES (?, ?, 'Example Co', 'Secret Title', ?, ?, ?, ?)`).run(uid, `example.com/${(n += 1)}`, `example|${n}`, at.slice(0, 10), at, at).lastInsertRowid,
     );
-  const run = (uid, name, status, at) => Number(db.prepare('INSERT INTO runs (name, status, started_at, user_id) VALUES (?, ?, ?, ?)').run(name, status, at, uid).lastInsertRowid);
-  const call = (runId, cost, at) => db.prepare("INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, 'scoring', 'm', ?, ?)").run(runId, cost, at);
+  const run = (/** @type {number} */ uid, /** @type {string} */ name, /** @type {string} */ status, /** @type {string} */ at) => Number(db.prepare('INSERT INTO runs (name, status, started_at, user_id) VALUES (?, ?, ?, ?)').run(name, status, at, uid).lastInsertRowid);
+  const call = (/** @type {number} */ runId, /** @type {number | null} */ cost, /** @type {string} */ at) => db.prepare("INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, 'scoring', 'm', ?, ?)").run(runId, cost, at);
+  /** @param {number} uid @param {number} posting @param {string} kind @param {string} source @param {string} at */
   const artifact = (uid, posting, kind, source, at) =>
     db.prepare('INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(uid, posting, kind, 'Private letter text', source, at);
-  const prep = (uid, posting, at) =>
+  const prep = (/** @type {number} */ uid, /** @type {number} */ posting, /** @type {string} */ at) =>
     db.prepare("INSERT INTO meeting_preps (id, user_id, posting_id, attendees_json, content, model, created_at) VALUES (?, ?, ?, '[]', 'Private prep', 'm', ?)").run(`prep-${(n += 1)}`, uid, posting, at);
-  const feedback = (uid, at) => db.prepare("INSERT INTO feedback (id, user_id, body, created_at) VALUES (?, ?, 'Private feedback text', ?)").run(`fb-${(n += 1)}`, uid, at);
-  const visit = (uid, at) => db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(at, uid);
+  const feedback = (/** @type {number} */ uid, /** @type {string} */ at) => db.prepare("INSERT INTO feedback (id, user_id, body, created_at) VALUES (?, ?, 'Private feedback text', ?)").run(`fb-${(n += 1)}`, uid, at);
+  const visit = (/** @type {number} */ uid, /** @type {string} */ at) => db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(at, uid);
 
   // This week: Pat adds two jobs (one on Sunday), gets a letter written and one saved by hand, and a prep; Pat's
   // pipeline completes (partial counts) with a priced and an unpriced call; the owner's fails. Sam visits and sends
@@ -103,8 +107,8 @@ test('GET /api/admin/usage: the admin only, 4 to 52 weeks, the listed fields onl
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: OWNER, SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
   seed(store.raw);
-  const app = await buildApp({ store, config: { candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }, authMode: 'google', auth: { settings }, services: { createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } } });
-  const as = (email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
+  const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });
+  const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
 
   assert.equal((await app.inject({ url: '/api/admin/usage', headers: as('pat@example.com') })).statusCode, 403, 'a member cannot read it');
   assert.equal((await app.inject({ url: '/api/admin/usage' })).statusCode, 401, 'signed out');

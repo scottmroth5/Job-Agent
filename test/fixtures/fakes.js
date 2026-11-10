@@ -65,3 +65,6 @@ export const fakeItem = (item) => /** @type {JobItem} */ (item);
  * @returns {Run}
  */
 export const fakeRun = (run) => /** @type {Run} */ (run);
+
+/** The scheduler's interval timer, never started: a test calls tick() itself. */
+export const noTimer = () => /** @type {NodeJS.Timeout} */ (/** @type {unknown} */ (null));

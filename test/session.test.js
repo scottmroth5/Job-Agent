@@ -17,7 +17,7 @@ test('a signed session round trips; tampering, the wrong key, and expiry are rej
   assert.equal(verify(token, sessionKey(randomBytes(48).toString('base64'))), null, 'other secret');
   assert.equal(verify(sign({ email: 'pat@example.com', exp: Date.now() - 1 }, key), key), null, 'expired');
   for (const junk of ['', 'abc', 'a.b.c', null, undefined]) assert.equal(verify(junk, key), null);
-  assert.throws(() => sign({ email: 'x' }, key), /exp is required/);
+  assert.throws(() => sign(/** @type {{ exp: number }} */ (/** @type {unknown} */ ({ email: 'x' })), key), /exp is required/);
 });
 
 test('the secret must be at least 32 bytes', () => {
@@ -33,7 +33,7 @@ test('cookies parse and serialize with safe flags', () => {
   const c = parseCookies('__proto__=x; constructor=y; prototype=z; bad name=1; a.b=2; enc=%E0%A4%A; ja_session=ok');
   assert.equal(Object.getPrototypeOf(c), null);
   assert.deepEqual(Object.keys(c), ['ja_session']);
-  assert.equal({}.x, undefined);
+  assert.equal(/** @type {Record<string, unknown>} */ ({}).x, undefined);
   assert.equal(cookie('ja_session', 'v', { maxAge: 60, secure: true }), 'ja_session=v; Path=/; HttpOnly; SameSite=Lax; Secure; Max-Age=60');
   assert.equal(cookie('ja_session', '', { maxAge: 0 }), 'ja_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0');
 });

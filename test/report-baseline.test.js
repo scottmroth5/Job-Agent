@@ -18,7 +18,7 @@ function build() {
   const store = openJobStore(path, { snapshot: false });
   const { raw } = store;
   addUser(raw, { email: 'second@example.com', name: 'Second' });
-  const job = (uid, o = {}) =>
+  const job = (/** @type {number} */ uid, /** @type {Record<string, string | null>} */ o = {}) =>
     Number(
       raw
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, created_at, updated_at)
@@ -51,8 +51,8 @@ test('baseline: counts, sizes, spend, and outcome data across users, read-only a
     const r = baselineReport(path, { attachmentsDir, now });
     assert.deepEqual(readFileSync(path), before, 'the file is unchanged');
 
-    assert.equal(r.tables.find((t) => t.table === 'postings').rows, 5);
-    assert.equal(r.tables.find((t) => t.table === 'users').rows, 2);
+    assert.equal(r.tables.find((t) => t.table === 'postings')?.rows, 5);
+    assert.equal(r.tables.find((t) => t.table === 'users')?.rows, 2);
     assert.ok(r.database.bytes > 0 && r.database.pageCount > 0);
     assert.deepEqual(r.attachments, { files: 1, bytes: 1000 });
     assert.deepEqual(r.spendByMonth, [

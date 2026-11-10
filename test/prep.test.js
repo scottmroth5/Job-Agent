@@ -6,17 +6,20 @@ import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { buildPrepRequest, extractDocument, normalizePrepInput, prepDocName, prepHtml, PREP_MODEL } from '../agents/hunt/prep.ts';
 import { getPrompt } from '../agents/prompts.ts';
+import { fakeConfig, fakeServices as asServices } from './fixtures/fakes.js';
+/** @import { BuiltApp } from '../server/app.ts' */
 
-const config = {
+const config = fakeConfig({
   candidate: { name: 'Pat Example', signoffName: 'Pat' },
   search: { homeAreaLabel: 'the Anytown area', homeLocations: ['Anytown, ST'] },
   fractional: { targetAnnual: [200000, 250000], weeksPerYear: 48 },
   coverLetterChecks: [],
-};
+});
 const KNOWLEDGE = 'Section 1: Experience. Led platform teams. '.repeat(20);
 const DOC = `# Call Prep: Alex Sample, Example Co\n*VP Engineering | recruiter screen*\n\n## The Meeting at a Glance\n- **Goal:** learn the scope\n\n| What they want | Your evidence |\n| --- | --- |\n| Scale | Grew a team ${'to 80 people '.repeat(10)}|\n`;
 
-const posting = { id: 1, company: 'Example Co', title: 'VP Engineering', url: 'https://jobs.example.com/1', fetched_text: 'Lead the engineering team. '.repeat(10), notes: '- Recruiter: **Alex**' };
+// A discovered job: fetched text, no pasted jd_text.
+const posting = /** @type {Parameters<typeof buildPrepRequest>[0]} */ (/** @type {unknown} */ ({ id: 1, company: 'Example Co', title: 'VP Engineering', url: 'https://jobs.example.com/1', fetched_text: 'Lead the engineering team. '.repeat(10), notes: '- Recruiter: **Alex**' }));
 const input = normalizePrepInput({
   attendees: [{ name: '  Alex Sample ', role: 'Founder', organization: 'Sample Search', url: 'https://www.linkedin.com/in/alex-sample', about: 'Met at a meetup' }, { name: '' }],
   meetingAt: '2026-10-15T10:00',
@@ -40,7 +43,7 @@ test('request: Opus 5.5 with the knowledge as the system prompt, web research on
   const req = buildPrepRequest(posting, input, { config, knowledge: KNOWLEDGE, prompt, analysis: { score: 8, reason: 'Strong', strengths: ['Scale'], watchOuts: [], topTalkingPoint: 'Growth' }, letter: 'Letter body', now: new Date(2026, 9, 12) });
   assert.equal(req.model, PREP_MODEL);
   assert.equal(req.system, KNOWLEDGE);
-  assert.deepEqual(req.tools.map((t) => t.type), ['web_search_20260209', 'web_fetch_20260209']);
+  assert.deepEqual(req.tools?.map((t) => /** @type {{ type: string }} */ (t).type), ['web_search_20260209', 'web_fetch_20260209']);
   assert.deepEqual([req.stream, req.fallbacks, req.betas], [true, 'default', ['server-side-fallback-2026-07-01']]);
   for (const part of ['Pat Example', 'Example Co', 'Alex Sample, Founder, Sample Search (https://www.linkedin.com/in/alex-sample)', 'Met at a meetup', 'Recruiter or search firm, video meeting, Thursday, October 15, 2026 at 10:00 AM', 'Intro call; ask about the team.', '- Recruiter: **Alex**', 'FIT SCORE: 8 of 10', 'Letter body', 'Lead the engineering team.', 'Research first', 'Monday, October 12, 2026']) {
     assert.ok(req.prompt.includes(part), `prompt includes ${part}`);
@@ -75,9 +78,14 @@ test('Google Doc: a readable name and bordered tables', () => {
   assert.match(html, /<h1>Call Prep: Alex Sample, Example Co<\/h1>/);
 });
 
+/** @typedef {{ model: string }} Params */
+/** @typedef {{ name: string, html: string, folderId: string }} Doc */
+
+/** Claude over a fake SDK that answers with DOC after one search, and Drive in memory. @param {{ docFails?: boolean }} [o] */
 function fakeServices({ docFails = false } = {}) {
+  /** @type {Params[]} */
   const requests = [];
-  const answer = async (params) => {
+  const answer = async (/** @type {Params} */ params) => {
     requests.push(params);
     return {
       id: 'm',
@@ -91,18 +99,19 @@ function fakeServices({ docFails = false } = {}) {
       usage: { input_tokens: 20000, output_tokens: 6000, server_tool_use: { web_search_requests: 4 } },
     };
   };
-  const api = { create: answer, stream: (p) => ({ finalMessage: () => answer(p) }) };
+  const api = { create: answer, stream: (/** @type {Params} */ p) => ({ finalMessage: () => answer(p) }) };
+  /** @type {Doc[]} */
   const docs = [];
   return {
     requests,
     docs,
-    services: {
+    services: asServices({
       claude: createClaude({ client: { messages: api, beta: { messages: api } } }),
       knowledge: async () => KNOWLEDGE,
       drive: {
         getFile: async () => ({}),
-        createFolder: async (name) => `folder:${name}`,
-        createDocFromHtml: async (d) => {
+        createFolder: async (/** @type {string} */ name) => `folder:${name}`,
+        createDocFromHtml: async (/** @type {Doc} */ d) => {
           if (docFails) throw new Error('Drive is down');
           docs.push(d);
           return { id: 'doc1', url: 'https://docs.example.com/doc1' };
@@ -110,10 +119,11 @@ function fakeServices({ docFails = false } = {}) {
       },
       http: { get: async () => { throw new Error('no network in tests'); }, sleep: async () => {} },
       createBrowser: async () => null,
-    },
+    }),
   };
 }
 
+/** @param {{ docFails?: boolean }} [opts] */
 async function setup(opts) {
   const store = openJobStore(':memory:');
   const id = Number(
@@ -126,6 +136,7 @@ async function setup(opts) {
   return { store, app, id, fake };
 }
 
+/** @param {BuiltApp} app @param {string} taskId */
 async function finish(app, taskId) {
   for (let i = 0; i < 200; i++) {
     const t = (await app.inject(`/api/tasks/${taskId}`)).json();
@@ -157,7 +168,7 @@ test('API: a prep runs as a task, is saved with its cost and Google Doc, listed 
   assert.ok(one.content.startsWith('# Call Prep: Alex Sample'));
   assert.equal(one.context, 'Intro call');
 
-  const log = (await app.inject(`/api/tasks/${res.json().taskId}/log`)).json().lines.map((l) => l.text).join('\n');
+  const log = (await app.inject(`/api/tasks/${res.json().taskId}/log`)).json().lines.map((/** @type {{ text: string }} */ l) => l.text).join('\n');
   assert.ok(!log.includes('Alex') && !log.includes('Call Prep'), 'task output has counts only, no names or text');
 
   assert.equal((await app.inject({ method: 'DELETE', url: `/api/meeting-preps/${list[0].id}` })).statusCode, 204);
@@ -184,7 +195,7 @@ test('API: refusals for no people, unknown jobs, and bad choices; a failed Googl
 
 test('API: with no AI here, a prep is refused with 503 before any task starts', async () => {
   const { app, store, id, fake } = await setup();
-  const noAi = await buildApp({ store, config, services: { ...fake.services, claude: null } });
+  const noAi = await buildApp({ store, config, services: asServices({ ...fake.services, claude: null }) });
   const res = await noAi.inject({ method: 'POST', url: `/api/postings/${id}/meeting-prep`, payload: { attendees: [{ name: 'A' }] } });
   assert.equal(res.statusCode, 503);
   assert.match(res.json().error, /AI is not available here/);

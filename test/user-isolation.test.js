@@ -16,6 +16,10 @@ import { authSettings } from '../server/auth.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { seedDemo } from '../scripts/demo-seed.js';
 import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.ts';
+import { fakeServices } from './fixtures/fakes.js';
+/** @import { AppServices } from '../server/app.ts' */
+/** @import { Database } from '../tools/types.ts' */
+/** @import { InjectOptions } from 'fastify' */
 
 const SITE = 'http://localhost:5178';
 // Strings only A's sample data holds: its companies.
@@ -40,27 +44,30 @@ async function setup() {
     webDir,
     authMode: 'google',
     auth: { settings, exchange: async () => assert.fail('no sign-in here') },
-    services: {
+    services: fakeServices({
       claude: null,
       createBrowser: null,
       runPipeline: async () => ({ code: 0, lastError: null }),
       runScript: async () => ({ code: 0, lastError: null }),
-      inbox: { ready: () => false, gmail: () => assert.fail('no Gmail here'), key: () => null, cfg: {} },
+      // Gmail is never reached: ready() says it is not signed in.
+      inbox: /** @type {NonNullable<AppServices['inbox']>} */ (/** @type {unknown} */ ({ ready: () => false, gmail: () => assert.fail('no Gmail here'), key: () => null, cfg: {} })),
       knowledge: async () => '',
       // Finished runs whose output names A's jobs (the owner's: they start outside any request).
       sampleTasks: SAMPLE_TASKS,
       log: { info() {}, warn() {}, error() {} },
-    },
+    }),
   });
-  const cookie = (email) => `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`;
+  const cookie = (/** @type {string} */ email) => `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`;
   return { store, app, B, asA: cookie('a@example.com'), asB: cookie('b@example.com') };
 }
 
 // A's ids, so B's requests aim at A's rows.
-const fill = (url) => url.replace(/:(\w+)/g, (_, k) => ({ action: 'score', list: 'status', name: 'score', area: 'home' })[k] ?? '1').replaceAll('*', 'index.html');
+/** @type {Record<string, string>} */
+const PARAMS = { action: 'score', list: 'status', name: 'score', area: 'home' };
+const fill = (/** @type {string} */ url) => url.replace(/:(\w+)/g, (_, /** @type {string} */ k) => PARAMS[k] ?? '1').replaceAll('*', 'index.html');
 // Task routes take a task id; A's sample tasks are 1 to N.
-const urlsFor = (url) => (url.startsWith('/api/tasks/:id') ? SAMPLE_TASKS.map((_, i) => url.replace(':id', String(i + 1))) : [fill(url)]);
-const snapshot = (db, uid) => JSON.stringify(USER_TABLES.map((t) => db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid)));
+const urlsFor = (/** @type {string} */ url) => (url.startsWith('/api/tasks/:id') ? SAMPLE_TASKS.map((_, i) => url.replace(':id', String(i + 1))) : [fill(url)]);
+const snapshot = (/** @type {Database} */ db, /** @type {number} */ uid) => JSON.stringify(USER_TABLES.map((t) => db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid)));
 
 test('isolation: B sees none of A\'s jobs on any GET route; A sees them', async () => {
   const { store, app, asA, asB } = await setup();
@@ -85,8 +92,8 @@ test('isolation: B sees none of A\'s jobs on any GET route; A sees them', async 
 test("the summary's spend and last run are each user's own; the owner's include runs from before runs had a user", async () => {
   const { store, app, B, asA, asB } = await setup();
   const at = new Date().toISOString();
-  const run = (uid, cost) => store.raw.prepare("INSERT INTO runs (name, status, started_at, cost_usd, user_id) VALUES ('pipeline', 'ok', ?, ?, ?)").run(at, cost, uid);
-  const summary = async (cookie) => (await app.inject({ url: '/api/summary', headers: { cookie } })).json();
+  const run = (/** @type {number | null} */ uid, /** @type {number} */ cost) => store.raw.prepare("INSERT INTO runs (name, status, started_at, cost_usd, user_id) VALUES ('pipeline', 'ok', ?, ?, ?)").run(at, cost, uid);
+  const summary = async (/** @type {string} */ cookie) => (await app.inject({ url: '/api/summary', headers: { cookie } })).json();
   const before = await summary(asA);
   assert.deepEqual([(await summary(asB)).spend30Days, (await summary(asB)).lastRun], [0, null], 'B has no runs yet');
   run(OWNER_ID, 2);
@@ -105,9 +112,10 @@ test("the summary's spend and last run are each user's own; the owner's include 
 test('isolation: no write route sent by B changes any of A\'s rows', async () => {
   const { store, app, asB } = await setup();
   const before = snapshot(store.raw, OWNER_ID);
-  const writes = app.routeList.filter((r) => ['PUT', 'PATCH', 'POST', 'DELETE'].includes(r.method) && r.url.startsWith('/api/'));
+  const writes = app.routeList.filter((r) => ['PUT', 'PATCH', 'POST', 'DELETE'].includes(/** @type {string} */ (r.method)) && r.url.startsWith('/api/'));
   assert.ok(writes.length >= 15, `the route table lists the write routes (${writes.length})`);
   // Plausible bodies for the routes that edit an existing row, so they get past validation and try A's row.
+  /** @type {Record<string, object>} */
   const BODIES = {
     'PATCH /api/postings/:id': { status: 'passed', notes: 'Changed by B', title: 'Changed by B' },
     'POST /api/postings/:id/notes': { body: 'Changed by B' },
@@ -117,7 +125,7 @@ test('isolation: no write route sent by B changes any of A\'s rows', async () =>
   };
   for (const r of writes) {
     const body = BODIES[`${r.method} ${r.url}`] ?? (r.method === 'DELETE' ? undefined : {});
-    await app.inject({ method: r.method, url: fill(r.url), headers: { cookie: asB, origin: SITE }, ...(body ? { payload: body } : {}) });
+    await app.inject({ method: /** @type {InjectOptions['method']} */ (r.method), url: fill(r.url), headers: { cookie: asB, origin: SITE }, ...(body ? { payload: body } : {}) });
   }
   await new Promise((r) => setTimeout(r, 300)); // tasks the routes started finish
   assert.equal(snapshot(store.raw, OWNER_ID), before, "A's rows are unchanged");
@@ -149,7 +157,7 @@ test('routes that use the owner\'s own accounts refuse everyone else, and every 
   for (const route of OWNER_ONLY) {
     assert.ok(routes.has(route), `${route} is a route`);
     const [method, url] = route.split(' ');
-    const res = await app.inject({ method, url: fill(url), headers: { cookie: asB, origin: SITE }, payload: {} });
+    const res = await app.inject({ method: /** @type {InjectOptions['method']} */ (method), url: fill(url), headers: { cookie: asB, origin: SITE }, payload: {} });
     assert.equal(res.statusCode, 403, `${route} as B`);
     assert.match(res.json().error, /Only the owner/);
   }

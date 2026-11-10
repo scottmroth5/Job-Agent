@@ -7,6 +7,7 @@ import { normalizeUrl, companyTitleKey } from '../tools/urls.ts';
 import { parseSheetDate, parsePostedDate } from '../tools/dates.ts';
 import { fillTemplate } from '../tools/template.ts';
 import { loadConfig, validateConfig, homeAreaText } from '../tools/config.ts';
+/** @import { JobSearchConfig } from '../tools/config.ts' */
 
 test('normalizeUrl drops tracking, fragments, www and trailing slashes', () => {
   assert.equal(
@@ -57,6 +58,7 @@ test('fillTemplate keeps $ values and rejects unfilled placeholders', () => {
   assert.throws(() => fillTemplate('Hi {{name}} {{missing}}', { name: 'x' }), /Unfilled template placeholders: \{\{missing\}\}/);
 });
 
+/** @returns {JobSearchConfig} */
 const validConfig = () => ({
   candidate: { name: 'Pat Example', signoffName: 'Pat', contactLine: 'Anytown | pat@example.com', linkedin: 'linkedin.com/in/example' },
   search: {
@@ -72,7 +74,8 @@ const validConfig = () => ({
 
 test('validateConfig accepts a complete config and names each problem', () => {
   assert.deepEqual(validateConfig(validConfig()), []);
-  const bad = validConfig();
+  // Wrong on purpose: the checks below name each problem.
+  const bad = /** @type {{ candidate: { name: string }, search: { terms: string[] }, coverLetterChecks: unknown[], privateTerms: unknown }} */ (validConfig());
   bad.candidate.name = '';
   bad.search.terms = [];
   bad.coverLetterChecks = [{ label: 'x', text: '(' }, { label: 'y', sentence: ['only one'] }];

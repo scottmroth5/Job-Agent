@@ -29,7 +29,7 @@ test('annualize matches the tracker math', () => {
   // Two engagements at 15 hrs/week and $200/hr over 48 weeks is about $288K: one is $144K.
   assert.deepEqual(annualize({ min: 200, max: 200, unit: 'hour' }, { min: 15, max: 15 }), { low: 144000, mid: 144000, high: 144000 });
   assert.deepEqual(annualize({ min: 10000, max: 20000, unit: 'month' }, null), { low: 120000, mid: 180000, high: 240000 });
-  assert.deepEqual(annualize({ min: 175, max: 225, unit: 'hour' }, { min: 8, max: 15 }, 48).low, 67200);
+  assert.deepEqual(annualize({ min: 175, max: 225, unit: 'hour' }, { min: 8, max: 15 }, 48)?.low, 67200);
   assert.equal(annualize({ min: 175, max: 225, unit: 'hour' }, null), null);
   assert.equal(annualize(null, null), null);
 });
@@ -45,7 +45,7 @@ test('detectTrack', () => {
 
 test('005 migration adds track, rate and hours columns defaulting to full-time', () => {
   const store = openJobStore(':memory:');
-  const cols = store.db.prepare('PRAGMA table_info(postings)').all().map((c) => c.name);
+  const cols = /** @type {Array<{ name: string }>} */ (store.db.prepare('PRAGMA table_info(postings)').all()).map((c) => c.name);
   for (const c of ['track', 'rate_text', 'rate_min', 'rate_max', 'rate_unit', 'hours_min', 'hours_max', 'extra_json']) assert.ok(cols.includes(c), c);
   store.close();
 });
@@ -53,8 +53,8 @@ test('005 migration adds track, rate and hours columns defaulting to full-time',
 test('findPayInText finds a salary or an explicit hourly range, and skips funding figures', async () => {
   const { findPayInText } = await import('../tools/rates.ts');
   assert.deepEqual(findPayInText('The base salary range is $170,000 - $210,000 plus equity.'), { min: 170000, max: 210000, unit: 'year', text: '$170,000 - $210,000' });
-  assert.equal(findPayInText('Pay: $150K–$200K per year').max, 200000);
-  assert.deepEqual(findPayInText('Contract at $80 to $95/hr').unit, 'hour');
+  assert.equal(findPayInText('Pay: $150K–$200K per year')?.max, 200000);
+  assert.deepEqual(findPayInText('Contract at $80 to $95/hr')?.unit, 'hour');
   assert.equal(findPayInText('We raised $50 - $100 million and offer a $1,000 - $2,000 stipend.'), null);
   assert.equal(findPayInText('Hourly-looking $50 - $90 with no unit'), null);
   assert.equal(findPayInText(''), null);

@@ -19,6 +19,8 @@ import * as usageBrowser from '../db/migrations/021-usage-browser.ts';
 import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
 import { DEMO_CONFIG } from '../demo/sample-data.ts';
+import { fakeServices } from './fixtures/fakes.js';
+/** @typedef {{ dimension: string, value: string, count: number }} Total */
 
 const SITE = 'https://jobs.example.com';
 const OWNER = 'owner@example.com';
@@ -31,8 +33,9 @@ const UA = {
   windows: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
 };
 // The fake location database: one known address, one it misses, one that breaks.
+/** @type {Record<string, { city: string | null, state: string | null, country: string }>} */
 const PLACES = { '203.0.113.7': { city: 'Springfield', state: 'Illinois', country: 'United States' } };
-const location = (ip) => {
+const location = (/** @type {string} */ ip) => {
   if (ip === '198.51.100.66') throw new Error('database read failed');
   return PLACES[ip] ?? null;
 };
@@ -48,7 +51,7 @@ test('device type from the user agent and the mobile hint', () => {
 });
 
 test('browser and major version: a fixed name and a number, or Other', () => {
-  const b = (ua) => browserOf({ 'user-agent': ua });
+  const b = (/** @type {string} */ ua) => browserOf({ 'user-agent': ua });
   assert.equal(b(UA.windows), 'Chrome 130');
   assert.equal(b(UA.androidPhone), 'Chrome 130');
   assert.equal(b(UA.iphone), 'Safari 18');
@@ -94,6 +97,7 @@ test('a location is "City, State, Country", or unknown', () => {
 });
 
 test('the source is one fixed category: utm_source from the list, else the whole Referer host', () => {
+  /** @param {string | undefined} referer @param {string} [url] @param {{ siteHost?: string, demoHost?: string }} [hosts] */
   const from = (referer, url = '/', hosts = HOSTS) => sourceOf({ referer, url, ownOrigin: SITE, ...hosts });
   assert.equal(from(undefined, '/?utm_source=linkedin'), 'linkedin');
   assert.equal(from(undefined, '/?utm_source=GitHub'), 'github');
@@ -130,6 +134,7 @@ test('the source is one fixed category: utm_source from the list, else the whole
   assert.equal(from(`${SITE}/auth/signed-out`), null);
 });
 
+/** @param {{ authMode?: string }} [o] */
 async function setup({ authMode = 'google' } = {}) {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: OWNER, SESSION_SECRET: secret });
@@ -146,15 +151,17 @@ async function setup({ authMode = 'google' } = {}) {
     authMode,
     auth: { settings },
     usage: { location, ...HOSTS },
-    services: { createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } },
+    services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }),
   });
-  const cookie = (email) => `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`;
+  const cookie = (/** @type {string} */ email) => `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`;
+  /** @param {string} url @param {{ as?: string | null, ip?: string, ua?: string | null, headers?: Record<string, string> }} [o] */
   const get = (url, { as = OWNER, ip = '203.0.113.7', ua = UA.windows, headers = {} } = {}) =>
     app.inject({ url, remoteAddress: ip, headers: { ...(as ? { cookie: cookie(as) } : {}), ...(ua ? { 'user-agent': ua } : {}), origin: SITE, ...headers } });
-  const totals = () => store.raw.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension, value').all();
+  const totals = () => /** @type {Total[]} */ (store.raw.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension, value').all());
   return { app, store, sam, get, totals };
 }
 
+/** @param {string} [referer] */
 const page = (referer) => ({ 'sec-fetch-dest': 'document', accept: 'text/html', ...(referer ? { referer } : {}) });
 
 test('a visit counts once per account per day, by device, browser, and location', async () => {
@@ -210,7 +217,7 @@ test('arrivals: page loads of the app or a direct sign-in link, by source; never
   // Signed out from LinkedIn: / redirects to sign-in, counted once; the sign-in step after it is not counted again.
   const first = await get('/?utm_source=evil', { as: null, headers: page('https://www.linkedin.com/feed/') });
   assert.equal(first.statusCode, 302);
-  await get(first.headers.location, { as: null, headers: page('https://www.linkedin.com/feed/') });
+  await get(/** @type {string} */ (first.headers.location), { as: null, headers: page('https://www.linkedin.com/feed/') });
   assert.deepEqual(sources(), [['linkedin', 1]]);
   // Back from Google's sign-in to the main page: not a source.
   await get('/?utm_source=evil', { headers: page('https://accounts.google.com/') });

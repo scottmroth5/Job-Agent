@@ -8,22 +8,25 @@ import { today, REMINDER_DAYS } from '../server/today.ts';
 import { FOLLOW_UP_DAYS } from '../server/funnel.ts';
 import { addUser } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @typedef {{ kind: string, text: string, company?: string, count?: number, staleDays?: number, overdue?: boolean, id?: string }} Item */
 
 // Synthetic data only; "now" is fixed so due dates and waiting days are stable.
 const now = new Date('2026-10-26T12:00:00Z');
-const daysAgo = (n) => new Date(now.getTime() - n * 864e5).toISOString().slice(0, 10);
-const inDays = (n) => new Date(now.getTime() + n * 864e5).toISOString();
+const daysAgo = (/** @type {number} */ n) => new Date(now.getTime() - n * 864e5).toISOString().slice(0, 10);
+const inDays = (/** @type {number} */ n) => new Date(now.getTime() + n * 864e5).toISOString();
 
 function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const job = (o = {}) =>
+  const job = (/** @type {Record<string, string | null>} */ o = {}) =>
     Number(
       db
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, created_at, updated_at)
           VALUES (@uid, @k, @company, @title, @k, 'LinkedIn', 'fulltime', '2026-09-01', @stage, @status, @applied, 'x', 'x')`)
         .run({ uid: 1, k: `k${Math.random()}`, company: 'Example Co', title: 'CTO', stage: 'pipeline', status: 'applied', applied: null, ...o }).lastInsertRowid,
     );
+  /** @param {number} postingId @param {string} kind @param {string} due @param {Record<string, string | null>} [o] */
   const reminder = (postingId, kind, due, o = {}) =>
     db.prepare(`INSERT INTO reminders (user_id, id, posting_id, kind, due_at, note, status, created_at) VALUES (@uid, @id, @postingId, @kind, @due, @note, @status, 'x')`)
       .run({ uid: 1, id: randomUUID(), postingId, kind, due, note: null, status: 'open', ...o });
@@ -50,7 +53,7 @@ test('order: past-due reminders, offers, upcoming reminders by date, then follow
   job({ company: 'Ghost Archived Co', stage: 'archived', applied: daysAgo(90) }); // stale too
   job({ company: 'Closed Co', status: 'rejected', applied: daysAgo(30) });
 
-  const items = today(db, { now }).items;
+  const items = /** @type {Item[]} */ (today(db, { now }).items);
   assert.deepEqual(items.map((t) => `${t.kind}:${t.company}`), [
     'assessment:Late Co',
     'offer:Offer Co',
@@ -60,8 +63,8 @@ test('order: past-due reminders, offers, upcoming reminders by date, then follow
     'follow_up:Newer Co',
     'stale:undefined',
   ]);
-  assert.deepEqual([items.at(-1).count, items.at(-1).staleDays], [2, 45]);
-  assert.match(items.at(-1).text, /2 applications with no reply after 45 days/);
+  assert.deepEqual([items.at(-1)?.count, items.at(-1)?.staleDays], [2, 45]);
+  assert.match(String(items.at(-1)?.text), /2 applications with no reply after 45 days/);
   assert.equal(items[0].overdue, true);
   assert.equal(items[0].text, 'Send the 90 day plan');
   assert.equal(items[2].text, 'Assessment', 'no note: the kind');
@@ -73,9 +76,9 @@ test('the summary carries the list, and another user sees only their own', async
   const { store, job, reminder } = setup();
   const id = job({ company: 'Mine Co', status: 'interviewing', applied: daysAgo(5) });
   reminder(id, 'interview', inDays(1));
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   const t = (await app.inject('/api/summary')).json().today;
-  assert.ok(t.some((x) => x.company === 'Mine Co'));
+  assert.ok(t.some((/** @type {Item} */ x) => x.company === 'Mine Co'));
   const other = runAsUser(addUser(store.raw, { email: 'b@example.com' }), () => today(store.db, { now }).items);
   assert.deepEqual(other, []);
   await app.close();
@@ -92,16 +95,16 @@ test("one job's next steps: every open reminder however far out, its offer or fo
   const offer = job({ company: 'Offer Co', status: 'offer', applied: daysAgo(40) });
   const waiting = job({ company: 'Waiting Co', applied: daysAgo(FOLLOW_UP_DAYS + 2) });
 
-  const steps = today(db, { now, jobId: target }).items;
+  const steps = /** @type {Item[]} */ (today(db, { now, jobId: target }).items);
   assert.deepEqual(steps.map((t) => [t.kind, t.text]), [['interview', 'Final round']]);
   assert.ok(steps[0].id, 'a reminder carries its id, for Done');
   assert.deepEqual(today(db, { now, jobId: offer }).items.map((t) => t.kind), ['offer']);
   assert.deepEqual(today(db, { now, jobId: waiting }).items.map((t) => t.kind), ['follow_up']);
   assert.equal(today(db, { now }).items.some((t) => t.text === 'Final round'), false, "Home's list keeps its 14-day horizon");
 
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   const detail = (await app.inject(`/api/postings/${target}`)).json();
-  assert.deepEqual(detail.nextSteps.map((t) => t.text), ['Final round'], 'the job panel gets them with the job');
+  assert.deepEqual(detail.nextSteps.map((/** @type {Item} */ t) => t.text), ['Final round'], 'the job panel gets them with the job');
   await app.close();
   store.close();
 });

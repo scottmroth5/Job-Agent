@@ -10,13 +10,14 @@ import { USER_TABLES } from '../db/user-tables.ts';
 
 const FOLDERS = ['agents', 'server', 'tools', 'demo', 'scripts', 'db', 'evals'];
 // Migrations shape every user's rows at once; admin queries are the reviewed cross-user reads.
-const isExempt = (rel) => rel.startsWith('db/migrations/') || rel === 'server/admin-queries.ts';
+const isExempt = (/** @type {string} */ rel) => rel.startsWith('db/migrations/') || rel === 'server/admin-queries.ts';
 
 /** Every string literal in JavaScript source (template literals whole, with their ${} expressions). */
+/** @param {string} src */
 export function stringLiterals(src) {
   const out = [];
   let i = 0;
-  const readQuoted = (q) => {
+  const readQuoted = (/** @type {string} */ q) => {
     const start = i;
     i += 1;
     while (i < src.length && src[i] !== q) i += src[i] === '\\' ? 2 : 1;
@@ -57,6 +58,7 @@ export function stringLiterals(src) {
   return out;
 }
 
+/** @param {string} dir @returns {string[]} */
 const files = (dir) => readdirSync(dir).flatMap((name) => {
   const path = join(dir, name);
   if (name === 'node_modules' || name === 'public' || name === 'fixtures') return [];
