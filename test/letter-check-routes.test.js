@@ -6,8 +6,11 @@ import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { generateForPostings } from '../agents/hunt/generate.ts';
 import { CHECKS_PER_DAY } from '../server/letter-routes.ts';
+import { fakeClaude, fakeConfig, fakeRun, fakeServices } from './fixtures/fakes.js';
+/** @import { SendOptions } from '@scottmroth5/agent-core' */
+/** @import { BuiltApp } from '../server/app.ts' */
 
-const config = { candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { homeLocations: [] }, fractional: {} };
+const config = fakeConfig({ candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { homeLocations: [] }, fractional: {} });
 const LETTER = `When I read that Example Co is building a care platform, I recognized the stage you are in.\n\nI grew a platform team from 6 to 45 engineers as VP of Engineering, and I hold a PMP.\n\nI would welcome a conversation.`;
 const CLAIMS = [
   { claim: 'grew a team from 6 to 45 engineers', kind: 'number', verdict: 'supported', evidence: 'grew the team from 6 to 45' },
@@ -23,17 +26,17 @@ async function setup({ fail = false } = {}) {
       VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x')`).run().lastInsertRowid,
   );
   const v1 = Number(db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', '2026-10-02T12:00:00Z')").run(id, LETTER).lastInsertRowid);
+  /** @type {SendOptions[]} */
   const sent = [];
-  const claude = {
-    send: async (opts) => {
+  const claude = fakeClaude(async (opts) => {
       sent.push(opts);
       if (fail) throw Object.assign(new Error('refused'), { name: 'BudgetError' });
       return { data: { claims: CLAIMS }, text: '' };
-    },
-  };
-  const app = await buildApp({ store, config, services: { createBrowser: async () => null, claude, knowledge: async () => 'Background. '.repeat(60), log: { info() {}, warn() {}, error() {} } } });
+  });
+  const app = await buildApp({ store, config, services: fakeServices({ createBrowser: async () => null, claude, knowledge: async () => 'Background. '.repeat(60), log: { info() {}, warn() {}, error() {} } }) });
   return { store, db, app, id, v1, sent };
 }
+/** @param {BuiltApp} app @param {string} url @param {object} [payload] */
 const post = (app, url, payload) => app.inject({ method: 'POST', url, payload });
 
 test('checking a version saves its claims, versions carry the check, and claims are dismissed one at a time', async () => {
@@ -46,7 +49,7 @@ test('checking a version saves its claims, versions carry the check, and claims 
   assert.equal(r.json().status, 'checked');
   assert.equal(r.json().claims.length, 3);
   assert.equal(sent[0].label, 'letter-check');
-  assert.ok(sent[0].prompt.includes('PMP') && sent[0].system.startsWith('Background.'));
+  assert.ok(/** @type {string} */ (sent[0].prompt).includes('PMP') && /** @type {string} */ (sent[0].system).startsWith('Background.'));
 
   r = await post(app, `/api/postings/${id}/letters/${v1}/claims/2/dismiss`);
   assert.equal(r.json().claims[2].dismissed, true);
@@ -91,17 +94,16 @@ test('writing a letter checks it, and a failed check still keeps the letter', as
         VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x')`).run().lastInsertRowid,
     );
     db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, 8, ?, 'v2', 'x')").run(id, JSON.stringify({ score: 8, reason: 'Fit', strengths: [], watchOuts: [], topTalkingPoint: 'Growth' }));
-    const claude = {
-      send: async (opts) => {
+    const claude = fakeClaude(async (opts) => {
         if (opts.label === 'letter-check') {
           if (fail) throw new Error('down');
           return { data: { claims: CLAIMS }, text: '' };
         }
         return { text: LETTER };
-      },
-    };
+    });
+    /** @type {string[]} */
     const lines = [];
-    const run = { id: null, log: (level, msg) => lines.push(msg) };
+    const run = fakeRun({ id: null, log: (level, msg) => lines.push(msg) });
     const s = await generateForPostings({ store, config, claude, knowledge: 'Background. '.repeat(60), drive: null, run, options: { ids: [id] } });
     assert.equal(s.letters, 1);
     assert.equal(s.failures.length, 0);

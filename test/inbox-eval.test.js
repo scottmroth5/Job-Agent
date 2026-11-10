@@ -6,7 +6,10 @@ import { inboxMetrics } from '../evals/inbox/metrics.js';
 import { runInboxEval } from '../evals/inbox/run.js';
 import { loadInboxConfig } from '../agents/inbox/config.ts';
 import { EMAIL_TYPES } from '../agents/inbox/classify.ts';
+/** @import { Expected, Predicted } from '../evals/inbox/metrics.js' */
+/** @import { EvalApplication, InboxCase } from '../evals/inbox/run.js' */
 
+/** @type {{ applications: EvalApplication[], cases: InboxCase[] }} */
 const data = JSON.parse(readFileSync(new URL('../evals/inbox/cases.json', import.meta.url), 'utf8'));
 
 test('the eval cases are well formed', () => {
@@ -15,12 +18,13 @@ test('the eval cases are well formed', () => {
   assert.equal(new Set(data.cases.map((c) => c.id)).size, data.cases.length);
   for (const c of data.cases) {
     assert.ok(EMAIL_TYPES.includes(c.expected.type), c.id);
-    assert.ok(c.expected.applicationId === null || ids.has(c.expected.applicationId), c.id);
+    assert.ok(c.expected.applicationId === null || ids.has(/** @type {number} */ (c.expected.applicationId)), c.id);
     assert.ok(c.email.from && c.email.subject && c.email.body, c.id);
   }
 });
 
 test('metrics: match and classification accuracy over classified emails, pre-filter rates over all', () => {
+  /** @param {Expected} expected @param {boolean} passed @param {Predicted | null} predicted @param {string | null} [rule] */
   const r = (expected, passed, predicted, rule = null) => ({ expected, passed, predicted, rule });
   const m = inboxMetrics([
     r({ applicationId: 1, type: 'confirmation' }, true, { applicationId: 1, type: 'confirmation', reviewStatus: 'auto' }, 'ats_subject'),
@@ -44,8 +48,8 @@ test('the eval runs the real decision code with a fake model', async () => {
   const byId = Object.fromEntries(data.cases.map((c) => [c.email.subject, c.expected]));
   const client = {
     messages: {
-      create: async (params) => {
-        const subject = /Subject: (.*)/.exec(params.messages[0].content)[1];
+      create: async (/** @type {{ model: string, messages: Array<{ content: string }> }} */ params) => {
+        const subject = /** @type {RegExpExecArray} */ (/Subject: (.*)/.exec(params.messages[0].content))[1];
         const e = byId[subject];
         const reply = { application_id: e.applicationId == null ? null : String(e.applicationId), confidence: 0.95, type: e.type, summary: 'x', extracted: { company: null, role_title: null, contact_name: null, contact_email: null, interview_times: [], deadline: null } };
         return { id: 'x', model: params.model, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(reply) }], usage: { input_tokens: 1, output_tokens: 1 } };
@@ -57,5 +61,5 @@ test('the eval runs the real decision code with a fake model', async () => {
   assert.equal(m.classificationAccuracy, 1);
   assert.equal(m.wrongLinks, 0, 'rules never link a case to the wrong application');
   const injection = results.find((r) => r.id === 'c25');
-  assert.deepEqual([injection.predicted.applicationId, injection.predicted.reviewStatus], [null, 'needs_review']);
+  assert.deepEqual([injection?.predicted?.applicationId, injection?.predicted?.reviewStatus], [null, 'needs_review']);
 });

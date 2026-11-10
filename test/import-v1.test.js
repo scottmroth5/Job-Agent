@@ -37,7 +37,9 @@ const huntRow = (o = {}) => ({
   ...o,
 });
 
-const run = (input) => {
+/** @import { PostingsRow } from '../db/types.ts' */
+
+const run = (/** @type {Parameters<typeof importV1>[1]} */ input) => {
   const store = openJobStore(':memory:');
   const counts = importV1(store, input, { now: '2026-09-30T00:00:00.000Z' });
   return { store, db: store.db, counts };
@@ -57,7 +59,7 @@ test('mapStatus, extractFitScore and parseCoverLetterCell cover the v1 formats',
 
 test('a discovered row becomes a posting with a quick score and parsed dates', () => {
   const { db, counts, store } = run({ discovered: [discoveredRow()], hunt: [] });
-  const p = db.prepare('SELECT * FROM postings').get();
+  const p = /** @type {PostingsRow} */ (db.prepare('SELECT * FROM postings').get());
   assert.equal(p.url_key, 'jobs.example.com/acme/1');
   assert.equal(p.discovered_on, '2026-07-20');
   assert.equal(p.posted_on, '2026-07-18');
@@ -85,7 +87,7 @@ test('hunt rows update the matching posting and add analysis, tweaks and letter 
     discovered: [discoveredRow({ Status: 'Added to Pipeline' })],
     hunt: [{ name: 'x - Jobs.csv', current: true, rows: [huntRow({ 'Date Applied': '7/25/2026' })] }],
   });
-  const p = db.prepare('SELECT * FROM postings').get();
+  const p = /** @type {PostingsRow} */ (db.prepare('SELECT * FROM postings').get());
   assert.equal(counts.postingsCreated, 1);
   assert.equal(p.stage, 'pipeline');
   assert.equal(p.status, 'applied');

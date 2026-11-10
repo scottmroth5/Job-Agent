@@ -3,22 +3,28 @@ import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { addPosting, validateManualInput, isRealCompany } from '../agents/manual.ts';
+import { fakeConfig, fakeHttp } from './fixtures/fakes.js';
+/** @import { Claude } from '@scottmroth5/agent-core' */
+/** @import { JobStore } from '../tools/types.ts' */
+/** @import { ManualContext } from '../agents/manual.ts' */
 
 // Synthetic config, knowledge, and postings only.
-const config = {
+const config = fakeConfig({
   candidate: { name: 'Pat Example', signoffName: 'Pat' },
   search: { homeAreaLabel: 'the Anytown area', homeLocations: ['Anytown, ST'] },
   fractional: { targetAnnual: [200000, 250000] },
   coverLetterChecks: [],
-};
+});
 const KNOWLEDGE = 'Section 5: Job Targets. Engineering leadership. '.repeat(20);
 const DESCRIPTION = 'We are hiring a fractional CTO to lead our platform team for ten to fifteen hours a week. '.repeat(3);
 
+/** A real agent-core client over a fake SDK: scoring answers with this score, writing with a paragraph. @param {number} score */
 function fakeClaude(score) {
+  /** @type {string[]} */
   const labels = [];
   const client = {
     messages: {
-      create: async (params) => {
+      create: async (/** @type {{ model: string, output_config?: { format?: object } }} */ params) => {
         const isScore = Boolean(params.output_config?.format);
         labels.push(isScore ? 'score' : 'writing');
         const data = { score, fit: 'High', reason: 'r', whyItFits: 'w', caveats: '', rate: { min: null, max: null, unit: 'unknown' }, hoursPerWeek: { min: null, max: null }, roleType: 'Fractional', locationConcern: 'none', strengths: [], watchOuts: [], topTalkingPoint: 't', suggestedStatus: 'worth_pursuing' };
@@ -30,8 +36,9 @@ function fakeClaude(score) {
 }
 
 const drive = { getFile: async () => ({}), createFolder: async () => 'f', createDocFromHtml: async () => ({ id: 'd', url: 'https://docs.example.com/d' }) };
-const noHttp = { get: async () => { throw new Error('no network in tests'); }, sleep: async () => {} };
-const ctx = (store, claude, http = noHttp) => ({ store, config, http, browser: null, claude, knowledge: KNOWLEDGE, drive, run: null, steps: [] });
+const noHttp = fakeHttp({ get: async () => { throw new Error('no network in tests'); }, sleep: async () => {} });
+/** @param {JobStore} store @param {Claude} claude @param {ManualContext['http']} [http] @returns {ManualContext & { onStep?: (m: string) => void }} */
+const ctx = (store, claude, http = noHttp) => /** @type {ManualContext} */ (/** @type {unknown} */ ({ store, config, http, browser: null, claude, knowledge: KNOWLEDGE, drive, run: null, steps: [] })); // the fake drive and no run
 
 test('validateManualInput explains what is missing', () => {
   assert.throws(() => validateManualInput({}), /link to the posting, a pasted description/);
@@ -44,6 +51,7 @@ test('validateManualInput explains what is missing', () => {
 test('a pasted fractional job is saved, scored, promoted, and gets materials; adding it again finds it', async () => {
   const store = openJobStore(':memory:');
   const { claude, labels } = fakeClaude(8);
+  /** @type {string[]} */
   const steps = [];
   const input = { url: 'https://jobs.example.com/fcto', title: 'Fractional CTO', company: 'Example Co', description: DESCRIPTION, rateText: '$150 - $200 / hr', hoursText: '10 - 15 hrs', notes: 'Referred by a friend' };
   const result = await addPosting(input, { ...ctx(store, claude), onStep: (m) => steps.push(m) });
@@ -56,11 +64,12 @@ test('a pasted fractional job is saved, scored, promoted, and gets materials; ad
   assert.ok(steps.some((s) => /Scored 8 of 10, moved to your pipeline/.test(s)));
   assert.ok(steps.some((s) => /Cover letter saved as a Google Doc/.test(s)));
 
+  /** @type {string[]} */
   const againSteps = [];
   const again = await addPosting({ url: 'https://jobs.example.com/fcto/' }, { ...ctx(store, claude), onStep: (m) => againSteps.push(m) });
   assert.deepEqual([again.id, again.created, again.matchedBy], [result.id, false, 'link']);
   assert.deepEqual(
-    (({ title, company, stage, status, track, score, source }) => ({ title, company, stage, status, track, score, source }))(again.existing),
+    (({ title, company, stage, status, track, score, source }) => ({ title, company, stage, status, track, score, source }))(/** @type {NonNullable<typeof again.existing>} */ (again.existing)),
     { title: 'Fractional CTO', company: 'Example Co', stage: 'pipeline', status: 'new', track: 'fractional', score: 8, source: 'manual' },
   );
   assert.match(againSteps[0], /^Already saved: "Fractional CTO" at Example Co \(found by you on \d{4}-\d{2}-\d{2}, Pipeline, new, score 8\)$/);
@@ -75,7 +84,7 @@ test('a low score writes no materials unless asked; an explicit track wins', asy
   assert.equal(store.db.prepare('SELECT track FROM postings WHERE id = ?').pluck().get(r1.id), 'fulltime');
 
   const r2 = await addPosting({ title: 'CTO', company: 'Other Co', description: DESCRIPTION, writeMaterials: true }, ctx(store, claude));
-  assert.equal(r2.materials.letters, 1);
+  assert.equal(r2.materials?.letters, 1);
   assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(r2.id), 'pipeline');
   assert.equal(labels.filter((l) => l === 'writing').length, 2);
   store.close();

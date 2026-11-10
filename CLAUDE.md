@@ -45,7 +45,7 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
                     add-job dialog, fractional stacking bar. Pictures: web/public/dash (160 px PNGs) through DashIcon.tsx's map (Home tiles, the Home link, panel headings) Phones get a back link to Home and the screen name instead of tabs
 /evals              eval runner and rubric code; real eval cases live in data/evals; evals/inbox/cases.json is synthetic. Results: EVALS.md
 /test               node:test suites with synthetic fixtures only; test/fixtures/fakes.js types partial stand-ins (fakeConfig,
-                    fakeServices, fakeClaude, fakeHttp, fakeItem) and returns them unchanged
+                    fakeServices, fakeClaude, fakeHttp, fakeItem, fakeRun) and returns them unchanged
 /data               gitignored: job-agent.db, config/, google/ (OAuth client and token), attachments/, v1-export/
 /legacy contains the v1 scripts for reference only. Do not modify or import from them.
 

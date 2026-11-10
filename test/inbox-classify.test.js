@@ -25,11 +25,13 @@ const answer = (o = {}) => ({
   ...o,
 });
 
+/** A real agent-core client over a fake SDK that always answers with this JSON. @param {object} reply */
 function fakeClaude(reply) {
+  /** @type {Array<{ model: string, tools?: unknown }>} */
   const requests = [];
   const client = {
     messages: {
-      create: async (params) => {
+      create: async (/** @type {{ model: string, tools?: unknown }} */ params) => {
         requests.push(params);
         return { id: 'm', model: params.model, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(reply) }], usage: { input_tokens: 900, output_tokens: 120 } };
       },
@@ -49,7 +51,7 @@ test('the email is wrapped in <email> tags and cannot close the wrapper or injec
   assert.match(req.prompt, /11 \| Example Co \| VP of Engineering/);
   assert.match(req.prompt, /\{ \{applicationsBlock\} \}/, 'braces in the email are neutralized');
   assert.equal(req.maxTokens, 800);
-  assert.ok(req.schema.properties.type.enum.includes('offer'));
+  assert.ok(/** @type {{ properties: { type: { enum: string[] } } }} */ (req.schema).properties.type.enum.includes('offer'));
 });
 
 test('the untrusted-data rule stays even after an Admin-screen edit of the prompt', () => {

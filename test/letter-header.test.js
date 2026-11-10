@@ -15,9 +15,12 @@ import { letterPdf, winAnsi } from '../tools/pdf-writer.ts';
 import { letterDocx } from '../server/word-docs.ts';
 import { letterHtml } from '../agents/hunt/letters.ts';
 import { validateConfig } from '../tools/config.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { LetterHeader } from '../tools/letter-header.ts' */
 
 const candidate = { name: 'Pat Example', signoffName: 'Pat', contactLine: 'pat@example.com | 555-0100', linkedin: 'https://www.linkedin.com/in/example/', website: 'https://example.com/', github: 'github.com/example' };
-const letter = { candidate, company: 'Example Co', title: '🧪 Vice President, Engineering 🚀', date: 'October 29, 2026', body: 'First paragraph ✨ here.\n\nSecond paragraph.' };
+// Older settings: the letter documents read the candidate fields through headerLines, as they do before a header is saved.
+const letter = { candidate: /** @type {LetterHeader} */ (/** @type {unknown} */ (candidate)), company: 'Example Co', title: '🧪 Vice President, Engineering 🚀', date: 'October 29, 2026', body: 'First paragraph ✨ here.\n\nSecond paragraph.' };
 
 test('pictographs come out; accents, curly quotes, and dashes stay', () => {
   assert.equal(withoutPictographs('🧪 Vice President, Engineering'), 'Vice President, Engineering');
@@ -38,7 +41,7 @@ test('header parts: an email links as mailto, web addresses as https, the rest i
     [{ text: 'https://www.linkedin.com/in/example/', url: 'https://www.linkedin.com/in/example/' }, { text: 'https://example.com/', url: 'https://example.com/' }],
     [{ text: 'github.com/example', url: 'https://github.com/example' }],
   ]);
-  const long = { email: 'pat@example.com', phone: '555.010.0100', location: '', links: ['https://www.linkedin.com/in/pat-example-healthcare-technology-leader/', 'https://example.com', 'https://github.com/example'] };
+  const long = /** @type {LetterHeader} */ ({ email: 'pat@example.com', phone: '555.010.0100', location: '', links: ['https://www.linkedin.com/in/pat-example-healthcare-technology-leader/', 'https://example.com', 'https://github.com/example'] });
   assert.deepEqual(headerLines(long).map((l) => l.map((p) => p.text)), [['pat@example.com', '555.010.0100'], [long.links[0]], ['https://example.com', 'https://github.com/example']]);
   assert.deepEqual(fromCandidate({ name: 'Pat', contactLine: 'Anytown, ST | pat@example.com | (555) 010-0100', linkedin: 'linkedin.com/in/pat' }), {
     name: 'Pat', signoffName: '', email: 'pat@example.com', phone: '(555) 010-0100', location: 'Anytown, ST', links: ['linkedin.com/in/pat'],
@@ -56,7 +59,11 @@ test('the PDF has link areas for the email, LinkedIn, website, and GitHub, and n
   assert.ok(!pdf.includes('?'), 'nothing printed as "?"');
 });
 
-// The text of one part of a .docx (a zip), read without a zip library: stored or deflated entries only.
+/**
+ * The text of one part of a .docx (a zip), read without a zip library: stored or deflated entries only.
+ * @param {Buffer} buf
+ * @param {string} name
+ */
 function docxPart(buf, name) {
   for (let i = 0; i < buf.length - 30; i++) {
     if (buf.readUInt32LE(i) !== 0x04034b50) continue;
@@ -111,7 +118,7 @@ test('the routes save the header, and a letter downloaded after uses it', async 
       VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', '2026-10-01', 'x', 'x')`).run().lastInsertRowid,
   );
   db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', 'The body of the letter, long enough to read.', 'v2', '2026-10-02T12:00:00Z')").run(id);
-  const app = await buildApp({ store, config: { candidate, search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  const app = await buildApp({ store, config: fakeConfig({ candidate, search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   assert.equal((await app.inject('/api/letter-header')).json().saved, false);
   assert.equal((await app.inject({ method: 'PUT', url: '/api/letter-header', payload: { name: 'Pat', links: ['nope nope'] } })).statusCode, 400);
   const put = await app.inject({ method: 'PUT', url: '/api/letter-header', payload: { name: 'Pat M. Example', signoffName: 'Pat', email: 'pat.m@example.com', phone: '555-0199', links: ['https://patexample.example.com'] } });

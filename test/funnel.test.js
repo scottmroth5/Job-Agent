@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
 import { addValue } from '../agents/lookups.ts';
 import { funnel, applications, NO_REPLY_DAYS } from '../server/funnel.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 // Synthetic data only. "now" is fixed so ages and weeks are stable.
 const now = new Date('2026-10-05T12:00:00Z');
@@ -18,7 +19,9 @@ function setup() {
           VALUES (1, @k, @company, @title, @k, @source, @track, @found, 'pipeline', @status, @applied, 'x', 'x')`)
         .run({ k: `k${Math.random()}`, company: 'Example Co', title: 'CTO', source: 'LinkedIn', track: 'fulltime', found: '2026-09-01', status: 'applied', applied: null, ...o }).lastInsertRowid,
     );
+  /** @param {number} id @param {string} to @param {string} at @param {string} [by] */
   const history = (id, to, at, by = 'user') => db.prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, ?, ?, ?)').run(id, to, by, `${at}T10:00:00Z`);
+  /** @param {number} id @param {string} type @param {string} at @param {string} [review] */
   const email = (id, type, at, review = 'auto') =>
     db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, type, posting_id, review_status, created_at, updated_at)
       VALUES (1, ?, ?, 't', 'x@example.com', 'example.com', ?, ?, ?, ?, 'x', 'x')`).run(randomUUID(), randomUUID(), `${at}T09:00:00Z`, type, id, review);
@@ -64,7 +67,7 @@ test('an added status in the In conversation group counts as an interview; impor
   const f = funnel(db, { now });
   assert.deepEqual([f.totals.interview, f.totals.offer], [1, 1]);
   assert.deepEqual([f.medians.daysToInterview, f.medians.interviewSamples], [7, 1]);
-  assert.equal(applications(db, { now }).find((a) => a.id === imported).offer.date, null);
+  assert.equal(applications(db, { now }).find((a) => a.id === imported)?.offer.date, null);
   store.close();
 });
 
@@ -84,14 +87,14 @@ test('filters, by-source results, weekly counts, and the follow-up list', () => 
   const f = funnel(db, { now });
   assert.deepEqual(f.bySource.map((s) => [s.source, s.applied, s.responded]), [['Himalayas', 2, 1], ['manual', 2, 0], ['LinkedIn', 1, 0]]);
   assert.equal(f.weeks.length, 12);
-  assert.equal(f.weeks.at(-1).weekStart, '2026-10-05');
-  assert.equal(f.weeks.find((w) => w.weekStart === '2026-09-28').applied, 3);
+  assert.equal(f.weeks.at(-1)?.weekStart, '2026-10-05');
+  assert.equal(f.weeks.find((w) => w.weekStart === '2026-09-28')?.applied, 3);
   // From 7 days until the stale days (45 by default): the 126-day one is stale, the 6-day ones too new.
   assert.deepEqual(f.followUps.map((x) => [x.id, x.days]), [[stale, 20]]);
   assert.deepEqual([f.stale, f.staleDays], [1, 45]);
   assert.equal(old > 0, true);
   assert.deepEqual(funnel(db, { now, staleDays: 200 }).followUps.map((x) => x.id), [old, stale], "a longer stale setting keeps it a follow-up");
-  assert.equal(applications(db, { now }).find((a) => a.id === stale).noReply, 20 >= NO_REPLY_DAYS);
+  assert.equal(applications(db, { now }).find((a) => a.id === stale)?.noReply, 20 >= NO_REPLY_DAYS);
   store.close();
 });
 
@@ -100,7 +103,7 @@ test('GET /api/funnel applies the window and track, and rejects bad values', asy
   const { store, job } = setup();
   job({ applied: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10) });
   job({ applied: '2025-01-01' });
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null } });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   assert.equal((await app.inject('/api/funnel?days=all')).json().totals.applied, 2);
   assert.equal((await app.inject('/api/funnel?days=30')).json().totals.applied, 1);
   assert.equal((await app.inject('/api/funnel?days=30&track=fractional')).json().totals.applied, 0);

@@ -9,16 +9,17 @@ import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
 import { repoPath } from '../tools/paths.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-const pngSize = (file) => {
+const pngSize = (/** @type {string} */ file) => {
   const b = readFileSync(file);
   assert.deepEqual([...b.subarray(0, 8)], PNG_SIGNATURE, `${file} is a PNG`);
   return [b.readUInt32BE(16), b.readUInt32BE(20)];
 };
 
 test('icons: each is a PNG of its size; favicon.ico holds icons; the 1024 source is kept but not served', () => {
-  for (const [file, size] of [['icon-180.png', 180], ['icon-192.png', 192], ['icon-512.png', 512], ['favicon-32x32.png', 32], ['favicon-16x16.png', 16]]) {
+  for (const [file, size] of /** @type {Array<[string, number]>} */ ([['icon-180.png', 180], ['icon-192.png', 192], ['icon-512.png', 512], ['favicon-32x32.png', 32], ['favicon-16x16.png', 16]])) {
     assert.deepEqual(pngSize(repoPath('web', 'public', file)), [size, size], file);
   }
   const ico = readFileSync(repoPath('web', 'public', 'favicon.ico'));
@@ -53,15 +54,15 @@ test('signed out with Google sign-in on: the manifest, icons, and favicons load;
   const store = openJobStore(':memory:');
   const app = await buildApp({
     store,
-    config: { search: { homeLocations: [] }, fractional: {} },
-    services: { createBrowser: async () => null },
+    config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }),
+    services: fakeServices({ createBrowser: async () => null }),
     webDir: repoPath('web', 'public'),
     authMode: 'google',
     auth: { settings, exchange: async () => assert.fail('no sign-in here') },
   });
   const manifest = await app.inject('/manifest.webmanifest');
   assert.equal(manifest.statusCode, 200);
-  assert.match(manifest.headers['content-type'], /manifest\+json|json/);
+  assert.match(/** @type {string} */ (manifest.headers['content-type']), /manifest\+json|json/);
   for (const path of ['/icon-180.png', '/icon-512.png', '/favicon-32x32.png', '/favicon-16x16.png', '/favicon.ico']) {
     assert.equal((await app.inject(path)).statusCode, 200, path);
   }

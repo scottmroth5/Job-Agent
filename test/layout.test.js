@@ -7,6 +7,7 @@ import { buildApp } from '../server/app.ts';
 import { LAYOUT_AREAS } from '../server/layout.ts';
 import { arranged, moved } from '../web/src/layout.ts';
 import { repoPath } from '../tools/paths.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 const HOME = LAYOUT_AREAS.home;
 
@@ -22,20 +23,20 @@ test('the order rule: saved first, new items in their default place, unknown and
 
 test('the Home page and the server name the same tiles', () => {
   const jsx = readFileSync(repoPath('web', 'src', 'components', 'HomePage.tsx'), 'utf8');
-  const keys = JSON.parse(/HOME_TILES(?::[^=]+)? = (\[[^\]]+\])/.exec(jsx)[1].replaceAll("'", '"'));
+  const keys = JSON.parse(/** @type {RegExpExecArray} */ (/HOME_TILES(?::[^=]+)? = (\[[^\]]+\])/.exec(jsx))[1].replaceAll("'", '"'));
   assert.deepEqual(keys, HOME);
 });
 
 async function setup(authMode = 'none') {
   const store = openJobStore(':memory:');
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null }, authMode });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }), authMode });
   return { store, app, done: async () => { await app.close(); store.close(); } };
 }
 
 test('API: the saved order comes back with the summary; an empty list resets it; bad orders are refused', async () => {
   const { app, done } = await setup();
   assert.equal((await app.inject('/api/summary')).json().layout.home, null, 'never arranged');
-  const put = (order) => app.inject({ method: 'PUT', url: '/api/layout/home', payload: { order } });
+  const put = (/** @type {unknown[]} */ order) => app.inject({ method: 'PUT', url: '/api/layout/home', payload: { order } });
   const saved = await put(['inbox', 'jobs']);
   assert.equal(saved.statusCode, 200);
   assert.deepEqual(saved.json().order, ['inbox', 'jobs']);

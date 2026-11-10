@@ -7,10 +7,14 @@ import { readFileSync } from 'node:fs';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { countryLookup, geoAllowFromEnv, geoBlocker, isPrivateAddress, parseRelayRanges, relayLookup, shortAddress } from '../server/geo.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
+/** @type {Record<string, string | null>} */
 const COUNTRY = { '8.8.8.8': 'US', '81.2.69.142': 'GB', '203.0.113.9': null };
-const lookup = (ip) => COUNTRY[ip] ?? null;
-const TRUST_PROXY = /TRUST_PROXY: (\S+)/.exec(readFileSync(new URL('../deploy/compose.yml', import.meta.url), 'utf8'))[1];
+const lookup = (/** @type {string} */ ip) => COUNTRY[ip] ?? null;
+const TRUST_PROXY = /** @type {RegExpExecArray} */ (/TRUST_PROXY: (\S+)/.exec(readFileSync(new URL('../deploy/compose.yml', import.meta.url), 'utf8')))[1];
+/** @type {Record<string, string>} */
+const DBIP = { '192.0.2.1': 'GB', '192.0.2.70': 'US', '81.2.69.142': 'GB', '8.8.8.8': 'US' };
 const compose = readFileSync(new URL('../deploy/compose.yml', import.meta.url), 'utf8');
 
 test('settings and private addresses', () => {
@@ -23,12 +27,13 @@ test('settings and private addresses', () => {
   assert.equal(geoBlocker({ allow: [], lookup })({ ip: '81.2.69.142', url: '/' }), false, 'no allow list: off');
   assert.equal(geoBlocker({ allow: ['US'], lookup: null })({ ip: '81.2.69.142', url: '/' }), false, 'no database: fails open');
   // Production: the app is US-only; the demo (made-up data, read-only) is open from any country.
-  const block = (service) => compose.split(/^  (?=[a-z]+:)/m).find((b) => b.startsWith(`${service}:`)) ?? '';
+  const block = (/** @type {string} */ service) => compose.split(/^  (?=[a-z]+:)/m).find((b) => b.startsWith(`${service}:`)) ?? '';
   assert.match(block('app'), /GEO_ALLOW: US\b/, 'the app is US-only');
   assert.match(block('demo'), /GEO_ALLOW: ""/, 'the demo is open from any country');
 });
 
 test('refusals are logged with the country and half the address, at most hourly per address', () => {
+  /** @type {string[]} */
   const warnings = [];
   let clock = 0;
   const blocked = geoBlocker({ allow: ['US'], lookup, log: { warn: (m) => warnings.push(m) }, now: () => clock });
@@ -79,13 +84,13 @@ test('the relay list: ranges, edges, IPv6, and malformed lines skipped', () => {
   assert.equal(relay('2001:db8:2:3:abcd::1'), 'GB', 'inside the /64');
   assert.equal(relay('2001:db8:2:4::1'), null, 'the next /64');
   assert.equal(relay('2001:db8:9::1'), null, 'the skipped /65');
-  for (const bad of ['', 'nonsense', null, '192.0.2']) assert.equal(relay(bad), null);
+  for (const bad of /** @type {string[]} */ (['', 'nonsense', null, '192.0.2'])) assert.equal(relay(bad), null);
   assert.deepEqual(parseRelayRanges(''), { v4: [], v6: [] });
 });
 
 test('the country check: the relay list first, DB-IP for addresses it does not list', () => {
   const relay = relayLookup(parseRelayRanges(RELAY_CSV));
-  const dbip = (ip) => ({ '192.0.2.1': 'GB', '192.0.2.70': 'US', '81.2.69.142': 'GB', '8.8.8.8': 'US' })[ip] ?? null;
+  const dbip = (/** @type {string} */ ip) => DBIP[ip] ?? null;
   const country = countryLookup({ relay, dbip });
   assert.equal(country('192.0.2.1'), 'US', 'listed as US, DB-IP says GB');
   assert.equal(country('192.0.2.70'), 'GB', 'listed as GB, DB-IP says US');
@@ -102,9 +107,14 @@ test('the image downloads the relay list without ever failing the build', () => 
   assert.match(step, /; true\s*$/m, 'a failed download never fails the build');
 });
 
+/**
+ * @param {string} ip
+ * @param {{ allow?: string[], lookup?: (ip: string) => string | null }} [o]
+ */
 async function appFrom(ip, { allow = ['US'], lookup: countryOf = lookup } = {}) {
   const store = openJobStore(':memory:');
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: {} }, services: { createBrowser: async () => null }, trustProxy: TRUST_PROXY, geo: { allow, lookup: countryOf } });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }), trustProxy: TRUST_PROXY, geo: { allow, lookup: countryOf } });
+  /** @param {string} url @param {{ headers?: Record<string, string>, method?: 'GET' | 'POST' }} [opts] */
   return (url, opts = {}) => app.inject({ url, remoteAddress: '172.18.0.4', ...opts, headers: { 'x-forwarded-for': ip, ...(opts.headers ?? {}) } });
 }
 
@@ -129,8 +139,8 @@ test('in the US, from inside the server, or with blocking off: everything as usu
 
 test('iCloud Private Relay: the country Apple lists decides, whatever DB-IP says', async () => {
   const relay = relayLookup(parseRelayRanges(RELAY_CSV));
-  const dbip = (ip) => ({ '192.0.2.1': 'GB', '192.0.2.70': 'US', '81.2.69.142': 'GB', '8.8.8.8': 'US' })[ip] ?? null;
-  const viaRelay = (ip) => appFrom(ip, { lookup: countryLookup({ relay, dbip }) });
+  const dbip = (/** @type {string} */ ip) => DBIP[ip] ?? null;
+  const viaRelay = (/** @type {string} */ ip) => appFrom(ip, { lookup: countryLookup({ relay, dbip }) });
   assert.equal((await (await viaRelay('192.0.2.1'))('/api/postings')).statusCode, 200, 'DB-IP says GB, Apple lists US');
   assert.equal((await (await viaRelay('192.0.2.5'))('/api/postings')).statusCode, 200, 'DB-IP has no country, Apple lists US');
   assert.equal((await (await viaRelay('2001:db8:1::7'))('/api/postings')).statusCode, 200, 'IPv6 relay address listed as US');

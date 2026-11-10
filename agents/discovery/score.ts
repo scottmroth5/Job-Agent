@@ -181,7 +181,7 @@ export function interpretResult(data: Record<string, unknown>, posting: ScoreInp
 }
 
 /** True when scoring needs no AI call: a clear location conflict, a list-of-jobs page, or an excluded site. */
-export const isRuleScored = (posting: ScoreInput, config: Pick<JobSearchConfig, 'search'>) => posting.location_check === 'conflict' || skipReason(posting, config) !== null;
+export const isRuleScored = (posting: ScoreInput, config?: Pick<JobSearchConfig, 'search'>) => posting.location_check === 'conflict' || skipReason(posting, config) !== null;
 
 /** The no-AI score for a skipped posting (list of jobs, excluded site) or a clear location conflict. */
 export function ruleScore(posting: ScoreInput, config: Pick<JobSearchConfig, 'search'>): { score: number; reason: string; analysis: ScoreAnalysis } {

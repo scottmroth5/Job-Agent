@@ -8,6 +8,8 @@ import { storedKey } from '../agents/identity.ts';
 import { insertEmail } from '../agents/inbox/store.ts';
 import { loadKey, newKey, decrypt, encrypt } from '../agents/inbox/crypto.ts';
 import { listNeedsReview, resolveReview, sealCaseLines } from '../agents/inbox/review.ts';
+/** @import { EmailRecord } from '../agents/inbox/store.ts' */
+/** @import { EmailsRow } from '../db/types.ts' */
 
 // Synthetic data only.
 const key = loadKey({ EMAIL_ENC_KEY: newKey() });
@@ -16,7 +18,7 @@ const now = new Date('2026-10-02T12:00:00Z');
 function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const add = (company, title, status) =>
+  const add = (/** @type {string} */ company, /** @type {string} */ title, /** @type {string} */ status) =>
     Number(
       db
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
@@ -24,7 +26,7 @@ function setup() {
         .run(`k${Math.random()}`, company, title, storedKey({ company, title }), status).lastInsertRowid,
     );
   const ids = { guess: add('Example Co', 'VP of Engineering', 'applied'), other: add('Sample Labs', 'CTO', 'applied') };
-  const email = (o) =>
+  const email = (/** @type {Partial<EmailRecord>} */ o = {}) =>
     insertEmail(db, {
       gmailMessageId: `g${Math.random()}`,
       threadId: `t${Math.random()}`,
@@ -45,14 +47,14 @@ function setup() {
   return { store, db, ids, email, casesPath };
 }
 
-const cases = (path) => (existsSync(path) ? readFileSync(path, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
+const cases = (/** @type {string} */ path) => (existsSync(path) ? readFileSync(path, 'utf8').trim().split('\n').map((l) => JSON.parse(l)) : []);
 
 test('the review queue shows the best guess', () => {
   const { store, db, ids, email } = setup();
   email();
   const [e] = listNeedsReview(db);
-  assert.equal(e.guess.id, ids.guess);
-  assert.equal(e.extracted.interview_times[0], 'October 8, 2026 10:00 AM');
+  assert.equal(e.guess?.id, ids.guess);
+  assert.equal(e.extracted.interview_times?.[0], 'October 8, 2026 10:00 AM');
   store.close();
 });
 
@@ -61,9 +63,9 @@ test('confirm links the guess, runs the actions as the user, stores the body, an
   const id = email();
   const r = resolveReview(db, listNeedsReview(db)[0], 'confirm', { body: 'Can you talk on Oct 8?', key, now, casesPath });
   assert.deepEqual(r.statusChange, { from: 'applied', to: 'interviewing' });
-  const row = db.prepare('SELECT * FROM emails WHERE id = ?').get(id);
+  const row = /** @type {EmailsRow} */ (db.prepare('SELECT * FROM emails WHERE id = ?').get(id));
   assert.deepEqual([row.review_status, row.posting_id, row.match_rule], ['confirmed', ids.guess, 'user']);
-  assert.equal(decrypt(row.body_enc, key), 'Can you talk on Oct 8?');
+  assert.equal(decrypt(/** @type {string} */ (row.body_enc), key), 'Can you talk on Oct 8?');
   assert.equal(db.prepare("SELECT decided_by FROM decision_log WHERE action = 'review:confirm'").pluck().get(), 'user');
   assert.equal(db.prepare("SELECT decided_by FROM decision_log WHERE action = 'status_change'").pluck().get(), 'user');
   const [c] = cases(casesPath);
@@ -138,7 +140,7 @@ test('dismiss takes an unsure email off the list with no link, no status change,
   const id = email();
   const r = resolveReview(db, listNeedsReview(db)[0], 'dismiss', { body: 'Thanks for applying.', key, now, casesPath });
   assert.deepEqual([r.postingId, r.statusChange], [null, null]);
-  const row = db.prepare('SELECT review_status, posting_id, body_enc FROM emails WHERE id = ?').get(id);
+  const row = /** @type {Pick<EmailsRow, 'review_status' | 'posting_id' | 'body_enc'>} */ (db.prepare('SELECT review_status, posting_id, body_enc FROM emails WHERE id = ?').get(id));
   assert.deepEqual([row.review_status, row.posting_id, row.body_enc], ['dismissed', null, null]);
   assert.equal(db.prepare('SELECT status FROM postings WHERE id = ?').pluck().get(ids.guess), 'applied');
   assert.equal(db.prepare("SELECT decided_by FROM decision_log WHERE action = 'review:dismiss'").pluck().get(), 'user');

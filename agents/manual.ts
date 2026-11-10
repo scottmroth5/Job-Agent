@@ -254,7 +254,7 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
   step(`Scored ${score} of 10${promoted ? ', moved to your pipeline' : ''}`);
 
   // 6. Materials
-  let materials: { docs?: unknown } | null = null;
+  let materials: Awaited<ReturnType<typeof generateForPostings>> | null = null;
   if (promoted || input.writeMaterials) {
     if (!promoted) db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), nowIso, id);
     step('Writing resume tweaks and cover letter');
