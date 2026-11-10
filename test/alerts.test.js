@@ -5,11 +5,14 @@ import { openJobStore } from '../db/index.ts';
 import { createAlerts } from '../server/alerts.ts';
 import { createScheduler, parseSchedule } from '../server/scheduler.ts';
 import { buildRawEmail } from '../tools/google/gmail.ts';
+/** @import { SentEmail } from './fixtures/fakes.js' */
 
-const local = (y, mo, d, h = 12) => new Date(y, mo - 1, d, h);
+/** A local time; callers give the minutes too (5:59, 6:01). */
+const local = (/** @type {number} */ y, /** @type {number} */ mo, /** @type {number} */ d, h = 12, min = 0) => new Date(y, mo - 1, d, h, min);
 
 function setup(clock = () => local(2026, 10, 25)) {
   const { db } = openJobStore(':memory:');
+  /** @type {SentEmail[]} */
   const sent = [];
   const alerts = createAlerts({ db, send: async (e) => sent.push(e), to: () => 'owner@example.com', appUrl: () => 'https://jobs.example.com', clock, log: {} });
   return { db, sent, alerts };
@@ -31,7 +34,7 @@ test('a failed scheduled job emails once a day; a success clears it so the next 
   await alerts.jobResult('pipeline', false, 'failed again after recovering');
   assert.equal(sent.length, 3, 'after recovery the same day, it emails again');
   await alerts.jobResult('backup', false, 'Drive refused');
-  assert.equal(sent.at(-1).subject, 'Job Agent: the nightly backup failed', 'each job is its own kind');
+  assert.equal(sent.at(-1)?.subject, 'Job Agent: the nightly backup failed', 'each job is its own kind');
 });
 
 test('once: an ongoing problem emails a single time until it recovers', async () => {
@@ -55,6 +58,7 @@ test('no address or a failing send: recorded, never thrown', async () => {
 });
 
 test('the scheduler reports each run to the alerts, and a reporting problem never changes the job result', async () => {
+  /** @type {Array<[string, boolean, string | null]>} */
   const reports = [];
   let clock = local(2026, 10, 25, 5, 59);
   const scheduler = createScheduler({
@@ -64,7 +68,7 @@ test('the scheduler reports each run to the alerts, and a reporting problem neve
     ],
     now: () => clock,
     log: {},
-    every: () => null,
+    every: () => /** @type {NodeJS.Timeout} */ (/** @type {unknown} */ (null)),
     onResult: (name, ok, error) => {
       reports.push([name, ok, error]);
       throw new Error('the alert itself broke');

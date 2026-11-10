@@ -14,7 +14,7 @@ const job = { company: JOBS[0].company, title: JOBS[0].title, score: 9, analysis
 test('the sample prep has the real prompt\'s ten sections, for the people the visitor entered', () => {
   const md = samplePrep(job, { attendees: [{ name: 'Dana Ortiz', role: 'CEO' }], kind: 'Recruiter or search firm', format: 'Video' });
   assert.ok(md.startsWith(`# Call Prep: Dana Ortiz, ${job.company}`));
-  const sections = md.match(/^## .+$/gm).map((h) => h.slice(3));
+  const sections = /** @type {RegExpMatchArray} */ (md.match(/^## .+$/gm)).map((h) => h.slice(3));
   assert.deepEqual(sections, ['The Meeting at a Glance', 'Who You Are Talking To', 'Company Snapshot', 'Your Opening', 'Fit Against the Role', 'Stories to Have Ready', 'Likely Questions and Your Answers', 'Gaps: Own Them, Then Bridge', 'Questions to Ask', 'Close and Next Steps']);
   assert.match(md, /What are you looking for in pay/, 'a recruiter screen covers pay');
   assert.match(md, /Team is offshore/, 'gaps come from the fit analysis');
@@ -33,7 +33,7 @@ test('sample letters pass the real letter rules, and each kind of revision does 
   assert.deepEqual([sampleScore(job).score, sampleScore(job).reason], [9, 'Strong match.']);
 
   const letter = sampleLetter(job);
-  const words = (t) => t.split(/\s+/).length;
+  const words = (/** @type {string} */ t) => t.split(/\s+/).length;
   const short = sampleRevision({ letter, feedback: 'make it shorter', company: job.company, title: job.title });
   assert.ok(words(short.letter) < words(letter) && short.changes.endsWith(`from ${words(letter)} words to ${words(short.letter)}.`), short.changes);
   assert.match(sampleRevision({ letter, feedback: 'warmer please', company: job.company, title: job.title }).letter, /Thank you for considering me\.$/);
@@ -45,7 +45,7 @@ test('sample letters pass the real letter rules, and each kind of revision does 
 });
 
 test('the sample Help answer quotes the guide section that matches the question', () => {
-  const guides = readdirSync('help').map((f) => ({ title: /^#\s+(.+)$/m.exec(readFileSync(`help/${f}`, 'utf8'))[1], markdown: readFileSync(`help/${f}`, 'utf8') }));
+  const guides = readdirSync('help').map((f) => ({ title: /** @type {RegExpExecArray} */ (/^#\s+(.+)$/m.exec(readFileSync(`help/${f}`, 'utf8')))[1], markdown: readFileSync(`help/${f}`, 'utf8') }));
   assert.match(sampleHelpAnswer('How do I skip a job site?', guides).answer, /Job sites to skip/);
   assert.match(sampleHelpAnswer('When is an application stale?', guides).answer, /Following up on applications/);
   assert.match(sampleHelpAnswer('zzzz qqqq', guides).answer, /do not cover that yet/);

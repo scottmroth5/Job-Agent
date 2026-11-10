@@ -12,6 +12,9 @@ import { registerRateLimits } from '../server/security.ts';
 import { seedDemo, isDemoDatabase } from '../scripts/demo-seed.js';
 import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.ts';
 import Fastify from 'fastify';
+import { fakeServices } from './fixtures/fakes.js';
+/** @import { InjectOptions } from 'fastify' */
+/** @import { JsonRow } from './fixtures/fakes.js' */
 
 const NOW = new Date('2026-10-23T15:00:00Z');
 
@@ -23,7 +26,7 @@ function seeded() {
   return { dir, dbPath, configPath, counts };
 }
 
-async function demoApp(dbPath) {
+async function demoApp(/** @type {string} */ dbPath) {
   const store = openJobStore(dbPath);
   const webDir = mkdtempSync(join(tmpdir(), 'web-'));
   writeFileSync(join(webDir, 'index.html'), '<!doctype html><title>Job Hunt</title>');
@@ -33,7 +36,7 @@ async function demoApp(dbPath) {
     webDir,
     authMode: 'demo',
     auth: { settings: authSettings({ AUTH_MODE: 'demo', PUBLIC_URL: 'https://demo.example.com' }) },
-    services: {
+    services: fakeServices({
       claude: null,
       createBrowser: null,
       runPipeline: async () => assert.fail('the demo must never run the pipeline'),
@@ -42,19 +45,19 @@ async function demoApp(dbPath) {
       knowledge: async () => '',
       sampleTasks: SAMPLE_TASKS,
       log: { info() {}, warn() {}, error() {} },
-    },
+    }),
   });
   return { app, store };
 }
 
-const sampleUrl = (url) => url.replace(/:(\w+)/g, (_, name) => (name === 'id' ? '1' : name === 'action' ? 'score' : name === 'list' ? 'status' : name === 'name' ? 'score' : 'x')).replaceAll('*', 'index.html');
+const sampleUrl = (/** @type {string} */ url) => url.replace(/:(\w+)/g, (_, /** @type {string} */ name) => (name === 'id' ? '1' : name === 'action' ? 'score' : name === 'list' ? 'status' : name === 'name' ? 'score' : 'x')).replaceAll('*', 'index.html');
 
 test('the seed builds a full sample search: jobs in every stage, scores, letters, emails, runs, and prompt edits', () => {
   const { dbPath, configPath, counts } = seeded();
   assert.equal(counts.postings, JOBS.length);
   assert.ok(counts.runs > 10);
   const store = openJobStore(dbPath);
-  const one = (sql) => store.db.prepare(sql).pluck().get();
+  const one = (/** @type {string} */ sql) => /** @type {number} */ (store.db.prepare(sql).pluck().get());
   assert.ok(one("SELECT COUNT(*) FROM postings WHERE stage = 'pipeline'") >= 10);
   assert.ok(one("SELECT COUNT(*) FROM postings WHERE stage = 'discovered'") >= 5);
   assert.ok(one("SELECT COUNT(*) FROM postings WHERE stage = 'archived'") >= 5);
@@ -63,15 +66,17 @@ test('the seed builds a full sample search: jobs in every stage, scores, letters
   assert.equal(one("SELECT COUNT(*) FROM emails WHERE review_status = 'needs_review'"), 1);
   assert.equal(one('SELECT COUNT(*) FROM meeting_preps'), 3, 'two interviews and the Arbor case');
   // No watch-out contradicts its job's location (the review's Yarrow finding): a location watch-out only on a job that has it.
-  for (const r of store.db.prepare("SELECT p.workplace, s.analysis_json FROM scores s JOIN postings p ON p.id = s.posting_id WHERE s.user_id = @uid").all()) {
+  const rows = /** @type {Array<{ workplace: string, analysis_json: string }>} */ (store.db.prepare("SELECT p.workplace, s.analysis_json FROM scores s JOIN postings p ON p.id = s.posting_id WHERE s.user_id = @uid").all());
+  for (const r of rows) {
+    /** @type {string[]} */
     const watch = JSON.parse(r.analysis_json).watchOuts ?? [];
     if (r.workplace !== 'hybrid') assert.ok(!watch.some((w) => /hybrid/i.test(w)), 'no hybrid watch-out on a ' + r.workplace + ' job');
     if (r.workplace !== 'onsite') assert.ok(!watch.some((w) => /onsite/i.test(w)), 'no onsite watch-out on a ' + r.workplace + ' job');
   }
   assert.equal(one('SELECT COUNT(*) FROM prompt_versions WHERE active = 1'), 2, 'the two sample prompt edits');
   // Every address and link is on a reserved example domain.
-  for (const url of store.db.prepare('SELECT url FROM postings').pluck().all()) assert.match(url, /^https:\/\/jobs\.example\.com\//);
-  for (const s of store.db.prepare('SELECT sender_domain FROM emails').pluck().all()) assert.match(s, /example(-recruiting)?\.com$/);
+  for (const url of /** @type {string[]} */ (store.db.prepare('SELECT url FROM postings').pluck().all())) assert.match(url, /^https:\/\/jobs\.example\.com\//);
+  for (const s of /** @type {string[]} */ (store.db.prepare('SELECT sender_domain FROM emails').pluck().all())) assert.match(s, /example(-recruiting)?\.com$/);
   store.close();
   assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), DEMO_CONFIG);
 });
@@ -90,12 +95,13 @@ test('demo mode refuses every request that would change data, without sign-in, e
   const { app, store } = await demoApp(dbPath);
   await app.ready();
   const before = store.db.prepare('SELECT COUNT(*) FROM postings').pluck().get();
+  /** @type {string[]} */
   const writes = [];
   for (const r of app.routeList) {
     for (const method of [r.method].flat()) {
       if (['GET', 'HEAD', 'OPTIONS'].includes(method)) continue;
       const url = sampleUrl(r.url);
-      const res = await app.inject({ method, url, payload: { template: 'x', status: 'applied' }, remoteAddress: `10.1.${writes.length >> 8}.${writes.length & 255}` });
+      const res = await app.inject({ method: /** @type {InjectOptions['method']} */ (method), url, payload: { template: 'x', status: 'applied' }, remoteAddress: `10.1.${writes.length >> 8}.${writes.length & 255}` });
       if (/\/preview$/.test(r.url)) {
         assert.equal(res.statusCode, 200, 'the preview fills a draft and writes nothing');
       } else {
@@ -125,7 +131,7 @@ test('demo mode serves every screen without sign-in and says it is the demo', as
     assert.equal((await app.inject(url)).statusCode, 200, `${url} is open in the demo`);
   }
   const tasks = (await app.inject('/api/tasks')).json();
-  assert.deepEqual(tasks.map((t) => t.kind).sort(), ['inbox', 'pipeline', 'score']);
+  assert.deepEqual(tasks.map((/** @type {JsonRow} */ t) => t.kind).sort(), ['inbox', 'pipeline', 'score']);
   // Settings shows the sample candidate's About you and search, complete, so visitors see what scoring works from.
   const search = (await app.inject('/api/account/search')).json();
   assert.equal(search.demo, true);
@@ -162,7 +168,7 @@ test('the demo caps every request per address, so a script cannot hammer the ser
 test("the demo's Find someone to contact is a canned sample: a read, no AI, nothing saved, and only in the demo", async () => {
   const { dbPath } = seeded();
   const { app, store } = await demoApp(dbPath);
-  const job = store.db.prepare('SELECT id, company, title FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').get();
+  const job = /** @type {{ id: number, company: string, title: string }} */ (store.db.prepare('SELECT id, company, title FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').get());
   const notes = () => store.db.prepare('SELECT COUNT(*) FROM posting_notes WHERE user_id = @uid').pluck().get();
   const before = notes();
   const res = await app.inject(`/api/postings/${job.id}/find-contact/sample`);
@@ -170,7 +176,8 @@ test("the demo's Find someone to contact is a canned sample: a read, no AI, noth
   const { sample, markdown } = res.json();
   assert.equal(sample, true);
   assert.ok(markdown.startsWith(`## Who to contact at ${job.company}`) && markdown.includes(job.title));
-  const hosts = markdown.split(/[\s()[\]]+/).filter((w) => w.startsWith('http')).map((u) => new URL(u).hostname);
+  /** @type {string[]} */
+  const hosts = markdown.split(/[\s()[\]]+/).filter((/** @type {string} */ w) => w.startsWith('http')).map((/** @type {string} */ u) => new URL(u).hostname);
   assert.ok(hosts.length > 0 && hosts.every((h) => h.endsWith('.example.com')), 'every link is an example.com page');
   assert.equal(notes(), before, 'nothing saved');
   assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${job.id}/find-contact` })).statusCode, 403, 'the real search stays refused');
@@ -180,7 +187,7 @@ test("the demo's Find someone to contact is a canned sample: a read, no AI, noth
 
   // Outside the demo there is no sample route.
   const real = openJobStore(':memory:');
-  const plain = await buildApp({ store: real, config: DEMO_CONFIG, services: { createBrowser: async () => null } });
+  const plain = await buildApp({ store: real, config: DEMO_CONFIG, services: fakeServices({ createBrowser: async () => null }) });
   assert.equal((await plain.inject('/api/postings/1/find-contact/sample')).statusCode, 404);
   await plain.close();
   real.close();

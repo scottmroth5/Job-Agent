@@ -13,6 +13,9 @@ import { demoAnalytics } from '../server/demo-analytics.ts';
 import { CONTENT_SECURITY_POLICY } from '../server/security.ts';
 import { SECTIONS, SOURCES, changeFeature, eventBody, sampled, startAnalytics, track, trafficSource } from '../web/src/analytics.ts';
 import { DEMO_CONFIG } from '../demo/sample-data.ts';
+import { fakeServices } from './fixtures/fakes.js';
+
+/** @typedef {{ url: string, init: RequestInit, body: { event: string, distinct_id: string, properties: Record<string, unknown> } }} Sent */
 
 const KEY = 'phc_ExampleKey0123456789abcdefABCDEF';
 const DEMO_ENV = { AUTH_MODE: 'demo', PUBLIC_URL: 'https://demo.example.com', DEMO_POSTHOG_KEY: KEY };
@@ -28,19 +31,20 @@ test('only the demo, with a project key and an https posthog.com host, is config
   assert.equal(demoAnalytics({ ...DEMO_ENV, DEMO_POSTHOG_HOST: 'https://evil-posthog.com' }), null);
 });
 
+/** @param {string} authMode @param {Record<string, string | undefined>} env */
 async function appFor(authMode, env) {
   const store = openJobStore(':memory:');
   const webDir = mkdtempSync(join(tmpdir(), 'web-'));
   writeFileSync(join(webDir, 'index.html'), '<!doctype html><title>Job Hunt</title>');
-  return buildApp({ store, config: DEMO_CONFIG, webDir, authMode, auth: { settings: authSettings(env) }, services: { log: { info() {}, warn() {}, error() {} } } });
+  return buildApp({ store, config: DEMO_CONFIG, webDir, authMode, auth: { settings: authSettings(env) }, services: fakeServices({ log: { info() {}, warn() {}, error() {} } }) });
 }
 
 test('the demo hands the page its key and lets it reach the host; the app does neither', async () => {
   const demo = await appFor('demo', DEMO_ENV);
   const me = await demo.inject({ method: 'GET', url: '/api/me' });
   assert.deepEqual(me.json().analytics, { key: KEY, host: 'https://us.i.posthog.com', site: 'example.com' });
-  assert.match(me.headers['content-security-policy'], /connect-src 'self' https:\/\/us\.i\.posthog\.com;/);
-  assert.match(me.headers['content-security-policy'], /script-src 'self';/);
+  assert.match(/** @type {string} */ (me.headers['content-security-policy']), /connect-src 'self' https:\/\/us\.i\.posthog\.com;/);
+  assert.match(/** @type {string} */ (me.headers['content-security-policy']), /script-src 'self';/);
   await demo.close();
 
   const unset = await appFor('demo', { ...DEMO_ENV, DEMO_POSTHOG_KEY: '' });
@@ -67,7 +71,7 @@ test('an event carries only its fixed properties, and anything off the lists is 
     timestamp: '2026-11-02T12:00:00.000Z',
   });
   // Extra properties never ride along.
-  assert.deepEqual(eventBody('job_viewed', { id: 42, title: 'VP Engineering', url: 'https://x' }, at).properties, { app: 'job_hunt_demo', $process_person_profile: false });
+  assert.deepEqual(eventBody('job_viewed', { id: 42, title: 'VP Engineering', url: 'https://x' }, at)?.properties, { app: 'job_hunt_demo', $process_person_profile: false });
   assert.equal(eventBody('section_viewed', { section: 'jobs/42' }, at), null);
   assert.equal(eventBody('section_viewed', {}, at), null);
   assert.equal(eventBody('typed_text', { text: 'hello' }, at), null);
@@ -89,7 +93,11 @@ test('a stopped change is named by its kind, never its path', () => {
   assert.equal(changeFeature('POST', '/api/something-new?x=secret'), 'other');
 });
 
-// The browser's Global Privacy Control signal, set for the length of fn.
+/**
+ * The browser's Global Privacy Control signal, set for the length of fn.
+ * @param {boolean} on
+ * @param {() => unknown} fn
+ */
 async function withPrivacyControl(on, fn) {
   const before = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   Object.defineProperty(globalThis, 'navigator', { value: { globalPrivacyControl: on }, configurable: true, writable: true });
@@ -97,13 +105,18 @@ async function withPrivacyControl(on, fn) {
     return await fn();
   } finally {
     if (before) Object.defineProperty(globalThis, 'navigator', before);
-    else delete globalThis.navigator;
+    else delete /** @type {{ navigator?: unknown }} */ (globalThis).navigator;
   }
 }
 
-// The page's address and referrer (location, document), set for the length of fn.
+/**
+ * The page's address and referrer (location, document), set for the length of fn.
+ * @param {string} href
+ * @param {string} referrer
+ * @param {() => unknown} fn
+ */
 async function withPage(href, referrer, fn) {
-  const saved = ['location', 'document'].map((name) => [name, Object.getOwnPropertyDescriptor(globalThis, name)]);
+  const saved = ['location', 'document'].map((name) => /** @type {[string, PropertyDescriptor | undefined]} */ ([name, Object.getOwnPropertyDescriptor(globalThis, name)]));
   Object.defineProperty(globalThis, 'location', { value: { href, hostname: new URL(href).hostname }, configurable: true, writable: true });
   Object.defineProperty(globalThis, 'document', { value: { referrer }, configurable: true, writable: true });
   try {
@@ -111,7 +124,7 @@ async function withPage(href, referrer, fn) {
   } finally {
     for (const [name, before] of saved) {
       if (before) Object.defineProperty(globalThis, name, before);
-      else delete globalThis[name];
+      else delete /** @type {Record<string, unknown>} */ (globalThis)[name];
     }
   }
 }
@@ -120,6 +133,7 @@ test('the traffic source is one of five categories, from a listed utm_source or 
   const page = 'https://demo.example.com/#/';
   const own = 'demo.example.com';
   const site = 'example.org';
+  /** @param {string | undefined} referrer @param {{ url?: string, withSite?: boolean }} [o] */
   const from = (referrer, { url = page, withSite = true } = {}) => trafficSource({ url, referrer, ownHost: own, site: withSite ? site : undefined });
 
   // utm_source first, only when it is on the list.
@@ -161,22 +175,23 @@ test('the traffic source is one of five categories, from a listed utm_source or 
 
 test('demo_opened carries only a listed source', () => {
   const at = { key: KEY, id: 'anon-1' };
-  for (const source of SOURCES) assert.equal(eventBody('demo_opened', { source }, at).properties.source, source);
+  for (const source of SOURCES) assert.equal(eventBody('demo_opened', { source }, at)?.properties.source, source);
   assert.equal(eventBody('demo_opened', { source: 'https://www.linkedin.com/feed/' }, at), null);
   assert.equal(eventBody('demo_opened', { source: 'example' }, at), null);
   assert.equal(eventBody('demo_opened', {}, at), null);
 });
 
 test('the personal site is the domain above the demo address', () => {
-  assert.equal(demoAnalytics(DEMO_ENV).site, 'example.com');
-  assert.equal(demoAnalytics({ ...DEMO_ENV, PUBLIC_URL: 'https://Demo.Jobs.Example.ORG/' }).site, 'jobs.example.org');
+  assert.equal(demoAnalytics(DEMO_ENV)?.site, 'example.com');
+  assert.equal(demoAnalytics({ ...DEMO_ENV, PUBLIC_URL: 'https://Demo.Jobs.Example.ORG/' })?.site, 'jobs.example.org');
   for (const none of ['http://localhost:5180', 'https://example.com', 'http://127.0.0.1:5180', 'not a url', undefined])
-    assert.equal('site' in demoAnalytics({ ...DEMO_ENV, PUBLIC_URL: none }), false, String(none));
+    assert.equal('site' in /** @type {object} */ (demoAnalytics({ ...DEMO_ENV, PUBLIC_URL: none })), false, String(none));
 });
 
 test('Global Privacy Control: nothing is sent, not even demo_opened (runs before anything starts)', async (t) => {
+  /** @type {string[]} */
   const sent = [];
-  t.mock.method(globalThis, 'fetch', async (url) => {
+  t.mock.method(globalThis, 'fetch', async (/** @type {string} */ url) => {
     sent.push(url);
     return new Response('{}');
   });
@@ -189,9 +204,10 @@ test('Global Privacy Control: nothing is sent, not even demo_opened (runs before
 });
 
 test('sending: nothing before start, then only listed events, with no credentials or referrer', async (t) => {
+  /** @type {Sent[]} */
   const sent = [];
-  t.mock.method(globalThis, 'fetch', async (url, init) => {
-    sent.push({ url, init, body: JSON.parse(init.body) });
+  t.mock.method(globalThis, 'fetch', async (/** @type {string} */ url, /** @type {RequestInit} */ init) => {
+    sent.push({ url, init, body: JSON.parse(/** @type {string} */ (init.body)) });
     return new Response('{}');
   });
   track('section_viewed', { section: 'jobs' });

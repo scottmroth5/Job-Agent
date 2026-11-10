@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { Document, Packer, Paragraph } from 'docx';
 import { documentText, tidy, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 
-/** A minimal one-page PDF with real text, built by hand with its byte offsets. */
+/** A minimal one-page PDF with real text, built by hand with its byte offsets. @param {string[]} lines */
 export function tinyPdf(lines) {
   const content = ['BT', '/F1 12 Tf', '72 720 Td', '14 TL', ...lines.map((l) => `(${l.replace(/[()\\]/g, '')}) Tj T*`), 'ET'].join('\n');
   const objs = [
@@ -16,6 +16,7 @@ export function tinyPdf(lines) {
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   ];
   let out = '%PDF-1.4\n';
+  /** @type {number[]} */
   const offsets = [];
   objs.forEach((o, i) => {
     offsets.push(Buffer.byteLength(out));
@@ -41,7 +42,9 @@ test('a PDF, a Word .docx, and a text file each give their text', async () => {
 });
 
 test('old .doc, other files, empty, too large, and textless files are refused with what to do instead', async () => {
-  const refuse = async (bytes, name, re) => assert.rejects(documentText(bytes, name), (e) => e.statusCode === 400 && re.test(e.message), name);
+  /** @param {Buffer} bytes @param {string} name @param {RegExp} re */
+  const refuse = async (bytes, name, re) =>
+    assert.rejects(documentText(bytes, name), (/** @type {Error & { statusCode?: number }} */ e) => e.statusCode === 400 && re.test(e.message), name);
   await refuse(Buffer.from('x'.repeat(80)), 'resume.doc', /\.docx or PDF/);
   await refuse(Buffer.from('x'.repeat(80)), 'resume.exe', /PDF, a Word \.docx, or a text file/);
   await refuse(Buffer.from('PK not really a zip'.padEnd(80, '.')), 'resume.docx', /could not be read/);

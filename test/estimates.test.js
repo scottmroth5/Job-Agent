@@ -13,12 +13,15 @@ import { estimateLetterEval } from '../evals/letters/run.js';
 import { estimateEval } from '../evals/score/run.js';
 import { unpriced } from '../evals/estimate.js';
 import { repoPath } from '../tools/paths.ts';
+import { fakeConfig } from './fixtures/fakes.js';
+/** @import { ScoreCase } from '../evals/score/build-cases.js' */
 
+/** @param {number} id @param {string} url @returns {ScoreCase} */
 const posting = (id, url) => ({ id, label: 'applied', company: 'Example Co', title: 'VP of Engineering', location: null, url, location_check: 'ok', jd_text: 'x'.repeat(4000), v1Score: null });
 
 test('every scoring model has a price', () => {
   for (const model of Object.keys(MODEL_SETTINGS)) {
-    const usd = estimateCost([posting(1, 'https://jobs.example.com/1')], { model, knowledgeChars: 10000, templateChars: 3000, config: { search: {} } });
+    const usd = estimateCost([posting(1, 'https://jobs.example.com/1')], { model, knowledgeChars: 10000, templateChars: 3000, config: fakeConfig({ search: {} }) });
     assert.equal(typeof usd, 'number', model);
   }
 });
@@ -37,9 +40,9 @@ test('unpriced names the models without a price', () => {
 test('the scoring eval estimate leaves out cases on a skipped site, as scoring does', () => {
   const cases = [posting(1, 'https://jobs.example.com/1'), posting(2, 'https://skipped.example.com/2')];
   const model = 'claude-haiku-4-5';
-  const all = estimateEval(cases, [model], 10000, { search: {} })[model];
-  const skipping = estimateEval(cases, [model], 10000, { search: { excludedSites: ['skipped.example.com'] } })[model];
-  assert.ok(skipping > 0 && skipping < all, `${skipping} < ${all}`);
+  const all = estimateEval(cases, [model], 10000, fakeConfig({ search: {} }))[model];
+  const skipping = estimateEval(cases, [model], 10000, fakeConfig({ search: { excludedSites: ['skipped.example.com'] } }))[model];
+  assert.ok(all != null && skipping != null && skipping > 0 && skipping < all, `${skipping} < ${all}`);
 });
 
 test('backup:restore without JOB_BACKUP_PASSPHRASE says so, before reading any backup', () => {

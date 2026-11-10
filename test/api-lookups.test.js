@@ -2,6 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { BuiltApp } from '../server/app.ts' */
+/** @import { InjectOptions, LightMyRequestResponse } from 'fastify' */
+/** @typedef {{ id: string, label: string, jobs?: number, archived?: boolean, settings?: object }} Value */
 
 // Synthetic data only.
 async function setup() {
@@ -12,20 +16,21 @@ async function setup() {
         VALUES (1, 'k1', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'applied', 'x', 'x')`)
       .run().lastInsertRowid,
   );
-  const app = await buildApp({ store, config: { search: { homeLocations: [] }, fractional: { weeksPerYear: 48 } }, services: { createBrowser: async () => null } });
+  const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: { weeksPerYear: 48 } }), services: fakeServices({ createBrowser: async () => null }) });
   return { store, app, job };
 }
 
+/** @type {(app: BuiltApp, method: InjectOptions['method'], url: string, payload?: object) => Promise<LightMyRequestResponse>} */
 const call = (app, method, url, payload) => app.inject({ method, url, ...(payload ? { payload } : {}) });
 
 test('GET /api/lookups lists values in order with groups and roles', async () => {
   const { app, store } = await setup();
   const l = (await call(app, 'GET', '/api/lookups')).json();
-  assert.deepEqual(l.lists.status.map((v) => v.id), ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'no_response', 'duplicate']);
-  assert.deepEqual(l.lists.track.find((v) => v.id === 'fractional').settings, { scorePrompt: 'score-fractional', terms: true });
+  assert.deepEqual(l.lists.status.map((/** @type {Value} */ v) => v.id), ['new', 'applied', 'interviewing', 'offer', 'passed', 'closed', 'rejected', 'no_response', 'duplicate']);
+  assert.deepEqual(l.lists.track.find((/** @type {Value} */ v) => v.id === 'fractional').settings, { scorePrompt: 'score-fractional', terms: true });
   assert.equal(l.roles.stage.promote, 'pipeline');
-  assert.ok(l.groups.status.some((g) => g.key === 'conversation'));
-  assert.ok(l.roleDefinitions.stage.some((r) => r.role === 'archive'));
+  assert.ok(l.groups.status.some((/** @type {{ key: string }} */ g) => g.key === 'conversation'));
+  assert.ok(l.roleDefinitions.stage.some((/** @type {{ role: string }} */ r) => r.role === 'archive'));
   assert.equal(l.lists.status[0].jobs, undefined, 'job counts only on the admin route');
   await app.close();
   store.close();
@@ -39,13 +44,13 @@ test('admin: add, rename, reorder, archive, and restore; jobs keep IDs and use n
   assert.equal((await call(app, 'GET', '/api/postings?status=progress')).json().length, 1);
 
   let admin = (await call(app, 'PATCH', '/api/admin/lookups/status/phone_screen', { label: 'Recruiter screen' })).json();
-  assert.equal(admin.lists.status.find((v) => v.id === 'phone_screen').label, 'Recruiter screen');
-  assert.equal(admin.lists.status.find((v) => v.id === 'phone_screen').jobs, 1);
+  assert.equal(admin.lists.status.find((/** @type {Value} */ v) => v.id === 'phone_screen').label, 'Recruiter screen');
+  assert.equal(admin.lists.status.find((/** @type {Value} */ v) => v.id === 'phone_screen').jobs, 1);
   admin = (await call(app, 'PATCH', '/api/admin/lookups/status/phone_screen', { move: 'up' })).json();
   assert.equal(admin.lists.status.at(-2).id, 'phone_screen');
 
   admin = (await call(app, 'PATCH', '/api/admin/lookups/status/phone_screen', { archived: true })).json();
-  assert.equal(admin.lists.status.find((v) => v.id === 'phone_screen').archived, true);
+  assert.equal(admin.lists.status.find((/** @type {Value} */ v) => v.id === 'phone_screen').archived, true);
   assert.equal((await call(app, 'GET', `/api/postings/${job}`)).json().status, 'phone_screen', 'the job keeps its archived status');
   assert.equal((await call(app, 'PATCH', `/api/postings/${job}`, { notes: 'still editable' })).statusCode, 200);
   assert.equal((await call(app, 'PATCH', `/api/postings/${job}`, { status: 'applied' })).statusCode, 200);

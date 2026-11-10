@@ -9,17 +9,21 @@ import { insertEmail, addReminder } from '../agents/inbox/store.ts';
 import { createGmail } from '../agents/inbox/gmail.ts';
 import { loadInboxConfig } from '../agents/inbox/config.ts';
 import { loadKey, newKey } from '../agents/inbox/crypto.ts';
-import { fakeGmailApi, message } from './fixtures/inbox/fake-gmail.js';
+import { asGmailApi, fakeGmailApi, message } from './fixtures/inbox/fake-gmail.js';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { FakeMessage } from './fixtures/inbox/fake-gmail.js' */
 
 // Synthetic data only.
-const config = { candidate: { name: 'Pat Example' }, search: { homeLocations: [] }, fractional: { weeksPerYear: 48 }, coverLetterChecks: [] };
+const config = fakeConfig({ candidate: { name: 'Pat Example' }, search: { homeLocations: [] }, fractional: { weeksPerYear: 48 }, coverLetterChecks: [] });
 const key = loadKey({ EMAIL_ENC_KEY: newKey() });
 
+/** A real agent-core client over a fake SDK that always answers with this JSON. @param {object} reply */
 function claudeReplying(reply) {
-  const client = { messages: { create: async (p) => ({ id: 'x', model: p.model, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(reply) }], usage: { input_tokens: 10, output_tokens: 5 } }) } };
+  const client = { messages: { create: async (/** @type {{ model: string }} */ p) => ({ id: 'x', model: p.model, stop_reason: 'end_turn', content: [{ type: 'text', text: JSON.stringify(reply) }], usage: { input_tokens: 10, output_tokens: 5 } }) } };
   return createClaude({ client });
 }
 
+/** @param {{ pipelineLines?: string[], pipelineCode?: number, ready?: boolean, messages?: FakeMessage[] }} [o] */
 async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messages = [] } = {}) {
   const store = openJobStore(':memory:');
   const { db } = store;
@@ -30,20 +34,21 @@ async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messa
       .run(storedKey({ company: 'Example Co', title: 'VP of Engineering' })).lastInsertRowid,
   );
   const { api } = fakeGmailApi({ messages, me: 'me@example.net' });
-  let release;
+  /** @type {(value?: unknown) => void} */
+  let release = () => {};
   const gate = new Promise((r) => (release = r));
-  const services = {
+  const services = fakeServices({
     claude: claudeReplying({ application_id: String(posting), confidence: 0.95, type: 'interview_request', summary: 'Invites an interview.', extracted: { company: null, role_title: null, contact_name: null, contact_email: null, interview_times: ['October 8, 2026 2:00 PM'], deadline: null } }),
     knowledge: async () => 'k',
     createBrowser: async () => null,
-    runPipeline: async ({ onLine }) => {
+    runPipeline: async (/** @type {{ onLine: (line: string) => void }} */ { onLine }) => {
       for (const l of pipelineLines) onLine(l);
       await gate;
       db.prepare("INSERT INTO runs (name, status, started_at, finished_at) VALUES ('pipeline', ?, '2026-10-05T13:00:00Z', '2026-10-05T13:12:00Z')").run(pipelineCode ? 'failed' : 'ok');
       return { code: pipelineCode, lastError: pipelineCode ? 'EMAIL_ADDRESS is not set in .env; the report was not sent.' : null };
     },
-    inbox: { ready: () => ready, gmail: () => createGmail({ api }), key: () => key, cfg: loadInboxConfig() },
-  };
+    inbox: { ready: () => ready, gmail: () => createGmail({ api: asGmailApi(api) }), key: () => key, cfg: loadInboxConfig() },
+  });
   const app = await buildApp({ store, config, services });
   return { store, db, app, posting, release };
 }
@@ -63,6 +68,7 @@ test('Run pipeline: progress, the last run time, and no second run while one is 
   assert.equal((await app.inject({ method: 'POST', url: '/api/pipeline/run' })).statusCode, 409);
   release();
   const task = await app.tasks.wait(taskId);
+  assert.ok(task);
   assert.equal(task.status, 'done');
   assert.deepEqual(task.steps.map((s) => s.message), ['Starting', 'Step 1/5: discover', 'Step 5/5: report', 'Report emailed']);
   const state = (await app.inject({ method: 'GET', url: '/api/pipeline' })).json();
@@ -76,8 +82,9 @@ test('a failed pipeline reports why, and the button is refused while a CLI run i
   release();
   const { taskId } = (await app.inject({ method: 'POST', url: '/api/pipeline/run' })).json();
   const task = await app.tasks.wait(taskId);
+  assert.ok(task);
   assert.equal(task.status, 'failed');
-  assert.match(task.error, /EMAIL_ADDRESS is not set/);
+  assert.match(task.error ?? '', /EMAIL_ADDRESS is not set/);
   db.prepare("INSERT INTO runs (name, status, started_at) VALUES ('inbox', 'running', ?)").run(new Date().toISOString());
   const res = await app.inject({ method: 'POST', url: '/api/pipeline/run' });
   assert.equal(res.statusCode, 409);
@@ -91,8 +98,10 @@ test('Check inbox runs the inbox and the overview shows linked emails and remind
   const { app, store, posting } = await setup({ messages: [msg] });
   const { taskId } = (await app.inject({ method: 'POST', url: '/api/inbox/check' })).json();
   const task = await app.tasks.wait(taskId);
-  assert.equal(task.status, 'done', task.error);
-  assert.deepEqual([task.result.considered, task.result.matched, task.result.statusChanges], [1, 1, 1]);
+  assert.ok(task);
+  assert.equal(task.status, 'done', task.error ?? undefined);
+  const result = /** @type {{ considered: number, matched: number, statusChanges: number }} */ (task.result);
+  assert.deepEqual([result.considered, result.matched, result.statusChanges], [1, 1, 1]);
   const o = (await app.inject({ method: 'GET', url: '/api/inbox' })).json();
   assert.equal(o.signedIn, true);
   assert.equal(o.lastCheck.status, 'ok');
@@ -142,19 +151,20 @@ test('task output: the pipeline keeps every line; in-server actions capture thei
   const { taskId } = (await app.inject({ method: 'POST', url: '/api/pipeline/run' })).json();
   await app.tasks.wait(taskId);
   const log = (await app.inject({ method: 'GET', url: `/api/tasks/${taskId}/log` })).json();
-  assert.deepEqual(log.lines.map((l) => l.text), ['Starting', '[pipeline] Step 1/5: discover', 'LinkedIn: 3 found in 2 requests', '[discover] ok: 0 calls']);
+  assert.deepEqual(log.lines.map((/** @type {{ text: string }} */ l) => l.text), ['Starting', '[pipeline] Step 1/5: discover', 'LinkedIn: 3 found in 2 requests', '[discover] ok: 0 calls']);
   assert.equal(log.next, 4);
-  assert.deepEqual((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}/log?from=3` })).json().lines.map((l) => l.text), ['[discover] ok: 0 calls']);
+  assert.deepEqual((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}/log?from=3` })).json().lines.map((/** @type {{ text: string }} */ l) => l.text), ['[discover] ok: 0 calls']);
   assert.equal((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}` })).json().log, undefined, 'polling a task does not send its output');
 
   const inbox = (await app.inject({ method: 'POST', url: '/api/inbox/check' })).json();
   await app.tasks.wait(inbox.taskId);
-  const inboxLog = (await app.inject({ method: 'GET', url: `/api/tasks/${inbox.taskId}/log` })).json().lines.map((l) => l.text);
+  /** @type {string[]} */
+  const inboxLog = (await app.inject({ method: 'GET', url: `/api/tasks/${inbox.taskId}/log` })).json().lines.map((/** @type {{ text: string }} */ l) => l.text);
   assert.ok(inboxLog.some((t) => /^\[inbox\] 0 messages to check/.test(t)), inboxLog.join(' | '));
   assert.ok(inboxLog.some((t) => /^\[inbox\] ok: /.test(t)), 'the run summary line is captured');
 
   const list = (await app.inject({ method: 'GET', url: '/api/tasks' })).json();
-  assert.deepEqual(list.map((t) => t.kind), ['inbox', 'pipeline']);
+  assert.deepEqual(list.map((/** @type {{ kind: string }} */ t) => t.kind), ['inbox', 'pipeline']);
   assert.equal(list[1].lines, 4);
   assert.equal((await app.inject({ method: 'GET', url: '/api/tasks/999/log' })).statusCode, 404);
   await app.close();

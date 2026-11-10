@@ -46,7 +46,7 @@ import type { AuthSettings, Exchange } from './auth.ts';
 import type { createAlerts } from './alerts.ts';
 import type { InboxServices } from './inbox-routes.ts';
 import type { RunPipeline } from './pipeline-routes.ts';
-import type { Account, FastifyReply, IdParams, Notices, RouteServices, StartTask } from './types.ts';
+import type { Account, App, FastifyReply, IdParams, Notices, RouteServices, StartTask, Tasks } from './types.ts';
 
 /** A browser for pages that need JavaScript (tools/browser.ts), closed when its task ends. */
 type Browser = PageRenderer & { close?: () => Promise<unknown> };
@@ -74,6 +74,9 @@ export type AppServices = Omit<RouteServices, 'knowledge'> & {
   checkClaudeKey?: (apiKey: string) => Promise<boolean>;
   attachmentsDir?: string;
 };
+
+/** buildApp's app with what it decorates: the task runner, and every route (test/security.test.js walks it). */
+export type BuiltApp = App & { tasks: Tasks; routeList: Array<{ method: string | string[]; url: string }> };
 
 export type BuildAppOptions = {
   store: JobStore;
@@ -588,5 +591,5 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   }
 
   app.decorate('tasks', tasks);
-  return app;
+  return (app as App) as BuiltApp;
 }

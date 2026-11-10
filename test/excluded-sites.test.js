@@ -9,8 +9,10 @@ import { addUser, OWNER_ID } from '../db/users.ts';
 import { buildApp } from '../server/app.ts';
 import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote, siteOf, withExcludedSites } from '../agents/excluded-sites.ts';
 import { configFor, saveUserConfig } from '../agents/user-config.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+/** @import { JobSearchConfig } from '../tools/config.ts' */
 
-const config = { candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { terms: ['VP Engineering'], homeLocations: [], excludedSites: ['filesite.example'] }, fractional: {} };
+const config = fakeConfig({ candidate: { name: 'Pat Example' }, coverLetterChecks: [], search: { terms: ['VP Engineering'], homeLocations: [], excludedSites: ['filesite.example'] }, fractional: {} });
 
 test('a site is the link or domain as a lowercase host without www', () => {
   assert.equal(siteOf('https://www.PaywallJobs.example/jobs/123?x=1'), 'paywalljobs.example');
@@ -48,19 +50,21 @@ test("another user's sites from their saved search move into the list, and only 
   addExcludedSite(raw, b, { site: 'new.example', note: 'Charges to apply' }, { legacy });
   assert.deepEqual(excludedSites(raw, b, { legacy }).map((s) => s.site), ['old.example', 'new.example']);
   removeExcludedSite(raw, b, 'old.example', { legacy });
-  assert.deepEqual(configFor(raw, b, null).search.excludedSites, ['new.example'], "removed stays removed; the owner's are not theirs");
+  // For anyone but the owner the owner's settings file is not read.
+  const noOwnerFile = /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null));
+  assert.deepEqual(configFor(raw, b, noOwnerFile).search.excludedSites, ['new.example'], "removed stays removed; the owner's are not theirs");
 });
 
 async function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const add = (url, status) =>
+  const add = (/** @type {string} */ url, /** @type {string} */ status) =>
     Number(
       db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
         VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', ?, '2026-10-01', 'x', 'x')`).run(url, url, `Role ${status} ${url}`, `k ${url}`, status).lastInsertRowid,
     );
   const ids = { fresh: add('https://www.paywall.example/job/1', 'new'), applied: add('https://paywall.example/job/2', 'applied'), other: add('https://jobs.example.com/3', 'new') };
-  const app = await buildApp({ store, config, services: { createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } } });
+  const app = await buildApp({ store, config, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });
   return { store, db, app, ids };
 }
 
@@ -72,12 +76,12 @@ test('the routes: skip from a job link, count saved jobs, remove them (not the a
   const added = await app.inject({ method: 'POST', url: '/api/excluded-sites', payload: { site: 'https://www.paywall.example/job/1', note: 'Paywall' } });
   assert.equal(added.statusCode, 201);
   assert.equal(added.json().site, 'paywall.example');
-  assert.deepEqual(added.json().sites.map(({ site, note, savedJobs }) => [site, note, savedJobs]), [['paywall.example', 'Paywall', 1]], 'the applied job does not count');
+  assert.deepEqual(added.json().sites.map((/** @type {{ site: string, note: string, savedJobs: number }} */ { site, note, savedJobs }) => [site, note, savedJobs]), [['paywall.example', 'Paywall', 1]], 'the applied job does not count');
   assert.equal((await app.inject({ method: 'POST', url: '/api/excluded-sites', payload: { site: 'nonsense' } })).statusCode, 400);
 
   const removed = await app.inject({ method: 'POST', url: '/api/excluded-sites/paywall.example/remove-jobs' });
   assert.equal(removed.json().removed, 1);
-  const status = (id) => db.prepare('SELECT stage, status FROM postings WHERE id = ? AND user_id = @uid').get(id);
+  const status = (/** @type {number} */ id) => db.prepare('SELECT stage, status FROM postings WHERE id = ? AND user_id = @uid').get(id);
   assert.deepEqual(status(ids.fresh), { stage: 'archived', status: 'passed' });
   assert.deepEqual(status(ids.applied), { stage: 'pipeline', status: 'applied' }, 'a job you applied to is kept');
   assert.deepEqual(status(ids.other), { stage: 'pipeline', status: 'new' });
@@ -87,7 +91,7 @@ test('the routes: skip from a job link, count saved jobs, remove them (not the a
   assert.equal((await app.inject({ method: 'PATCH', url: '/api/excluded-sites/Bad Site', payload: { note: 'x' } })).statusCode, 400);
 
   // What discovery, scoring, and adding a job read (the server's config) has the site at once.
-  assert.ok(configFor(store.raw, OWNER_ID, config).search.excludedSites.includes('paywall.example'));
+  assert.ok(configFor(store.raw, OWNER_ID, config).search.excludedSites?.includes('paywall.example'));
 
   assert.deepEqual((await app.inject({ method: 'DELETE', url: '/api/excluded-sites/paywall.example' })).json().sites, []);
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/excluded-sites/paywall.example' })).statusCode, 404);

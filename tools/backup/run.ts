@@ -76,7 +76,7 @@ const safeEntry = (name: unknown) => typeof name === 'string' && name.length > 0
  */
 export async function runBackup({ db, passphrase, extras = [], folders = [], drive, toDir, date, kdf }: {
   db: Database.Database;
-  passphrase: string;
+  passphrase: string | undefined;
   extras?: Array<{ name: string; path: string }>;
   folders?: Array<{ name: string; dir: string }>;
   drive?: BackupDrive;

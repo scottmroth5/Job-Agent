@@ -10,9 +10,10 @@ import { backgroundFor, saveUserProfile, userProfile } from '../agents/user-conf
 import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
+import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 const SITE = 'http://localhost:5178';
-const LONG = (who) => `${who} background. `.repeat(40);
+const LONG = (/** @type {string} */ who) => `${who} background. `.repeat(40);
 
 test('backgroundFor: the knowledge doc when long enough, else how to fix it; never the Google Doc', async () => {
   const store = openJobStore(':memory:');
@@ -35,12 +36,12 @@ async function setup() {
   const b = addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
   const app = await buildApp({
     store,
-    config: { candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} },
+    config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }),
     authMode: 'google',
     auth: { settings },
-    services: { createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } },
+    services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }),
   });
-  const as = (email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
+  const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
   const done = async () => {
     await app.close();
     store.close();
@@ -61,7 +62,7 @@ test('the owner keeps their knowledge doc in Settings like everyone else; the Go
 test('Fill from a document returns the text and saves nothing; bad files say what to upload', async () => {
   const { store, app, b, other, done } = await setup();
   const docx = await Packer.toBuffer(new Document({ sections: [{ children: ['Sam Example', 'Head of Data at Example Co, 2021 to now, team of 12.'].map((t) => new Paragraph(t)) }] }));
-  const upload = (body, name) => app.inject({ method: 'POST', url: '/api/account/profile/from-file', headers: { ...other, 'content-type': 'application/octet-stream', 'x-filename': encodeURIComponent(name) }, payload: body });
+  const upload = (/** @type {Buffer} */ body, /** @type {string} */ name) => app.inject({ method: 'POST', url: '/api/account/profile/from-file', headers: { ...other, 'content-type': 'application/octet-stream', 'x-filename': encodeURIComponent(name) }, payload: body });
   const res = await upload(docx, 'My resume.docx');
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.json(), { kind: 'docx', text: 'Sam Example\n\nHead of Data at Example Co, 2021 to now, team of 12.' });

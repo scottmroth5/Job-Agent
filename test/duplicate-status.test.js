@@ -29,6 +29,7 @@ test('migration 008 loosens the status constraint in place without losing rows, 
 
   const store = openStore(':memory:', { app: 'job-agent', migrations: before });
   const { db } = store;
+  /** @param {string} status @param {string} stage @param {string | null} notes */
   const add = (status, stage, notes) =>
     Number(
       db
@@ -36,7 +37,7 @@ test('migration 008 loosens the status constraint in place without losing rows, 
           VALUES (?, 'Example Co', 'CTO', 'example|cto', '2026-10-01', ?, ?, ?, 'x', 'x')`)
         .run(`k${Math.random()}`, stage, status, notes).lastInsertRowid,
     );
-  const history = (id, by) => db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, 'new', 'passed', ?, 'x')").run(id, by);
+  const history = (/** @type {number} */ id, /** @type {string} */ by) => db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, 'new', 'passed', ?, 'x')").run(id, by);
   const applied = add('applied', 'pipeline', null);
   const cleanupCopy = add('passed', 'archived', 'Removed 2026-10-01: duplicate of #1, CTO at Example Co, pipeline/applied.');
   const userPassed = add('passed', 'archived', 'Removed 2026-10-01: duplicate of #1, CTO at Example Co, pipeline/applied.');
@@ -46,8 +47,9 @@ test('migration 008 loosens the status constraint in place without losing rows, 
   db.prepare("INSERT INTO artifacts (posting_id, kind, content, source, created_at) VALUES (?, 'cover_letter', 'Body', 'v2', 'x')").run(applied);
   const indexes = () => db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'postings' AND sql IS NOT NULL ORDER BY name").pluck().all();
   const indexesBefore = indexes();
+  const up = /** @type {(db: import('better-sqlite3').Database) => void} */ (m008.up); // a code migration
 
-  db.transaction(() => m008.up(db))();
+  db.transaction(() => up(db))();
 
   assert.equal(db.prepare('SELECT COUNT(*) FROM postings').pluck().get(), 3);
   assert.equal(db.prepare('SELECT COUNT(*) FROM scores WHERE posting_id = ?').pluck().get(applied), 1, 'scores survive');
@@ -55,11 +57,11 @@ test('migration 008 loosens the status constraint in place without losing rows, 
   assert.equal(db.prepare('SELECT status FROM postings WHERE id = ?').pluck().get(cleanupCopy), 'duplicate');
   assert.equal(db.prepare('SELECT status FROM postings WHERE id = ?').pluck().get(userPassed), 'passed', 'a pass the user made stays');
   assert.deepEqual(indexes(), indexesBefore);
-  assert.match(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'postings'").pluck().get(), /'duplicate'\)/);
-  assert.match(db.prepare("SELECT sql FROM sqlite_master WHERE name = 'scores'").pluck().get(), /REFERENCES postings\(id\)/, 'children still point at postings');
+  assert.match(/** @type {string} */ (db.prepare("SELECT sql FROM sqlite_master WHERE name = 'postings'").pluck().get()), /'duplicate'\)/);
+  assert.match(/** @type {string} */ (db.prepare("SELECT sql FROM sqlite_master WHERE name = 'scores'").pluck().get()), /REFERENCES postings\(id\)/, 'children still point at postings');
   assert.equal(db.pragma('integrity_check', { simple: true }), 'ok');
   assert.throws(() => db.prepare("UPDATE postings SET status = 'maybe' WHERE id = ?").run(applied), /CHECK/, 'the constraint is still enforced');
-  db.transaction(() => m008.up(db))();
+  db.transaction(() => up(db))();
   assert.equal(db.prepare('SELECT COUNT(*) FROM status_history WHERE to_status = ?').pluck().get('duplicate'), 1, 'running it again changes nothing');
   assert.deepEqual(db.pragma('foreign_key_check'), []);
   assert.equal(db.prepare('SELECT COUNT(*) FROM application_funnel').pluck().get(), 0, 'the funnel view still works');
