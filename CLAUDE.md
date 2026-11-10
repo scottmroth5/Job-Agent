@@ -1,8 +1,8 @@
 ## Purpose
 Job Discovery and Job Hunt agents built on the shared agent-core package.
 agent-core comes from the public Agent-Core repo as a git dependency pinned to a version tag
-("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.2.3"; meeting prep needs 0.2.2's tools, streaming, and pause_turn resume;
-migration 013 needs 0.2.3's foreignKeys: false table rebuilds). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
+("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.3.0"; meeting prep needs 0.2.2's tools, streaming, and pause_turn resume;
+migration 013 needs 0.2.3's foreignKeys: false table rebuilds; 0.3.0 moves the Anthropic SDK to 1.x, whose default API version is 2026-10-21). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
 Job specific logic stays in this repo; never add it to agent-core.
 v3: docs/v3/PLAN.md is the phased plan (one phase at a time, plan mode first, its stop-and-ask list applies); docs/architecture/
 holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-final tags the last v2 commit.
