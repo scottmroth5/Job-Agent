@@ -33,7 +33,7 @@ function setup() {
   return { store, db, job, reminder };
 }
 
-test('order: past-due reminders, offers, upcoming reminders by date, then follow-ups oldest first; nothing else', () => {
+test('order: past-due reminders, offers, upcoming reminders by date, then follow-ups oldest first; nothing else', async () => {
   const { store, db, job, reminder } = setup();
   const later = job({ company: 'Later Co', status: 'interviewing', applied: daysAgo(20) });
   reminder(later, 'interview', inDays(5), { note: 'Panel interview' });
@@ -53,7 +53,7 @@ test('order: past-due reminders, offers, upcoming reminders by date, then follow
   job({ company: 'Ghost Archived Co', stage: 'archived', applied: daysAgo(90) }); // stale too
   job({ company: 'Closed Co', status: 'rejected', applied: daysAgo(30) });
 
-  const items = /** @type {Item[]} */ (today(db, { now }).items);
+  const items = /** @type {Item[]} */ ((await today(db, { now })).items);
   assert.deepEqual(items.map((t) => `${t.kind}:${t.company}`), [
     'assessment:Late Co',
     'offer:Offer Co',
@@ -79,7 +79,7 @@ test('the summary carries the list, and another user sees only their own', async
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   const t = (await app.inject('/api/summary')).json().today;
   assert.ok(t.some((/** @type {Item} */ x) => x.company === 'Mine Co'));
-  const other = runAsUser(await addUser(store.raw, { email: 'b@example.com' }), () => today(store.db, { now }).items);
+  const other = await runAsUser(await addUser(store.raw, { email: 'b@example.com' }), async () => (await today(store.db, { now })).items);
   assert.deepEqual(other, []);
   await app.close();
   store.close();
@@ -95,12 +95,12 @@ test("one job's next steps: every open reminder however far out, its offer or fo
   const offer = job({ company: 'Offer Co', status: 'offer', applied: daysAgo(40) });
   const waiting = job({ company: 'Waiting Co', applied: daysAgo(FOLLOW_UP_DAYS + 2) });
 
-  const steps = /** @type {Item[]} */ (today(db, { now, jobId: target }).items);
+  const steps = /** @type {Item[]} */ ((await today(db, { now, jobId: target })).items);
   assert.deepEqual(steps.map((t) => [t.kind, t.text]), [['interview', 'Final round']]);
   assert.ok(steps[0].id, 'a reminder carries its id, for Done');
-  assert.deepEqual(today(db, { now, jobId: offer }).items.map((t) => t.kind), ['offer']);
-  assert.deepEqual(today(db, { now, jobId: waiting }).items.map((t) => t.kind), ['follow_up']);
-  assert.equal(today(db, { now }).items.some((t) => t.text === 'Final round'), false, "Home's list keeps its 14-day horizon");
+  assert.deepEqual((await today(db, { now, jobId: offer })).items.map((t) => t.kind), ['offer']);
+  assert.deepEqual((await today(db, { now, jobId: waiting })).items.map((t) => t.kind), ['follow_up']);
+  assert.equal((await today(db, { now })).items.some((t) => t.text === 'Final round'), false, "Home's list keeps its 14-day horizon");
 
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   const detail = (await app.inject(`/api/postings/${target}`)).json();

@@ -55,7 +55,7 @@ async function setup() {
   const pat = await addUser(store.raw, { email: 'pat@example.com', name: 'Pat' });
   const sam = await addUser(store.raw, { email: 'sam@example.com', name: 'Sam', aiSource: 'owner' });
   const seeded = { owner: seedUser(store.raw, OWNER_ID, dir, 'Owner'), pat: seedUser(store.raw, pat, dir, 'Pat'), sam: seedUser(store.raw, sam, dir, 'Sam') };
-  saveUserProfile(store.raw, pat, 'Pat background text. '.repeat(30));
+  await saveUserProfile(store.raw, pat, 'Pat background text. '.repeat(30));
   store.raw.prepare("UPDATE users SET claude_key_enc = 'v1.sealed.value.here' WHERE id = ?").run(pat);
   return { store, app, dir, sent, pat, sam, seeded, asOwner: as(OWNER), asPat: as('pat@example.com'), asSam: as('sam@example.com'), done: async () => { await app.close(); store.close(); rmSync(dir, { recursive: true, force: true }); } };
 }

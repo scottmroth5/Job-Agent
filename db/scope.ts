@@ -6,6 +6,7 @@
 // name @uid and run anywhere. test/user-scope.test.js checks that every query on a user table names user_id.
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Database, Statement } from 'better-sqlite3';
+import { assertSyncMayRun } from './engine/sqlite.ts';
 
 /** The scoped database: better-sqlite3's, plus the unscoped one underneath, the current user's id, and its fallback user. */
 export type ScopedDatabase = Database & { readonly unscoped: Database; readonly uid: number; readonly fallbackUid: number | null };
@@ -54,8 +55,11 @@ export function userIdOr(fallbackUid: number | null): () => number {
   };
 }
 
-function scopeStatement(stmt: Statement, userId: () => number): Statement {
-  const bind = (args: unknown[]): unknown[] => bindUid(stmt.source, args, userId);
+function scopeStatement(stmt: Statement, userId: () => number, raw: Database): Statement {
+  const bind = (args: unknown[]): unknown[] => {
+    assertSyncMayRun(raw);
+    return bindUid(stmt.source, args, userId);
+  };
   const scoped = {
     run: (...args: unknown[]) => stmt.run(...bind(args)),
     get: (...args: unknown[]) => stmt.get(...bind(args)),
@@ -83,7 +87,8 @@ export function scopeDb(db: Database | ScopedDatabase, { fallbackUid = null }: {
   const userId = userIdOr(fallbackUid);
   return new Proxy(raw, {
     get(target, prop) {
-      if (prop === 'prepare') return (sql: string) => scopeStatement(target.prepare(sql), userId);
+      if (prop === 'prepare') return (sql: string) => scopeStatement(target.prepare(sql), userId, target);
+      if (prop === 'exec') return (sql: string) => (assertSyncMayRun(target), target.exec(sql));
       if (prop === 'unscoped') return target;
       if (prop === 'uid') return userId();
       if (prop === 'fallbackUid') return fallbackUid;

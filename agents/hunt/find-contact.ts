@@ -3,6 +3,7 @@
 // voice from the knowledge doc (plus the job's resume) as the system prompt. The result is Markdown, saved as a note
 // on the job (source agent), so it stays with the job and shows in its notes. It never contacts anyone. Logs hold
 // counts only, never names or text.
+import { asEngine } from '../../db/engine/index.ts';
 import { fillTemplate } from '../../tools/template.ts';
 import { truncate } from '../../tools/text.ts';
 import { localDay } from '../../tools/dates.ts';
@@ -68,20 +69,20 @@ export async function findContact({ store, config, claude, knowledge, run = null
   now?: Date;
 }) {
   const { db } = store;
-  const posting = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as PostingsRow | undefined;
+  const posting = await asEngine(db).prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as PostingsRow | undefined;
   if (!posting) throw Object.assign(new Error('Job not found'), { statusCode: 404 });
-  const analysisJson = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
-  const prompt = getPrompt(db, 'find-contact');
-  const resume = pickResume(db, posting.title);
+  const analysisJson = await asEngine(db).prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
+  const prompt = await getPrompt(db, 'find-contact');
+  const resume = await pickResume(db, posting.title);
   onStep('Searching for the hiring manager and a recruiter (about a minute)');
   run?.log?.('info', `#${postingId}: finding someone to contact`);
   const res = await claude.send({
-    ...buildContactRequest(posting, { config, knowledge: withResume(knowledge, resume), prompt, analysis: analysisJson ? JSON.parse(analysisJson) : null, notes: notesForPrompt(listNotes(db, postingId)), now }),
+    ...buildContactRequest(posting, { config, knowledge: withResume(knowledge, resume), prompt, analysis: analysisJson ? JSON.parse(analysisJson) : null, notes: notesForPrompt(await listNotes(db, postingId)), now }),
     trace: run,
   });
   const content = extractDocument((res.content as ContentBlock[] | undefined) ?? [{ type: 'text', text: res.text }]);
   if (content.length < 100) throw new Error('The search came back empty; try again.');
-  const note = addNote(db, postingId, `${content}\n\n*Found ${localDay(now)} with web search; check each person on LinkedIn before you write.*`, { source: 'agent', now });
+  const note = await addNote(db, postingId, `${content}\n\n*Found ${localDay(now)} with web search; check each person on LinkedIn before you write.*`, { source: 'agent', now });
   run?.log?.('info', `#${postingId}: saved as a note (${content.length} characters, ${res.usage?.webSearches ?? 0} searches)`);
   return { noteId: note?.id ?? null, costUsd: res.costUsd ?? null, webSearches: res.usage?.webSearches ?? 0 };
 }

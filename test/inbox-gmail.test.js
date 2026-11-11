@@ -76,19 +76,19 @@ test('quota errors are retried after a wait; other errors and exhausted retries 
 
 test('history mode returns messages since the stored historyId and the next cursor', async () => {
   const store = openJobStore(':memory:');
-  setSetting(store.db, CURSOR_KEY, '100');
+  await setSetting(store.db, CURSOR_KEY, '100');
   const { api } = fakeGmailApi({ messages: msgs, history: { 100: ['m1', 'm1', 'm2'] }, historyId: '150' });
   const r = await newMessageIds({ gmail: createGmail({ api: asGmailApi(api) }), db: store.db });
   assert.deepEqual(r, { messageIds: ['m1', 'm2'], nextHistoryId: '150', mode: 'history' });
-  assert.equal(getSetting(store.db, CURSOR_KEY), '100', 'not saved until processing finishes');
-  saveCursor(store.db, r.nextHistoryId);
-  assert.equal(getSetting(store.db, CURSOR_KEY), '150');
+  assert.equal(await getSetting(store.db, CURSOR_KEY), '100', 'not saved until processing finishes');
+  await saveCursor(store.db, r.nextHistoryId);
+  assert.equal(await getSetting(store.db, CURSOR_KEY), '150');
   store.close();
 });
 
 test('an expired historyId falls back to a 7-day search and resets the cursor', async () => {
   const store = openJobStore(':memory:');
-  setSetting(store.db, CURSOR_KEY, '1');
+  await setSetting(store.db, CURSOR_KEY, '1');
   const { api, calls } = fakeGmailApi({ messages: msgs, expiredHistory: true, historyId: '777' });
   const r = await newMessageIds({ gmail: createGmail({ api: asGmailApi(api) }), db: store.db, fallbackDays: 7 });
   assert.deepEqual([r.mode, r.nextHistoryId, r.messageIds.length], ['fallback', '777', 2]);
@@ -108,7 +108,7 @@ test('the first run reads the fallback window; backfill reads the configured win
 
 test('errors other than an expired history are not swallowed', async () => {
   const store = openJobStore(':memory:');
-  setSetting(store.db, CURSOR_KEY, '1');
+  await setSetting(store.db, CURSOR_KEY, '1');
   const { api } = fakeGmailApi();
   api.users.history.list = async () => {
     throw Object.assign(new Error('Server error'), { code: 500 });

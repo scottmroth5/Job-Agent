@@ -39,12 +39,12 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const store = openJobStore();
-  const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
+  const config = await configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   try {
     if (args.dryRun) {
-      const postings = selectPostings(store.db, args);
+      const postings = await selectPostings(store.db, args);
       const rule = postings.filter((p) => p.location_check === 'conflict').length;
-      const usd = estimateCost(postings, { model: args.model, config, knowledgeChars: 10000, templateChars: loadScorePrompt('fulltime', store.db).template.length });
+      const usd = estimateCost(postings, { model: args.model, config, knowledgeChars: 10000, templateChars: (await loadScorePrompt('fulltime', store.db)).template.length });
       console.log(`DRY RUN: ${postings.length} postings to score with ${args.model} (${rule} by location rule, no AI call).`);
       console.log(usd == null ? `Estimated cost: unknown (no price for ${args.model} in agents/discovery/score.ts ESTIMATE_RATES).` : `Estimated cost: about $${usd.toFixed(2)}.`);
       /** @type {Record<string, number>} */
@@ -57,7 +57,7 @@ async function main() {
     await assertNoRunningRun(store.db, 'score');
     const knowledge = await ownerBackground(store);
     console.log(`Candidate Knowledge loaded: ${knowledge.length.toLocaleString()} characters.`);
-    const run = await createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });
+    const run = await createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: (await loadScorePrompt('fulltime', store.db)).version });
     try {
       const summary = await scorePostings({
         store,

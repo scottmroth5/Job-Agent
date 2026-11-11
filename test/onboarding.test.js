@@ -79,8 +79,8 @@ test('the Home checklist: AI, About you, and search, for users only', async () =
   const { store, app, pat, asPat, asOwner, done } = await setup();
   const setup1 = (await app.inject({ url: '/api/summary', headers: asPat })).json().setup;
   assert.deepEqual(setup1, { ai: true, aboutYou: false, search: false }, 'on the owner\'s key counts as AI ready');
-  saveUserProfile(store.raw, pat, 'Background. '.repeat(60));
-  saveUserConfig(store.raw, pat, { search: { terms: ['VP Engineering'], relevantTitleKeywords: ['engineering'], homeLocations: ['Remote'] } }, 'Pat');
+  await saveUserProfile(store.raw, pat, 'Background. '.repeat(60));
+  await saveUserConfig(store.raw, pat, { search: { terms: ['VP Engineering'], relevantTitleKeywords: ['engineering'], homeLocations: ['Remote'] } }, 'Pat');
   assert.deepEqual((await app.inject({ url: '/api/summary', headers: asPat })).json().setup, { ai: true, aboutYou: true, search: true });
   assert.equal((await app.inject({ url: '/api/summary', headers: asOwner })).json().setup, undefined);
   await done();

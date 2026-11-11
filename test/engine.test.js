@@ -52,7 +52,7 @@ test('get, all, run, and pluck answer like better-sqlite3, as promises', async (
 test('@uid binds the current user, or fallbackUid; with neither, the query rejects', async () => {
   const { db, raw } = setup();
   raw.exec("INSERT INTO things (user_id, name) VALUES (1, 'mine'), (2, 'theirs')");
-  const mine = () => db.prepare('SELECT name FROM things WHERE user_id = @uid').pluck().all();
+  const mine = async () => await db.prepare('SELECT name FROM things WHERE user_id = @uid').pluck().all();
   assert.deepEqual(await runAsUser(2, mine), ['theirs']);
   await assert.rejects(mine(), /needs a user, but it is running outside a request or job/);
   // A query that does not name @uid runs anywhere.
@@ -127,7 +127,7 @@ test('a statement from outside waits while a transaction is open, and is not rol
   const outside = (async () => {
     await db.prepare("INSERT INTO things (user_id, name) VALUES (@uid, 'outside')").run();
     outsideDone = true;
-    return db.prepare('SELECT name FROM things ORDER BY id').pluck().all();
+    return await db.prepare('SELECT name FROM things ORDER BY id').pluck().all();
   })();
   await new Promise((r) => setImmediate(r));
   assert.equal(outsideDone, false, 'the outside write waits for the transaction');
@@ -199,7 +199,7 @@ test('openJobStore gives store.engine over the same connection, scoped like stor
 
   const server = openJobStore(':memory:', { fallbackUid: null });
   await assert.rejects(server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get(), /needs a user/);
-  assert.equal(await runAsUser(1, () => server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get()), 0);
+  assert.equal(await runAsUser(1, async () => await server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get()), 0);
   server.close();
 });
 

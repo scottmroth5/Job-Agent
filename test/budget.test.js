@@ -27,30 +27,30 @@ function seed(db, calls, uid = null) {
   for (const [label, usd, at] of calls) insert.run(runId, label, 'claude-sonnet-5-5', usd, at.toISOString());
 }
 
-test('status: only this calendar month counts, in local time; warn at 80%, over at the cap', () => {
+test('status: only this calendar month counts, in local time; warn at 80%, over at the cap', async () => {
   const { db } = openJobStore(':memory:');
   seed(db, [
     ['score', 30, local(2026, 9, 30, 23)], // last month, even though it is October 1 in UTC
     ['score', 20, local(2026, 10, 1, 0, 30)],
     ['meeting-prep', 15, local(2026, 10, 12)],
   ]);
-  const s = budgetStatus(db, { now: local(2026, 10, 16), env: {} });
+  const s = await budgetStatus(db, { now: local(2026, 10, 16), env: {} });
   assert.deepEqual([s.spentUsd, s.limitUsd, s.remainingUsd, s.level, s.month, s.source], [35, DEFAULT_MONTHLY_BUDGET_USD, 15, 'ok', '2026-10', 'default']);
   seed(db, [['cover-letter', 6, local(2026, 10, 14)]]);
-  assert.equal(budgetStatus(db, { now: local(2026, 10, 16), env: {} }).level, 'warn');
+  assert.equal((await budgetStatus(db, { now: local(2026, 10, 16), env: {} })).level, 'warn');
   seed(db, [['score', 9, local(2026, 10, 15)]]);
-  assert.equal(budgetStatus(db, { now: local(2026, 10, 16), env: {} }).level, 'over');
-  assert.equal(budgetStatus(db, { now: local(2026, 11, 1, 0, 5), env: {} }).spentUsd, 0, 'a new month starts at zero');
-  assert.deepEqual(spendByLabel(db, { now: local(2026, 10, 16) }).map((r) => [r.label, r.costUsd]), [['score', 29], ['meeting-prep', 15], ['cover-letter', 6]]);
+  assert.equal((await budgetStatus(db, { now: local(2026, 10, 16), env: {} })).level, 'over');
+  assert.equal((await budgetStatus(db, { now: local(2026, 11, 1, 0, 5), env: {} })).spentUsd, 0, 'a new month starts at zero');
+  assert.deepEqual((await spendByLabel(db, { now: local(2026, 10, 16) })).map((r) => [r.label, r.costUsd]), [['score', 29], ['meeting-prep', 15], ['cover-letter', 6]]);
 });
 
-test('limit: the Admin setting beats .env, which beats the default; bad values are refused', () => {
+test('limit: the Admin setting beats .env, which beats the default; bad values are refused', async () => {
   const { db } = openJobStore(':memory:');
-  assert.deepEqual(budgetLimit(db, { MONTHLY_CLAUDE_BUDGET_USD: '75' }), { limitUsd: 75, source: 'env' });
-  assert.deepEqual(budgetLimit(db, { MONTHLY_CLAUDE_BUDGET_USD: 'lots' }), { limitUsd: DEFAULT_MONTHLY_BUDGET_USD, source: 'default' });
-  setBudgetLimit(db, 120.456);
-  assert.deepEqual(budgetLimit(db, { MONTHLY_CLAUDE_BUDGET_USD: '75' }), { limitUsd: 120.46, source: 'admin' });
-  for (const bad of [0, -5, 'abc', 1e9]) assert.throws(() => setBudgetLimit(db, bad), /above zero/);
+  assert.deepEqual(await budgetLimit(db, { MONTHLY_CLAUDE_BUDGET_USD: '75' }), { limitUsd: 75, source: 'env' });
+  assert.deepEqual(await budgetLimit(db, { MONTHLY_CLAUDE_BUDGET_USD: 'lots' }), { limitUsd: DEFAULT_MONTHLY_BUDGET_USD, source: 'default' });
+  await setBudgetLimit(db, 120.456);
+  assert.deepEqual(await budgetLimit(db, { MONTHLY_CLAUDE_BUDGET_USD: '75' }), { limitUsd: 120.46, source: 'admin' });
+  for (const bad of [0, -5, 'abc', 1e9]) await assert.rejects(async () => await setBudgetLimit(db, bad), /above zero/);
 });
 
 const SECRET = 'a test secret for sealing user keys, 32+ characters';
@@ -121,14 +121,14 @@ test('caps: a user on the owner\'s key stops at their allowance (told once), and
   seed(db, [['score', 6, new Date()]], given);
   await assert.rejects(runAsUser(given, () => ask(claude)), /allowance the owner gave you/);
   assert.deepEqual(reached, [given]);
-  assert.equal(budgetStatus(db, { uid: OWNER_ID, env: { MONTHLY_CLAUDE_BUDGET_USD: '20' } }).spentUsd, 6, "the owner's key paid for it");
+  assert.equal((await budgetStatus(db, { uid: OWNER_ID, env: { MONTHLY_CLAUDE_BUDGET_USD: '20' } })).spentUsd, 6, "the owner's key paid for it");
 
   // Spend on a user's own key is theirs alone: it is shown to them, with no cap, and never counts against the owner.
   seed(db, [['cover-letter', 30, new Date()]], own);
-  const mine = budgetStatus(db, { uid: own });
+  const mine = await budgetStatus(db, { uid: own });
   assert.deepEqual([mine.paidBy, mine.spentUsd, mine.limitUsd, mine.level], ['own', 30, null, 'ok']);
-  assert.equal(budgetStatus(db, { uid: OWNER_ID, env: { MONTHLY_CLAUDE_BUDGET_USD: '20' } }).spentUsd, 6);
-  assert.deepEqual(spendByLabel(db, { uid: own }).map((r) => r.label), ['cover-letter']);
+  assert.equal((await budgetStatus(db, { uid: OWNER_ID, env: { MONTHLY_CLAUDE_BUDGET_USD: '20' } })).spentUsd, 6);
+  assert.deepEqual((await spendByLabel(db, { uid: own })).map((r) => r.label), ['cover-letter']);
 
   // The owner's own cap also stops users on the owner's key.
   await setAiAccess(db, given, { source: 'owner', capUsd: 100 });

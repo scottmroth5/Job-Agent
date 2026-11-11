@@ -10,6 +10,7 @@
 //   AUTH_MODE=demo    A public, read-only showcase over a sample database (npm run demo:seed): no login, every
 //                     request that would change data is refused, and the server starts without Claude, Gmail,
 //                     or Drive (server/main.ts), so nothing a visitor does can spend money or reach an account.
+import { asEngine } from '../db/engine/index.ts';
 import { createHash, randomBytes } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { escapeHtml } from '../tools/html.ts';
@@ -292,7 +293,7 @@ export function registerAuth(
     const { session, go } = await statePage(req, 'none');
     if (go) return reply.redirect(go);
     const email = (session as Session).email; // no go, so there is a session
-    const closed = (users.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING;
+    const closed = (await asEngine(users).prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING;
     if (closed) return html(reply, 'Requests are closed', '<p>Job Hunt is not taking new requests for access right now. Please try again later.</p>' + signOut);
     return html(
       reply,
@@ -317,15 +318,19 @@ export function registerAuth(
     // The terms require it (TERMS.md); the browser enforces the box too, but a hand-made post is refused here.
     if (body.age !== 'yes') return html(reply, 'Request access', '<p>You must be 18 or older to use Job Hunt.</p><p><a href="/auth/register">Back</a></p>', 400);
     if (body.terms !== 'yes') return html(reply, 'Request access', '<p>Please accept the terms and privacy policy.</p><p><a href="/auth/register">Back</a></p>', 400);
-    if ((users.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING) return reply.redirect('/auth/register');
-    let result: { id: number; created: boolean };
+    let result: { id: number; created: boolean } | null;
     try {
-      result = await requestAccess(users, { email, name: body.name, note: body.note });
+      // The open-requests count and the request are one transaction, so requests at once can not pass MAX_PENDING.
+      result = await asEngine(users).tx(async () => {
+        if (((await asEngine(users).prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get()) as number) >= MAX_PENDING) return null;
+        return requestAccess(users, { email, name: body.name, note: body.note });
+      });
     } catch (err) {
       const e = err as Error & { statusCode?: number };
       if (e.statusCode === 400) return html(reply, 'Request access', `<p>${escapeHtml(e.message)}</p><p><a href="/auth/register">Back</a></p>`, 400);
       throw err;
     }
+    if (!result) return reply.redirect('/auth/register'); // requests are closed for now
     if (result.created) await notices.accessRequested?.((await getUser(users, result.id)) as User); // the row was just made
     return reply.code(303).redirect('/auth/waiting');
   });

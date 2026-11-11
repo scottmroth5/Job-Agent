@@ -1,6 +1,7 @@
 // Run the pipeline from the UI. It runs as its own process (the same scripts/pipeline.js as npm run pipeline),
 // so a long run never blocks the server, and its step lines become task progress. Each user runs their own pipeline
 // (scripts/pipeline.js --user=<id>); one runs at a time across the app, since they share the browser and the sources.
+import { asEngine } from '../db/engine/index.ts';
 import { assertNoRunningRun, oneStartAtATime } from '../tools/runs.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
@@ -21,14 +22,14 @@ const MINE = '(user_id = ? OR (? = 1 AND user_id IS NULL))';
  * reload).
  */
 export async function pipelineState(db: Database, uid: number = OWNER_ID) {
-  const last = db.prepare(`SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name = 'pipeline' AND ${MINE} ORDER BY id DESC LIMIT 1`).get(uid, uid) ?? null;
+  const last = await asEngine(db).prepare(`SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name = 'pipeline' AND ${MINE} ORDER BY id DESC LIMIT 1`).get(uid, uid) ?? null;
   let running = false;
   try {
     await assertNoRunningRun(db, 'pipeline');
   } catch {
     running = true;
   }
-  const lastFinished = db
+  const lastFinished = await asEngine(db)
     .prepare(`SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name = 'pipeline' AND status != 'running' AND ${MINE} ORDER BY id DESC LIMIT 1`)
     .get(uid, uid) ?? null;
   return { running, last, lastFinished };

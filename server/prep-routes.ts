@@ -1,5 +1,6 @@
 // Meeting prep routes: start a prep for a job (a background task), read one, delete one. Prep text and the
 // people's names stay in the database and the response; task output holds counts only.
+import { asEngine } from '../db/engine/index.ts';
 import { MAX_ATTENDEES, MEETING_FORMATS, MEETING_KINDS, listPreps, writeMeetingPrep } from '../agents/hunt/prep.ts';
 import type { Claude } from '@scottmroth5/agent-core';
 import type { JobStore } from '../tools/types.ts';
@@ -60,7 +61,7 @@ export function registerPrepRoutes(app: App, { store, config, services, startTas
     async (req, reply) => {
       if (!services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
       const id = req.params.id;
-      if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id)) return reply.code(404).send({ error: 'Job not found' });
+      if (!await asEngine(db).prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id)) return reply.code(404).send({ error: 'Job not found' });
       if (!req.body.attendees.some((a) => a.name?.trim())) return reply.code(400).send({ error: 'Add at least one person the meeting is with.' });
       const taskId = await startTask('meeting-prep', { id }, async (step, { run }) => {
         const r = await writeMeetingPrep({
@@ -83,11 +84,11 @@ export function registerPrepRoutes(app: App, { store, config, services, startTas
   );
 
   app.get<{ Params: IdParams }>('/api/postings/:id/meeting-preps', { schema: { summary: "A job's meeting preps, newest first (without their text)", params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }, response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
-    listPreps(db, req.params.id),
+    await listPreps(db, req.params.id),
   );
 
   app.get<{ Params: { id: string } }>('/api/meeting-preps/:id', { schema: { summary: 'One meeting prep with its text (Markdown) and what was asked', params: uuidParams, response: { 200: anyObject } } }, async (req, reply) => {
-    const r = db.prepare('SELECT * FROM meeting_preps WHERE id = ? AND user_id = @uid').get(req.params.id) as MeetingPrepsRow | undefined;
+    const r = await asEngine(db).prepare('SELECT * FROM meeting_preps WHERE id = ? AND user_id = @uid').get(req.params.id) as MeetingPrepsRow | undefined;
     if (!r) return reply.code(404).send({ error: 'Meeting prep not found' });
     return {
       id: r.id,
@@ -109,7 +110,7 @@ export function registerPrepRoutes(app: App, { store, config, services, startTas
   });
 
   app.delete<{ Params: { id: string } }>('/api/meeting-preps/:id', { schema: { summary: 'Delete a meeting prep from the app (its Google Doc stays in Drive)', params: uuidParams } }, async (req, reply) => {
-    const r = db.prepare('DELETE FROM meeting_preps WHERE id = ? AND user_id = @uid').run(req.params.id);
+    const r = await asEngine(db).prepare('DELETE FROM meeting_preps WHERE id = ? AND user_id = @uid').run(req.params.id);
     if (!r.changes) return reply.code(404).send({ error: 'Meeting prep not found' });
     return reply.code(204).send();
   });

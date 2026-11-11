@@ -99,15 +99,15 @@ test('the Google Doc HTML links the header and has no emoji', () => {
 test('the header setting: from the settings until saved, checked on save, and each user has their own', async () => {
   const { db, raw } = openJobStore(':memory:');
   const config = { candidate };
-  assert.deepEqual(letterHeader(db, config), { ...fromCandidate(candidate), saved: false });
-  assert.throws(() => saveLetterHeader(db, { name: '' }), /Enter your name/);
-  assert.throws(() => saveLetterHeader(db, { name: 'Pat', email: 'not-an-email' }), /email address/);
-  assert.throws(() => saveLetterHeader(db, { name: 'Pat', links: ['just words'] }), /not a web address/);
-  const saved = saveLetterHeader(db, { name: ' Pat M. Example ', email: 'pat@example.com', phone: '555-0100', links: ['example.com', '', 'github.com/example'] });
+  assert.deepEqual(await letterHeader(db, config), { ...fromCandidate(candidate), saved: false });
+  await assert.rejects(async () => await saveLetterHeader(db, { name: '' }), /Enter your name/);
+  await assert.rejects(async () => await saveLetterHeader(db, { name: 'Pat', email: 'not-an-email' }), /email address/);
+  await assert.rejects(async () => await saveLetterHeader(db, { name: 'Pat', links: ['just words'] }), /not a web address/);
+  const saved = await saveLetterHeader(db, { name: ' Pat M. Example ', email: 'pat@example.com', phone: '555-0100', links: ['example.com', '', 'github.com/example'] });
   assert.deepEqual(saved, { name: 'Pat M. Example', signoffName: '', email: 'pat@example.com', phone: '555-0100', location: '', links: ['example.com', 'github.com/example'], saved: true });
-  assert.equal(letterHeader(db, config).name, 'Pat M. Example');
+  assert.equal((await letterHeader(db, config)).name, 'Pat M. Example');
   const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
-  assert.equal(runAsUser(b, () => letterHeader(db, { candidate: { name: 'Sam' } }).saved), false, "another user's is their own");
+  assert.equal(await runAsUser(b, async () => (await letterHeader(db, { candidate: { name: 'Sam' } })).saved), false, "another user's is their own");
 });
 
 test('the routes save the header, and a letter downloaded after uses it', async () => {

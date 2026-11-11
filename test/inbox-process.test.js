@@ -116,7 +116,7 @@ test('end to end: confirm, skip, hold an injected email, create an opportunity, 
 
   assert.deepEqual(s.statusChanges.map((c) => c.to), ['applied']);
   assert.deepEqual(s.events, { 'email.received': 4, 'email.matched': 2, 'email.needs_review': 2 });
-  assert.equal(getSetting(db, CURSOR_KEY), '500');
+  assert.equal(await getSetting(db, CURSOR_KEY), '500');
   for (const p of prompts) assert.match(p, /<email>[\s\S]*<\/email>\s*$/);
   store.close();
 });
@@ -146,7 +146,7 @@ test('a second run processes nothing new; a dry run classifies nothing and saves
   const dry = await runInbox({ store: fresh.store, gmail: fresh.gmail, claude: fresh.claude, cfg, key: noKey, options: { dryRun: true } });
   assert.deepEqual([dry.considered, fresh.prompts.length], [4, 0]);
   assert.ok(Number(dry.estimatedUsd) > 0 && Number(dry.estimatedUsd) < 0.05);
-  assert.equal(getSetting(fresh.db, CURSOR_KEY), null);
+  assert.equal(await getSetting(fresh.db, CURSOR_KEY), null);
   assert.equal(fresh.db.prepare('SELECT COUNT(*) FROM emails').pluck().get(), 0);
   fresh.store.close();
   store.close();
@@ -158,7 +158,7 @@ test('a classification failure keeps the cursor so the next run retries', async 
   const failing = createClaude({ client: { messages: { create: async () => Promise.reject(Object.assign(new Error('overloaded'), { status: 529 })) } }, maxRetries: 0 });
   const s = await runInbox({ store, gmail, claude: failing, cfg, key });
   assert.equal(s.failures.length, 4);
-  assert.equal(getSetting(db, CURSOR_KEY), null);
+  assert.equal(await getSetting(db, CURSOR_KEY), null);
   store.close();
 });
 
@@ -177,7 +177,7 @@ test('a message that vanished since it was listed is skipped, and the run still 
   const s = await runInbox({ store, gmail, claude, cfg, key });
   assert.equal(s.gone, 1);
   assert.equal(s.failures.length, 0);
-  assert.equal(getSetting(db, CURSOR_KEY), '500');
+  assert.equal(await getSetting(db, CURSOR_KEY), '500');
   store.close();
 });
 

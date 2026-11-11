@@ -29,7 +29,7 @@ async function main() {
   if (estimate > maxUsd) throw new Error(`Estimated cost is over --max-usd=${maxUsd}.`);
 
   const store = openJobStore();
-  const promptVersion = getPrompt(store.db, 'inbox-classify').version;
+  const promptVersion = (await getPrompt(store.db, 'inbox-classify')).version;
   const run = await createJobTracer({ store }).startRun('eval-inbox', { model, promptVersion });
   try {
     const results = await runInboxEval({ cases, applications, claude: createJobClaude(store.db), cfg, model, trace: run, log: argv.includes('--verbose') ? (m) => console.log(`  ${m}`) : () => {} });

@@ -81,8 +81,8 @@ test('finishLetter flags letters over the word limit', () => {
   assert.deepEqual(finishLetter(long, config).flags, ['360 words (limit 350)']);
 });
 
-test('buildLetterRequest fills the approved prompt with executive positioning and Sonnet settings', () => {
-  const req = buildLetterRequest(/** @type {Parameters<typeof buildLetterRequest>[0]} */ ({ company: 'Example Co', title: 'CTO', fetched_text: 'Build it.', notes: null }), analysis, { config, knowledge: KNOWLEDGE, prompts: loadHuntPrompts() });
+test('buildLetterRequest fills the approved prompt with executive positioning and Sonnet settings', async () => {
+  const req = buildLetterRequest(/** @type {Parameters<typeof buildLetterRequest>[0]} */ ({ company: 'Example Co', title: 'CTO', fetched_text: 'Build it.', notes: null }), analysis, { config, knowledge: KNOWLEDGE, prompts: await loadHuntPrompts() });
   assert.equal(req.model, 'claude-sonnet-5-5');
   assert.deepEqual([req.effort, req.maxTokens], ['medium', 12000]);
   assert.match(req.prompt, /for Pat Example applying for CTO at Example Co/);
@@ -115,7 +115,7 @@ test('generateForPostings writes tweaks and a letter Doc for promoted jobs only,
   assert.equal(arts[0].content, 'HEADLINE TWEAK: Platform leader, scaled teams');
   assert.deepEqual([arts[1].kind, arts[1].doc_id, arts[1].flags_json, arts[1].model], ['cover_letter', 'doc-1', '["confident"]', 'claude-sonnet-5-5']);
 
-  assert.equal(selectForHunt(store.db).length, 0, 'a second run has nothing to do');
+  assert.equal((await selectForHunt(store.db)).length, 0, 'a second run has nothing to do');
   store.close();
 });
 
@@ -138,7 +138,7 @@ test('a failed Doc save keeps the letter and the next run retries only the Doc',
 test('--ids targets any posting, and repeated failures stop the run', async () => {
   const store = openJobStore(':memory:');
   const ids = [addPosting(store.db, { stage: 'discovered', score: 5 }), addPosting(store.db), addPosting(store.db), addPosting(store.db)];
-  assert.equal(selectForHunt(store.db, { ids: [ids[0]] }).length, 1);
+  assert.equal((await selectForHunt(store.db, { ids: [ids[0]] })).length, 1);
   const { claude } = fakeClaude(() => Object.assign(new Error('overloaded'), { name: 'InternalServerError' }));
   const s = await generateForPostings({ store, config, claude, knowledge: KNOWLEDGE, drive: fakeDrive(), options: { maxConsecutiveFailures: 2 } });
   assert.equal(s.failures.length, 2);
@@ -152,7 +152,7 @@ test('ensureLetterFolder creates the folder once and remembers it', async () => 
   assert.equal(await ensureLetterFolder(drive, store.db), 'folder-1');
   assert.equal(await ensureLetterFolder(drive, store.db), 'folder-1');
   assert.equal(drive.calls.folders, 1);
-  assert.equal(getSetting(store.db, 'drive.coverLetterFolderId'), 'folder-1');
+  assert.equal(await getSetting(store.db, 'drive.coverLetterFolderId'), 'folder-1');
   const trashed = { ...fakeDrive(), getFile: async () => ({ trashed: true }), createFolder: async () => 'folder-2' };
   assert.equal(await ensureLetterFolder(trashed, store.db), 'folder-2');
   store.close();

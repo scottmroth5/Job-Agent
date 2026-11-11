@@ -6,7 +6,7 @@ import { listPostings } from '../server/queries.ts';
 import { archivePostings } from '../agents/hunt/archive.ts';
 
 // Synthetic data only.
-test('the duplicate status is allowed and closes a job like passed', () => {
+test('the duplicate status is allowed and closes a job like passed', async () => {
   const store = openJobStore(':memory:');
   const { db } = store;
   const id = Number(
@@ -16,9 +16,9 @@ test('the duplicate status is allowed and closes a job like passed', () => {
       .run().lastInsertRowid,
   );
   assert.throws(() => db.prepare("UPDATE postings SET status = 'maybe' WHERE id = ?").run(id), /status is not in the status list/);
-  assert.deepEqual(listPostings(db, { status: 'active' }), []);
-  assert.deepEqual(listPostings(db, { status: 'progress' }), []);
-  assert.equal(archivePostings(db).archived[0].reason, 'status duplicate');
+  assert.deepEqual(await listPostings(db, { status: 'active' }), []);
+  assert.deepEqual(await listPostings(db, { status: 'progress' }), []);
+  assert.equal((await archivePostings(db)).archived[0].reason, 'status duplicate');
   store.close();
 });
 
