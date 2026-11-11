@@ -82,7 +82,7 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
         },
       },
     },
-    async (req) => ({ weeks: usageByWeek(db, { weeks: req.query.weeks }), ...usageTotals(db, { since: usagePeriodStart(req.query.weeks) }) }),
+    async (req) => ({ weeks: await usageByWeek(db, { weeks: req.query.weeks }), ...await usageTotals(db, { since: usagePeriodStart(req.query.weeks) }) }),
   );
 
   app.get('/api/admin/users', { schema: { summary: 'Every account, with its AI setup and this month\'s spend (admin)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>

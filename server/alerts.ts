@@ -3,6 +3,7 @@
 // is missing. At most one email per kind of problem per day (the day is kept in app_settings as alert:<key>, so a
 // restart never resends), and with once, none again until it has recovered. Emails go only to the owner's own address
 // (EMAIL_ADDRESS, the same as the run report) and carry job names, dates and error messages only, like the log lines.
+import { asEngine } from '../db/engine/index.ts';
 import { claimSetting } from '../db/settings.ts';
 import { localDay } from '../tools/dates.ts';
 import type { Database } from 'better-sqlite3';
@@ -39,13 +40,13 @@ export function createAlerts({ db, send, to, appUrl = () => '', clock = () => ne
   }
 
   /** The problem is over: the next one emails again, even the same day. */
-  function recovered(k: string) {
-    db.prepare('DELETE FROM app_settings WHERE key = ?').run(key(k));
+  async function recovered(k: string) {
+    await asEngine(db).prepare('DELETE FROM app_settings WHERE key = ?').run(key(k));
   }
 
   /** The scheduler's report for one run of a job: an email when it failed, recovery when it worked. */
   async function jobResult(name: string, ok: boolean, error?: string | null) {
-    if (ok) return recovered(`job:${name}`);
+    if (ok) return await recovered(`job:${name}`);
     const names: Record<string, string> = { pipeline: 'the scheduled pipeline', inbox: 'the scheduled inbox check', backup: 'the nightly backup', 'restore-test': 'the monthly backup restore test' };
     const what = names[name] ?? `the scheduled ${name}`;
     return alert(`job:${name}`, `${what} failed`, `${what[0].toUpperCase()}${what.slice(1)} failed on ${localDay(clock())}: ${error ?? 'no details'}.`);

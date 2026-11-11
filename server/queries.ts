@@ -195,27 +195,27 @@ export async function listPostings(db: Database, filters: PostingFilters = {}, c
   const limit = Math.min(Number(filters.limit) || 500, 2000);
   const sql = `${await base(db)} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY COALESCE(ls.score, 0) DESC, p.discovered_on DESC, p.id DESC LIMIT ${limit}`;
-  return (db.prepare(sql).all(params) as JobRow[]).map((r) => toRow(r, config));
+  return (await asEngine(db).prepare(sql).all(params) as JobRow[]).map((r) => toRow(r, config));
 }
 
 /** Full detail for one posting, or null. */
 export async function getPosting(db: Database, id: number, config: QueryConfig = {}) {
-  const r = db.prepare(`${await base(db)} WHERE p.id = ?`).get(id) as JobRow | undefined;
+  const r = await asEngine(db).prepare(`${await base(db)} WHERE p.id = ?`).get(id) as JobRow | undefined;
   if (!r) return null;
-  const tweaks = db
+  const tweaks = await asEngine(db)
     .prepare("SELECT content, model, created_at, resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
     .get(id) as { content: string; model: string | null; created_at: string; resume_id: string | null } | undefined;
   const letter = r.letter_id
-    ? (db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at, resume_id FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) as
+    ? (await asEngine(db).prepare('SELECT content, doc_url, doc_name, flags_json, created_at, resume_id FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) as
         | { content: string; doc_url: string | null; doc_name: string | null; flags_json: string | null; created_at: string; resume_id: string | null }
         | undefined)
     : null;
   // Which of the user's resumes a letter or tweaks were written from (null: none, or since deleted).
-  const resumeLabel = (rid: string | null) => (rid ? (db.prepare('SELECT label FROM resumes WHERE id = ? AND user_id = @uid').pluck().get(rid) ?? null) : null);
+  const resumeLabel = async (rid: string | null) => (rid ? (await asEngine(db).prepare('SELECT label FROM resumes WHERE id = ? AND user_id = @uid').pluck().get(rid) ?? null) : null);
   return {
     ...toRow(r, config),
     copies: await findCopies(db, r),
-    attachments: listAttachments(db, r.id),
+    attachments: await listAttachments(db, r.id),
     meetingPreps: await listPreps(db, r.id),
     noteEntries: await listNotes(db, r.id),
     analysis: parse(r.analysis_json),
@@ -224,15 +224,15 @@ export async function getPosting(db: Database, id: number, config: QueryConfig =
     text: r.jd_text ?? r.fetched_text ?? null,
     textSource: r.jd_text ? 'pasted' : r.fetched_text ? 'fetched' : null,
     extra: parse(r.extra_json),
-    tweaks: tweaks ? { content: tweaks.content, model: tweaks.model, createdAt: tweaks.created_at, resume: resumeLabel(tweaks.resume_id) } : null,
-    letter: letter ? { url: letter.doc_url, name: letter.doc_name, flags: parse(letter.flags_json) ?? [], content: letter.content, createdAt: letter.created_at, resume: resumeLabel(letter.resume_id) } : null,
-    scores: db
+    tweaks: tweaks ? { content: tweaks.content, model: tweaks.model, createdAt: tweaks.created_at, resume: await resumeLabel(tweaks.resume_id) } : null,
+    letter: letter ? { url: letter.doc_url, name: letter.doc_name, flags: parse(letter.flags_json) ?? [], content: letter.content, createdAt: letter.created_at, resume: await resumeLabel(letter.resume_id) } : null,
+    scores: await asEngine(db)
       .prepare('SELECT score, source, model, reason, created_at AS createdAt FROM scores WHERE posting_id = ? AND user_id = @uid ORDER BY id DESC')
       .all(id),
-    statusHistory: db
+    statusHistory: await asEngine(db)
       .prepare('SELECT from_status AS fromStatus, to_status AS toStatus, changed_by AS changedBy, changed_at AS changedAt FROM status_history WHERE posting_id = ? AND user_id = @uid ORDER BY id')
       .all(id),
-    sightings: db.prepare('SELECT source, url, seen_on AS seenOn FROM posting_sightings WHERE posting_id = ? AND user_id = @uid ORDER BY id').all(id),
+    sightings: await asEngine(db).prepare('SELECT source, url, seen_on AS seenOn FROM posting_sightings WHERE posting_id = ? AND user_id = @uid ORDER BY id').all(id),
   };
 }
 
@@ -268,7 +268,7 @@ export async function updatePosting(db: Database, id: number, patch: PostingPatc
   // The read of the job and the writes are one transaction, so two edits at once can not record a stale status.
   return asEngine(db).tx(async () => {
     const lk = await lookups(db);
-    const current = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
+    const current = await asEngine(db).prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
     if (!current) return null;
     const set: Partial<PostingsRow> = {};
     const nowIso = now.toISOString();
@@ -293,7 +293,7 @@ export async function updatePosting(db: Database, id: number, patch: PostingPatc
       set.company_title_key = storedKey({ company: set.company ?? current.company, title: set.title ?? current.title });
     }
     if (patch.duplicateOf !== undefined) {
-      const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf) as
+      const other = await asEngine(db).prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf) as
         | Pick<PostingsRow, 'id' | 'company' | 'title' | 'stage' | 'status'>
         | undefined;
       if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
@@ -322,9 +322,9 @@ export async function updatePosting(db: Database, id: number, patch: PostingPatc
     const keys = Object.keys(set);
     if (keys.length || newNotes.length) {
       await asEngine(db).tx(async () => {
-        if (keys.length) db.prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id AND user_id = @uid`).run({ ...set, updated_at: nowIso, id });
+        if (keys.length) await asEngine(db).prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id AND user_id = @uid`).run({ ...set, updated_at: nowIso, id });
         if (set.status) {
-          db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
+          await asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
         }
         for (const n of newNotes) await addNote(db, id, n.body, { source: n.source, now });
       });
@@ -340,7 +340,7 @@ export async function summary(db: Database, config: QueryConfig = {}, now = new 
   // runs is not a user table (agent-core writes the row first): the user's runs, and for the owner the ones from before runs had a user.
   const mine = '(user_id = @me OR (@me = 1 AND user_id IS NULL))';
   const since = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
-  const counts = db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all() as Array<{
+  const counts = await asEngine(db).prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all() as Array<{
     track: string;
     stage: string;
     status: string;
@@ -352,12 +352,12 @@ export async function summary(db: Database, config: QueryConfig = {}, now = new 
     // The Home page's counts: pipeline jobs that need action (the Jobs page's default view) and ones in progress.
     needsAction: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.needsAction().includes(c.status)).reduce((s, c) => s + c.n, 0),
     inProgress: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.inProgress().includes(c.status)).reduce((s, c) => s + c.n, 0),
-    needsDescription: db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id WHERE p.user_id = @uid AND ${awaitingDescription(lk)}`).pluck().get(),
+    needsDescription: await asEngine(db).prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id WHERE p.user_id = @uid AND ${awaitingDescription(lk)}`).pluck().get(),
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
-    spend30Days: db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= @since AND ${mine}`).pluck().get({ since, me: uid }),
+    spend30Days: await asEngine(db).prepare(`SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= @since AND ${mine}`).pluck().get({ since, me: uid }),
     budget: await budgetStatus(db, { now, uid }),
-    inboxNeedsReview: db.prepare("SELECT COUNT(*) FROM emails WHERE user_id = @uid AND review_status = 'needs_review'").pluck().get(),
-    lastRun: db.prepare(`SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') AND ${mine} ORDER BY id DESC LIMIT 1`).get({ me: uid }) ?? null,
+    inboxNeedsReview: await asEngine(db).prepare("SELECT COUNT(*) FROM emails WHERE user_id = @uid AND review_status = 'needs_review'").pluck().get(),
+    lastRun: await asEngine(db).prepare(`SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') AND ${mine} ORDER BY id DESC LIMIT 1`).get({ me: uid }) ?? null,
   };
 }

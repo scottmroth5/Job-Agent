@@ -79,7 +79,7 @@ test('weekly totals across two users, Sunday to Saturday in the app zone, newest
   const store = openJobStore(':memory:');
   await seed(store.raw);
   const edgeLastWeek = localDay(new Date(EDGE)) === '2026-10-24';
-  const weeks = usageByWeek(store.raw, { weeks: 4, now: NOW });
+  const weeks = await usageByWeek(store.raw, { weeks: 4, now: NOW });
   const none = { accountsSeen: 0, pipelineCompleted: 0, pipelineFailed: 0, jobsAdded: 0, lettersWritten: 0, prepsWritten: 0, feedbackReceived: 0, claudeSpendUsd: 0 };
   assert.deepEqual(weeks, [
     { weekEnding: '2026-10-31', accountsSeen: 1, pipelineCompleted: 1, pipelineFailed: 1, jobsAdded: 2, lettersWritten: 2, prepsWritten: 1, feedbackReceived: 1, claudeSpendUsd: edgeLastWeek ? 0.5 : 1.5 },
@@ -88,10 +88,10 @@ test('weekly totals across two users, Sunday to Saturday in the app zone, newest
     { weekEnding: '2026-10-10', ...none },
   ]);
   // The asking admin's own zone (Settings) never moves the weeks.
-  assert.deepEqual(runAsUser(1, () => usageByWeek(store.raw, { weeks: 4, now: NOW }), { timeZone: 'Pacific/Kiritimati' }), weeks);
+  assert.deepEqual(await runAsUser(1, async () => await usageByWeek(store.raw, { weeks: 4, now: NOW }), { timeZone: 'Pacific/Kiritimati' }), weeks);
 
   // Totals only: the listed fields, numbers apart from the week, nothing about who or which job.
-  const year = usageByWeek(store.raw, { weeks: 52, now: NOW });
+  const year = await usageByWeek(store.raw, { weeks: 52, now: NOW });
   assert.equal(year.length, 52);
   for (const row of year) {
     assert.deepEqual(Object.keys(row).sort(), FIELDS);

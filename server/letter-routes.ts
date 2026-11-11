@@ -3,6 +3,7 @@
 // older version current again, and Word or PDF downloads of any version. Every save is a new artifact, so nothing is
 // overwritten, and the newest is the letter the panel, the report, and meeting prep use. Each version can carry a fact
 // check (agents/letter-checks.ts): the panel asks for one after a save, and the user dismisses claims one at a time.
+import { asEngine } from '../db/engine/index.ts';
 import { createJobTracer } from '../tools/trace.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { reviseLetter, MAX_TURNS } from '../agents/hunt/revise-letter.ts';
@@ -60,10 +61,10 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
   const { db } = store;
   const revisions = new Map<number, number[]>(); // uid -> timestamps in the last day
   const checks = new Map<number, number[]>(); // uid -> fact check timestamps in the last day
-  const job = (id: number) => db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
+  const job = async (id: number) => await asEngine(db).prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
   const versions = async (postingId: number) => await withChecks(
     (
-    db
+    await asEngine(db)
       .prepare(`SELECT a.id, a.content, a.source, a.flags_json, a.doc_url, a.created_at, r.label AS resume FROM artifacts a
           LEFT JOIN resumes r ON r.id = a.resume_id AND r.user_id = a.user_id
           WHERE a.posting_id = ? AND a.user_id = @uid AND a.kind = 'cover_letter' ORDER BY a.id DESC`)
@@ -85,10 +86,10 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     const found = await checksFor(db, list.map((v) => v.id));
     return list.map((v) => ({ ...v, check: publicCheck(found.get(v.id) ?? null) }));
   };
-  const version = (postingId: number, versionId: number) =>
-    db.prepare("SELECT id, content FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(versionId, postingId) as { id: number; content: string } | undefined;
-  const latestAnalysis = (postingId: number) => {
-    const a = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
+  const version = async (postingId: number, versionId: number) =>
+    await asEngine(db).prepare("SELECT id, content FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(versionId, postingId) as { id: number; content: string } | undefined;
+  const latestAnalysis = async (postingId: number) => {
+    const a = await asEngine(db).prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
     return a ? JSON.parse(a) : null;
   };
 
@@ -100,10 +101,10 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
   ) => {
     const now = new Date();
     const id = Number(
-      db
+      (await asEngine(db)
         .prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, created_at, resume_id)
             SELECT user_id, id, 'cover_letter', ?, ?, ?, ?, NULL, ?, ? FROM postings WHERE id = ? AND user_id = @uid`)
-        .run(content, flags.length ? JSON.stringify(flags) : null, source, model, now.toISOString(), resumeId, posting.id).lastInsertRowid,
+        .run(content, flags.length ? JSON.stringify(flags) : null, source, model, now.toISOString(), resumeId, posting.id)).id,
     );
     let docError: string | null = null;
     const drive = services.drive;
@@ -112,7 +113,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
         const folderId = await ensureLetterFolder(drive, db);
         const name = letterDocName((await letterHeader(db, config)).name, posting.title, posting.company);
         const doc = await drive.createDocFromHtml({ name, folderId, html: letterHtml({ candidate: await letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body: content }) });
-        db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
+        await asEngine(db).prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
       } catch {
         docError = 'Saved here; the Google Doc could not be made.';
       }
@@ -140,7 +141,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
   app.put<{ Body: Record<string, unknown> }>('/api/letter-header', { schema: { summary: 'Save your cover letter header', body: headerBody, response: { 200: anyObject } } }, async (req) => await saveLetterHeader(db, req.body));
 
   app.get<{ Params: IdParams }>('/api/postings/:id/letters', { schema: { summary: "A job's cover letter versions, newest (current) first", params: idParams, response: { 200: { type: 'array', items: anyObject } } } }, async (req, reply) =>
-    job(req.params.id) ? await versions(req.params.id) : reply.code(404).send({ error: 'Job not found' }),
+    await job(req.params.id) ? await versions(req.params.id) : reply.code(404).send({ error: 'Job not found' }),
   );
 
   app.post<{ Params: IdParams; Body: { letter: string; feedback: string; history?: RevisionTurn[] } }>(
@@ -168,7 +169,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     },
     async (req, reply) => {
       if (!services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
-      const posting = job(req.params.id);
+      const posting = await job(req.params.id);
       if (!posting) return reply.code(404).send({ error: 'Job not found' });
       const uid = req.uid ?? OWNER_ID;
       const day = Date.now() - 24 * 3600 * 1000;
@@ -179,7 +180,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       const background = withResume(await services.knowledge(), resume);
       const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-revise', { posting: posting.id });
       try {
-        const r = await reviseLetter({ claude: services.claude, background, posting, analysis: latestAnalysis(posting.id), letter: req.body.letter, feedback: req.body.feedback, history: req.body.history ?? [], config, trace: run });
+        const r = await reviseLetter({ claude: services.claude, background, posting, analysis: await latestAnalysis(posting.id), letter: req.body.letter, feedback: req.body.feedback, history: req.body.history ?? [], config, trace: run });
         await run.finish('ok', { flags: r.flags.length });
         return { ...r, resume: resume?.label ?? null };
       } catch (err) {
@@ -200,7 +201,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       },
     },
     async (req, reply) => {
-      const posting = job(req.params.id);
+      const posting = await job(req.params.id);
       if (!posting) return reply.code(404).send({ error: 'Job not found' });
       // Your own text keeps its wording; its header (name, contact lines, date, Re: line, greeting) and sign-off are taken
       // off, since the layout adds those. A kept revision was already cleaned. Both get the letter checks.
@@ -220,8 +221,8 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     { schema: { summary: "Check a letter version's claims about you against your knowledge doc and resume (uses your AI); the letter is unchanged", params: versionParams, response: { 200: checkReply } } },
     async (req, reply) => {
       if (!services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
-      const posting = job(req.params.id);
-      const v = posting && version(posting.id, req.params.versionId);
+      const posting = await job(req.params.id);
+      const v = posting && await version(posting.id, req.params.versionId);
       if (!v) return reply.code(404).send({ error: 'Version not found' });
       const uid = req.uid ?? OWNER_ID;
       const day = Date.now() - 24 * 3600 * 1000;
@@ -246,8 +247,8 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       },
     },
     async (req, reply) => {
-      const posting = job(req.params.id);
-      const v = posting && version(posting.id, req.params.versionId);
+      const posting = await job(req.params.id);
+      const v = posting && await version(posting.id, req.params.versionId);
       const check = v && await dismissClaim(db, v.id, req.params.index);
       if (!check) return reply.code(404).send({ error: 'Claim not found' });
       return publicCheck(check);
@@ -260,8 +261,8 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       schema: { summary: 'Make an earlier cover letter version current again (saved as a new version)', params: idParams, body: { type: 'object', required: ['versionId'], additionalProperties: false, properties: { versionId: { type: 'integer', minimum: 1 } } }, response: { 200: anyObject } },
     },
     async (req, reply) => {
-      const posting = job(req.params.id);
-      const old = posting && db.prepare("SELECT content, source, flags_json, resume_id FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.body.versionId, posting.id) as { content: string; source: string; flags_json: string | null; resume_id: string | null } | undefined;
+      const posting = await job(req.params.id);
+      const old = posting && await asEngine(db).prepare("SELECT content, source, flags_json, resume_id FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.body.versionId, posting.id) as { content: string; source: string; flags_json: string | null; resume_id: string | null } | undefined;
       if (!old) return reply.code(404).send({ error: 'Version not found' });
       const saved = await saveVersion(posting, { content: old.content, source: old.source, flags: old.flags_json ? JSON.parse(old.flags_json) : [], resumeId: old.resume_id });
       await copyCheck(db, req.body.versionId, saved.id); // the same text, so the same check
@@ -273,7 +274,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     '/api/postings/:id/letter/from-file',
     { bodyLimit: MAX_DOC_BYTES, schema: { summary: "A file's text for your own letter version (the raw file as the body, its name in X-Filename); nothing is saved", params: idParams, response: { 200: anyObject } } },
     async (req, reply) => {
-      if (!job(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
+      if (!await job(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
       if (!Buffer.isBuffer(req.body)) return reply.code(400).send({ error: 'Send the file as the request body (application/octet-stream).' });
       const { text } = await documentText(req.body, uploadName(req));
       // The body only, as it will be saved, so what you review is what the Word and PDF show under their own header.
@@ -283,10 +284,10 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
 
   // Word or PDF of the current letter, or of any version (?version=<id>), in the Google Doc's layout.
   const download = (format: 'pdf' | 'docx') => async (req: FastifyRequest<{ Params: IdParams; Querystring: { version?: number } }>, reply: FastifyReply) => {
-    const posting = job(req.params.id);
+    const posting = await job(req.params.id);
     const version = req.query.version
-      ? posting && (db.prepare("SELECT content, created_at FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.query.version, posting.id) as Letter | undefined)
-      : posting && (db.prepare("SELECT content, created_at FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").get(posting.id) as Letter | undefined);
+      ? posting && (await asEngine(db).prepare("SELECT content, created_at FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.query.version, posting.id) as Letter | undefined)
+      : posting && (await asEngine(db).prepare("SELECT content, created_at FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").get(posting.id) as Letter | undefined);
     if (!version?.content) return reply.code(404).send({ error: 'No cover letter for this job yet.' });
     // A version was found, so the job was too (posting!).
     const written = new Date(version.created_at);

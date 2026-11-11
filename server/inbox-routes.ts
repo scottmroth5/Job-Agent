@@ -1,5 +1,6 @@
 // Inbox screen: check Gmail, resolve emails that need review, and close reminders. Email subjects and
 // summaries are shown to the user here (local server only); they are never logged.
+import { asEngine } from '../db/engine/index.ts';
 import { createJobTracer } from '../tools/trace.ts';
 import { assertNoRunningRun, oneStartAtATime } from '../tools/runs.ts';
 import { runInbox } from '../agents/inbox/process.ts';
@@ -27,7 +28,7 @@ const uuidParams = { type: 'object', required: ['id'], properties: { id: { type:
 export async function inboxOverview(db: Database, { ready }: { ready: boolean }) {
   return {
     signedIn: ready,
-    lastCheck: db.prepare("SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name IN ('inbox', 'inbox-backfill') ORDER BY id DESC LIMIT 1").get() ?? null,
+    lastCheck: await asEngine(db).prepare("SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name IN ('inbox', 'inbox-backfill') ORDER BY id DESC LIMIT 1").get() ?? null,
     needsReview: (await listNeedsReview(db)).map((e) => ({
       id: e.id,
       sentAt: e.sent_at,
@@ -40,11 +41,11 @@ export async function inboxOverview(db: Database, { ready }: { ready: boolean })
       extracted: e.extracted,
       guess: e.guess,
     })),
-    reminders: db
+    reminders: await asEngine(db)
       .prepare(`SELECT r.id, r.kind, r.due_at AS dueAt, r.note, r.created_at AS createdAt, p.id AS postingId, p.company, p.title
         FROM reminders r JOIN postings p ON p.id = r.posting_id AND p.user_id = r.user_id WHERE r.user_id = @uid AND r.status = 'open' ORDER BY COALESCE(r.due_at, r.created_at)`)
       .all(),
-    recent: db
+    recent: await asEngine(db)
       .prepare(`SELECT e.id, e.sent_at AS sentAt, e.sender, e.subject, e.type, e.match_rule AS matchRule, e.review_status AS reviewStatus,
           e.summary, p.id AS postingId, p.company, p.title, p.status
         FROM emails e JOIN postings p ON p.id = e.posting_id AND p.user_id = e.user_id
@@ -151,7 +152,7 @@ export function registerReminderRoutes(app: App, { db }: { db: Database }) {
       },
     },
     async (req, reply) => {
-      const r = db.prepare("UPDATE reminders SET status = ? WHERE id = ? AND user_id = @uid AND status = 'open'").run(req.body.status, req.params.id);
+      const r = await asEngine(db).prepare("UPDATE reminders SET status = ? WHERE id = ? AND user_id = @uid AND status = 'open'").run(req.body.status, req.params.id);
       if (!r.changes) return reply.code(404).send({ error: 'Reminder not found or already closed.' });
       return { id: req.params.id, status: req.body.status };
     },

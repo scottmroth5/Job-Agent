@@ -1,4 +1,5 @@
 // A job's notes, one entry at a time: add, edit, delete (agents/notes.ts keeps postings.notes in step).
+import { asEngine } from '../db/engine/index.ts';
 import { addNote, deleteNote, listNotes, updateNote, MAX_NOTE_CHARS } from '../agents/notes.ts';
 import type { Database } from '../tools/types.ts';
 import type { App, IdParams } from './types.ts';
@@ -14,7 +15,7 @@ export function registerNoteRoutes(app: App, { db }: { db: Database }) {
   );
 
   app.post<{ Params: IdParams; Body: { body: string } }>('/api/postings/:id/notes', { schema: { summary: 'Add a note to a job (Markdown)', params: idParams, body, response: { 201: anyObject } } }, async (req, reply) => {
-    if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
+    if (!await asEngine(db).prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
     return reply.code(201).send(await addNote(db, req.params.id, req.body.body, { source: 'user' }));
   });
 

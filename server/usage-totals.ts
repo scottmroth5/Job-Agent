@@ -11,6 +11,7 @@
 // The address, user agent, Referer, and URL are read here and dropped: usage_totals (migrations 020, 021) holds only
 // the day, the dimension, a fixed value ("Chrome 130" is a fixed name and a number) or "City, State, Country", and a
 // count. Nothing is logged.
+import { asEngine } from '../db/engine/index.ts';
 import { isPrivateAddress } from './geo.ts';
 import { appDay } from '../tools/dates.ts';
 import { hostIs } from '../tools/urls.ts';
@@ -149,8 +150,8 @@ const isVisit = (req: CountedRequest, statusCode: number) => {
 };
 
 /** Adds one to a day's total. */
-export const addToTotal = (db: Database, day: string, dimension: string, value: string) =>
-  db.prepare('INSERT INTO usage_totals (day, dimension, value, count) VALUES (?, ?, ?, 1) ON CONFLICT (day, dimension, value) DO UPDATE SET count = count + 1').run(day, dimension, value);
+export const addToTotal = async (db: Database, day: string, dimension: string, value: string) =>
+  await asEngine(db).prepare('INSERT INTO usage_totals (day, dimension, value, count) VALUES (?, ?, ?, 1) ON CONFLICT (day, dimension, value) DO UPDATE SET count = count + 1').run(day, dimension, value);
 
 /**
  * Counts visits and arrivals after each response. db: the unscoped database (an app-wide table); location: ip ->
@@ -192,14 +193,14 @@ export function registerUsageTotals(
           } catch {
             loc = null;
           }
-          addToTotal(db, day, 'device', deviceOf(req.headers));
-          addToTotal(db, day, 'browser', browserOf(req.headers));
-          addToTotal(db, day, 'location', locationValue(loc));
+          await addToTotal(db, day, 'device', deviceOf(req.headers));
+          await addToTotal(db, day, 'browser', browserOf(req.headers));
+          await addToTotal(db, day, 'location', locationValue(loc));
         }
       }
       if (isArrival(req, reply.statusCode)) {
         const source = sourceOf({ referer: req.headers.referer, url: req.url, ownOrigin, siteHost: site, demoHost: demo });
-        if (source && SOURCES.includes(source)) addToTotal(db, day, 'source', source);
+        if (source && SOURCES.includes(source)) await addToTotal(db, day, 'source', source);
       }
     } catch {
       // Counting never affects a request.
