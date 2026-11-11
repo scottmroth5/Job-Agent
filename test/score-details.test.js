@@ -1,5 +1,6 @@
 // The job panel's score details (server/queries.ts scoreDetails, agents/prompts.ts describeVersion): when and how the
 // current score was made, which prompt, and when a re-score would change it. Synthetic data only.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -21,14 +22,14 @@ const promptOf = (/** @type {Details} */ d) => /** @type {PromptDetails} */ (d.p
 function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const job = (/** @type {Record<string, string | null>} */ o = {}) =>
+  const job = async (/** @type {Record<string, string | null>} */ o = {}) =>
     Number(
-      db.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, fetched_text, created_at, updated_at)
+      (await asEngine(db).prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, fetched_text, created_at, updated_at)
           VALUES (1, @k, 'Example Co', 'CTO', @k, 'LinkedIn', @track, '2026-10-01', 'pipeline', 'new', @text, 'x', 'x')`)
-        .run({ k: `k${Math.random()}`, track: 'fulltime', text: 'The full posting.', ...o }).lastInsertRowid,
+        .run({ k: `k${Math.random()}`, track: 'fulltime', text: 'The full posting.', ...o })).id,
     );
   const score = async (/** @type {number} */ id, /** @type {Record<string, string | number | null>} */ o = {}) =>
-    db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, created_at)
+    await asEngine(db).prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, created_at)
         VALUES (1, @id, @score, 'r', @analysis, @source, @model, @version, @at)`)
       .run({ id, score: 8, analysis: '{}', source: 'v2', model: 'claude-sonnet-5-5', version: (await getPrompt(db, 'score')).version, at: '2026-10-02T12:00:00Z', ...o });
   return { store, db, job, score };
@@ -36,7 +37,7 @@ function setup() {
 
 test('a score from the posting text with the default prompt, then the prompt is edited', async () => {
   const { store, db, job, score } = setup();
-  const id = job();
+  const id = await job();
   await score(id);
   let d = await detailsOf(db, id);
   assert.deepEqual({ at: d.at, model: d.model, from: d.from, kind: promptOf(d).kind, current: promptOf(d).current }, { at: '2026-10-02T12:00:00Z', model: 'claude-sonnet-5-5', from: 'text', kind: 'default', current: true });
@@ -51,7 +52,7 @@ test("a score with the user's edit names it; an unknown version is an earlier on
   const { store, db, job, score } = setup();
   const edited = `${defaultPrompt('score').template}\nWeigh healthcare higher.`;
   await savePrompt(db, 'score', { template: edited, note: 'Healthcare' });
-  const id = job();
+  const id = await job();
   await score(id, { version: versionOf('score', edited) });
   const p = promptOf(await detailsOf(db, id));
   assert.deepEqual({ kind: p.kind, note: p.note, current: p.current }, { kind: 'edit', note: 'Healthcare', current: true });
@@ -63,20 +64,20 @@ test("a score with the user's edit names it; an unknown version is an earlier on
 
 test('a title-only score is capped, says what it would be, and flags a description added since; rules and v1 are named', async () => {
   const { store, db, job, score } = setup();
-  const capped = job({ text: null });
+  const capped = await job({ text: null });
   await score(capped, { score: 5, analysis: JSON.stringify({ uncappedScore: 8 }) });
   let d = await detailsOf(db, capped);
   assert.deepEqual({ from: d.from, uncapped: d.uncappedScore, since: d.textSinceScore }, { from: 'title', uncapped: 8, since: false });
-  db.prepare("UPDATE postings SET jd_text = 'Pasted later.' WHERE id = ?").run(capped);
+  await asEngine(db).prepare("UPDATE postings SET jd_text = 'Pasted later.' WHERE id = ?").run(capped);
   assert.equal((await detailsOf(db, capped)).textSinceScore, true);
 
-  const ruled = job();
+  const ruled = await job();
   await score(ruled, { score: 1, source: 'v2-rule', model: null, version: null });
   d = await detailsOf(db, ruled);
   assert.deepEqual({ from: d.from, prompt: d.prompt }, { from: 'rule', prompt: null });
-  const old = job();
+  const old = await job();
   await score(old, { source: 'v1-analysis', model: null, version: null });
   assert.equal((await detailsOf(db, old)).from, 'v1');
-  assert.equal((await getPosting(db, job()))?.scoreDetails, null, 'not scored yet');
+  assert.equal((await getPosting(db, await job()))?.scoreDetails, null, 'not scored yet');
   store.close();
 });

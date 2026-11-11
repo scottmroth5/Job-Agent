@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -12,35 +13,35 @@ const now = new Date('2026-10-05T12:00:00Z');
 function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const job = (o = {}) =>
+  const job = async (o = {}) =>
     Number(
-      db
+      (await asEngine(db)
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, created_at, updated_at)
           VALUES (1, @k, @company, @title, @k, @source, @track, @found, 'pipeline', @status, @applied, 'x', 'x')`)
-        .run({ k: `k${Math.random()}`, company: 'Example Co', title: 'CTO', source: 'LinkedIn', track: 'fulltime', found: '2026-09-01', status: 'applied', applied: null, ...o }).lastInsertRowid,
+        .run({ k: `k${Math.random()}`, company: 'Example Co', title: 'CTO', source: 'LinkedIn', track: 'fulltime', found: '2026-09-01', status: 'applied', applied: null, ...o })).id,
     );
   /** @param {number} id @param {string} to @param {string} at @param {string} [by] */
-  const history = (id, to, at, by = 'user') => db.prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, ?, ?, ?)').run(id, to, by, `${at}T10:00:00Z`);
+  const history = async (id, to, at, by = 'user') => await asEngine(db).prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, ?, ?, ?)').run(id, to, by, `${at}T10:00:00Z`);
   /** @param {number} id @param {string} type @param {string} at @param {string} [review] */
-  const email = (id, type, at, review = 'auto') =>
-    db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, type, posting_id, review_status, created_at, updated_at)
+  const email = async (id, type, at, review = 'auto') =>
+    await asEngine(db).prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, type, posting_id, review_status, created_at, updated_at)
       VALUES (1, ?, ?, 't', 'x@example.com', 'example.com', ?, ?, ?, ?, 'x', 'x')`).run(randomUUID(), randomUUID(), `${at}T09:00:00Z`, type, id, review);
   return { store, db, job, history, email };
 }
 
 test('milestones: a response email, an interview by status, a rejection, and a confirmation that is not a response', async () => {
   const { store, db, job, history, email } = setup();
-  const byEmail = job({ applied: '2026-09-01' });
-  email(byEmail, 'confirmation', '2026-09-01');
-  email(byEmail, 'follow_up', '2026-09-05');
-  const byStatus = job({ applied: '2026-09-10', status: 'interviewing' });
-  history(byStatus, 'interviewing', '2026-09-20');
-  const rejected = job({ applied: '2026-09-02', status: 'rejected' });
-  history(rejected, 'rejected', '2026-09-12');
-  const ackOnly = job({ applied: '2026-09-03' });
-  email(ackOnly, 'confirmation', '2026-09-03');
-  email(ackOnly, 'interview_request', '2026-09-04', 'needs_review');
-  job({ status: 'new' }); // not applied
+  const byEmail = await job({ applied: '2026-09-01' });
+  await email(byEmail, 'confirmation', '2026-09-01');
+  await email(byEmail, 'follow_up', '2026-09-05');
+  const byStatus = await job({ applied: '2026-09-10', status: 'interviewing' });
+  await history(byStatus, 'interviewing', '2026-09-20');
+  const rejected = await job({ applied: '2026-09-02', status: 'rejected' });
+  await history(rejected, 'rejected', '2026-09-12');
+  const ackOnly = await job({ applied: '2026-09-03' });
+  await email(ackOnly, 'confirmation', '2026-09-03');
+  await email(ackOnly, 'interview_request', '2026-09-04', 'needs_review');
+  await job({ status: 'new' }); // not applied
 
   const apps = Object.fromEntries((await applications(db, { now })).map((a) => [a.id, a]));
   assert.equal(Object.keys(apps).length, 4);
@@ -60,10 +61,10 @@ test('milestones: a response email, an interview by status, a rejection, and a c
 test('an added status in the In conversation group counts as an interview; imported history counts but is not timed', async () => {
   const { store, db, job, history } = setup();
   await addValue(db, 'status', { label: 'Phone screen', group: 'conversation' });
-  const screen = job({ applied: '2026-09-01', status: 'phone_screen' });
-  history(screen, 'phone_screen', '2026-09-08');
-  const imported = job({ applied: '2026-08-01', status: 'offer' });
-  history(imported, 'offer', '2026-09-30', 'import');
+  const screen = await job({ applied: '2026-09-01', status: 'phone_screen' });
+  await history(screen, 'phone_screen', '2026-09-08');
+  const imported = await job({ applied: '2026-08-01', status: 'offer' });
+  await history(imported, 'offer', '2026-09-30', 'import');
   const f = await funnel(db, { now });
   assert.deepEqual([f.totals.interview, f.totals.offer], [1, 1]);
   assert.deepEqual([f.medians.daysToInterview, f.medians.interviewSamples], [7, 1]);
@@ -73,12 +74,12 @@ test('an added status in the In conversation group counts as an interview; impor
 
 test('filters, by-source results, weekly counts, and the follow-up list', async () => {
   const { store, db, job, email } = setup();
-  const old = job({ applied: '2026-06-01', source: 'Himalayas' });
-  const recent = job({ applied: '2026-09-28', source: 'Himalayas' });
-  email(recent, 'interview_request', '2026-09-30');
-  const stale = job({ applied: '2026-09-15', source: 'LinkedIn' });
-  job({ applied: '2026-09-29', source: 'manual', track: 'fractional' });
-  job({ applied: '2026-09-29', source: 'Manual', track: 'fractional', status: 'new' });
+  const old = await job({ applied: '2026-06-01', source: 'Himalayas' });
+  const recent = await job({ applied: '2026-09-28', source: 'Himalayas' });
+  await email(recent, 'interview_request', '2026-09-30');
+  const stale = await job({ applied: '2026-09-15', source: 'LinkedIn' });
+  await job({ applied: '2026-09-29', source: 'manual', track: 'fractional' });
+  await job({ applied: '2026-09-29', source: 'Manual', track: 'fractional', status: 'new' });
 
   assert.equal((await funnel(db, { now })).totals.applied, 5);
   assert.equal((await funnel(db, { now, days: 30 })).totals.applied, 4);
@@ -101,8 +102,8 @@ test('filters, by-source results, weekly counts, and the follow-up list', async 
 test('GET /api/funnel applies the window and track, and rejects bad values', async () => {
   const { buildApp } = await import('../server/app.ts');
   const { store, job } = setup();
-  job({ applied: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10) });
-  job({ applied: '2025-01-01' });
+  await job({ applied: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10) });
+  await job({ applied: '2025-01-01' });
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   assert.equal((await app.inject('/api/funnel?days=all')).json().totals.applied, 2);
   assert.equal((await app.inject('/api/funnel?days=30')).json().totals.applied, 1);

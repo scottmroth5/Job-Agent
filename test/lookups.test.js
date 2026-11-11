@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -82,7 +83,7 @@ test('archiving: allowed for any value except one holding a role; archived value
 test('usage counts per value', async () => {
   const store = openJobStore(':memory:');
   const { db } = store;
-  db.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
+  await asEngine(db).prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
     VALUES (1, 'a', 'Example Co', 'CTO', 'k', '2026-10-01', 'x', 'x'), (1, 'b', 'Example Co', 'VP', 'k2', '2026-10-01', 'x', 'x')`).run();
   assert.deepEqual(await usageCounts(db, 'status'), { new: 2 });
   store.close();

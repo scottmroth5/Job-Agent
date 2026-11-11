@@ -1,5 +1,6 @@
 // The cover letter fact check in the job panel and after generation (server/letter-routes.ts, agents/letter-checks.ts,
 // agents/hunt/generate.ts). Synthetic data; Claude is a stand-in.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -22,10 +23,10 @@ async function setup({ fail = false } = {}) {
   const store = openJobStore(':memory:');
   const { db } = store;
   const id = Number(
-    db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x')`).run().lastInsertRowid,
+    (await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x')`).run()).id,
   );
-  const v1 = Number(db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', '2026-10-02T12:00:00Z')").run(id, LETTER).lastInsertRowid);
+  const v1 = Number((await asEngine(db).prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', '2026-10-02T12:00:00Z')").run(id, LETTER)).id);
   /** @type {SendOptions[]} */
   const sent = [];
   const claude = fakeClaude(async (opts) => {
@@ -64,7 +65,7 @@ test('a failed check answers "failed", keeps the letter, and restoring a version
   const r = await post(failing.app, `/api/postings/${failing.id}/letters/${failing.v1}/check`);
   assert.equal(r.statusCode, 200);
   assert.deepEqual([r.json().status, r.json().claims], ['failed', []]);
-  assert.equal(failing.db.prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid').pluck().get(failing.v1), LETTER);
+  assert.equal(await asEngine(failing.db).prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid').pluck().get(failing.v1), LETTER);
   await failing.app.close();
 
   const { app, id, v1 } = await setup();
@@ -90,10 +91,10 @@ test('writing a letter checks it, and a failed check still keeps the letter', as
     const store = openJobStore(':memory:');
     const { db } = store;
     const id = Number(
-      db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-        VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x')`).run().lastInsertRowid,
+      (await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+        VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x')`).run()).id,
     );
-    db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, 8, ?, 'v2', 'x')").run(id, JSON.stringify({ score: 8, reason: 'Fit', strengths: [], watchOuts: [], topTalkingPoint: 'Growth' }));
+    await asEngine(db).prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, 8, ?, 'v2', 'x')").run(id, JSON.stringify({ score: 8, reason: 'Fit', strengths: [], watchOuts: [], topTalkingPoint: 'Growth' }));
     const claude = fakeClaude(async (opts) => {
         if (opts.label === 'letter-check') {
           if (fail) throw new Error('down');
@@ -107,7 +108,7 @@ test('writing a letter checks it, and a failed check still keeps the letter', as
     const s = await generateForPostings({ store, config, claude, knowledge: 'Background. '.repeat(60), drive: null, run, options: { ids: [id] } });
     assert.equal(s.letters, 1);
     assert.equal(s.failures.length, 0);
-    const status = db.prepare("SELECT c.status FROM letter_checks c JOIN artifacts a ON a.id = c.artifact_id WHERE a.posting_id = ? AND c.user_id = @uid").pluck().get(id);
+    const status = await asEngine(db).prepare("SELECT c.status FROM letter_checks c JOIN artifacts a ON a.id = c.artifact_id WHERE a.posting_id = ? AND c.user_id = @uid").pluck().get(id);
     assert.equal(status, fail ? 'failed' : 'checked');
     assert.deepEqual([s.checked, s.claimFlags], fail ? [0, 0] : [1, 2]);
     assert.ok(lines.every((l) => !l.includes('PMP')), 'logs hold counts only');

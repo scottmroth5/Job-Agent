@@ -1,5 +1,6 @@
 // Multi-user, phase 3: each user's own search settings, background, pipeline, and schedule. Made-up accounts and
 // settings; nothing reaches the network (the pipeline is faked, and the script check stops before any search).
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -128,7 +129,7 @@ test('Settings: a user saves their search, background, and schedule; the owner i
     assert.ok(!body.includes('Owner Term') && !body.includes('owner knowledge') && !body.includes('owner-only pattern'), url);
   }
   // A paused user's pipeline is off the schedule.
-  store.raw.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(b);
+  await asEngine(store.raw).prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(b);
   assert.deepEqual(await scheduledUsers(store.raw), []);
   await setScheduledForUser(store.raw, b, false);
   await done();

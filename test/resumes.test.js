@@ -1,5 +1,6 @@
 // Resumes (agents/resumes.ts, server/resume-routes.ts): upload, label and match titles, default, replace, delete,
 // download your own only, and the right one reaching each job's letter and tweaks. Synthetic files and data only.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -78,21 +79,21 @@ test("each job's letter and tweaks are written from its resume, and the artifact
   assert.ok(exec);
   await updateResume(db, exec.id, { titles: 'VP' });
   await addResume(db, { bytes: text('IC-MARKER'), filename: 'ic.txt' });
-  const job = (/** @type {string} */ title) => {
+  const job = async (/** @type {string} */ title) => {
     const url = `https://jobs.example.com/${Math.random()}`;
     const id = Number(
-      db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-        VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', 'new', 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url).lastInsertRowid,
+      (await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+        VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', 'new', 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url)).id,
     );
-    db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, 8, ?, 'v2', 'x')").run(id, JSON.stringify({ score: 8, reason: 'r', strengths: [], watchOuts: [] }));
+    await asEngine(db).prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, 8, ?, 'v2', 'x')").run(id, JSON.stringify({ score: 8, reason: 'r', strengths: [], watchOuts: [] }));
     return id;
   };
-  const vp = job('VP Engineering');
+  const vp = await job('VP Engineering');
   const { systems, claude } = fakeClaude();
   await generateForPostings({ store, config: fakeConfig({ candidate: { name: 'Pat Example' }, coverLetterChecks: [] }), claude, knowledge: 'Background text.', drive: null, options: { ids: [vp] } });
   assert.equal(systems.length, 3, 'tweaks, a letter, and its fact check, all from the resume');
   for (const s of systems) assert.ok(s.includes('EXEC-MARKER') && !s.includes('IC-MARKER') && s.includes('Background text.'));
-  const used = db.prepare('SELECT DISTINCT resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid').pluck().all(vp);
+  const used = await asEngine(db).prepare('SELECT DISTINCT resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid').pluck().all(vp);
   assert.deepEqual(used, [exec.id]);
   store.close();
 });

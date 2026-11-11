@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -16,12 +17,12 @@ import { fakeConfig } from './fixtures/fakes.js';
 function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const add = (o = {}) =>
+  const add = async (o = {}) =>
     Number(
-      db
+      (await asEngine(db)
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, track, fetch_status, created_at, updated_at)
           VALUES (1, @k, 'Example Co', @title, @k, @on, @stage, @status, @track, 'ok', 'x', 'x')`)
-        .run({ k: `k${Math.random()}`, title: 'CTO', on: '2026-01-01', stage: 'pipeline', status: 'new', track: 'fulltime', ...o }).lastInsertRowid,
+        .run({ k: `k${Math.random()}`, title: 'CTO', on: '2026-01-01', stage: 'pipeline', status: 'new', track: 'fulltime', ...o })).id,
     );
   return { store, db, add };
 }
@@ -31,9 +32,9 @@ test('an added status behaves like the built-in ones in its group', async () => 
   await addValue(db, 'status', { label: 'Phone screen', group: 'conversation' });
   await addValue(db, 'status', { label: 'Ghosted', group: 'closed' });
   await addValue(db, 'status', { label: 'Referred', group: 'waiting' });
-  const screen = add({ status: 'phone_screen' });
-  const ghosted = add({ status: 'ghosted' });
-  const referred = add({ status: 'referred' });
+  const screen = await add({ status: 'phone_screen' });
+  const ghosted = await add({ status: 'ghosted' });
+  const referred = await add({ status: 'referred' });
 
   assert.deepEqual((await listPostings(db, { status: 'progress' })).map((r) => r.id).sort(), [screen, referred].sort());
   assert.deepEqual(await listPostings(db, { status: 'active' }), []);
@@ -47,15 +48,15 @@ test('an added status behaves like the built-in ones in its group', async () => 
   assert.match(String(planStatus('phone_screen', 'interview_request', lk).review), /backward/);
   assert.deepEqual(planStatus('referred', 'interview_request', lk), { change: { from: 'referred', to: 'interviewing' } });
   assert.match(String(planStatus('ghosted', 'offer', lk).review), /reopen/);
-  await updatePosting(db, add({ status: 'new' }), { status: 'referred' });
-  assert.ok(db.prepare("SELECT applied_on FROM postings WHERE status = 'referred' AND applied_on IS NOT NULL").get(), 'a waiting status sets the applied date');
+  await updatePosting(db, await add({ status: 'new' }), { status: 'referred' });
+  assert.ok(await asEngine(db).prepare("SELECT applied_on FROM postings WHERE status = 'referred' AND applied_on IS NOT NULL").get(), 'a waiting status sets the applied date');
   store.close();
 });
 
 test('an archived inbox target sends the email to review instead of setting it', async () => {
   const { store, db } = setup();
   // Archived before 023 gave it a role (the migration keeps such a value as the role's).
-  store.raw.prepare("UPDATE lookup_values SET archived_at = 'x' WHERE list = 'status' AND id = 'interviewing'").run();
+  await asEngine(store.raw).prepare("UPDATE lookup_values SET archived_at = 'x' WHERE list = 'status' AND id = 'interviewing'").run();
   invalidateLookups(db);
   assert.match(String(planStatus('applied', 'interview_request', await lookups(db)).review), /"Interviewing" status is archived/);
   store.close();
@@ -71,16 +72,16 @@ test('status roles: the inbox, duplicates, cleanup, and the funnel use the value
   assert.deepEqual(planStatus('moved_forward', 'rejection', lk), { change: { from: 'moved_forward', to: 'turned_down' } });
   assert.match(String(planStatus('offer', 'rejection', lk).review), /after an offer/);
 
-  const keep = add();
-  const copy = add();
+  const keep = await add();
+  const copy = await add();
   await updatePosting(db, copy, { duplicateOf: keep });
-  assert.equal(db.prepare('SELECT status FROM postings WHERE id = ?').pluck().get(copy), 'same_job');
-  const live = db.prepare(`SELECT id FROM postings q WHERE user_id = @uid AND ${await liveCopySql(db)}`).pluck().all();
+  assert.equal(await asEngine(db).prepare('SELECT status FROM postings WHERE id = ?').pluck().get(copy), 'same_job');
+  const live = await asEngine(db).prepare(`SELECT id FROM postings q WHERE user_id = @uid AND ${await liveCopySql(db)}`).pluck().all();
   assert.ok(live.includes(keep) && !live.includes(copy), 'a copy closed with the duplicate role is not a live copy');
 
-  const turned = add({ status: 'turned_down' });
-  const old = add({ status: 'rejected' });
-  db.prepare("UPDATE postings SET applied_on = '2026-09-01' WHERE id IN (?, ?) AND user_id = @uid").run(turned, old);
+  const turned = await add({ status: 'turned_down' });
+  const old = await add({ status: 'rejected' });
+  await asEngine(db).prepare("UPDATE postings SET applied_on = '2026-09-01' WHERE id IN (?, ?) AND user_id = @uid").run(turned, old);
   const apps = Object.fromEntries((await applications(db, { now: new Date('2026-10-05') })).map((a) => [a.id, a]));
   assert.equal(apps[turned].rejected.reached, true, "the role's value counts as rejected");
   assert.equal(apps[old].rejected.reached, false, 'the value the role left does not');
@@ -92,11 +93,11 @@ test('stages: an added active stage counts as pipeline; promotion and archiving 
   await addValue(db, 'stage', { label: 'Shortlist', group: 'active' });
   await addValue(db, 'stage', { label: 'Cold storage', group: 'archived' });
   await setRole(db, 'stage', 'archive', 'cold_storage');
-  const a = add({ stage: 'shortlist', status: 'passed' });
-  add({ stage: 'pipeline', status: 'applied', on: '2026-10-01' });
+  const a = await add({ stage: 'shortlist', status: 'passed' });
+  await add({ stage: 'pipeline', status: 'applied', on: '2026-10-01' });
   assert.equal((await summary(db)).pipeline, 2);
   await archivePostings(db, { now: new Date('2026-10-05') });
-  assert.equal(db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(a), 'cold_storage');
+  assert.equal(await asEngine(db).prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(a), 'cold_storage');
   store.close();
 });
 

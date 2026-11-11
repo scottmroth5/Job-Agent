@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readdirSync, existsSync } from 'node:fs';
@@ -12,10 +13,10 @@ import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 async function setup() {
   const store = openJobStore(':memory:');
   const job = Number(
-    store.db
+    (await asEngine(store.db)
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
         VALUES (1, 'k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'applied', 'x', 'x')`)
-      .run().lastInsertRowid,
+      .run()).id,
   );
   const dir = mkdtempSync(join(tmpdir(), 'attach-'));
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null, attachmentsDir: dir }) });

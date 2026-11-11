@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
@@ -59,7 +60,7 @@ test('a pasted fractional job is saved, scored, promoted, and gets materials; ad
   assert.equal(result.created, true);
   assert.deepEqual([result.score, result.promoted], [8, true]);
   assert.deepEqual(labels, ['score', 'writing', 'writing', 'score'], 'score, tweaks, letter, then the fact check (structured, like a score)');
-  const row = store.db.prepare('SELECT source, track, stage, jd_text IS NOT NULL AS pasted, rate_unit, hours_max, notes FROM postings WHERE id = ?').get(result.id);
+  const row = await asEngine(store.db).prepare('SELECT source, track, stage, jd_text IS NOT NULL AS pasted, rate_unit, hours_max, notes FROM postings WHERE id = ?').get(result.id);
   assert.deepEqual(row, { source: 'manual', track: 'fractional', stage: 'pipeline', pasted: 1, rate_unit: 'hour', hours_max: 15, notes: 'Referred by a friend' });
   assert.ok(steps.some((s) => /Scored 8 of 10, moved to your pipeline/.test(s)));
   assert.ok(steps.some((s) => /Cover letter saved as a Google Doc/.test(s)));
@@ -81,11 +82,11 @@ test('a low score writes no materials unless asked; an explicit track wins', asy
   const { claude, labels } = fakeClaude(5);
   const r1 = await addPosting({ title: 'VP Engineering', company: 'Example Co', description: DESCRIPTION, track: 'fulltime' }, ctx(store, claude));
   assert.deepEqual([r1.promoted, r1.materials], [false, null]);
-  assert.equal(store.db.prepare('SELECT track FROM postings WHERE id = ?').pluck().get(r1.id), 'fulltime');
+  assert.equal(await asEngine(store.db).prepare('SELECT track FROM postings WHERE id = ?').pluck().get(r1.id), 'fulltime');
 
   const r2 = await addPosting({ title: 'CTO', company: 'Other Co', description: DESCRIPTION, writeMaterials: true }, ctx(store, claude));
   assert.equal(r2.materials?.letters, 1);
-  assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(r2.id), 'pipeline');
+  assert.equal(await asEngine(store.db).prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(r2.id), 'pipeline');
   assert.equal(labels.filter((l) => l === 'writing').length, 2);
   store.close();
 });
@@ -107,6 +108,6 @@ test('a link that cannot be read and has no title fails with a clear message', a
   const store = openJobStore(':memory:');
   const { claude } = fakeClaude(5);
   await assert.rejects(addPosting({ url: 'https://jobs.example.com/unknown' }, ctx(store, claude)), /Couldn't read the job title or company/);
-  assert.equal(store.db.prepare('SELECT COUNT(*) FROM postings').pluck().get(), 0);
+  assert.equal(await asEngine(store.db).prepare('SELECT COUNT(*) FROM postings').pluck().get(), 0);
   store.close();
 });

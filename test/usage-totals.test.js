@@ -1,6 +1,7 @@
 // The admin's device, location, and source totals (server/usage-totals.ts, usage_totals): counted once per account per
 // day for visits, per page arrival for sources, with nothing that leads back to a person. Made-up accounts, addresses
 // (documentation ranges), and hosts; a fake location lookup; no network.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -71,19 +72,19 @@ test('browser and major version: a fixed name and a number, or Other', () => {
   for (const ua of Object.values(UA)) assert.match(b(ua), /^(?:(?:Edge|Opera|Samsung Internet|Firefox|Chrome|Safari) \d{1,3}|Other)$/);
 });
 
-test('migration 021 adds the browser dimension and keeps the totals already counted', () => {
+test('migration 021 adds the browser dimension and keeps the totals already counted', async () => {
   const db = new Database(':memory:');
   db.exec(readFileSync('db/migrations/020-usage-totals.sql', 'utf8'));
-  db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'device', 'phone', 3), ('2026-11-02', 'source', 'linkedin', 2)").run();
-  assert.throws(() => db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run());
+  await asEngine(db).prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'device', 'phone', 3), ('2026-11-02', 'source', 'linkedin', 2)").run();
+  await assert.rejects(async () => await asEngine(db).prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run());
   usageBrowser.up(db);
-  db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run();
-  assert.deepEqual(db.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension').all(), [
+  await asEngine(db).prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run();
+  assert.deepEqual(await asEngine(db).prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension').all(), [
     { dimension: 'browser', value: 'Chrome 130', count: 1 },
     { dimension: 'device', value: 'phone', count: 3 },
     { dimension: 'source', value: 'linkedin', count: 2 },
   ]);
-  assert.throws(() => db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'user', '1', 1)").run());
+  await assert.rejects(async () => await asEngine(db).prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'user', '1', 1)").run());
   assert.equal(usageBrowser.foreignKeys, false);
   db.close();
 });
@@ -157,7 +158,7 @@ async function setup({ authMode = 'google' } = {}) {
   /** @param {string} url @param {{ as?: string | null, ip?: string, ua?: string | null, headers?: Record<string, string> }} [o] */
   const get = (url, { as = OWNER, ip = '203.0.113.7', ua = UA.windows, headers = {} } = {}) =>
     app.inject({ url, remoteAddress: ip, headers: { ...(as ? { cookie: cookie(as) } : {}), ...(ua ? { 'user-agent': ua } : {}), origin: SITE, ...headers } });
-  const totals = () => /** @type {Total[]} */ (store.raw.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension, value').all());
+  const totals = async () => /** @type {Total[]} */ (await asEngine(store.raw).prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension, value').all());
   return { app, store, sam, get, totals };
 }
 
@@ -169,7 +170,7 @@ test('a visit counts once per account per day, by device, browser, and location'
   assert.equal((await get('/api/me')).statusCode, 200);
   await get('/api/me');
   await get('/api/summary');
-  assert.deepEqual(totals(), [
+  assert.deepEqual(await totals(), [
     { dimension: 'browser', value: 'Chrome 130', count: 1 },
     { dimension: 'device', value: 'computer', count: 1 },
     { dimension: 'location', value: 'Springfield, Illinois, United States', count: 1 },
@@ -177,7 +178,7 @@ test('a visit counts once per account per day, by device, browser, and location'
   // A second account counts again; a lookup that misses or breaks is unknown.
   await get('/api/me', { as: 'sam@example.com', ip: '198.51.100.66', ua: UA.iphone });
   await get('/api/me', { as: 'sam@example.com', ip: '198.51.100.66', ua: UA.iphone });
-  assert.deepEqual(totals(), [
+  assert.deepEqual(await totals(), [
     { dimension: 'browser', value: 'Chrome 130', count: 1 },
     { dimension: 'browser', value: 'Safari 18', count: 1 },
     { dimension: 'device', value: 'computer', count: 1 },
@@ -198,41 +199,41 @@ test('nothing counts for health checks, assets, signed-out or refused calls, scr
   await get('/api/me', { ua: 'curl/8.5.0' }); // a script
   assert.equal((await get('/assets/app.js', { as: 'sam@example.com' })).statusCode, 200); // a static file
   await get('/api/me', { as: 'nobody@example.com' }); // no account: refused
-  assert.deepEqual(totals(), []);
+  assert.deepEqual(await totals(), []);
   await app.close();
   store.close();
 
   const demo = await setup({ authMode: 'demo' });
   await demo.get('/api/me', { as: null, headers: page('https://www.linkedin.com/') });
   await demo.get('/', { as: null, headers: page('https://www.linkedin.com/') });
-  assert.deepEqual(demo.totals(), []);
+  assert.deepEqual(await demo.totals(), []);
   await demo.app.close();
   demo.store.close();
 });
 
 test('arrivals: page loads of the app or a direct sign-in link, by source; never sign-in returns or internal moves', async () => {
   const { app, store, get, totals } = await setup();
-  const sources = () => totals().filter((r) => r.dimension === 'source').map(({ value, count }) => [value, count]);
+  const sources = async () => (await totals()).filter((r) => r.dimension === 'source').map(({ value, count }) => [value, count]);
 
   // Signed out from LinkedIn: / redirects to sign-in, counted once; the sign-in step after it is not counted again.
   const first = await get('/?utm_source=evil', { as: null, headers: page('https://www.linkedin.com/feed/') });
   assert.equal(first.statusCode, 302);
   await get(/** @type {string} */ (first.headers.location), { as: null, headers: page('https://www.linkedin.com/feed/') });
-  assert.deepEqual(sources(), [['linkedin', 1]]);
+  assert.deepEqual(await sources(), [['linkedin', 1]]);
   // Back from Google's sign-in to the main page: not a source.
   await get('/?utm_source=evil', { headers: page('https://accounts.google.com/') });
   // Internal navigation, and API calls and assets with an outside Referer: not arrivals.
   await get('/', { headers: page(`${SITE}/auth/signed-out`) });
   await get('/api/me', { headers: { referer: 'https://github.com/' } });
   await get('/assets/app.js', { headers: { 'sec-fetch-dest': 'script', referer: 'https://github.com/' } });
-  assert.deepEqual(sources(), [['linkedin', 1]]);
+  assert.deepEqual(await sources(), [['linkedin', 1]]);
   // A direct sign-in link, the demo by utm, a lookalike, and no Referer.
   await get('/auth/login', { as: null, headers: page('https://github.com/someone') });
   await get('/?utm_source=demo', { headers: page() });
   await get('/', { headers: page('https://linkedin.com.example.com/') });
   await get('/', { headers: page() });
   await get('/', { headers: { accept: 'text/html', referer: 'https://blog.example.org/' } }); // no Sec-Fetch-Dest: Accept decides
-  assert.deepEqual(sources(), [['demo', 1], ['direct', 1], ['github', 1], ['linkedin', 1], ['other', 1], ['site', 1]]);
+  assert.deepEqual(await sources(), [['demo', 1], ['direct', 1], ['github', 1], ['linkedin', 1], ['other', 1], ['site', 1]]);
   await app.close();
   store.close();
 });
@@ -242,12 +243,12 @@ test('the table holds no address, browser string, referrer, URL, or user id, and
   const referer = 'https://www.linkedin.com/in/someone-private';
   await get('/?utm_source=linkedin&secret=1', { headers: page(referer) });
   await get('/api/me', { as: 'sam@example.com', ua: UA.ipad });
-  assert.deepEqual(store.raw.prepare('SELECT name FROM pragma_table_info(?) ORDER BY cid').pluck().all('usage_totals'), ['day', 'dimension', 'value', 'count']);
-  const text = JSON.stringify(store.raw.prepare('SELECT * FROM usage_totals').all());
+  assert.deepEqual(await asEngine(store.raw).prepare('SELECT name FROM pragma_table_info(?) ORDER BY cid').pluck().all('usage_totals'), ['day', 'dimension', 'value', 'count']);
+  const text = JSON.stringify(await asEngine(store.raw).prepare('SELECT * FROM usage_totals').all());
   for (const leak of ['203.0.113', 'Mozilla', 'iPad;', 'someone-private', 'secret', 'utm_source', 'sam@example.com', OWNER]) assert.ok(!text.includes(leak), leak);
-  for (const row of totals()) assert.ok(['device', 'browser', 'location', 'source'].includes(row.dimension));
+  for (const row of await totals()) assert.ok(['device', 'browser', 'location', 'source'].includes(row.dimension));
   assert.ok(!text.includes('605.1.15') && !text.includes('AppleWebKit'), 'no user agent text');
-  assert.ok(!totals().some((r) => r.value === String(sam)));
+  assert.ok(!(await totals()).some((r) => r.value === String(sam)));
   assert.ok(!USER_TABLES.includes('usage_totals'));
 
   // The admin sees the totals for the period, each dimension on its own; a member gets 403.
@@ -262,9 +263,9 @@ test('the table holds no address, browser string, referrer, URL, or user id, and
 
   // Not anyone's data: an account's export leaves it out, and deleting the account leaves the totals as they were.
   assert.ok(!JSON.stringify(await exportAccount(store.raw, sam)).includes('usage_totals'));
-  const before = totals();
+  const before = await totals();
   await deleteAccount(store.raw, sam);
-  assert.deepEqual(totals(), before);
+  assert.deepEqual(await totals(), before);
   await app.close();
   store.close();
 });

@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
@@ -56,7 +57,7 @@ test('scoring uses the active edited prompt and records its version', async () =
   const { db } = store;
   const marker = 'EDITED-PROMPT-MARKER';
   const custom = await savePrompt(db, 'score', { template: `${(await getPrompt(db, 'score')).template}\n${marker}` });
-  db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, fetch_status, fetched_text, location, location_check, discovered_on, created_at, updated_at)
+  await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, fetch_status, fetched_text, location, location_check, discovered_on, created_at, updated_at)
     VALUES (1, 'u', 'u', 'Example Co', 'CTO', 'k', 'ok', 'Lead the team.', 'Remote', 'remote', '2026-09-30', 'x', 'x')`).run();
   /** @type {string[]} */
   const seen = [];
@@ -72,6 +73,6 @@ test('scoring uses the active edited prompt and records its version', async () =
   const config = fakeConfig({ candidate: { name: 'Pat Example' }, search: { homeAreaLabel: 'the Anytown area', homeLocations: [] } });
   await scorePostings({ store, config, claude: createClaude({ client }), knowledge: 'Section 5. '.repeat(60), model: 'claude-haiku-4-5' });
   assert.ok(seen[0].includes(marker));
-  assert.equal(db.prepare('SELECT prompt_version FROM scores').pluck().get(), custom.version);
+  assert.equal(await asEngine(db).prepare('SELECT prompt_version FROM scores').pluck().get(), custom.version);
   store.close();
 });

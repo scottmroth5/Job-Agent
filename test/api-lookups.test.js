@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -11,10 +12,10 @@ import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 async function setup() {
   const store = openJobStore(':memory:');
   const job = Number(
-    store.db
+    (await asEngine(store.db)
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
         VALUES (1, 'k1', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'applied', 'x', 'x')`)
-      .run().lastInsertRowid,
+      .run()).id,
   );
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: { weeksPerYear: 48 } }), services: fakeServices({ createBrowser: async () => null }) });
   return { store, app, job };

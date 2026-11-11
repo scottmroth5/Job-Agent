@@ -1,4 +1,5 @@
 // Encrypted backups. Synthetic data only; Google Drive is faked, nothing touches the network.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -136,7 +137,7 @@ test('restore: the database, settings, and attachments come back identical; noth
   const out = join(outDir, 'job-agent.db');
   const res = restoreBackup({ file: readFileSync(r.savedTo), passphrase: PASS, outPath: out });
   const restored = new Database(out, { readonly: true });
-  assert.deepEqual(/** @type {Array<{ v: string }>} */ (restored.prepare('SELECT v FROM t ORDER BY id').all()).map((x) => x.v), ['synthetic a', 'synthetic b']);
+  assert.deepEqual(/** @type {Array<{ v: string }>} */ (await asEngine(restored).prepare('SELECT v FROM t ORDER BY id').all()).map((x) => x.v), ['synthetic a', 'synthetic b']);
   restored.close();
   assert.equal(res.files, 3);
   assert.equal(readFileSync(join(outDir, 'restored', 'attachments', '7', 'aaaa'), 'utf8'), '%PDF-1.4 synthetic resume');

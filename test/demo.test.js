@@ -1,5 +1,6 @@
 // The public demo (AUTH_MODE=demo): read-only for every route, open without sign-in, its sample database, and the
 // guards that keep the seed script away from a real job search. Sample data only; no network.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
@@ -57,26 +58,26 @@ test('the seed builds a full sample search: jobs in every stage, scores, letters
   assert.equal(counts.postings, JOBS.length);
   assert.ok(counts.runs > 10);
   const store = openJobStore(dbPath);
-  const one = (/** @type {string} */ sql) => /** @type {number} */ (store.db.prepare(sql).pluck().get());
-  assert.ok(one("SELECT COUNT(*) FROM postings WHERE stage = 'pipeline'") >= 10);
-  assert.ok(one("SELECT COUNT(*) FROM postings WHERE stage = 'discovered'") >= 5);
-  assert.ok(one("SELECT COUNT(*) FROM postings WHERE stage = 'archived'") >= 5);
-  assert.equal(one('SELECT COUNT(*) FROM postings p WHERE NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id)'), 0);
-  assert.ok(one("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'") >= 10);
-  assert.equal(one("SELECT COUNT(*) FROM emails WHERE review_status = 'needs_review'"), 1);
-  assert.equal(one('SELECT COUNT(*) FROM meeting_preps'), 3, 'two interviews and the Arbor case');
+  const one = async (/** @type {string} */ sql) => /** @type {number} */ (await asEngine(store.db).prepare(sql).pluck().get());
+  assert.ok(await one("SELECT COUNT(*) FROM postings WHERE stage = 'pipeline'") >= 10);
+  assert.ok(await one("SELECT COUNT(*) FROM postings WHERE stage = 'discovered'") >= 5);
+  assert.ok(await one("SELECT COUNT(*) FROM postings WHERE stage = 'archived'") >= 5);
+  assert.equal(await one('SELECT COUNT(*) FROM postings p WHERE NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id)'), 0);
+  assert.ok(await one("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'") >= 10);
+  assert.equal(await one("SELECT COUNT(*) FROM emails WHERE review_status = 'needs_review'"), 1);
+  assert.equal(await one('SELECT COUNT(*) FROM meeting_preps'), 3, 'two interviews and the Arbor case');
   // No watch-out contradicts its job's location (the review's Yarrow finding): a location watch-out only on a job that has it.
-  const rows = /** @type {Array<{ workplace: string, analysis_json: string }>} */ (store.db.prepare("SELECT p.workplace, s.analysis_json FROM scores s JOIN postings p ON p.id = s.posting_id WHERE s.user_id = @uid").all());
+  const rows = /** @type {Array<{ workplace: string, analysis_json: string }>} */ (await asEngine(store.db).prepare("SELECT p.workplace, s.analysis_json FROM scores s JOIN postings p ON p.id = s.posting_id WHERE s.user_id = @uid").all());
   for (const r of rows) {
     /** @type {string[]} */
     const watch = JSON.parse(r.analysis_json).watchOuts ?? [];
     if (r.workplace !== 'hybrid') assert.ok(!watch.some((w) => /hybrid/i.test(w)), 'no hybrid watch-out on a ' + r.workplace + ' job');
     if (r.workplace !== 'onsite') assert.ok(!watch.some((w) => /onsite/i.test(w)), 'no onsite watch-out on a ' + r.workplace + ' job');
   }
-  assert.equal(one('SELECT COUNT(*) FROM prompt_versions WHERE active = 1'), 2, 'the two sample prompt edits');
+  assert.equal(await one('SELECT COUNT(*) FROM prompt_versions WHERE active = 1'), 2, 'the two sample prompt edits');
   // Every address and link is on a reserved example domain.
-  for (const url of /** @type {string[]} */ (store.db.prepare('SELECT url FROM postings').pluck().all())) assert.match(url, /^https:\/\/jobs\.example\.com\//);
-  for (const s of /** @type {string[]} */ (store.db.prepare('SELECT sender_domain FROM emails').pluck().all())) assert.match(s, /example(-recruiting)?\.com$/);
+  for (const url of /** @type {string[]} */ (await asEngine(store.db).prepare('SELECT url FROM postings').pluck().all())) assert.match(url, /^https:\/\/jobs\.example\.com\//);
+  for (const s of /** @type {string[]} */ (await asEngine(store.db).prepare('SELECT sender_domain FROM emails').pluck().all())) assert.match(s, /example(-recruiting)?\.com$/);
   store.close();
   assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), DEMO_CONFIG);
 });
@@ -94,7 +95,7 @@ test('demo mode refuses every request that would change data, without sign-in, e
   const { dbPath } = await seeded();
   const { app, store } = await demoApp(dbPath);
   await app.ready();
-  const before = store.db.prepare('SELECT COUNT(*) FROM postings').pluck().get();
+  const before = await asEngine(store.db).prepare('SELECT COUNT(*) FROM postings').pluck().get();
   /** @type {string[]} */
   const writes = [];
   for (const r of app.routeList) {
@@ -114,7 +115,7 @@ test('demo mode refuses every request that would change data, without sign-in, e
   for (const must of ['PATCH /api/postings/:id', 'POST /api/postings', 'POST /api/pipeline/run', 'POST /api/inbox/check', 'PUT /api/prompts/:name', 'PUT /api/admin/budget', 'DELETE /api/notes/:id', 'POST /api/postings/:id/meeting-prep']) {
     assert.ok(writes.includes(must), `${must} was checked`);
   }
-  assert.equal(store.db.prepare('SELECT COUNT(*) FROM postings').pluck().get(), before);
+  assert.equal(await asEngine(store.db).prepare('SELECT COUNT(*) FROM postings').pluck().get(), before);
   await app.close();
   store.close();
 });
@@ -168,9 +169,9 @@ test('the demo caps every request per address, so a script cannot hammer the ser
 test("the demo's Find someone to contact is a canned sample: a read, no AI, nothing saved, and only in the demo", async () => {
   const { dbPath } = await seeded();
   const { app, store } = await demoApp(dbPath);
-  const job = /** @type {{ id: number, company: string, title: string }} */ (store.db.prepare('SELECT id, company, title FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').get());
-  const notes = () => store.db.prepare('SELECT COUNT(*) FROM posting_notes WHERE user_id = @uid').pluck().get();
-  const before = notes();
+  const job = /** @type {{ id: number, company: string, title: string }} */ (await asEngine(store.db).prepare('SELECT id, company, title FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').get());
+  const notes = async () => await asEngine(store.db).prepare('SELECT COUNT(*) FROM posting_notes WHERE user_id = @uid').pluck().get();
+  const before = await notes();
   const res = await app.inject(`/api/postings/${job.id}/find-contact/sample`);
   assert.equal(res.statusCode, 200);
   const { sample, markdown } = res.json();
@@ -179,7 +180,7 @@ test("the demo's Find someone to contact is a canned sample: a read, no AI, noth
   /** @type {string[]} */
   const hosts = markdown.split(/[\s()[\]]+/).filter((/** @type {string} */ w) => w.startsWith('http')).map((/** @type {string} */ u) => new URL(u).hostname);
   assert.ok(hosts.length > 0 && hosts.every((h) => h.endsWith('.example.com')), 'every link is an example.com page');
-  assert.equal(notes(), before, 'nothing saved');
+  assert.equal(await notes(), before, 'nothing saved');
   assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${job.id}/find-contact` })).statusCode, 403, 'the real search stays refused');
   assert.equal((await app.inject('/api/postings/99999/find-contact/sample')).statusCode, 404);
   await app.close();

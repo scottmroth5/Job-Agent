@@ -1,6 +1,7 @@
 // Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.ts): each user's own list with notes, added
 // to the settings file's search.excludedSites for everything that reads it; removing a site's saved jobs keeps the ones
 // you applied to. Synthetic data on example domains only.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -58,12 +59,12 @@ test("another user's sites from their saved search move into the list, and only 
 async function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const add = (/** @type {string} */ url, /** @type {string} */ status) =>
+  const add = async (/** @type {string} */ url, /** @type {string} */ status) =>
     Number(
-      db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
-        VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', ?, '2026-10-01', 'x', 'x')`).run(url, url, `Role ${status} ${url}`, `k ${url}`, status).lastInsertRowid,
+      (await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
+        VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', ?, '2026-10-01', 'x', 'x')`).run(url, url, `Role ${status} ${url}`, `k ${url}`, status)).id,
     );
-  const ids = { fresh: add('https://www.paywall.example/job/1', 'new'), applied: add('https://paywall.example/job/2', 'applied'), other: add('https://jobs.example.com/3', 'new') };
+  const ids = { fresh: await add('https://www.paywall.example/job/1', 'new'), applied: await add('https://paywall.example/job/2', 'applied'), other: await add('https://jobs.example.com/3', 'new') };
   const app = await buildApp({ store, config, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });
   return { store, db, app, ids };
 }
@@ -81,10 +82,10 @@ test('the routes: skip from a job link, count saved jobs, remove them (not the a
 
   const removed = await app.inject({ method: 'POST', url: '/api/excluded-sites/paywall.example/remove-jobs' });
   assert.equal(removed.json().removed, 1);
-  const status = (/** @type {number} */ id) => db.prepare('SELECT stage, status FROM postings WHERE id = ? AND user_id = @uid').get(id);
-  assert.deepEqual(status(ids.fresh), { stage: 'archived', status: 'passed' });
-  assert.deepEqual(status(ids.applied), { stage: 'pipeline', status: 'applied' }, 'a job you applied to is kept');
-  assert.deepEqual(status(ids.other), { stage: 'pipeline', status: 'new' });
+  const status = async (/** @type {number} */ id) => await asEngine(db).prepare('SELECT stage, status FROM postings WHERE id = ? AND user_id = @uid').get(id);
+  assert.deepEqual(await status(ids.fresh), { stage: 'archived', status: 'passed' });
+  assert.deepEqual(await status(ids.applied), { stage: 'pipeline', status: 'applied' }, 'a job you applied to is kept');
+  assert.deepEqual(await status(ids.other), { stage: 'pipeline', status: 'new' });
   assert.equal((await app.inject({ method: 'POST', url: '/api/excluded-sites/unlisted.example/remove-jobs' })).statusCode, 404);
 
   assert.equal((await app.inject({ method: 'PATCH', url: '/api/excluded-sites/paywall.example', payload: { note: 'Paywall I will never pay' } })).json().sites[0].note, 'Paywall I will never pay');

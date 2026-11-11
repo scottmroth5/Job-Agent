@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -6,7 +7,7 @@ import { openJobStore } from '../db/index.ts';
 const now = '2026-01-01T00:00:00.000Z';
 
 /** @param {Database} db @param {Record<string, string>} [overrides] */
-function insertPosting(db, overrides = {}) {
+async function insertPosting(db, overrides = {}) {
   const row = {
     url: 'https://example.com/jobs/1',
     url_key: 'example.com/jobs/1',
@@ -19,36 +20,36 @@ function insertPosting(db, overrides = {}) {
     ...overrides,
   };
   const cols = Object.keys(row);
-  return db
+  return (await asEngine(db)
     .prepare(`INSERT INTO postings (user_id, ${cols.join(', ')}) VALUES (1, ${cols.map(() => '?').join(', ')})`)
-    .run(...Object.values(row)).lastInsertRowid;
+    .run(...Object.values(row))).id;
 }
 
-test('creates the app tables next to the agent-core tables', () => {
+test('creates the app tables next to the agent-core tables', async () => {
   const store = openJobStore(':memory:');
-  const tables = store.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").pluck().all();
+  const tables = await asEngine(store.db).prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").pluck().all();
   for (const t of ['postings', 'scores', 'artifacts', 'status_history', 'runs', 'run_calls']) assert.ok(tables.includes(t), t);
   store.close();
 });
 
-test('defaults new postings to discovered/new and enforces allowed values', () => {
+test('defaults new postings to discovered/new and enforces allowed values', async () => {
   const store = openJobStore(':memory:');
-  const id = insertPosting(store.db);
-  assert.deepEqual(store.db.prepare('SELECT stage, status FROM postings WHERE id = ?').get(id), { stage: 'discovered', status: 'new' });
-  assert.throws(() => insertPosting(store.db, { url_key: 'k2', stage: 'somewhere' }), /stage is not in the stage list/);
-  assert.throws(() => insertPosting(store.db, { url_key: 'k3', status: 'maybe' }), /status is not in the status list/);
-  assert.throws(() => insertPosting(store.db), /UNIQUE/);
+  const id = await insertPosting(store.db);
+  assert.deepEqual(await asEngine(store.db).prepare('SELECT stage, status FROM postings WHERE id = ?').get(id), { stage: 'discovered', status: 'new' });
+  await assert.rejects(async () => await insertPosting(store.db, { url_key: 'k2', stage: 'somewhere' }), /stage is not in the stage list/);
+  await assert.rejects(async () => await insertPosting(store.db, { url_key: 'k3', status: 'maybe' }), /status is not in the status list/);
+  await assert.rejects(async () => await insertPosting(store.db), /UNIQUE/);
   store.close();
 });
 
-test('scores must be 1 to 10 and follow their posting on delete', () => {
+test('scores must be 1 to 10 and follow their posting on delete', async () => {
   const store = openJobStore(':memory:');
-  const id = insertPosting(store.db);
-  const addScore = (/** @type {number} */ score) =>
-    store.db.prepare("INSERT INTO scores (user_id, posting_id, score, source, created_at) VALUES (1, ?, ?, 'v2', ?)").run(id, score, now);
-  addScore(8);
-  assert.throws(() => addScore(11), /CHECK/);
-  store.db.prepare('DELETE FROM postings WHERE id = ?').run(id);
-  assert.equal(store.db.prepare('SELECT COUNT(*) FROM scores').pluck().get(), 0);
+  const id = await insertPosting(store.db);
+  const addScore = async (/** @type {number} */ score) =>
+    await asEngine(store.db).prepare("INSERT INTO scores (user_id, posting_id, score, source, created_at) VALUES (1, ?, ?, 'v2', ?)").run(id, score, now);
+  await addScore(8);
+  await assert.rejects(async () => await addScore(11), /CHECK/);
+  await asEngine(store.db).prepare('DELETE FROM postings WHERE id = ?').run(id);
+  assert.equal(await asEngine(store.db).prepare('SELECT COUNT(*) FROM scores').pluck().get(), 0);
   store.close();
 });

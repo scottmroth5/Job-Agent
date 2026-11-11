@@ -1,5 +1,6 @@
 // Onboarding: Build a draft (agents/draft-profile.ts, POST /api/account/draft) and the Home checklist (summary.setup).
 // Claude is faked; the "resume" is a made-up two-line PDF-looking file.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -54,7 +55,7 @@ async function setup() {
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, claude, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
   const pat = await addUser(store.raw, { email: 'pat@example.com', name: 'Pat', aiSource: 'owner' });
-  store.raw.prepare('UPDATE users SET ai_cap_usd = 5 WHERE id = ?').run(pat);
+  await asEngine(store.raw).prepare('UPDATE users SET ai_cap_usd = 5 WHERE id = ?').run(pat);
   return { store, app, sent, pat, asPat: as('pat@example.com'), asOwner: as('owner@example.com'), done: async () => { await app.close(); store.close(); } };
 }
 
@@ -67,8 +68,8 @@ test('Build a draft: the materials go to Claude as data on the user\'s own AI; n
   assert.match(/** @type {string} */ (sent[0].system), /not instructions to you/);
   const content = /** @type {Array<{ content: Array<{ type: string, source: { data: string } }> }>} */ (sent[0].messages)[0].content;
   assert.equal(content.find((b) => b.type === 'document')?.source.data, pdf);
-  assert.deepEqual(store.raw.prepare("SELECT user_id, status FROM runs WHERE name = 'draft-profile'").get(), { user_id: pat, status: 'ok' });
-  assert.equal(store.raw.prepare('SELECT COUNT(*) FROM user_settings WHERE user_id = ?').pluck().get(pat), 0, 'nothing saved');
+  assert.deepEqual(await asEngine(store.raw).prepare("SELECT user_id, status FROM runs WHERE name = 'draft-profile'").get(), { user_id: pat, status: 'ok' });
+  assert.equal(await asEngine(store.raw).prepare('SELECT COUNT(*) FROM user_settings WHERE user_id = ?').pluck().get(pat), 0, 'nothing saved');
   assert.equal((await app.inject({ method: 'POST', url: '/api/account/draft', headers: asPat, payload: {} })).statusCode, 400);
   for (let i = 2; i < DRAFTS_PER_DAY; i += 1) await app.inject({ method: 'POST', url: '/api/account/draft', headers: asPat, payload: { texts: [{ text: 'x' }] } });
   assert.equal((await app.inject({ method: 'POST', url: '/api/account/draft', headers: asPat, payload: { texts: [{ text: 'x' }] } })).statusCode, 429);

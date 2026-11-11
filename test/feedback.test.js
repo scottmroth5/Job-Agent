@@ -1,5 +1,6 @@
 // Multi-user, phase 4: feedback to the owner, the Users screen's activity and setup columns, and the admin's count on
 // Home. Made-up accounts; email is faked.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -40,7 +41,7 @@ test('feedback: saved as the sender\'s, emailed to the owner with the sender as 
   assert.equal(sent.length, 1);
   assert.deepEqual([sent[0].to, sent[0].replyTo, sent[0].subject], [OWNER, 'pat@example.com', 'Job Hunt: feedback from Pat']);
   assert.match(sent[0].text, /could use an example/);
-  const row = store.raw.prepare('SELECT user_id, page, status FROM feedback').get();
+  const row = await asEngine(store.raw).prepare('SELECT user_id, page, status FROM feedback').get();
   assert.deepEqual(row, { user_id: pat, page: '#/settingsscript', status: 'open' }, 'the page label keeps only plain characters');
 
   assert.equal((await app.inject({ url: '/api/admin/feedback', headers: asPat })).statusCode, 403, 'a user cannot read feedback');
@@ -67,7 +68,7 @@ test('feedback sent at once never passes the day\'s limit', async () => {
   for (let i = 1; i < FEEDBACK_PER_DAY; i += 1) await send(`note ${i}`);
   const codes = (await Promise.all([send('last one'), send('and another')])).map((r) => r.statusCode).sort();
   assert.deepEqual(codes, [201, 429]);
-  assert.equal(store.raw.prepare('SELECT COUNT(*) FROM feedback').pluck().get(), FEEDBACK_PER_DAY);
+  assert.equal(await asEngine(store.raw).prepare('SELECT COUNT(*) FROM feedback').pluck().get(), FEEDBACK_PER_DAY);
   await done();
 });
 
@@ -76,7 +77,7 @@ test('the Users screen: last seen, last pipeline run, and setup; no one\'s backg
   await app.inject({ url: '/api/postings', headers: asPat });
   await saveUserConfig(store.raw, pat, { search: { terms: ['Head of Data'], relevantTitleKeywords: ['data'], homeLocations: ['Remote'] } }, 'Pat');
   await saveUserProfile(store.raw, pat, 'A private background sentence. '.repeat(30));
-  store.raw.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('pipeline', 'ok', '2026-10-26T10:00:00Z', ?)").run(pat);
+  await asEngine(store.raw).prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('pipeline', 'ok', '2026-10-26T10:00:00Z', ?)").run(pat);
   const res = await app.inject({ url: '/api/admin/users', headers: asOwner });
   const p = res.json().find((/** @type {JsonRow} */ u) => u.email === 'pat@example.com');
   assert.ok(p.lastSeenAt, 'seen');

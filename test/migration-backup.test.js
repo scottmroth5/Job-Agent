@@ -1,5 +1,6 @@
 // A database is never changed by a migration without a checked copy first (db/index.ts), and the pending check reports
 // what would change without touching the real file. Synthetic temporary databases only.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
@@ -10,22 +11,22 @@ import { openStore } from '@scottmroth5/agent-core';
 import { loadMigrations, openJobStore, pendingMigrations, pruneMigrationCopies } from '../db/index.ts';
 
 /** A database file with every migration but the last, holding one job. */
-function olderDatabase() {
+async function olderDatabase() {
   const dir = mkdtempSync(join(tmpdir(), 'ja-migrate-'));
   const path = join(dir, 'job-agent.db');
   const all = loadMigrations();
   const store = openStore(path, { app: 'job-agent', migrations: all.slice(0, -1) });
   // The owner's job once 013 has added user_id.
-  const owned = Boolean(store.db.prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
-  store.db.prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
+  const owned = Boolean(await asEngine(store.db).prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
+  await asEngine(store.db).prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
     VALUES (${owned ? '1, ' : ''}'k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')`).run();
   store.close();
   return { dir, path, last: all.at(-1)?.id };
 }
 const copiesIn = (/** @type {string} */ dir) => (existsSync(join(dir, 'backups')) ? readdirSync(join(dir, 'backups')).filter((n) => n.startsWith('pre-migration-')) : []);
 
-test('the pending check lists what would change and leaves the real file alone', () => {
-  const { dir, path, last } = olderDatabase();
+test('the pending check lists what would change and leaves the real file alone', async () => {
+  const { dir, path, last } = await olderDatabase();
   const temp = mkdtempSync(join(tmpdir(), 'ja-pending-'));
   assert.deepEqual(pendingMigrations(path, temp).pending, [`job-agent:${last}`]);
   assert.deepEqual(readdirSync(temp), [], 'the throwaway copy is deleted');
@@ -34,8 +35,8 @@ test('the pending check lists what would change and leaves the real file alone',
   assert.deepEqual(pendingMigrations(join(dir, 'missing.db'), temp).pending, [], 'no database yet: nothing to change');
 });
 
-test('opening a database that needs a migration takes a checked copy first; an up-to-date one takes none', () => {
-  const { dir, path, last } = olderDatabase();
+test('opening a database that needs a migration takes a checked copy first; an up-to-date one takes none', async () => {
+  const { dir, path, last } = await olderDatabase();
   /** @type {string[]} */
   const logged = [];
   const store = openJobStore(path, { log: { info: (m) => logged.push(m) } });
@@ -44,8 +45,8 @@ test('opening a database that needs a migration takes a checked copy first; an u
   assert.equal(copies.length, 1);
   assert.match(logged[0], new RegExp(`applying ${last}`));
   const copy = new Database(join(dir, 'backups', copies[0]), { readonly: true });
-  assert.equal(copy.prepare("SELECT COUNT(*) FROM schema_migrations WHERE id = ?").pluck().get(last), 0, 'the copy is the database before the migration');
-  assert.equal(copy.prepare('SELECT COUNT(*) FROM postings').pluck().get(), 1, 'with its data');
+  assert.equal(await asEngine(copy).prepare("SELECT COUNT(*) FROM schema_migrations WHERE id = ?").pluck().get(last), 0, 'the copy is the database before the migration');
+  assert.equal(await asEngine(copy).prepare('SELECT COUNT(*) FROM postings').pluck().get(), 1, 'with its data');
   copy.close();
 
   openJobStore(path).close();

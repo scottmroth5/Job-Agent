@@ -1,3 +1,4 @@
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
@@ -53,14 +54,14 @@ function fakeDrive({ failDocs = false } = {}) {
 }
 
 /** @param {Database} db @param {{ stage?: string, status?: string, score?: number | null, title?: string }} [o] */
-function addPosting(db, { stage = 'pipeline', status = 'new', score = 8, title = 'VP Engineering' } = {}) {
+async function addPosting(db, { stage = 'pipeline', status = 'new', score = 8, title = 'VP Engineering' } = {}) {
   const url = `https://jobs.example.com/${Math.random()}`;
   const id = Number(
-    db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-      VALUES (1, ?, ?, 'Example Co', ?, ?, ?, ?, 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url, stage, status).lastInsertRowid,
+    (await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+      VALUES (1, ?, ?, 'Example Co', ?, ?, ?, ?, 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url, stage, status)).id,
   );
   if (score != null) {
-    db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, ?, ?, 'v2', 'x')").run(id, score, JSON.stringify({ ...analysis, score }));
+    await asEngine(db).prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, ?, ?, 'v2', 'x')").run(id, score, JSON.stringify({ ...analysis, score }));
   }
   return id;
 }
@@ -93,11 +94,11 @@ test('buildLetterRequest fills the approved prompt with executive positioning an
 
 test('generateForPostings writes tweaks and a letter Doc for promoted jobs only, once', async () => {
   const store = openJobStore(':memory:');
-  const eligible = addPosting(store.db);
-  addPosting(store.db, { score: 6 }); // below the promotion threshold
-  addPosting(store.db, { status: 'passed' });
-  addPosting(store.db, { stage: 'discovered' });
-  addPosting(store.db, { score: null }); // no v2 score
+  const eligible = await addPosting(store.db);
+  await addPosting(store.db, { score: 6 }); // below the promotion threshold
+  await addPosting(store.db, { status: 'passed' });
+  await addPosting(store.db, { stage: 'discovered' });
+  await addPosting(store.db, { score: null }); // no v2 score
   const { claude, requests } = fakeClaude(reply);
   const drive = fakeDrive();
 
@@ -110,7 +111,7 @@ test('generateForPostings writes tweaks and a letter Doc for promoted jobs only,
   assert.match(drive.calls.docs[0].html, /September 30, 2026/);
   assert.equal(drive.calls.docs[0].folderId, 'folder-1');
 
-  const arts = /** @type {Array<Record<string, string | null>>} */ (store.db.prepare('SELECT kind, content, doc_id, doc_url, flags_json, model FROM artifacts ORDER BY id').all());
+  const arts = /** @type {Array<Record<string, string | null>>} */ (await asEngine(store.db).prepare('SELECT kind, content, doc_id, doc_url, flags_json, model FROM artifacts ORDER BY id').all());
   assert.equal(arts[0].kind, 'resume_tweaks');
   assert.equal(arts[0].content, 'HEADLINE TWEAK: Platform leader, scaled teams');
   assert.deepEqual([arts[1].kind, arts[1].doc_id, arts[1].flags_json, arts[1].model], ['cover_letter', 'doc-1', '["confident"]', 'claude-sonnet-5-5']);
@@ -121,7 +122,7 @@ test('generateForPostings writes tweaks and a letter Doc for promoted jobs only,
 
 test('a failed Doc save keeps the letter and the next run retries only the Doc', async () => {
   const store = openJobStore(':memory:');
-  addPosting(store.db);
+  await addPosting(store.db);
   const first = fakeClaude(reply);
   const s1 = await generateForPostings({ store, config, claude: first.claude, knowledge: KNOWLEDGE, drive: fakeDrive({ failDocs: true }) });
   assert.equal(s1.letters, 1);
@@ -131,13 +132,13 @@ test('a failed Doc save keeps the letter and the next run retries only the Doc',
   const s2 = await generateForPostings({ store, config, claude: second.claude, knowledge: KNOWLEDGE, drive: fakeDrive() });
   assert.deepEqual([s2.tweaks, s2.letters, s2.docs], [0, 0, 1]);
   assert.equal(second.requests.length, 0, 'no new Claude calls');
-  assert.equal(store.db.prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'").pluck().get(), 1);
+  assert.equal(await asEngine(store.db).prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'").pluck().get(), 1);
   store.close();
 });
 
 test('--ids targets any posting, and repeated failures stop the run', async () => {
   const store = openJobStore(':memory:');
-  const ids = [addPosting(store.db, { stage: 'discovered', score: 5 }), addPosting(store.db), addPosting(store.db), addPosting(store.db)];
+  const ids = [await addPosting(store.db, { stage: 'discovered', score: 5 }), await addPosting(store.db), await addPosting(store.db), await addPosting(store.db)];
   assert.equal((await selectForHunt(store.db, { ids: [ids[0]] })).length, 1);
   const { claude } = fakeClaude(() => Object.assign(new Error('overloaded'), { name: 'InternalServerError' }));
   const s = await generateForPostings({ store, config, claude, knowledge: KNOWLEDGE, drive: fakeDrive(), options: { maxConsecutiveFailures: 2 } });

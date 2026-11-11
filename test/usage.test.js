@@ -1,5 +1,6 @@
 // The admin's private weekly totals (server/admin-queries.ts usageByWeek, GET /api/admin/usage): counts across every
 // account, placed by local week, with nothing about who or which job. Made-up accounts and jobs; no network.
+import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -27,51 +28,51 @@ async function seed(db) {
   const pat = await addUser(db, { email: 'pat@example.com', name: 'Pat' });
   const sam = await addUser(db, { email: 'sam@example.com', name: 'Sam' });
   let n = 0;
-  const job = (/** @type {number} */ uid, /** @type {string} */ at) =>
+  const job = async (/** @type {number} */ uid, /** @type {string} */ at) =>
     Number(
-      db.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
-          VALUES (?, ?, 'Example Co', 'Secret Title', ?, ?, ?, ?)`).run(uid, `example.com/${(n += 1)}`, `example|${n}`, at.slice(0, 10), at, at).lastInsertRowid,
+      (await asEngine(db).prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
+          VALUES (?, ?, 'Example Co', 'Secret Title', ?, ?, ?, ?)`).run(uid, `example.com/${(n += 1)}`, `example|${n}`, at.slice(0, 10), at, at)).id,
     );
-  const run = (/** @type {number} */ uid, /** @type {string} */ name, /** @type {string} */ status, /** @type {string} */ at) => Number(db.prepare('INSERT INTO runs (name, status, started_at, user_id) VALUES (?, ?, ?, ?)').run(name, status, at, uid).lastInsertRowid);
-  const call = (/** @type {number} */ runId, /** @type {number | null} */ cost, /** @type {string} */ at) => db.prepare("INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, 'scoring', 'm', ?, ?)").run(runId, cost, at);
+  const run = async (/** @type {number} */ uid, /** @type {string} */ name, /** @type {string} */ status, /** @type {string} */ at) => Number((await asEngine(db).prepare('INSERT INTO runs (name, status, started_at, user_id) VALUES (?, ?, ?, ?)').run(name, status, at, uid)).id);
+  const call = async (/** @type {number} */ runId, /** @type {number | null} */ cost, /** @type {string} */ at) => await asEngine(db).prepare("INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, 'scoring', 'm', ?, ?)").run(runId, cost, at);
   /** @param {number} uid @param {number} posting @param {string} kind @param {string} source @param {string} at */
-  const artifact = (uid, posting, kind, source, at) =>
-    db.prepare('INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(uid, posting, kind, 'Private letter text', source, at);
-  const prep = (/** @type {number} */ uid, /** @type {number} */ posting, /** @type {string} */ at) =>
-    db.prepare("INSERT INTO meeting_preps (id, user_id, posting_id, attendees_json, content, model, created_at) VALUES (?, ?, ?, '[]', 'Private prep', 'm', ?)").run(`prep-${(n += 1)}`, uid, posting, at);
-  const feedback = (/** @type {number} */ uid, /** @type {string} */ at) => db.prepare("INSERT INTO feedback (id, user_id, body, created_at) VALUES (?, ?, 'Private feedback text', ?)").run(`fb-${(n += 1)}`, uid, at);
-  const visit = (/** @type {number} */ uid, /** @type {string} */ at) => db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(at, uid);
+  const artifact = async (uid, posting, kind, source, at) =>
+    await asEngine(db).prepare('INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (?, ?, ?, ?, ?, ?)').run(uid, posting, kind, 'Private letter text', source, at);
+  const prep = async (/** @type {number} */ uid, /** @type {number} */ posting, /** @type {string} */ at) =>
+    await asEngine(db).prepare("INSERT INTO meeting_preps (id, user_id, posting_id, attendees_json, content, model, created_at) VALUES (?, ?, ?, '[]', 'Private prep', 'm', ?)").run(`prep-${(n += 1)}`, uid, posting, at);
+  const feedback = async (/** @type {number} */ uid, /** @type {string} */ at) => await asEngine(db).prepare("INSERT INTO feedback (id, user_id, body, created_at) VALUES (?, ?, 'Private feedback text', ?)").run(`fb-${(n += 1)}`, uid, at);
+  const visit = async (/** @type {number} */ uid, /** @type {string} */ at) => await asEngine(db).prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(at, uid);
 
   // This week: Pat adds two jobs (one on Sunday), gets a letter written and one saved by hand, and a prep; Pat's
   // pipeline completes (partial counts) with a priced and an unpriced call; the owner's fails. Sam visits and sends
   // feedback. Only a visit counts this week, so Sam is seen and Pat (no visit) is not.
-  const a = job(pat, '2026-10-25T20:00:00Z');
-  job(pat, '2026-10-27T15:00:00Z');
-  artifact(pat, a, 'cover_letter', 'v2', '2026-10-27T16:00:00Z');
-  artifact(pat, a, 'cover_letter', 'user', '2026-10-27T17:00:00Z');
-  artifact(pat, a, 'analysis', 'v2', '2026-10-27T16:00:00Z');
-  prep(pat, a, '2026-10-28T10:00:00Z');
-  const patRun = run(pat, 'pipeline', 'partial', '2026-10-26T11:00:00Z');
-  call(patRun, 0.5, '2026-10-26T11:05:00Z');
-  call(patRun, null, '2026-10-26T11:06:00Z');
-  run(1, 'pipeline', 'failed', '2026-10-27T11:00:00Z');
-  feedback(sam, '2026-10-27T12:00:00Z');
-  visit(sam, '2026-10-28T09:00:00Z');
+  const a = await job(pat, '2026-10-25T20:00:00Z');
+  await job(pat, '2026-10-27T15:00:00Z');
+  await artifact(pat, a, 'cover_letter', 'v2', '2026-10-27T16:00:00Z');
+  await artifact(pat, a, 'cover_letter', 'user', '2026-10-27T17:00:00Z');
+  await artifact(pat, a, 'analysis', 'v2', '2026-10-27T16:00:00Z');
+  await prep(pat, a, '2026-10-28T10:00:00Z');
+  const patRun = await run(pat, 'pipeline', 'partial', '2026-10-26T11:00:00Z');
+  await call(patRun, 0.5, '2026-10-26T11:05:00Z');
+  await call(patRun, null, '2026-10-26T11:06:00Z');
+  await run(1, 'pipeline', 'failed', '2026-10-27T11:00:00Z');
+  await feedback(sam, '2026-10-27T12:00:00Z');
+  await visit(sam, '2026-10-28T09:00:00Z');
 
   // Last week: the owner's completed pipeline, a scoring run with calls, a job, and a v1 letter (an import, not
   // counted); Sam adds a job on Saturday. Seen: the owner and Sam, from what they did.
-  const b = job(1, '2026-10-21T15:00:00Z');
-  run(1, 'pipeline', 'ok', '2026-10-20T11:00:00Z');
-  const score = run(1, 'score', 'ok', '2026-10-20T12:00:00Z');
-  call(score, 0.256, '2026-10-20T12:01:00Z');
-  call(score, 1, EDGE);
-  artifact(1, b, 'cover_letter', 'v1', '2026-10-21T16:00:00Z');
-  job(sam, '2026-10-24T20:00:00Z');
-  visit(1, '2026-10-19T09:00:00Z');
+  const b = await job(1, '2026-10-21T15:00:00Z');
+  await run(1, 'pipeline', 'ok', '2026-10-20T11:00:00Z');
+  const score = await run(1, 'score', 'ok', '2026-10-20T12:00:00Z');
+  await call(score, 0.256, '2026-10-20T12:01:00Z');
+  await call(score, 1, EDGE);
+  await artifact(1, b, 'cover_letter', 'v1', '2026-10-21T16:00:00Z');
+  await job(sam, '2026-10-24T20:00:00Z');
+  await visit(1, '2026-10-19T09:00:00Z');
 
   // Before the window: not counted.
-  job(pat, '2026-01-05T15:00:00Z');
-  feedback(pat, '2026-01-05T15:00:00Z');
+  await job(pat, '2026-01-05T15:00:00Z');
+  await feedback(pat, '2026-01-05T15:00:00Z');
   return { pat, sam };
 }
 
