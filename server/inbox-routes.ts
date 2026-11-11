@@ -1,7 +1,7 @@
 // Inbox screen: check Gmail, resolve emails that need review, and close reminders. Email subjects and
 // summaries are shown to the user here (local server only); they are never logged.
 import { createJobTracer } from '../tools/trace.ts';
-import { assertNoRunningRun } from '../tools/runs.ts';
+import { assertNoRunningRun, oneStartAtATime } from '../tools/runs.ts';
 import { runInbox } from '../agents/inbox/process.ts';
 import { listNeedsReview, resolveReview, CHOICES } from '../agents/inbox/review.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
@@ -66,19 +66,24 @@ export function registerInboxRoutes(app: App, { store, tasks, claude, inbox }: {
   app.post(
     '/api/inbox/check',
     { schema: { summary: 'Check Gmail for new job email now', response: { 202: { type: 'object', properties: { taskId: { type: 'string' } } } } } },
-    async (req, reply) => reply.code(202).send({ taskId: startCheck() }),
+    async (req, reply) => reply.code(202).send({ taskId: await startCheck() }),
   );
 
-  /** Starts an inbox check as a task (the Inbox screen and the scheduler). */
+  /**
+   * Starts an inbox check as a task (the Inbox screen and the scheduler). One start at a time (tools/runs.ts): a check
+   * started while another is starting sees its task here, before its runs row is written.
+   */
   function startCheck({ by = 'button' }: { by?: string } = {}) {
+    return oneStartAtATime(async () => {
       if (!inbox.ready()) throw Object.assign(new Error('Gmail is not signed in. Run "npm run inbox:auth" first.'), { statusCode: 400 });
       for (const name of ['inbox', 'inbox-backfill', 'pipeline']) {
         try {
-          assertNoRunningRun(db, name);
+          await assertNoRunningRun(db, name);
         } catch (err) {
           throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
         }
       }
+      if (checkTaskId && tasks.get(checkTaskId)?.status === 'running') throw Object.assign(new Error('An inbox check is already running. Try again when it finishes.'), { statusCode: 409 });
       checkTaskId = tasks.start('inbox', { by }, async (step: TaskStep, { logger }: { logger: Logger }) => {
         const gmail = inbox.gmail({ onWait: (ms) => logger.warn(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
         // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
@@ -97,6 +102,7 @@ export function registerInboxRoutes(app: App, { store, tasks, claude, inbox }: {
         }
       });
       return checkTaskId;
+    });
   }
 
   app.post<{ Params: { id: string }; Body: { choice: string; postingId?: number } }>(

@@ -76,7 +76,7 @@ export function registerFollowUpRoutes(
       if (recent.length >= CONTACT_SEARCHES_PER_DAY) return reply.code(429).send({ error: 'That is a lot of searches for one day. Try again tomorrow.' });
       searches.set(uid, [...recent, Date.now()]);
       const knowledge = await services.knowledge();
-      const taskId = startTask('find-contact', { id }, async (step, { run }) => {
+      const taskId = await startTask('find-contact', { id }, async (step, { run }) => {
         // services.claude was checked above, before the task started.
         const r = await findContact({ store, config, claude: services.claude as Claude, knowledge, run, postingId: id, onStep: step });
         step('Saved as a note on the job');

@@ -62,7 +62,7 @@ export function registerPrepRoutes(app: App, { store, config, services, startTas
       const id = req.params.id;
       if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id)) return reply.code(404).send({ error: 'Job not found' });
       if (!req.body.attendees.some((a) => a.name?.trim())) return reply.code(400).send({ error: 'Add at least one person the meeting is with.' });
-      const taskId = startTask('meeting-prep', { id }, async (step, { run }) => {
+      const taskId = await startTask('meeting-prep', { id }, async (step, { run }) => {
         const r = await writeMeetingPrep({
           store,
           config,

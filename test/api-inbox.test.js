@@ -77,6 +77,18 @@ test('Run pipeline: progress, the last run time, and no second run while one is 
   store.close();
 });
 
+test('two presses of Run pipeline at once start one pipeline (the start lock)', async () => {
+  const { app, store, release } = await setup();
+  const [a, b] = await Promise.all([app.inject({ method: 'POST', url: '/api/pipeline/run' }), app.inject({ method: 'POST', url: '/api/pipeline/run' })]);
+  assert.deepEqual([a.statusCode, b.statusCode].sort(), [202, 409]);
+  release();
+  const task = await app.tasks.wait((a.statusCode === 202 ? a : b).json().taskId);
+  assert.equal(task?.status, 'done');
+  assert.equal(app.tasks.list().filter((t) => t.kind === 'pipeline').length, 1);
+  await app.close();
+  store.close();
+});
+
 test('a failed pipeline reports why, and the button is refused while a CLI run is going', async () => {
   const { app, store, db, release } = await setup({ pipelineCode: 1 });
   release();

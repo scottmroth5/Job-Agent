@@ -12,6 +12,8 @@ import { createHttp } from '../tools/http.ts';
 import { fakeClaude } from './fixtures/fakes.js';
 import { asEngine } from '../db/engine/index.ts';
 import { addUser, decide, getUser, requestAccess } from '../db/users.ts';
+import { createJobTracer } from '../tools/trace.ts';
+import { oneStartAtATime } from '../tools/runs.ts';
 
 function setup(/** @type {import('../db/engine/sqlite.ts').SqliteEngineOptions} */ options = {}) {
   const raw = new Database(':memory:');
@@ -243,4 +245,45 @@ test('users: two decisions at once can not both pass the status check; two reque
   assert.equal(store.db.prepare("SELECT COUNT(*) FROM users WHERE email = 'new@example.com'").pluck().get(), 1);
   assert.equal((await getUser(store.db, a.id))?.status, 'pending');
   store.close();
+});
+
+test('trace writes go through the engine: a run started during an open transaction waits for it', async () => {
+  const store = openJobStore(':memory:', { fallbackUid: 1 });
+  const hold = deferred();
+  const holder = createSqliteEngine(store.raw, { fallbackUid: 1, strictTx: false });
+  const inside = holder.tx(async () => {
+    await holder.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('a', '1', 'x')").run();
+    await hold.promise;
+  });
+  await new Promise((r) => setImmediate(r));
+  let started = false;
+  const run = createJobTracer({ store }).startRun('trace-test').then((r) => ((started = true), r));
+  await new Promise((r) => setImmediate(r));
+  assert.equal(started, false, 'the runs row waits for the open transaction');
+  hold.resolve();
+  await inside;
+  const r = await run;
+  assert.deepEqual(store.raw.prepare('SELECT name, user_id FROM runs WHERE id = ?').get(r.id), { name: 'trace-test', user_id: 1 });
+  await r.finish('ok');
+  assert.equal(store.raw.prepare('SELECT status FROM runs WHERE id = ?').pluck().get(r.id), 'ok');
+  store.close();
+});
+
+test('oneStartAtATime: starts run in order, one at a time, and a failed start does not block the next', async () => {
+  const order = /** @type {string[]} */ ([]);
+  const slow = oneStartAtATime(async () => {
+    order.push('a begins');
+    await new Promise((r) => setImmediate(r));
+    order.push('a ends');
+    return 'a';
+  });
+  const failing = oneStartAtATime(async () => {
+    order.push('b');
+    throw new Error('refused');
+  });
+  const after = oneStartAtATime(() => (order.push('c'), 'c'));
+  assert.equal(await slow, 'a');
+  await assert.rejects(failing, /refused/);
+  assert.equal(await after, 'c');
+  assert.deepEqual(order, ['a begins', 'a ends', 'b', 'c']);
 });

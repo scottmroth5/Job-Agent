@@ -72,7 +72,7 @@ async function main() {
     if (user?.status !== 'active') throw new Error(`User ${uid} is not an active account.`);
     if (!config.ready) throw new Error('Set up your search (terms, title keywords, and locations) under Settings first.');
   }
-  for (const name of ['pipeline', 'discover', 'score', 'hunt']) assertNoRunningRun(store.db, name);
+  for (const name of ['pipeline', 'discover', 'score', 'hunt']) await assertNoRunningRun(store.db, name);
   const tracer = createJobTracer({ store });
   const pipelineRun = await tracer.startRun('pipeline');
   // Google (Docs, Drive, the report email) is the owner's sign-in; others' runs never touch it.

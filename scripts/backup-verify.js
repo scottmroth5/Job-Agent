@@ -46,7 +46,7 @@ export async function restoreTestJob({ store, passphrase, drive, fromFile }) {
       name = newest.name;
       file = await from.download(newest.id);
     }
-    const r = restoreTest({ file, passphrase, live: store.raw });
+    const r = await restoreTest({ file, passphrase, live: store.raw });
     await run.finish(r.ok ? 'ok' : 'failed', { file: name, tables: r.tables, rowsBackup: r.rowsBackup, rowsLive: r.rowsLive, differences: r.differences.length, problems: r.problems });
     return { ...r, file: name };
   } catch (err) {

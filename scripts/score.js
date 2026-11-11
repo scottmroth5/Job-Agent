@@ -54,7 +54,7 @@ async function main() {
       return;
     }
 
-    assertNoRunningRun(store.db, 'score');
+    await assertNoRunningRun(store.db, 'score');
     const knowledge = await ownerBackground(store);
     console.log(`Candidate Knowledge loaded: ${knowledge.length.toLocaleString()} characters.`);
     const run = await createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });

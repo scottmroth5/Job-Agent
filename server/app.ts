@@ -240,10 +240,10 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   });
 
   /** Runs a background action as a traced task; refuses while a pipeline step is running. */
-  const startTask: StartTask = (kind, meta, fn) => {
+  const startTask: StartTask = async (kind, meta, fn) => {
     for (const name of ['pipeline', 'discover', 'score', 'hunt']) {
       try {
-        assertNoRunningRun(db, name);
+        await assertNoRunningRun(db, name);
       } catch (err) {
         throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
       }
@@ -388,7 +388,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     async (req, reply) => {
       if (!services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
       const input: ManualInput = Object.fromEntries(Object.entries(req.body ?? {}).filter(([, v]) => v !== ''));
-      const taskId = startTask('add', { url: input.url ?? null }, async (step, { run, browser }) =>
+      const taskId = await startTask('add', { url: input.url ?? null }, async (step, { run, browser }) =>
         addPosting(input, {
           store,
           config,
@@ -422,7 +422,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
       if (action !== 'refetch' && !services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
       // Checked above for the actions that use it.
       const claude = services.claude as Claude;
-      const taskId = startTask(action, { id }, async (step, { run, browser }) => {
+      const taskId = await startTask(action, { id }, async (step, { run, browser }) => {
         if (action === 'score') {
           step('Scoring');
           const s = await scorePostings({ store, config, claude, knowledge: await services.knowledge(), model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], rescore: true } });
@@ -522,17 +522,17 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     };
     const runners: Record<string, (() => Promise<unknown>) | null | undefined> = {
       pipeline: pipeline && (async () => {
-        await finish(pipeline.start({ by: 'schedule' }), 4);
+        await finish(await pipeline.start({ by: 'schedule' }), 4);
         // Then the inbox, as the Windows scheduled run did; a pipeline failure above skips it.
-        if (inboxChecks && (services.inbox as InboxServices).ready()) await finish(inboxChecks.startCheck({ by: 'schedule' }), 1);
+        if (inboxChecks && (services.inbox as InboxServices).ready()) await finish(await inboxChecks.startCheck({ by: 'schedule' }), 1);
         // Then each user who asked to be on the schedule, one at a time, each as themselves; one user's failure never
         // stops the next or marks the owner's run failed.
         for (const uid of scheduledUsers(store.raw ?? db)) {
           const timeZone = (db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) as string | null | undefined) ?? null;
-          await runAsUser(uid, () => finish(pipeline.start({ by: 'schedule' }), 4), { timeZone }).catch((err: Error) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
+          await runAsUser(uid, async () => finish(await pipeline.start({ by: 'schedule' }), 4), { timeZone }).catch((err: Error) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
         }
       }),
-      inbox: inboxChecks && (() => finish(inboxChecks.startCheck({ by: 'schedule' }), 1)),
+      inbox: inboxChecks && (async () => finish(await inboxChecks.startCheck({ by: 'schedule' }), 1)),
       backup: services.runScript && (() => finish(startBackup(), 1)),
       'restore-test': services.runScript && (() => finish(startRestoreTest(), 1)),
     };

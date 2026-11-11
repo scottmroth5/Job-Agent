@@ -36,11 +36,11 @@ test('a good backup passes: it decrypts, its database is sound, and every table 
   try {
     const file = await backupOf(store, dir);
     store.raw.prepare("INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at) VALUES (1, 'new', 'Example Co', 'CTO', 'new', '2026-10-26', 'x', 'x')").run();
-    const r = restoreTest({ file, passphrase: PASS, live: store.raw });
+    const r = await restoreTest({ file, passphrase: PASS, live: store.raw });
     assert.equal(r.ok, true, r.problems.join('; '));
     assert.deepEqual(r.differences.find((d) => d.table === 'postings'), { table: 'postings', backup: 12, live: 13 }, 'a day of new rows is a difference, not a failure');
     assert.ok(r.tables > 15);
-    assert.throws(() => restoreTest({ file, passphrase: 'not the right passphrase at all', live: store.raw }));
+    await assert.rejects(() => restoreTest({ file, passphrase: 'not the right passphrase at all', live: store.raw }));
     assert.equal(readdirSync(tmpdir()).filter((n) => n.startsWith('ja-restore-test-')).length, 0, 'the scratch copy is always deleted');
 
     // Through the job: recorded as a run, from a file.
@@ -59,7 +59,7 @@ test('a backup missing its data fails; the newest backup comes from Drive', asyn
   const full = liveStore(mkdtempSync(join(dir, 'live-')), EMPTY_TABLE_MIN_ROWS + 2);
   try {
     const file = await backupOf(empty, dir);
-    const r = restoreTest({ file, passphrase: PASS, live: full.raw });
+    const r = await restoreTest({ file, passphrase: PASS, live: full.raw });
     assert.equal(r.ok, false);
     assert.match(r.problems.join(' '), /table postings is empty in the backup but has 12 rows/);
 

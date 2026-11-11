@@ -35,7 +35,7 @@ async function main() {
   const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   if (!args.dryRun) {
     try {
-      assertNoRunningRun(store.db, 'discover');
+      await assertNoRunningRun(store.db, 'discover');
     } catch (err) {
       store.close();
       throw err;
