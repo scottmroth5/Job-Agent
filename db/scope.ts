@@ -29,19 +29,33 @@ export const currentUserId = () => context.getStore()?.uid ?? null;
 
 const isPlainObject = (v: unknown) => v !== null && typeof v === 'object' && !Array.isArray(v) && !Buffer.isBuffer(v);
 
-// unknown[]: the bind values better-sqlite3 takes (numbers, strings, buffers, null, or one object of named values).
-function scopeStatement(stmt: Statement, userId: () => number): Statement {
-  const needsUid = stmt.source.includes('@uid');
-  // Named values travel in one plain object: add uid to it, or pass one holding only uid after the positional values.
-  const bind = (args: unknown[]): unknown[] => {
-    if (!needsUid) return args;
-    const uid = userId();
-    const i = args.findIndex(isPlainObject);
-    if (i < 0) return [...args, { uid }];
-    const copy = [...args];
-    copy[i] = { ...(args[i] as object), uid };
-    return copy;
+/**
+ * A statement's bind values with @uid added when its SQL names @uid (userId is read now, so it throws outside a user).
+ * Named values travel in one plain object: uid is added to it, or passed in one holding only uid after the positional
+ * values. unknown[]: the bind values better-sqlite3 takes (numbers, strings, buffers, null, or one object of names).
+ * Shared by the scoped database here and the async engine (db/engine/sqlite.ts).
+ */
+export function bindUid(source: string, args: unknown[], userId: () => number): unknown[] {
+  if (!source.includes('@uid')) return args;
+  const uid = userId();
+  const i = args.findIndex(isPlainObject);
+  if (i < 0) return [...args, { uid }];
+  const copy = [...args];
+  copy[i] = { ...(args[i] as object), uid };
+  return copy;
+}
+
+/** A reader of the user a query runs as: currentUserId(), else fallbackUid; it throws when there is neither. */
+export function userIdOr(fallbackUid: number | null): () => number {
+  return () => {
+    const uid = currentUserId() ?? fallbackUid;
+    if (!uid) throw new Error('This query needs a user, but it is running outside a request or job (runAsUser).');
+    return uid;
   };
+}
+
+function scopeStatement(stmt: Statement, userId: () => number): Statement {
+  const bind = (args: unknown[]): unknown[] => bindUid(stmt.source, args, userId);
   const scoped = {
     run: (...args: unknown[]) => stmt.run(...bind(args)),
     get: (...args: unknown[]) => stmt.get(...bind(args)),
@@ -66,11 +80,7 @@ function scopeStatement(stmt: Statement, userId: () => number): Statement {
  */
 export function scopeDb(db: Database | ScopedDatabase, { fallbackUid = null }: { fallbackUid?: number | null } = {}): ScopedDatabase {
   const raw = (db as Partial<ScopedDatabase>).unscoped ?? db;
-  const userId = () => {
-    const uid = currentUserId() ?? fallbackUid;
-    if (!uid) throw new Error('This query needs a user, but it is running outside a request or job (runAsUser).');
-    return uid;
-  };
+  const userId = userIdOr(fallbackUid);
   return new Proxy(raw, {
     get(target, prop) {
       if (prop === 'prepare') return (sql: string) => scopeStatement(target.prepare(sql), userId);

@@ -17,13 +17,19 @@ import * as usageBrowser from './migrations/021-usage-browser.ts';
 import * as statusRoles from './migrations/023-status-roles.ts';
 import { scopeDb } from './scope.ts';
 import type { ScopedDatabase } from './scope.ts';
+import { createSqliteEngine } from './engine/sqlite.ts';
+import type { Db } from './engine/types.ts';
 import type { Migration, Store } from '@scottmroth5/agent-core';
 import { OWNER_ID } from './users.ts';
 
-/** openJobStore's store: db is scoped to the current user (db/scope.ts), raw is the unscoped database. */
+/**
+ * openJobStore's store: db is scoped to the current user (db/scope.ts), raw is the unscoped database, and engine is the
+ * async data layer over the same connection, scoped the same way (db/engine; v3 Phase 3 moves every call to it).
+ */
 export interface JobStore extends Omit<Store, 'db'> {
   db: ScopedDatabase;
   raw: Database.Database;
+  engine: Db;
 }
 
 /** Default database file. Gitignored, like everything under data/. */
@@ -121,7 +127,7 @@ export function openJobStore(
   }
   const store = openStore(path, { app: APP, migrations });
   if (copy) pruneMigrationCopies(dirname(copy));
-  return { ...store, raw: store.db, db: scopeDb(store.db, { fallbackUid }) };
+  return { ...store, raw: store.db, db: scopeDb(store.db, { fallbackUid }), engine: createSqliteEngine(store.db, { fallbackUid }) };
 }
 
 /**

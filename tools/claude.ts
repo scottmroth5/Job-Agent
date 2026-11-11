@@ -9,6 +9,7 @@ import { createClaude } from '@scottmroth5/agent-core';
 import type { Claude, SendOptions } from '@scottmroth5/agent-core';
 import { BudgetExceededError, checkBudget } from '../agents/budget.ts';
 import { currentUserId } from '../db/scope.ts';
+import { assertOutsideTransaction } from '../db/engine/sqlite.ts';
 import { OWNER_ID, sealedClaudeKey } from '../db/users.ts';
 import { open } from './secret-box.ts';
 import type { Database } from './types.ts';
@@ -61,6 +62,7 @@ export function createJobClaude(db: Database, { forKey, ownerClient, onCapReache
 
   return {
     async send(opts: SendOptions) {
+      assertOutsideTransaction('A Claude call');
       const uid = currentUserId() ?? OWNER_ID;
       const client = clientFor(uid);
       try {
