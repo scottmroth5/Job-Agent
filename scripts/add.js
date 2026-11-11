@@ -43,7 +43,7 @@ function parseArgs(argv) {
 async function main() {
   const input = parseArgs(process.argv.slice(2));
   const store = openJobStore();
-  const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
+  const config = await configFor(store.admin, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   const auth = getGoogleAuth();
   const browser = await createBrowser();
   const run = await createJobTracer({ store }).startRun('add', { url: input.url ?? null });

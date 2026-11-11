@@ -15,7 +15,7 @@ import { isPrivateAddress } from './geo.ts';
 import { appDay } from '../tools/dates.ts';
 import { hostIs } from '../tools/urls.ts';
 import type { IncomingHttpHeaders } from 'node:http';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { App } from './types.ts';
 
 /** An approximate location (server/geo.ts openGeo): any part may be missing. */
@@ -149,8 +149,8 @@ const isVisit = (req: CountedRequest, statusCode: number) => {
 };
 
 /** Adds one to a day's total. */
-export const addToTotal = (db: Database, day: string, dimension: string, value: string) =>
-  db.prepare('INSERT INTO usage_totals (day, dimension, value, count) VALUES (?, ?, ?, 1) ON CONFLICT (day, dimension, value) DO UPDATE SET count = count + 1').run(day, dimension, value);
+export const addToTotal = async (db: Db, day: string, dimension: string, value: string) =>
+  await db.prepare('INSERT INTO usage_totals (day, dimension, value, count) VALUES (?, ?, ?, 1) ON CONFLICT (day, dimension, value) DO UPDATE SET count = count + 1').run(day, dimension, value);
 
 /**
  * Counts visits and arrivals after each response. db: the unscoped database (an app-wide table); location: ip ->
@@ -166,7 +166,7 @@ export function registerUsageTotals(
     demoHost = null,
     now = () => new Date(),
   }: {
-    db: Database;
+    db: Db;
     location?: ((ip: string) => Place | null) | null;
     ownOrigin?: string | null;
     siteHost?: string | null;
@@ -192,14 +192,14 @@ export function registerUsageTotals(
           } catch {
             loc = null;
           }
-          addToTotal(db, day, 'device', deviceOf(req.headers));
-          addToTotal(db, day, 'browser', browserOf(req.headers));
-          addToTotal(db, day, 'location', locationValue(loc));
+          await addToTotal(db, day, 'device', deviceOf(req.headers));
+          await addToTotal(db, day, 'browser', browserOf(req.headers));
+          await addToTotal(db, day, 'location', locationValue(loc));
         }
       }
       if (isArrival(req, reply.statusCode)) {
         const source = sourceOf({ referer: req.headers.referer, url: req.url, ownOrigin, siteHost: site, demoHost: demo });
-        if (source && SOURCES.includes(source)) addToTotal(db, day, 'source', source);
+        if (source && SOURCES.includes(source)) await addToTotal(db, day, 'source', source);
       }
     } catch {
       // Counting never affects a request.

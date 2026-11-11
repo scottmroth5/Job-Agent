@@ -7,7 +7,7 @@
 //   A user with their own key pays for it themselves; their spend is shown, with no cap here.
 import { getSetting, setSetting } from '../db/settings.ts';
 import { OWNER_ID } from '../db/users.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 
 /** A month's spend against a cap: budgetStatus's answer. */
 export interface BudgetStatus {
@@ -51,16 +51,16 @@ const scopeSql = (uid: number) => (uid === OWNER_ID ? OWNER_KEY_RUNS : 'r.user_i
 const scopeArgs = (uid: number) => (uid === OWNER_ID ? [] : [uid]);
 
 /** Dollars spent this month: on the owner's key (uid = the owner) or by one user. */
-export function spentUsd(db: Database, uid: number, now = new Date()): number {
-  return db
+export async function spentUsd(db: Db, uid: number, now = new Date()): Promise<number> {
+  return await db
     .prepare(`SELECT COALESCE(SUM(c.cost_usd), 0) FROM run_calls c JOIN runs r ON r.id = c.run_id WHERE c.created_at >= ? AND ${scopeSql(uid)}`)
     .pluck()
     .get(monthStart(now).toISOString(), ...scopeArgs(uid)) as number;
 }
 
 /** The owner's cap in dollars and where it comes from. */
-export function budgetLimit(db: Database, env: NodeJS.ProcessEnv = process.env) {
-  const saved = Number(getSetting(db, SETTING));
+export async function budgetLimit(db: Db, env: NodeJS.ProcessEnv = process.env) {
+  const saved = Number(await getSetting(db, SETTING));
   if (valid(saved)) return { limitUsd: saved, source: 'admin' };
   const fromEnv = Number(env.MONTHLY_CLAUDE_BUDGET_USD);
   if (valid(fromEnv)) return { limitUsd: fromEnv, source: 'env' };
@@ -68,10 +68,10 @@ export function budgetLimit(db: Database, env: NodeJS.ProcessEnv = process.env) 
 }
 
 /** Saves a new cap for the owner's key (Admin > Spending). */
-export function setBudgetLimit(db: Database, limitUsd: unknown) {
+export async function setBudgetLimit(db: Db, limitUsd: unknown) {
   const n = Number(limitUsd);
   if (!valid(n) || n > 100000) throw Object.assign(new Error('The monthly budget must be a dollar amount above zero.'), { statusCode: 400 });
-  setSetting(db, SETTING, String(Math.round(n * 100) / 100));
+  await setSetting(db, SETTING, String(Math.round(n * 100) / 100));
 }
 
 const month = (now: Date) => {
@@ -87,13 +87,13 @@ const level = (spent: number, limit: number | null): BudgetStatus['level'] => (l
  * This month's spend for a user against their cap. paidBy: 'owner' (the owner's key) or 'own' (their key, no cap:
  * limitUsd null). For the owner it is everything on the owner's key against the owner's cap.
  */
-export function budgetStatus(db: Database, { uid = OWNER_ID, now = new Date(), env = process.env }: { uid?: number; now?: Date; env?: NodeJS.ProcessEnv } = {}): BudgetStatus {
-  const spent = spentUsd(db, uid, now);
+export async function budgetStatus(db: Db, { uid = OWNER_ID, now = new Date(), env = process.env }: { uid?: number; now?: Date; env?: NodeJS.ProcessEnv } = {}): Promise<BudgetStatus> {
+  const spent = await spentUsd(db, uid, now);
   if (uid === OWNER_ID) {
-    const { limitUsd, source } = budgetLimit(db, env);
+    const { limitUsd, source } = await budgetLimit(db, env);
     return { ...month(now), paidBy: 'owner', spentUsd: spent, limitUsd, remainingUsd: Math.max(0, limitUsd - spent), source, level: level(spent, limitUsd) };
   }
-  const user = db.prepare('SELECT ai_source, ai_cap_usd FROM users WHERE id = ?').get(uid) as { ai_source: string; ai_cap_usd: number | null } | undefined;
+  const user = await db.prepare('SELECT ai_source, ai_cap_usd FROM users WHERE id = ?').get(uid) as { ai_source: string; ai_cap_usd: number | null } | undefined;
   const limitUsd = user?.ai_source === 'owner' ? user.ai_cap_usd : null;
   return {
     ...month(now),
@@ -107,23 +107,23 @@ export function budgetStatus(db: Database, { uid = OWNER_ID, now = new Date(), e
 }
 
 /** Throws BudgetExceededError when this user may not make another Claude call this month. */
-export function checkBudget(db: Database, { uid = OWNER_ID, now = new Date(), env = process.env }: { uid?: number; now?: Date; env?: NodeJS.ProcessEnv } = {}) {
-  const status = budgetStatus(db, { uid, now, env });
+export async function checkBudget(db: Db, { uid = OWNER_ID, now = new Date(), env = process.env }: { uid?: number; now?: Date; env?: NodeJS.ProcessEnv } = {}) {
+  const status = await budgetStatus(db, { uid, now, env });
   if (status.level === 'over') {
     throw uid === OWNER_ID
       ? new BudgetExceededError(status)
       : new BudgetExceededError(status, { whose: 'monthly Claude allowance the owner gave you', fix: 'Ask the owner to raise it, or wait for next month.', scope: 'user' });
   }
   if (status.paidBy === 'owner' && uid !== OWNER_ID) {
-    const owner = budgetStatus(db, { uid: OWNER_ID, now, env });
+    const owner = await budgetStatus(db, { uid: OWNER_ID, now, env });
     if (owner.level === 'over') throw new BudgetExceededError(owner, { whose: "owner's monthly Claude budget", fix: 'Ask the owner, or wait for next month.' });
   }
   return status;
 }
 
 /** This month's spend by what it was for (call labels: score, cover-letter, meeting-prep, inbox, ...), for a user. */
-export function spendByLabel(db: Database, { uid = OWNER_ID, now = new Date() }: { uid?: number; now?: Date } = {}) {
-  return db
+export async function spendByLabel(db: Db, { uid = OWNER_ID, now = new Date() }: { uid?: number; now?: Date } = {}) {
+  return await db
     .prepare(`SELECT COALESCE(c.label, 'other') AS label, COUNT(*) AS calls, COALESCE(SUM(c.cost_usd), 0) AS costUsd
       FROM run_calls c JOIN runs r ON r.id = c.run_id WHERE c.created_at >= ? AND ${scopeSql(uid)}
       GROUP BY COALESCE(c.label, 'other') ORDER BY costUsd DESC`)

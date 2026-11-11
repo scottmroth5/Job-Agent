@@ -17,10 +17,10 @@ async function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
   const id = Number(
-    db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team. Grow the org.', '2026-10-01', 'x', 'x')`).run().lastInsertRowid,
+    (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team. Grow the org.', '2026-10-01', 'x', 'x')`).run()).id,
   );
-  db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, model, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'claude-sonnet-5-5', '2026-10-02T12:00:00Z')").run(id, LETTER);
+  await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, model, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'claude-sonnet-5-5', '2026-10-02T12:00:00Z')").run(id, LETTER);
   /** @type {SendOptions[]} */
   const sent = [];
   const claude = fakeClaude(async (opts) => {
@@ -55,7 +55,7 @@ test('revising returns a cleaned draft and saves nothing; keeping it makes a new
   assert.deepEqual(body.flags, ['confident'], 'the letter checks run');
   assert.match(/** @type {string} */ (sent[0].system), /Background/, 'the knowledge doc is the system prompt');
   assert.equal(sent[0].label, 'cover-letter-revise');
-  assert.equal(db.prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'").pluck().get(), 1, 'nothing saved');
+  assert.equal(await db.prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'").pluck().get(), 1, 'nothing saved');
 
   const kept = await app.inject({ method: 'POST', url: `/api/postings/${id}/letter`, payload: { content: body.letter, source: 'revision' } });
   assert.equal(kept.statusCode, 200);

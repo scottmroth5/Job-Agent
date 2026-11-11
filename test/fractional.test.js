@@ -86,7 +86,7 @@ test('discovery stores fractional postings with track, pay, hours and extras; fr
   };
   const summary = await runDiscovery({ store, config, http, sources, now: new Date('2026-09-30T12:00:00Z'), options: { pauseMs: 0, linkedinPauseMs: 0 } });
   assert.equal(summary.inserted, 2, 'the bookkeeper role is not relevant');
-  const rows = /** @type {Array<Record<string, string | number | null>>} */ (store.db.prepare('SELECT title, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, location_check FROM postings ORDER BY id').all());
+  const rows = /** @type {Array<Record<string, string | number | null>>} */ (await store.db.prepare('SELECT title, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, location_check FROM postings ORDER BY id').all());
   assert.deepEqual(rows.map((r) => [r.title, r.track, r.rate_unit, r.hours_max, r.location_check]), [
     ['Fractional CTO', 'fractional', 'hour', 15, 'remote'],
     ['Chief Information Security Officer', 'fractional', 'hour', 10, 'remote'],

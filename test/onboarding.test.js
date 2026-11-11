@@ -53,8 +53,8 @@ async function setup() {
   const claude = createJobClaude(store.db, { ownerClient: fakeClaude(async (opts) => { sent.push(opts); return { data: DRAFT, text: '' }; }), env: {} });
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, claude, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
-  const pat = addUser(store.raw, { email: 'pat@example.com', name: 'Pat', aiSource: 'owner' });
-  store.raw.prepare('UPDATE users SET ai_cap_usd = 5 WHERE id = ?').run(pat);
+  const pat = await addUser(store.admin, { email: 'pat@example.com', name: 'Pat', aiSource: 'owner' });
+  await store.admin.prepare('UPDATE users SET ai_cap_usd = 5 WHERE id = ?').run(pat);
   return { store, app, sent, pat, asPat: as('pat@example.com'), asOwner: as('owner@example.com'), done: async () => { await app.close(); store.close(); } };
 }
 
@@ -67,8 +67,8 @@ test('Build a draft: the materials go to Claude as data on the user\'s own AI; n
   assert.match(/** @type {string} */ (sent[0].system), /not instructions to you/);
   const content = /** @type {Array<{ content: Array<{ type: string, source: { data: string } }> }>} */ (sent[0].messages)[0].content;
   assert.equal(content.find((b) => b.type === 'document')?.source.data, pdf);
-  assert.deepEqual(store.raw.prepare("SELECT user_id, status FROM runs WHERE name = 'draft-profile'").get(), { user_id: pat, status: 'ok' });
-  assert.equal(store.raw.prepare('SELECT COUNT(*) FROM user_settings WHERE user_id = ?').pluck().get(pat), 0, 'nothing saved');
+  assert.deepEqual(await store.admin.prepare("SELECT user_id, status FROM runs WHERE name = 'draft-profile'").get(), { user_id: pat, status: 'ok' });
+  assert.equal(await store.admin.prepare('SELECT COUNT(*) FROM user_settings WHERE user_id = ?').pluck().get(pat), 0, 'nothing saved');
   assert.equal((await app.inject({ method: 'POST', url: '/api/account/draft', headers: asPat, payload: {} })).statusCode, 400);
   for (let i = 2; i < DRAFTS_PER_DAY; i += 1) await app.inject({ method: 'POST', url: '/api/account/draft', headers: asPat, payload: { texts: [{ text: 'x' }] } });
   assert.equal((await app.inject({ method: 'POST', url: '/api/account/draft', headers: asPat, payload: { texts: [{ text: 'x' }] } })).statusCode, 429);
@@ -79,8 +79,8 @@ test('the Home checklist: AI, About you, and search, for users only', async () =
   const { store, app, pat, asPat, asOwner, done } = await setup();
   const setup1 = (await app.inject({ url: '/api/summary', headers: asPat })).json().setup;
   assert.deepEqual(setup1, { ai: true, aboutYou: false, search: false }, 'on the owner\'s key counts as AI ready');
-  saveUserProfile(store.raw, pat, 'Background. '.repeat(60));
-  saveUserConfig(store.raw, pat, { search: { terms: ['VP Engineering'], relevantTitleKeywords: ['engineering'], homeLocations: ['Remote'] } }, 'Pat');
+  await saveUserProfile(store.admin, pat, 'Background. '.repeat(60));
+  await saveUserConfig(store.admin, pat, { search: { terms: ['VP Engineering'], relevantTitleKeywords: ['engineering'], homeLocations: ['Remote'] } }, 'Pat');
   assert.deepEqual((await app.inject({ url: '/api/summary', headers: asPat })).json().setup, { ai: true, aboutYou: true, search: true });
   assert.equal((await app.inject({ url: '/api/summary', headers: asOwner })).json().setup, undefined);
   await done();

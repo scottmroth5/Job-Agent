@@ -96,14 +96,14 @@ async function resolveAll(
     concurrency: number;
     pauseMs: number;
     linkedinPauseMs: number;
-    onDone: (item: RunItem) => void;
+    onDone: (item: RunItem) => void | Promise<void>;
   },
 ) {
   const viaLinkedIn = items.filter((i) => i.linkedinJobId);
   const others = items.filter((i) => !i.linkedinJobId);
   const run = async (item: RunItem) => {
     await resolveDetails(item, { http, browser, state });
-    onDone(item);
+    await onDone(item);
   };
   await Promise.all([
     mapLimit(viaLinkedIn, 1, linkedinPauseMs, http.sleep, run),
@@ -118,7 +118,7 @@ const MAX_FETCH_ATTEMPTS = 3;
  * (SOURCES by default). Returns a summary with per-source counts, location results, and the inserted postings.
  */
 export async function runDiscovery({ store, config, http, browser = null, sources = SOURCES, now = new Date(), options = {} }: {
-  store: Pick<JobStore, 'db' | 'tx'>;
+  store: Pick<JobStore, 'db'>;
   config: JobSearchConfig;
   http: Http;
   browser?: PageRenderer | null;
@@ -195,22 +195,22 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const seenCt = new Set<string>();
   const fresh: RunItem[] = [];
 
-  const findExisting = (item: RunItem) => {
+  const findExisting = async (item: RunItem) => {
     const urlKey = normalizeUrl(item.url);
     const ctKey = identityKey(item);
-    const existing = ((urlKey && byUrl.get(urlKey)) || (ctKey && byCompanyTitle.get(ctKey)) || null) as Existing | null;
+    const existing = ((urlKey && await byUrl.get(urlKey)) || (ctKey && await byCompanyTitle.get(ctKey)) || null) as Existing | null;
     return { urlKey, ctKey, existing };
   };
-  const recordDuplicate = (item: RunItem, existing: Existing) => {
+  const recordDuplicate = async (item: RunItem, existing: Existing) => {
     stat(item.source).duplicates += 1;
     sightings.push({ postingId: existing.id, source: item.source, url: item.url });
-    if (lookups(db).groupOf('stage', existing.stage) === 'found' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
+    if ((await lookups(db)).groupOf('stage', existing.stage) === 'found' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
   };
 
   for (const item of candidates) {
-    const { urlKey, ctKey, existing } = findExisting(item);
+    const { urlKey, ctKey, existing } = await findExisting(item);
     if (existing) {
-      recordDuplicate(item, existing);
+      await recordDuplicate(item, existing);
       continue;
     }
     if ((urlKey && seenUrl.has(urlKey)) || (ctKey && seenCt.has(ctKey))) {
@@ -250,9 +250,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const seenAfter = new Set<string>();
   for (const item of selected) {
     if (skipReason(item, config)) continue; // a Google redirect resolved to a skipped site or a list of jobs
-    const { ctKey, existing } = findExisting(item);
+    const { ctKey, existing } = await findExisting(item);
     if (existing) {
-      recordDuplicate(item, existing);
+      await recordDuplicate(item, existing);
       continue;
     }
     if (ctKey && seenAfter.has(ctKey)) {
@@ -275,7 +275,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const insertedIds: number[] = [];
   if (!dryRun) {
     const nowIso = now.toISOString();
-    const found = sqlList(lookups(db).ids('stage', 'found'));
+    const lk = await lookups(db); // before the transaction, which is still synchronous
+    const found = sqlList(lk.ids('stage', 'found'));
     const insert = db.prepare(`INSERT INTO postings
       (user_id, url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
        discovered_on, stage, status, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, workplace, location_check,
@@ -291,11 +292,11 @@ export async function runDiscovery({ store, config, http, browser = null, source
         workplace = COALESCE(workplace, @workplace), updated_at = @now
       WHERE id = @id AND user_id = @uid AND stage IN ${found}`);
 
-    store.tx(() => {
+    await store.db.tx(async () => {
       for (const item of toInsert) {
         const company = knownCompany(item.company) ? withoutPictographs(item.company) : UNKNOWN_COMPANY;
         const id = Number(
-          insert.run({
+          (await insert.run({
             url: item.url,
             url_key: normalizeUrl(item.url),
             company,
@@ -316,9 +317,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
             workplace: item.workplace ?? null,
             location_check: item.locationCheck,
             source_job_id: item.sourceJobId ?? null,
-            track: item.track ?? lookups(db).role('track', 'default'),
-            stage: lookups(db).role('stage', 'default'),
-            status: lookups(db).role('status', 'default'),
+            track: item.track ?? lk.role('track', 'default'),
+            stage: lk.role('stage', 'default'),
+            status: lk.role('status', 'default'),
             rate_text: item.rateText ?? null,
             rate_min: item.rate?.min ?? null,
             rate_max: item.rate?.max ?? null,
@@ -327,16 +328,16 @@ export async function runDiscovery({ store, config, http, browser = null, source
             hours_max: item.hours?.max ?? null,
             extra_json: item.extra && Object.keys(item.extra).length ? JSON.stringify(item.extra) : null,
             now: nowIso,
-          }).lastInsertRowid,
+          })).id,
         );
-        history.run(id, lookups(db).role('status', 'default'), nowIso);
-        sighting.run(id, item.source, item.url ?? null, today);
+        await history.run(id, lk.role('status', 'default'), nowIso);
+        await sighting.run(id, item.source, item.url ?? null, today);
         insertedIds.push(id);
       }
-      for (const s of sightings) sighting.run(s.postingId, s.source, s.url ?? null, today);
+      for (const s of sightings) await sighting.run(s.postingId, s.source, s.url ?? null, today);
       for (const { id, item } of upgrades) {
         try {
-          upgrade.run({
+          await upgrade.run({
             id,
             url: item.url,
             url_key: normalizeUrl(item.url),
@@ -358,9 +359,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
   // 8. Retry recent postings whose full text failed on an earlier run (rate limits, timeouts)
   const retried = { attempted: 0, fixed: 0 };
   if (!dryRun && details && retryPending) {
-    const pending = db
+    const pending = await db
       .prepare(`SELECT id, url, company, title, location, workplace, source_job_id, source FROM postings
-        WHERE user_id = @uid AND stage IN ${sqlList(lookups(db).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
+        WHERE user_id = @uid AND stage IN ${sqlList((await lookups(db)).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
           AND fetch_attempts < ? AND discovered_on >= ?
           ${insertedIds.length ? `AND id NOT IN (${insertedIds.map(() => '?').join(', ')})` : ''}`)
       .all(...RETRYABLE, MAX_FETCH_ATTEMPTS, since, ...insertedIds) as Array<{ id: number; url: string | null; company: string; title: string; location: string | null; workplace: string | null }>;
@@ -389,11 +390,11 @@ export async function runDiscovery({ store, config, http, browser = null, source
       concurrency,
       pauseMs,
       linkedinPauseMs,
-      onDone: (item) => {
+      onDone: async (item) => {
         retried.attempted += 1;
         if (item.fetchStatus === 'ok') retried.fixed += 1;
         const nowIso = new Date().toISOString();
-        update.run({
+        await update.run({
           id: item.id,
           text: item.description ?? null,
           fetchedAt: item.description ? nowIso : null,

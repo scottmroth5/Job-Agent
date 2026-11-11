@@ -15,7 +15,7 @@ import {
 import { fakeConfig } from './fixtures/fakes.js';
 /** @import { Claude } from '@scottmroth5/agent-core' */
 /** @import { ScoreInput } from '../agents/discovery/score.ts' */
-/** @import { Database } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 /** @typedef {{ model: string, messages: Array<{ content: string }> }} Params */
 
 /** A posting with only the fields a test sets. */
@@ -27,7 +27,7 @@ const config = fakeConfig({
   search: { homeAreaLabel: 'the Anytown area', homeLocations: ['Anytown, ST'], terms: ['x'], relevantTitleKeywords: ['x'] },
 });
 const KNOWLEDGE = 'Section 5: Job Targets. Senior engineering leadership roles. '.repeat(20);
-const prompt = loadScorePrompt();
+const prompt = await loadScorePrompt();
 
 const result = (/** @type {Record<string, unknown>} */ o = {}) => ({
   score: 8,
@@ -67,8 +67,8 @@ function fakeClaude(replies) {
   return { requests, claude: createClaude({ client }) };
 }
 
-/** @param {Database} db @param {Record<string, string | number | null>} [o] */
-function addPosting(db, o = {}) {
+/** @param {Db} db @param {Record<string, string | number | null>} [o] */
+async function addPosting(db, o = {}) {
   const row = {
     url: `https://jobs.example.com/${Math.random()}`,
     company: 'Example Co',
@@ -82,12 +82,12 @@ function addPosting(db, o = {}) {
     ...o,
   };
   return Number(
-    db
+    (await db
       .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, location, location_check, fetch_status,
         fetched_text, stage, status, discovered_on, created_at, updated_at)
         VALUES (1, @url, @url, @company, @title, @url, @location, @location_check, @fetch_status, @fetched_text, @stage, @status,
         '2026-09-30', 'x', 'x')`)
-      .run(row).lastInsertRowid,
+      .run(row)).id,
   );
 }
 
@@ -135,11 +135,11 @@ test('ruleScore explains a conflict without an AI call', () => {
 
 test('scorePostings stores scores, applies the rule, promotes 8+, and skips scored postings', async () => {
   const store = openJobStore(':memory:');
-  const high = addPosting(store.db);
-  const low = addPosting(store.db);
-  const conflict = addPosting(store.db, { location: 'Faraway, ZZ', location_check: 'conflict' });
-  addPosting(store.db, { status: 'passed' }); // never scored
-  addPosting(store.db, { fetch_status: null }); // v1 history, not selected by default
+  const high = await addPosting(store.db);
+  const low = await addPosting(store.db);
+  const conflict = await addPosting(store.db, { location: 'Faraway, ZZ', location_check: 'conflict' });
+  await addPosting(store.db, { status: 'passed' }); // never scored
+  await addPosting(store.db, { fetch_status: null }); // v1 history, not selected by default
   const { claude, requests } = fakeClaude((/** @type {Params} */ params) => (params.messages[0].content.includes('Lead a team') ? result({ score: requests.length === 1 ? 9 : 5 }) : result()));
 
   const summary = await scorePostings({ store, config, claude, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5', options: { concurrency: 1 } });
@@ -149,22 +149,22 @@ test('scorePostings stores scores, applies the rule, promotes 8+, and skips scor
   assert.equal(requests.length, 2, 'the conflict posting made no Claude call');
   assert.deepEqual(summary.promoted, [high]);
 
-  const rows = /** @type {Array<Record<string, string | number | null>>} */ (store.db.prepare('SELECT posting_id, score, source, model, prompt_version FROM scores ORDER BY posting_id').all());
+  const rows = /** @type {Array<Record<string, string | number | null>>} */ (await store.db.prepare('SELECT posting_id, score, source, model, prompt_version FROM scores ORDER BY posting_id').all());
   assert.deepEqual(rows.map((r) => [r.posting_id, r.score, r.source]), [[high, 9, 'v2'], [low, 5, 'v2'], [conflict, 2, 'v2-rule']]);
   assert.equal(rows[0].model, 'claude-haiku-4-5');
   assert.equal(rows[0].prompt_version, prompt.version);
-  assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(high), 'pipeline');
-  assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(low), 'discovered');
-  assert.equal(JSON.parse(/** @type {string} */ (store.db.prepare('SELECT analysis_json FROM scores WHERE posting_id = ?').pluck().get(high))).topTalkingPoint, 'Platform growth');
+  assert.equal(await store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(high), 'pipeline');
+  assert.equal(await store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(low), 'discovered');
+  assert.equal(JSON.parse(/** @type {string} */ (await store.db.prepare('SELECT analysis_json FROM scores WHERE posting_id = ?').pluck().get(high))).topTalkingPoint, 'Platform growth');
 
-  assert.equal(selectPostings(store.db).length, 0, 'a second run scores nothing');
-  assert.equal(selectPostings(store.db, { allUnscored: true }).length, 1, '--all-unscored includes v1 history');
+  assert.equal((await selectPostings(store.db)).length, 0, 'a second run scores nothing');
+  assert.equal((await selectPostings(store.db, { allUnscored: true })).length, 1, '--all-unscored includes v1 history');
   store.close();
 });
 
 test('scorePostings leaves failures unscored and stops after repeated failures', async () => {
   const store = openJobStore(':memory:');
-  for (let i = 0; i < 4; i++) addPosting(store.db);
+  for (let i = 0; i < 4; i++) await addPosting(store.db);
   const { claude } = fakeClaude(() => Object.assign(new Error('bad key'), { name: 'AuthenticationError' }));
   const summary = await scorePostings({
     store, config, claude, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5',
@@ -174,7 +174,7 @@ test('scorePostings leaves failures unscored and stops after repeated failures',
   assert.equal(summary.failures.length, 2);
   assert.equal(summary.aborted, true);
   assert.match(summary.failures[0].error, /AuthenticationError/);
-  assert.equal(store.db.prepare('SELECT COUNT(*) FROM scores').pluck().get(), 0);
+  assert.equal(await store.db.prepare('SELECT COUNT(*) FROM scores').pluck().get(), 0);
   store.close();
 });
 
@@ -185,8 +185,8 @@ test('scorePostings refuses to run without usable knowledge', async () => {
   store.close();
 });
 
-test('fractional postings use the fractional prompt with stacking target and posted terms', () => {
-  const prompts = { fulltime: prompt, fractional: loadScorePrompt('fractional') };
+test('fractional postings use the fractional prompt with stacking target and posted terms', async () => {
+  const prompts = { fulltime: prompt, fractional: await loadScorePrompt('fractional') };
   const fcfg = fakeConfig({ ...config, fractional: { targetAnnual: [200000, 250000], weeksPerYear: 48 } });
   const posting = { track: 'fractional', company: 'Example Co', title: 'Fractional CTO', location: 'Remote', location_check: 'remote', rate_text: '$5K - $6K / mo', hours_min: 5, hours_max: 8, fetched_text: 'x' };
   const req = buildScoreRequest(posting, { config: fcfg, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5', prompts });
@@ -201,8 +201,8 @@ test('fractional postings use the fractional prompt with stacking target and pos
 
 test('scoring a fractional posting stores pay and hours only where the source left them empty', async () => {
   const store = openJobStore(':memory:');
-  const id = addPosting(store.db);
-  store.db.prepare("UPDATE postings SET track = 'fractional', hours_min = 10, hours_max = 20 WHERE id = ?").run(id);
+  const id = await addPosting(store.db);
+  await store.db.prepare("UPDATE postings SET track = 'fractional', hours_min = 10, hours_max = 20 WHERE id = ?").run(id);
   const fractionalResult = result({
     score: 8,
     fit: 'High',
@@ -214,9 +214,9 @@ test('scoring a fractional posting stores pay and hours only where the source le
   const { claude, requests } = fakeClaude([fractionalResult]);
   await scorePostings({ store, config: fakeConfig({ ...config, fractional: { targetAnnual: [200000, 250000] } }), claude, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5' });
   assert.match(requests[0].messages[0].content, /fractional engagement/);
-  const row = store.db.prepare('SELECT rate_min, rate_max, rate_unit, hours_min, hours_max, stage FROM postings WHERE id = ?').get(id);
+  const row = await store.db.prepare('SELECT rate_min, rate_max, rate_unit, hours_min, hours_max, stage FROM postings WHERE id = ?').get(id);
   assert.deepEqual(row, { rate_min: 175, rate_max: 225, rate_unit: 'hour', hours_min: 10, hours_max: 20, stage: 'pipeline' });
-  assert.equal(JSON.parse(/** @type {string} */ (store.db.prepare('SELECT analysis_json FROM scores').pluck().get())).fit, 'High');
+  assert.equal(JSON.parse(/** @type {string} */ (await store.db.prepare('SELECT analysis_json FROM scores').pluck().get())).fit, 'High');
   store.close();
 });
 

@@ -24,7 +24,7 @@ async function main() {
   const cases = JSON.parse(readFileSync(repoPath('evals', 'letters', 'cases.json'), 'utf8'));
   const store = openJobStore();
   try {
-    const estimate = estimateLetterEval(cases, models, store.db);
+    const estimate = await estimateLetterEval(cases, models, store.db);
     const total = Object.values(estimate).reduce((/** @type {number} */ s, x) => s + (x ?? 0), 0);
     for (const [m, usd] of Object.entries(estimate)) console.log(`${m}: ${cases.letters.length} letters, estimated $${usd == null ? '?' : usd.toFixed(3)}`);
     console.log(`Estimated total: $${total.toFixed(3)} (limit --max-usd=${maxUsd}).`);

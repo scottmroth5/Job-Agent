@@ -66,13 +66,13 @@ async function main() {
   const started = new Date().toISOString();
   if (!Number.isInteger(uid) || uid < 1) throw new Error(`--user must be a user id, not "${userArg}"`);
   const store = openJobStore(undefined, { fallbackUid: uid });
-  const config = configFor(store.raw, uid, owner ? loadConfig() : /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null))); // either way with the skipped sites from Settings; the file config is read for the owner only
+  const config = await configFor(store.admin, uid, owner ? loadConfig() : /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null))); // either way with the skipped sites from Settings; the file config is read for the owner only
   if (!owner) {
-    const user = /** @type {Pick<UsersRow, 'status'> | undefined} */ (store.raw.prepare('SELECT status FROM users WHERE id = ?').get(uid));
+    const user = /** @type {Pick<UsersRow, 'status'> | undefined} */ (await store.admin.prepare('SELECT status FROM users WHERE id = ?').get(uid));
     if (user?.status !== 'active') throw new Error(`User ${uid} is not an active account.`);
     if (!config.ready) throw new Error('Set up your search (terms, title keywords, and locations) under Settings first.');
   }
-  for (const name of ['pipeline', 'discover', 'score', 'hunt']) assertNoRunningRun(store.db, name);
+  for (const name of ['pipeline', 'discover', 'score', 'hunt']) await assertNoRunningRun(store.db, name);
   const tracer = createJobTracer({ store });
   const pipelineRun = await tracer.startRun('pipeline');
   // Google (Docs, Drive, the report email) is the owner's sign-in; others' runs never touch it.
@@ -95,7 +95,7 @@ async function main() {
     /** @type {string | null} */
     let knowledge = null;
     try {
-      knowledge = owner ? await ownerBackground(store) : profileForAI(store.raw, uid);
+      knowledge = owner ? await ownerBackground(store) : await profileForAI(store.admin, uid);
     } catch (err) {
       pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${/** @type {Error} */ (err).message}`);
     }
@@ -109,7 +109,7 @@ async function main() {
       );
     }
     await step(tracer, 'archive', async () => {
-      const r = archivePostings(store.db);
+      const r = await archivePostings(store.db);
       return { archived: r.archived.map(({ id, reason }) => ({ id, reason })), remaining: r.remaining };
     });
     await pipelineRun.finish(knowledge ? 'ok' : 'partial');
@@ -117,7 +117,7 @@ async function main() {
     console.log(`[pipeline] Step ${STEPS.length}/${STEPS.length}: report`);
     // The report goes only to the owner (it is job data; others see their results in the app).
     if (noEmail || !owner) {
-      const r = renderReport(collectReport(store.db, { since: started }));
+      const r = renderReport(await collectReport(store.db, { since: started }));
       console.log(`${r.subject}\n${r.text}`);
     } else {
       const to = process.env.EMAIL_ADDRESS;
@@ -137,19 +137,19 @@ async function main() {
 // The user's own time zone for their calendar days (read before the store is opened in main; none for the owner).
 /**
  * @param {number} id
- * @returns {string | null}
+ * @returns {Promise<string | null>}
  */
-function timeZoneOf(id) {
+async function timeZoneOf(id) {
   if (id === OWNER_ID || !Number.isInteger(id)) return null;
   const store = openJobStore(undefined, { fallbackUid: id, snapshot: false });
   try {
-    return /** @type {string | null | undefined} */ (store.raw.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(id)) ?? null;
+    return /** @type {string | null | undefined} */ (await store.admin.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(id)) ?? null;
   } finally {
     store.close();
   }
 }
 
-runAsUser(uid, main, { timeZone: timeZoneOf(uid) })
+runAsUser(uid, main, { timeZone: await timeZoneOf(uid) })
   .catch((err) => {
     console.error(err.message);
     process.exitCode = 1;

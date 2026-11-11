@@ -3,7 +3,7 @@
 // prep read. titles are plain words matched against a job title to pick the resume for that job; one may be the
 // default. Artifacts and meeting preps record which resume they were written from.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '017-resumes';
 

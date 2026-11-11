@@ -6,7 +6,7 @@ import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.ts';
 import { checkLocation } from '../../tools/location.ts';
 import { lookups, sqlList } from '../../agents/lookups.ts';
 /**
- * @import { Database } from '../../tools/types.ts'
+ * @import { Db } from '../../tools/types.ts'
  * @import { Http } from '../../tools/http.ts'
  * @import { JobSearchConfig } from '../../tools/config.ts'
  * @import { JobItem, PageRenderer } from '../../agents/discovery/types.ts'
@@ -21,15 +21,15 @@ import { lookups, sqlList } from '../../agents/lookups.ts';
 export const MIN_CASE_TEXT = 500;
 
 /**
- * @param {{ db: Database, http: Http, browser?: PageRenderer | null, config: Pick<JobSearchConfig, 'search'>, log?: (line: string) => void }} opts
+ * @param {{ db: Db, http: Http, browser?: PageRenderer | null, config: Pick<JobSearchConfig, 'search'>, log?: (line: string) => void }} opts
  * @returns {Promise<{cases: ScoreCase[], skipped: {noText: number}, fetched: number}>}
  */
 export async function buildCases({ db, http, browser = null, config, log = () => {} }) {
-  const found = db
+  const found = await db
     .prepare(`SELECT p.id, p.company, p.title, p.location, p.url, p.status, p.jd_text,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-analysis' ORDER BY s.id DESC LIMIT 1) AS v1_score,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-quick' ORDER BY s.id DESC LIMIT 1) AS v1_quick
-      FROM postings p WHERE p.user_id = @uid AND (p.status IN ${sqlList(lookups(db).inProgress())} OR p.status = 'passed')
+      FROM postings p WHERE p.user_id = @uid AND (p.status IN ${sqlList((await lookups(db)).inProgress())} OR p.status = 'passed')
         -- a status the agent set (cleanup of list pages, excluded sites, duplicates) is not the user's choice
         AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = p.id AND h.user_id = p.user_id ORDER BY h.id DESC LIMIT 1), '') != 'agent'
       ORDER BY p.id`)

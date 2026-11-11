@@ -38,8 +38,8 @@ test('input: people are trimmed and required, unsafe links dropped, unknown choi
   assert.throws(() => normalizePrepInput({ attendees: Array.from({ length: 9 }, (_, i) => ({ name: `P${i}` })) }), /At most 8/);
 });
 
-test('request: Opus 5.5 with the knowledge as the system prompt, web research only when asked, everything in the prompt', () => {
-  const prompt = getPrompt(null, 'meeting-prep');
+test('request: Opus 5.5 with the knowledge as the system prompt, web research only when asked, everything in the prompt', async () => {
+  const prompt = await getPrompt(null, 'meeting-prep');
   const req = buildPrepRequest(posting, input, { config, knowledge: KNOWLEDGE, prompt, analysis: { score: 8, reason: 'Strong', strengths: ['Scale'], watchOuts: [], topTalkingPoint: 'Growth' }, letter: 'Letter body', now: new Date(2026, 9, 12) });
   assert.equal(req.model, PREP_MODEL);
   assert.equal(req.system, KNOWLEDGE);
@@ -127,9 +127,9 @@ function fakeServices({ docFails = false } = {}) {
 async function setup(opts) {
   const store = openJobStore(':memory:');
   const id = Number(
-    store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, fetched_text, notes, location, discovered_on, created_at, updated_at)
+    (await store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, fetched_text, notes, location, discovered_on, created_at, updated_at)
       VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'example|vp engineering', 'LinkedIn', 'pipeline', 'applied', 'fulltime', ?, ?, 'Remote', '2026-10-01', 'x', 'x')`)
-      .run(posting.fetched_text, posting.notes).lastInsertRowid,
+      .run(posting.fetched_text, posting.notes)).id,
   );
   const fake = fakeServices(opts);
   const app = await buildApp({ store, config, services: fake.services });
@@ -200,7 +200,7 @@ test('API: with no AI here, a prep is refused with 503 before any task starts', 
   assert.equal(res.statusCode, 503);
   assert.match(res.json().error, /AI is not available here/);
   assert.deepEqual((await noAi.inject('/api/tasks')).json(), [], 'no task was started');
-  assert.equal(store.db.prepare('SELECT COUNT(*) FROM meeting_preps').pluck().get(), 0);
+  assert.equal(await store.db.prepare('SELECT COUNT(*) FROM meeting_preps').pluck().get(), 0);
   await noAi.close();
   await app.close();
   store.close();

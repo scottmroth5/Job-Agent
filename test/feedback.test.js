@@ -27,7 +27,7 @@ async function setup() {
   const notices = createNotices({ send: async (e) => sent.push(e), owner: () => OWNER, appUrl: () => SITE, log: {} });
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, notices, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
-  const pat = addUser(store.raw, { email: 'pat@example.com', name: 'Pat' });
+  const pat = await addUser(store.admin, { email: 'pat@example.com', name: 'Pat' });
   return { store, app, sent, pat, asOwner: as(OWNER), asPat: as('pat@example.com'), done: async () => { await app.close(); store.close(); } };
 }
 
@@ -40,7 +40,7 @@ test('feedback: saved as the sender\'s, emailed to the owner with the sender as 
   assert.equal(sent.length, 1);
   assert.deepEqual([sent[0].to, sent[0].replyTo, sent[0].subject], [OWNER, 'pat@example.com', 'Job Hunt: feedback from Pat']);
   assert.match(sent[0].text, /could use an example/);
-  const row = store.raw.prepare('SELECT user_id, page, status FROM feedback').get();
+  const row = await store.admin.prepare('SELECT user_id, page, status FROM feedback').get();
   assert.deepEqual(row, { user_id: pat, page: '#/settingsscript', status: 'open' }, 'the page label keeps only plain characters');
 
   assert.equal((await app.inject({ url: '/api/admin/feedback', headers: asPat })).statusCode, 403, 'a user cannot read feedback');
@@ -61,12 +61,22 @@ test('feedback: saved as the sender\'s, emailed to the owner with the sender as 
   await done();
 });
 
+test('feedback sent at once never passes the day\'s limit', async () => {
+  const { store, app, asPat, done } = await setup();
+  const send = (/** @type {string} */ body) => app.inject({ method: 'POST', url: '/api/feedback', headers: asPat, payload: { body } });
+  for (let i = 1; i < FEEDBACK_PER_DAY; i += 1) await send(`note ${i}`);
+  const codes = (await Promise.all([send('last one'), send('and another')])).map((r) => r.statusCode).sort();
+  assert.deepEqual(codes, [201, 429]);
+  assert.equal(await store.admin.prepare('SELECT COUNT(*) FROM feedback').pluck().get(), FEEDBACK_PER_DAY);
+  await done();
+});
+
 test('the Users screen: last seen, last pipeline run, and setup; no one\'s background or key text', async () => {
   const { store, app, pat, asOwner, asPat, done } = await setup();
   await app.inject({ url: '/api/postings', headers: asPat });
-  saveUserConfig(store.raw, pat, { search: { terms: ['Head of Data'], relevantTitleKeywords: ['data'], homeLocations: ['Remote'] } }, 'Pat');
-  saveUserProfile(store.raw, pat, 'A private background sentence. '.repeat(30));
-  store.raw.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('pipeline', 'ok', '2026-10-26T10:00:00Z', ?)").run(pat);
+  await saveUserConfig(store.admin, pat, { search: { terms: ['Head of Data'], relevantTitleKeywords: ['data'], homeLocations: ['Remote'] } }, 'Pat');
+  await saveUserProfile(store.admin, pat, 'A private background sentence. '.repeat(30));
+  await store.admin.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('pipeline', 'ok', '2026-10-26T10:00:00Z', ?)").run(pat);
   const res = await app.inject({ url: '/api/admin/users', headers: asOwner });
   const p = res.json().find((/** @type {JsonRow} */ u) => u.email === 'pat@example.com');
   assert.ok(p.lastSeenAt, 'seen');

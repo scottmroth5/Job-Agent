@@ -25,4 +25,14 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
+  // v3 Phase 3: every database call goes through the async engine (db/engine). better-sqlite3 is imported only by the
+  // engine and its file helpers, by the migrations (they run on the connection before the engine exists), by the
+  // agent-core declarations, and by tests that build synthetic databases or test the engine on its connection.
+  {
+    files: ['**/*.{js,jsx,ts,tsx}'],
+    ignores: ['db/engine/**', 'db/migrations/**', 'types/**', 'test/**'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: [{ name: 'better-sqlite3', message: 'Use the async engine: store.db, store.admin, or db/engine/files.ts for work on database files.' }] }],
+    },
+  },
 );

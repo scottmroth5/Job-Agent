@@ -7,5 +7,5 @@ process.env.PORT ||= '5180';
 process.env.HOST ||= '127.0.0.1';
 
 const { main } = await import('./demo-seed.js');
-if (main(['--force']) !== 0) process.exit(1);
+if (await main(['--force']) !== 0) process.exit(1);
 await import('../server/index.js');

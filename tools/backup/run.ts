@@ -6,7 +6,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
-import Database from 'better-sqlite3';
+import { integrityOf } from '../../db/engine/files.ts';
 import { checkPassphrase, decrypt, encrypt, pack, sha256, unpack } from './crypto.ts';
 import type { Kdf } from './crypto.ts';
 import type { BackupDrive } from './drive.ts';
@@ -66,16 +66,18 @@ const safeEntry = (name: unknown) => typeof name === 'string' && name.length > 0
 
 /**
  * One backup, from options:
- *   db       the live database (backed up online, safe while the app runs)
+ *   backup   store.backup: an online snapshot of the live database (safe while the app runs)
  *   extras   other single files to include when they exist
  *   folders  folders to include whole (e.g. attachments)
  *   drive    createBackupDrive(...) or a fake; with toDir the upload is skipped
  *   toDir    write the encrypted file to this folder instead
  *   date     YYYY-MM-DD, the backup's name
  *   kdf      scrypt settings (tests only)
+ *   tempRoot where the plaintext snapshot is made and deleted (the OS temp folder; tests pass their own)
  */
-export async function runBackup({ db, passphrase, extras = [], folders = [], drive, toDir, date, kdf }: {
-  db: Database.Database;
+export async function runBackup({ backup, passphrase, extras = [], folders = [], drive, toDir, date, kdf, tempRoot = tmpdir() }: {
+  /** Writes an online snapshot of the open database to a file: store.backup (db/index.ts). */
+  backup: (to: string) => Promise<void>;
   passphrase: string | undefined;
   extras?: Array<{ name: string; path: string }>;
   folders?: Array<{ name: string; dir: string }>;
@@ -83,17 +85,15 @@ export async function runBackup({ db, passphrase, extras = [], folders = [], dri
   toDir?: string;
   date: string;
   kdf?: Kdf;
+  tempRoot?: string;
 }) {
   checkPassphrase(passphrase);
   if (!drive && !toDir) throw new Error('Nowhere to put the backup');
-  const tmp = mkdtempSync(join(tmpdir(), 'ja-backup-'));
+  const tmp = mkdtempSync(join(tempRoot, 'ja-backup-'));
   try {
     const snapshot = join(tmp, DB_ENTRY);
-    await db.backup(snapshot);
-    const check = new Database(snapshot, { readonly: true });
-    const integrity = check.pragma('integrity_check', { simple: true });
-    check.close();
-    if (integrity !== 'ok') throw new Error('The database snapshot failed its integrity check; nothing was uploaded');
+    await backup(snapshot);
+    if (integrityOf(snapshot) !== 'ok') throw new Error('The database snapshot failed its integrity check; nothing was uploaded');
 
     const dbBytes = readFileSync(snapshot);
     const files = [{ name: DB_ENTRY, data: dbBytes }];
@@ -165,10 +165,7 @@ export function restoreBackup({ file, passphrase, outPath }: { file: Buffer; pas
     if ((err as NodeJS.ErrnoException).code === 'EEXIST') throw new Error(`${outPath} already exists; choose a new file name`);
     throw err;
   }
-  const check = new Database(outPath, { readonly: true });
-  const integrity = check.pragma('integrity_check', { simple: true });
-  check.close();
-  if (integrity !== 'ok') throw new Error('The restored database failed its integrity check');
+  if (integrityOf(outPath) !== 'ok') throw new Error('The restored database failed its integrity check');
   for (const f of others) {
     const p = join(restoredDir, ...f.name.split('/'));
     mkdirSync(dirname(p), { recursive: true });

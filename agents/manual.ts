@@ -62,8 +62,8 @@ const MIN_PASTED = 100;
 const STAGE_LABEL: Record<string, string> = { discovered: 'Discovered', pipeline: 'Pipeline', archived: 'Archived' };
 
 /** What an existing posting is, in words the Add job dialog can show. */
-export function describeExisting(db: JobStore['db'], id: number) {
-  const p = db
+export async function describeExisting(db: JobStore['db'], id: number) {
+  const p = await db
     .prepare(`SELECT p.id, p.title, p.company, p.source, p.stage, p.status, p.track, p.discovered_on, p.url,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id ORDER BY CASE WHEN s.source LIKE 'v2%' THEN 0 ELSE 1 END, s.id DESC LIMIT 1) AS score
       FROM postings p WHERE p.id = ? AND p.user_id = @uid`)
@@ -138,12 +138,12 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
 
   // 1. Already known?
   const urlKey = normalizeUrl(url);
-  const byUrl = urlKey ? (db.prepare('SELECT id FROM postings WHERE url_key = ? AND user_id = @uid').get(urlKey) as { id: number } | undefined) : null;
+  const byUrl = urlKey ? (await db.prepare('SELECT id FROM postings WHERE url_key = ? AND user_id = @uid').get(urlKey) as { id: number } | undefined) : null;
   // Company + title only identifies a job when the company is real, not a placeholder like "Unknown".
   const ctKey = input.title ? identityKey({ company: input.company, title: input.title }) : null;
-  const existing = byUrl ?? (ctKey ? (db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(ctKey) as { id: number } | undefined) : null);
+  const existing = byUrl ?? (ctKey ? (await db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(ctKey) as { id: number } | undefined) : null);
   if (existing) {
-    const match = describeExisting(db, existing.id);
+    const match = await describeExisting(db, existing.id);
     step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
     return { id: existing.id, created: false, existing: match, matchedBy: byUrl ? 'link' : 'company and title' };
   }
@@ -187,9 +187,9 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
   rejectSkipped(item, config);
   // The link may have supplied the company and title: check again for the same job saved from another site.
   const fetchedKey = identityKey(item);
-  const sameJob = fetchedKey ? (db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(fetchedKey) as { id: number } | undefined) : null;
+  const sameJob = fetchedKey ? (await db.prepare('SELECT id FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1').get(fetchedKey) as { id: number } | undefined) : null;
   if (sameJob) {
-    const match = describeExisting(db, sameJob.id);
+    const match = await describeExisting(db, sameJob.id);
     step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
     return { id: sameJob.id, created: false, existing: match, matchedBy: 'company and title' };
   }
@@ -197,66 +197,69 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
   // 3. Location, track, pay and hours
   const rate = parseRate(item.rateText);
   const hours = parseHours(item.hoursText);
-  const lk = lookups(db);
+  const lk = await lookups(db);
   if (input.track && !lk.selectable('track', input.track)) throw new Error(`"${input.track}" is not an available track.`);
   const track = input.track ?? detectTrack({ ...item, hoursMax: hours?.max });
   const locationCheck = checkLocation({ location: item.location, workplace: item.workplace, text: item.description }, config.search.homeLocations);
 
-  // 4. Save
+  // 4. Save: the job, its first status, and its notes are one transaction.
   const nowIso = new Date().toISOString();
-  const id = Number(
-    db
-      .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, location, workplace, discovered_on,
-          stage, status, notes, jd_text, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, location_check,
-          track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
-        VALUES (@uid, @url, @url_key, @company, @title, @ct, 'manual', @location, @workplace, @today, @stage, @status, @notes,
-          @jd_text, @fetched_text, @fetched_at, @fetch_status, @fetch_method, 1, @location_check, @track, @rate_text,
-          @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra, @now, @now)`)
-      .run({
-        url,
-        url_key: urlKey,
-        company: item.company,
-        title: item.title,
-        ct: storedKey(item),
-        location: item.location ?? null,
-        workplace: item.workplace ?? null,
-        today: localDay(),
-        notes: input.notes?.trim() || null,
-        jd_text: pasted,
-        fetched_text: pasted ? null : item.description ?? null,
-        fetched_at: !pasted && item.description ? nowIso : null,
-        fetch_status: item.fetchStatus ?? null,
-        fetch_method: item.fetchMethod ?? null,
-        location_check: locationCheck,
-        track,
-        rate_text: item.rateText,
-        rate_min: rate?.min ?? null,
-        rate_max: rate?.max ?? null,
-        rate_unit: rate?.unit ?? null,
-        hours_min: hours?.min ?? null,
-        hours_max: hours?.max ?? null,
-        extra: item.extra && Object.keys(item.extra).length ? JSON.stringify(item.extra) : null,
-        now: nowIso,
-        stage: lk.role('stage', 'default'),
-        status: lk.role('status', 'default'),
-      }).lastInsertRowid,
-  );
-  db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'user', ?)").run(id, lk.role('status', 'default'), nowIso);
-  adoptNotesText(db, { postingId: id, source: 'user' });
+  const id = await db.tx(async () => {
+    const id = Number(
+      (await db
+        .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, location, workplace, discovered_on,
+            stage, status, notes, jd_text, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, location_check,
+            track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
+          VALUES (@uid, @url, @url_key, @company, @title, @ct, 'manual', @location, @workplace, @today, @stage, @status, @notes,
+            @jd_text, @fetched_text, @fetched_at, @fetch_status, @fetch_method, 1, @location_check, @track, @rate_text,
+            @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra, @now, @now)`)
+        .run({
+          url,
+          url_key: urlKey,
+          company: item.company,
+          title: item.title,
+          ct: storedKey(item),
+          location: item.location ?? null,
+          workplace: item.workplace ?? null,
+          today: localDay(),
+          notes: input.notes?.trim() || null,
+          jd_text: pasted,
+          fetched_text: pasted ? null : item.description ?? null,
+          fetched_at: !pasted && item.description ? nowIso : null,
+          fetch_status: item.fetchStatus ?? null,
+          fetch_method: item.fetchMethod ?? null,
+          location_check: locationCheck,
+          track,
+          rate_text: item.rateText,
+          rate_min: rate?.min ?? null,
+          rate_max: rate?.max ?? null,
+          rate_unit: rate?.unit ?? null,
+          hours_min: hours?.min ?? null,
+          hours_max: hours?.max ?? null,
+          extra: item.extra && Object.keys(item.extra).length ? JSON.stringify(item.extra) : null,
+          now: nowIso,
+          stage: lk.role('stage', 'default'),
+          status: lk.role('status', 'default'),
+        })).id,
+    );
+    await db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'user', ?)").run(id, lk.role('status', 'default'), nowIso);
+    await adoptNotesText(db, { postingId: id, source: 'user' });
+    return id;
+  });
   step(`Saved as job #${id} (${lk.label('track', track)})`);
 
   // 5. Score
   step('Scoring');
   const scored = await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], concurrency: 1 } });
   if (scored.failures.length) throw new Error(`Saved as job #${id}, but scoring failed: ${scored.failures[0]?.error}`);
-  const score = db.prepare("SELECT score FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(id) as number | undefined;
+  const score = await db.prepare("SELECT score FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(id) as number | undefined;
   const promoted = scored.promoted.includes(id);
   step(`Scored ${score} of 10${promoted ? ', moved to your pipeline' : ''}`);
 
   // 6. Materials
   let materials: Awaited<ReturnType<typeof generateForPostings>> | null = null;
   if (promoted || input.writeMaterials) {
-    if (!promoted) db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), nowIso, id);
+    if (!promoted) await db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), nowIso, id);
     step('Writing resume tweaks and cover letter');
     materials = await generateForPostings({ store, config, claude, knowledge, drive, run, options: { ids: [id] } });
     step(materials.docs ? 'Cover letter saved as a Google Doc' : 'Materials written');

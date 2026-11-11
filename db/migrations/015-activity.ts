@@ -1,7 +1,7 @@
 // Multi-user, phase 4: when each user was last seen (the admin's Users screen), and feedback users send the owner.
 // feedback is a user table: each row is its sender's, and only server/admin-queries.ts reads across users.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '015-activity';
 

@@ -14,7 +14,7 @@ import { listNotes, notesForPrompt } from '../notes.ts';
 import { pickResume, withResume } from '../resumes.ts';
 import { letterHeader } from '../letter-header.ts';
 import type { Claude, Run } from '@scottmroth5/agent-core';
-import type { Database, JobStore } from '../../tools/types.ts';
+import type { Db, JobStore } from '../../tools/types.ts';
 import type { JobSearchConfig } from '../../tools/config.ts';
 import type { DriveClient } from '../../tools/google/drive.ts';
 import type { MeetingPrepsRow, PostingsRow } from '../../db/types.ts';
@@ -178,8 +178,8 @@ export function prepHtml(markdown: string) {
 
 
 /** Lists a job's preps, newest first, without their text. */
-export function listPreps(db: Database, postingId: number) {
-  return (db
+export async function listPreps(db: Db, postingId: number) {
+  return (await db
     .prepare('SELECT id, attendees_json, meeting_at, meeting_kind, meeting_format, research, doc_url, cost_usd, web_searches, created_at FROM meeting_preps WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC')
     .all(postingId) as MeetingPrepsRow[])
     .map((r) => ({
@@ -212,14 +212,14 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
   now?: Date;
 }) {
   const { db } = store;
-  const posting = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as PostingsRow | undefined;
+  const posting = await db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as PostingsRow | undefined;
   if (!posting) throw new Error('Job not found');
   const prepInput = normalizePrepInput(input);
-  const analysisJson = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
-  const letter = db.prepare("SELECT content FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | undefined;
-  const prompt = getPrompt(db, 'meeting-prep');
-  const notes = notesForPrompt(listNotes(db, postingId));
-  const resume = pickResume(db, posting.title); // the user's resume for this job (agents/resumes.ts), if any
+  const analysisJson = await db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
+  const letter = await db.prepare("SELECT content FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | undefined;
+  const prompt = await getPrompt(db, 'meeting-prep');
+  const notes = notesForPrompt(await listNotes(db, postingId));
+  const resume = await pickResume(db, posting.title); // the user's resume for this job (agents/resumes.ts), if any
 
   const people = prepInput.attendees.length;
   onStep(prepInput.research ? `Researching ${people === 1 ? 'the person' : `${people} people`} and the company, then writing the prep (a few minutes)` : 'Writing the prep');
@@ -232,7 +232,7 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
   if (content.length < 200) throw new Error('The prep came back empty or too short; try again.');
 
   const id = randomUUID();
-  db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
+  await db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
       model, prompt_version, cost_usd, web_searches, run_id, created_at, resume_id)
     VALUES (@uid, @id, @postingId, @attendees, @meetingAt, @kind, @format, @context, @research, @content, @model, @version, @cost, @searches, @runId, @createdAt, @resumeId)`).run({
     id,
@@ -260,9 +260,9 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
     onStep('Saving it as a Google Doc');
     try {
       const folderId = await ensurePrepFolder(drive, db);
-      const name = prepDocName(letterHeader(db, config).name, posting.company, prepInput.attendees);
+      const name = prepDocName((await letterHeader(db, config)).name, posting.company, prepInput.attendees);
       const doc = await drive.createDocFromHtml({ name, html: prepHtml(content), folderId });
-      db.prepare('UPDATE meeting_preps SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
+      await db.prepare('UPDATE meeting_preps SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
       docUrl = doc.url;
     } catch (err) {
       const e = err as Error;

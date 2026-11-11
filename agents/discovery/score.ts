@@ -10,7 +10,7 @@ import { getPrompt } from '../prompts.ts';
 import { lookups, sqlList } from '../lookups.ts';
 import type { Claude, Run } from '@scottmroth5/agent-core';
 import type { JobSearchConfig } from '../../tools/config.ts';
-import type { Database, JobStore } from '../../tools/types.ts';
+import type { Db, JobStore } from '../../tools/types.ts';
 import type { PostingsRow } from '../../db/types.ts';
 
 /** What scoring reads from a posting: a stored row, or an eval case shaped like one. */
@@ -85,14 +85,14 @@ const ESTIMATE_RATES: Record<string, { input: number; output: number; expectedOu
  * 'fulltime' is score.md/score.json; 'fractional' is score-fractional.md/score-fractional.json.
  * db may be omitted, which gives the repo default.
  */
-export function loadScorePrompt(track = 'fulltime', db: Database | null = null): ScorePrompt {
-  const p = getPrompt(db, track === 'fractional' ? 'score-fractional' : 'score');
+export async function loadScorePrompt(track = 'fulltime', db: Db | null = null): Promise<ScorePrompt> {
+  const p = await getPrompt(db, track === 'fractional' ? 'score-fractional' : 'score');
   return { template: p.template, schema: p.schema, version: p.version, track, source: p.source };
 }
 
 /** Both tracks' prompts, keyed by track. */
-export function loadScorePrompts(db: Database | null = null) {
-  return { fulltime: loadScorePrompt('fulltime', db), fractional: loadScorePrompt('fractional', db) };
+export async function loadScorePrompts(db: Db | null = null) {
+  return { fulltime: await loadScorePrompt('fulltime', db), fractional: await loadScorePrompt('fractional', db) };
 }
 
 /** The prompt for a posting's track, from either a single prompt or a { fulltime, fractional } set. */
@@ -238,15 +238,15 @@ export function estimateCost(postings: ScoreInput[], { model, knowledgeChars, te
 }
 
 /** Selects postings to score: v2-discovered, not yet scored by v2, not passed or rejected. */
-export function selectPostings(
-  db: Database,
+export async function selectPostings(
+  db: Db,
   { ids, allUnscored = false, limit, rescore = false }: { ids?: number[]; allUnscored?: boolean; limit?: number; rescore?: boolean } = {},
-): PostingsRow[] {
+): Promise<PostingsRow[]> {
   const where: string[] = [];
   // rescore (with ids) scores again even when a v2 score exists and whatever the status; used by the UI's Re-score.
   if (!(rescore && ids?.length)) {
     where.push("NOT EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule'))");
-    where.push(`p.status NOT IN ${sqlList(lookups(db).closed())}`);
+    where.push(`p.status NOT IN ${sqlList((await lookups(db)).closed())}`);
   }
   const params: number[] = [];
   if (ids?.length) {
@@ -256,7 +256,7 @@ export function selectPostings(
     where.push('p.fetch_status IS NOT NULL');
   }
   const sql = `SELECT p.* FROM postings p WHERE p.user_id = @uid ${where.length ? `AND ${where.join(' AND ')}` : ''} ORDER BY p.id${limit ? ' LIMIT ?' : ''}`;
-  return db.prepare(sql).all(...params, ...(limit ? [limit] : [])) as PostingsRow[];
+  return await db.prepare(sql).all(...params, ...(limit ? [limit] : [])) as PostingsRow[];
 }
 
 async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
@@ -273,7 +273,7 @@ async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<v
  * (the system prompt); run is the trace from createJobTracer().startRun().
  */
 export async function scorePostings({ store, config, claude, knowledge, model, run, now = new Date(), options = {} }: {
-  store: Pick<JobStore, 'db' | 'tx'>;
+  store: Pick<JobStore, 'db'>;
   config: ScoreConfig;
   claude: Claude;
   knowledge: string;
@@ -287,13 +287,13 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
     throw new Error(`Candidate Knowledge is missing or under ${MIN_KNOWLEDGE_CHARS} characters; scoring aborted.`);
   }
   const { db } = store;
-  const prompts = loadScorePrompts(db);
-  const postings = selectPostings(db, { ids, allUnscored, limit, rescore }).map((p) => ({ ...p, scorePrompt: lookups(db).scorePrompt(p.track) }));
+  const prompts = await loadScorePrompts(db);
+  const lk = await lookups(db);
+  const postings = (await selectPostings(db, { ids, allUnscored, limit, rescore })).map((p) => ({ ...p, scorePrompt: lk.scorePrompt(p.track) }));
 
   const insertScore = db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   // A job without a description stays in Discovered (the UI flags it) until text is pasted and it is re-scored.
-  const lk = lookups(db);
   const promote = db.prepare(`UPDATE postings SET stage = '${lk.role('stage', 'promote')}', updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${sqlList(lk.ids('stage', 'found'))}
     AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != ''`);
   // Fractional scoring reports pay and hours from the posting text; keep what the source already gave.
@@ -321,10 +321,10 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
       const nowIso = new Date().toISOString();
       const version = promptFor(p, { prompts }).version;
       const { rate, hoursPerWeek } = result.analysis;
-      store.tx(() => {
-        insertScore.run(p.id, result.score, result.reason, JSON.stringify(result.analysis), result.source, result.model, version, run?.id ?? null, nowIso);
+      await store.db.tx(async () => {
+        await insertScore.run(p.id, result.score, result.reason, JSON.stringify(result.analysis), result.source, result.model, version, run?.id ?? null, nowIso);
         if (rate || hoursPerWeek) {
-          fillTerms.run({
+          await fillTerms.run({
             id: p.id,
             rateMin: rate?.min ?? null,
             rateMax: rate?.max ?? rate?.min ?? null,
@@ -333,7 +333,7 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
             hoursMax: hoursPerWeek?.max ?? hoursPerWeek?.min ?? null,
           });
         }
-        if (result.score >= promoteAt && promote.run(nowIso, p.id).changes) summary.promoted.push(p.id);
+        if (result.score >= promoteAt && (await promote.run(nowIso, p.id)).changes) summary.promoted.push(p.id);
       });
       summary.scored += 1;
       if (result.source === 'v2-rule') summary.ruleScored += 1;

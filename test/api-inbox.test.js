@@ -28,10 +28,10 @@ async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messa
   const store = openJobStore(':memory:');
   const { db } = store;
   const posting = Number(
-    db
+    (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
         VALUES (1, 'k1', 'Example Co', 'VP of Engineering', ?, '2026-09-01', 'pipeline', 'applied', 'x', 'x')`)
-      .run(storedKey({ company: 'Example Co', title: 'VP of Engineering' })).lastInsertRowid,
+      .run(storedKey({ company: 'Example Co', title: 'VP of Engineering' }))).id,
   );
   const { api } = fakeGmailApi({ messages, me: 'me@example.net' });
   /** @type {(value?: unknown) => void} */
@@ -44,7 +44,7 @@ async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messa
     runPipeline: async (/** @type {{ onLine: (line: string) => void }} */ { onLine }) => {
       for (const l of pipelineLines) onLine(l);
       await gate;
-      db.prepare("INSERT INTO runs (name, status, started_at, finished_at) VALUES ('pipeline', ?, '2026-10-05T13:00:00Z', '2026-10-05T13:12:00Z')").run(pipelineCode ? 'failed' : 'ok');
+      await db.prepare("INSERT INTO runs (name, status, started_at, finished_at) VALUES ('pipeline', ?, '2026-10-05T13:00:00Z', '2026-10-05T13:12:00Z')").run(pipelineCode ? 'failed' : 'ok');
       return { code: pipelineCode, lastError: pipelineCode ? 'EMAIL_ADDRESS is not set in .env; the report was not sent.' : null };
     },
     inbox: { ready: () => ready, gmail: () => createGmail({ api: asGmailApi(api) }), key: () => key, cfg: loadInboxConfig() },
@@ -77,6 +77,18 @@ test('Run pipeline: progress, the last run time, and no second run while one is 
   store.close();
 });
 
+test('two presses of Run pipeline at once start one pipeline (the start lock)', async () => {
+  const { app, store, release } = await setup();
+  const [a, b] = await Promise.all([app.inject({ method: 'POST', url: '/api/pipeline/run' }), app.inject({ method: 'POST', url: '/api/pipeline/run' })]);
+  assert.deepEqual([a.statusCode, b.statusCode].sort(), [202, 409]);
+  release();
+  const task = await app.tasks.wait((a.statusCode === 202 ? a : b).json().taskId);
+  assert.equal(task?.status, 'done');
+  assert.equal(app.tasks.list().filter((t) => t.kind === 'pipeline').length, 1);
+  await app.close();
+  store.close();
+});
+
 test('a failed pipeline reports why, and the button is refused while a CLI run is going', async () => {
   const { app, store, db, release } = await setup({ pipelineCode: 1 });
   release();
@@ -85,7 +97,7 @@ test('a failed pipeline reports why, and the button is refused while a CLI run i
   assert.ok(task);
   assert.equal(task.status, 'failed');
   assert.match(task.error ?? '', /EMAIL_ADDRESS is not set/);
-  db.prepare("INSERT INTO runs (name, status, started_at) VALUES ('inbox', 'running', ?)").run(new Date().toISOString());
+  await db.prepare("INSERT INTO runs (name, status, started_at) VALUES ('inbox', 'running', ?)").run(new Date().toISOString());
   const res = await app.inject({ method: 'POST', url: '/api/pipeline/run' });
   assert.equal(res.statusCode, 409);
   assert.match(res.json().error, /inbox run/);
@@ -123,7 +135,7 @@ test('Check inbox explains when Gmail is not signed in', async () => {
 
 test('review from the web page: reassign, validation, and reminders closed', async () => {
   const { app, store, db, posting } = await setup({ ready: false });
-  const emailId = insertEmail(db, {
+  const emailId = await insertEmail(db, {
     gmailMessageId: 'g9', threadId: 't9', senderEmail: 'no-reply@example.myworkdayjobs.com', senderDomain: 'example.myworkdayjobs.com',
     sentAt: '2026-10-04T10:00:00Z', subject: 'Next steps', type: 'rejection', confidence: 0.6, reviewStatus: 'needs_review', reviewReason: 'low confidence (0.60)', summary: 'Declines.', extracted: {},
   });
@@ -137,7 +149,7 @@ test('review from the web page: reassign, validation, and reminders closed', asy
   assert.deepEqual(r.statusChange, { from: 'applied', to: 'rejected' });
   assert.equal((await app.inject({ method: 'POST', url: `/api/inbox/emails/${emailId}/review`, payload: { choice: 'not_job' } })).statusCode, 404);
 
-  const reminderId = addReminder(db, { postingId: posting, emailId, kind: 'assessment', note: 'Due Friday' });
+  const reminderId = await addReminder(db, { postingId: posting, emailId, kind: 'assessment', note: 'Due Friday' });
   assert.equal((await app.inject({ method: 'PATCH', url: `/api/inbox/reminders/${reminderId}`, payload: { status: 'done' } })).json().status, 'done');
   assert.equal((await app.inject({ method: 'GET', url: '/api/inbox' })).json().reminders.length, 0);
   assert.equal((await app.inject({ method: 'PATCH', url: `/api/inbox/reminders/${reminderId}`, payload: { status: 'done' } })).statusCode, 404);

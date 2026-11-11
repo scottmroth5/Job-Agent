@@ -96,28 +96,28 @@ test('the Google Doc HTML links the header and has no emoji', () => {
   assert.ok(html.includes('Re: Vice President, Engineering at Example Co') && html.includes('First paragraph here.'));
 });
 
-test('the header setting: from the settings until saved, checked on save, and each user has their own', () => {
-  const { db, raw } = openJobStore(':memory:');
+test('the header setting: from the settings until saved, checked on save, and each user has their own', async () => {
+  const { db, admin: raw } = openJobStore(':memory:');
   const config = { candidate };
-  assert.deepEqual(letterHeader(db, config), { ...fromCandidate(candidate), saved: false });
-  assert.throws(() => saveLetterHeader(db, { name: '' }), /Enter your name/);
-  assert.throws(() => saveLetterHeader(db, { name: 'Pat', email: 'not-an-email' }), /email address/);
-  assert.throws(() => saveLetterHeader(db, { name: 'Pat', links: ['just words'] }), /not a web address/);
-  const saved = saveLetterHeader(db, { name: ' Pat M. Example ', email: 'pat@example.com', phone: '555-0100', links: ['example.com', '', 'github.com/example'] });
+  assert.deepEqual(await letterHeader(db, config), { ...fromCandidate(candidate), saved: false });
+  await assert.rejects(async () => await saveLetterHeader(db, { name: '' }), /Enter your name/);
+  await assert.rejects(async () => await saveLetterHeader(db, { name: 'Pat', email: 'not-an-email' }), /email address/);
+  await assert.rejects(async () => await saveLetterHeader(db, { name: 'Pat', links: ['just words'] }), /not a web address/);
+  const saved = await saveLetterHeader(db, { name: ' Pat M. Example ', email: 'pat@example.com', phone: '555-0100', links: ['example.com', '', 'github.com/example'] });
   assert.deepEqual(saved, { name: 'Pat M. Example', signoffName: '', email: 'pat@example.com', phone: '555-0100', location: '', links: ['example.com', 'github.com/example'], saved: true });
-  assert.equal(letterHeader(db, config).name, 'Pat M. Example');
-  const b = addUser(raw, { email: 'b@example.com', name: 'Sam' });
-  assert.equal(runAsUser(b, () => letterHeader(db, { candidate: { name: 'Sam' } }).saved), false, "another user's is their own");
+  assert.equal((await letterHeader(db, config)).name, 'Pat M. Example');
+  const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
+  assert.equal(await runAsUser(b, async () => (await letterHeader(db, { candidate: { name: 'Sam' } })).saved), false, "another user's is their own");
 });
 
 test('the routes save the header, and a letter downloaded after uses it', async () => {
   const store = openJobStore(':memory:');
   const { db } = store;
   const id = Number(
-    db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
-      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', '2026-10-01', 'x', 'x')`).run().lastInsertRowid,
+    (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
+      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', '2026-10-01', 'x', 'x')`).run()).id,
   );
-  db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', 'The body of the letter, long enough to read.', 'v2', '2026-10-02T12:00:00Z')").run(id);
+  await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', 'The body of the letter, long enough to read.', 'v2', '2026-10-02T12:00:00Z')").run(id);
   const app = await buildApp({ store, config: fakeConfig({ candidate, search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   assert.equal((await app.inject('/api/letter-header')).json().saved, false);
   assert.equal((await app.inject({ method: 'PUT', url: '/api/letter-header', payload: { name: 'Pat', links: ['nope nope'] } })).statusCode, 400);

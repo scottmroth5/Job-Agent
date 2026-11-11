@@ -6,7 +6,7 @@ import { fillTemplate } from '../../tools/template.ts';
 import { sanitizeDashes } from '../../tools/text.ts';
 import { getPrompt } from '../prompts.ts';
 import type { Claude, Run } from '@scottmroth5/agent-core';
-import type { Database } from '../../tools/types.ts';
+import type { Db } from '../../tools/types.ts';
 import type { Prompt } from '../prompts.ts';
 
 /** The parts of an email the classifier reads. */
@@ -133,8 +133,9 @@ export function validateClassification(answer: unknown, open: Array<{ id: number
 /** Classifies one email. Returns the validated result plus the model, prompt version, and cost. */
 export async function classifyEmail(
   email: ClassifyInput,
-  { claude, db, model, open, trace, prompt = getPrompt(db, 'inbox-classify') }: { claude: Claude; db?: Database | null; model: string; open: Application[]; trace?: Run | null; prompt?: Pick<Prompt, 'template' | 'schema' | 'version'> },
+  { claude, db, model, open, trace, prompt: promptGiven }: { claude: Claude; db?: Db | null; model: string; open: Application[]; trace?: Run | null; prompt?: Pick<Prompt, 'template' | 'schema' | 'version'> },
 ) {
+  const prompt = promptGiven ?? (await getPrompt(db, 'inbox-classify'));
   const res = await claude.send({ ...buildClassifyRequest(email, { open, model, prompt }), trace });
   return { ...validateClassification(res.data, open), model: res.model, promptVersion: prompt.version, costUsd: res.costUsd ?? 0 };
 }

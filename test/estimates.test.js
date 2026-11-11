@@ -26,9 +26,9 @@ test('every scoring model has a price', () => {
   }
 });
 
-test('every fact check model has a price in the letter eval', () => {
+test('every fact check model has a price in the letter eval', async () => {
   const cases = JSON.parse(readFileSync(repoPath('evals', 'letters', 'cases.json'), 'utf8'));
-  const estimate = estimateLetterEval(cases, Object.keys(VERIFY_SETTINGS));
+  const estimate = await estimateLetterEval(cases, Object.keys(VERIFY_SETTINGS));
   assert.deepEqual(unpriced(estimate), []);
 });
 
@@ -37,11 +37,11 @@ test('unpriced names the models without a price', () => {
   assert.deepEqual(unpriced({}), []);
 });
 
-test('the scoring eval estimate leaves out cases on a skipped site, as scoring does', () => {
+test('the scoring eval estimate leaves out cases on a skipped site, as scoring does', async () => {
   const cases = [posting(1, 'https://jobs.example.com/1'), posting(2, 'https://skipped.example.com/2')];
   const model = 'claude-haiku-4-5';
-  const all = estimateEval(cases, [model], 10000, fakeConfig({ search: {} }))[model];
-  const skipping = estimateEval(cases, [model], 10000, fakeConfig({ search: { excludedSites: ['skipped.example.com'] } }))[model];
+  const all = (await estimateEval(cases, [model], 10000, fakeConfig({ search: {} })))[model];
+  const skipping = (await estimateEval(cases, [model], 10000, fakeConfig({ search: { excludedSites: ['skipped.example.com'] } })))[model];
   assert.ok(all != null && skipping != null && skipping > 0 && skipping < all, `${skipping} < ${all}`);
 });
 

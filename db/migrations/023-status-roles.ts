@@ -3,7 +3,7 @@
 // cleanup closes jobs never acted on. Each starts on the built-in value the code used to name, so nothing changes until
 // Admin > Lists points one elsewhere. A role already set is kept; a value that is missing gets no role.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '023-status-roles';
 

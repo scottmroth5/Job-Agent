@@ -38,18 +38,18 @@ function services() {
 
 async function setup() {
   const store = openJobStore(':memory:');
-  const add = (/** @type {Record<string, string | number | null>} */ o) =>
+  const add = async (/** @type {Record<string, string | number | null>} */ o) =>
     Number(
-      store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, rate_text, rate_min, rate_max, rate_unit,
+      (await store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, rate_text, rate_min, rate_max, rate_unit,
           hours_min, hours_max, fetched_text, location, discovered_on, created_at, updated_at)
         VALUES (1, @url, @url, @company, @title, @url, 'LinkedIn', @stage, 'new', @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @text, 'Remote', '2026-09-30', 'x', 'x')`)
-        .run({ rate_text: null, rate_min: null, rate_max: null, rate_unit: null, hours_min: null, hours_max: null, text: DESCRIPTION, stage: 'pipeline', track: 'fulltime', ...o }).lastInsertRowid,
+        .run({ rate_text: null, rate_min: null, rate_max: null, rate_unit: null, hours_min: null, hours_max: null, text: DESCRIPTION, stage: 'pipeline', track: 'fulltime', ...o })).id,
     );
-  const full = add({ url: 'https://jobs.example.com/1', company: 'Full Co', title: 'VP Engineering' });
-  const frac = add({ url: 'https://jobs.example.com/2', company: 'Frac Co', title: 'Fractional CTO', track: 'fractional', rate_text: '$200 / hr', rate_min: 200, rate_max: 200, rate_unit: 'hour', hours_min: 15, hours_max: 15 });
-  const found = add({ url: 'https://jobs.example.com/3', company: 'New Co', title: 'CTO', stage: 'discovered', text: null });
-  store.db.prepare("INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, created_at) VALUES (1, ?, 9, 'Great', ?, 'v2', 'x')").run(frac, JSON.stringify({ fit: 'High', whyItFits: 'w' }));
-  store.db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, doc_url, flags_json, source, created_at) VALUES (1, ?, 'cover_letter', 'Body', 'https://docs.example.com/x', '[\"weak closer\"]', 'v2', 'x')").run(frac);
+  const full = await add({ url: 'https://jobs.example.com/1', company: 'Full Co', title: 'VP Engineering' });
+  const frac = await add({ url: 'https://jobs.example.com/2', company: 'Frac Co', title: 'Fractional CTO', track: 'fractional', rate_text: '$200 / hr', rate_min: 200, rate_max: 200, rate_unit: 'hour', hours_min: 15, hours_max: 15 });
+  const found = await add({ url: 'https://jobs.example.com/3', company: 'New Co', title: 'CTO', stage: 'discovered', text: null });
+  await store.db.prepare("INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, created_at) VALUES (1, ?, 9, 'Great', ?, 'v2', 'x')").run(frac, JSON.stringify({ fit: 'High', whyItFits: 'w' }));
+  await store.db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, doc_url, flags_json, source, created_at) VALUES (1, ?, 'cover_letter', 'Body', 'https://docs.example.com/x', '[\"weak closer\"]', 'v2', 'x')").run(frac);
   const app = await buildApp({ store, config, services: services() });
   return { store, app, ids: { full, frac, found } };
 }
@@ -121,7 +121,7 @@ test('adding a job runs as a task with progress steps; actions score and write m
   assert.equal(/** @type {{ docs: number }} */ (writeTask.result).docs, 1);
   assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/explode` })).statusCode, 400);
 
-  const runs = store.db.prepare("SELECT name FROM runs WHERE name LIKE 'ui-%' ORDER BY id").pluck().all();
+  const runs = await store.db.prepare("SELECT name FROM runs WHERE name LIKE 'ui-%' ORDER BY id").pluck().all();
   assert.deepEqual(runs, ['ui-add', 'ui-add', 'ui-score', 'ui-write-materials']);
   await app.close();
   store.close();
@@ -129,19 +129,19 @@ test('adding a job runs as a task with progress steps; actions score and write m
 
 test('writing materials for a Discovered job moves it to the promote stage first', async () => {
   const { app, store, ids } = await setup();
-  store.db.prepare('UPDATE postings SET fetched_text = ? WHERE id = ?').run(DESCRIPTION, ids.found);
+  await store.db.prepare('UPDATE postings SET fetched_text = ? WHERE id = ?').run(DESCRIPTION, ids.found);
   const task = await app.tasks.wait((await app.inject({ method: 'POST', url: `/api/postings/${ids.found}/actions/write-materials` })).json().taskId);
   assert.ok(task);
   assert.equal(task.status, 'done', task.error ?? undefined);
-  assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(ids.found), 'pipeline');
+  assert.equal(await store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(ids.found), 'pipeline');
   await app.close();
   store.close();
 });
 
 test('with no AI here, adding a job and the AI actions are refused with 503 before any task starts; refetch is not', async () => {
   const store = openJobStore(':memory:');
-  const id = Number(store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, discovered_on, created_at, updated_at)
-    VALUES (1, 'https://jobs.example.com/9', 'k9', 'Nine Co', 'CTO', 'k9', 'LinkedIn', 'pipeline', 'new', 'fulltime', '2026-09-30', 'x', 'x')`).run().lastInsertRowid);
+  const id = Number((await store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, discovered_on, created_at, updated_at)
+    VALUES (1, 'https://jobs.example.com/9', 'k9', 'Nine Co', 'CTO', 'k9', 'LinkedIn', 'pipeline', 'new', 'fulltime', '2026-09-30', 'x', 'x')`).run()).id);
   const app = await buildApp({ store, config, services: fakeServices({ ...services(), claude: null }) });
   const add = await app.inject({ method: 'POST', url: '/api/postings', payload: { title: 'CTO', company: 'Added Co', description: DESCRIPTION } });
   assert.equal(add.statusCode, 503);
@@ -149,14 +149,14 @@ test('with no AI here, adding a job and the AI actions are refused with 503 befo
     assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${id}/actions/${action}` })).statusCode, 503, action);
   }
   assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${id}/actions/refetch` })).statusCode, 202);
-  assert.equal(store.db.prepare("SELECT COUNT(*) FROM runs WHERE name IN ('ui-add', 'ui-score', 'ui-write-materials', 'ui-regenerate')").pluck().get(), 0);
+  assert.equal(await store.db.prepare("SELECT COUNT(*) FROM runs WHERE name IN ('ui-add', 'ui-score', 'ui-write-materials', 'ui-regenerate')").pluck().get(), 0);
   await app.close();
   store.close();
 });
 
 test('actions are refused while a pipeline run is in progress', async () => {
   const { app, store, ids } = await setup();
-  store.db.prepare("INSERT INTO runs (name, status, started_at) VALUES ('pipeline', 'running', ?)").run(new Date().toISOString());
+  await store.db.prepare("INSERT INTO runs (name, status, started_at) VALUES ('pipeline', 'running', ?)").run(new Date().toISOString());
   const res = await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/score` });
   assert.equal(res.statusCode, 409);
   assert.match(res.json().error, /still running/);
