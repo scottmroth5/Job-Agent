@@ -110,7 +110,7 @@ export async function decide(db: AnyDb, id: number, decision: string, { by, now 
   return q.tx(async () => {
     const user = await getUser(q, id);
     if (!user || id === OWNER_ID) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
-    if (!rule.from.includes(user.status)) throw Object.assign(new Error(`A ${user.status} account cannot be ${decision}d.`), { statusCode: 400 });
+    if (!rule.from.includes(user.status)) throw Object.assign(new Error(`A ${user.status} account cannot be ${decision.endsWith('e') ? `${decision}d` : `${decision}ed`}.`), { statusCode: 400 });
     const iso = now.toISOString();
     await q.prepare('UPDATE users SET status = ?, decided_at = ?, decided_by = ?, updated_at = ? WHERE id = ?').run(rule.to, iso, by, iso, id);
     return getUser(q, id);

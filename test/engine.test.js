@@ -232,7 +232,7 @@ test('users: two decisions at once can not both pass the status check; two reque
   const id = await addUser(store.db, { email: 'pending@example.com', status: 'pending' });
   const results = await Promise.allSettled([decide(store.db, id, 'reject', { by: 1 }), decide(store.db, id, 'reject', { by: 1 })]);
   assert.deepEqual(results.map((r) => r.status).sort(), ['fulfilled', 'rejected']);
-  assert.match(String(/** @type {PromiseRejectedResult} */ (results.find((r) => r.status === 'rejected')).reason), /A rejected account cannot be reject/);
+  assert.match(String(/** @type {PromiseRejectedResult} */ (results.find((r) => r.status === 'rejected')).reason), /A rejected account cannot be rejected\./);
 
   const [a, b] = await Promise.all([
     requestAccess(store.db, { email: 'new@example.com', name: 'New' }),
