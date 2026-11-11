@@ -2,10 +2,9 @@
 // it is for. pickResume chooses the one a job's letter, resume tweaks, and meeting prep are written from: the resume
 // whose words match the job title best, else the default, else the only one. withResume adds its text to the
 // background those calls read. Every query names user_id (db/user-tables.ts lists resumes).
-import { asEngine } from '../db/engine/index.ts';
 import { randomUUID } from 'node:crypto';
 import { documentText } from '../tools/doc-text.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { ResumesRow } from '../db/types.ts';
 
 /** A resume as Settings shows it (never the file or its text). */
@@ -52,24 +51,24 @@ const row = (r: ResumeListRow | undefined): Resume | undefined =>
 const COLUMNS = 'id, label, titles, is_default, filename, kind, size_bytes, LENGTH(text) AS chars, created_at, updated_at';
 
 /** The current user's resumes, default first, then newest. */
-export async function listResumes(db: Database) {
-  return (await asEngine(db).prepare(`SELECT ${COLUMNS} FROM resumes WHERE user_id = @uid ORDER BY is_default DESC, created_at DESC`).all() as ResumeListRow[]).map(row) as Resume[];
+export async function listResumes(db: Db) {
+  return (await db.prepare(`SELECT ${COLUMNS} FROM resumes WHERE user_id = @uid ORDER BY is_default DESC, created_at DESC`).all() as ResumeListRow[]).map(row) as Resume[];
 }
 
-export async function getResume(db: Database, id: string): Promise<Resume | null> {
-  return row(await asEngine(db).prepare(`SELECT ${COLUMNS} FROM resumes WHERE id = ? AND user_id = @uid`).get(id) as ResumeListRow | undefined) ?? null;
+export async function getResume(db: Db, id: string): Promise<Resume | null> {
+  return row(await db.prepare(`SELECT ${COLUMNS} FROM resumes WHERE id = ? AND user_id = @uid`).get(id) as ResumeListRow | undefined) ?? null;
 }
 
 /** The file for a download: { filename, kind, file, text } or null. */
-export async function resumeFile(db: Database, id: string) {
-  return (await asEngine(db).prepare('SELECT filename, kind, file, text FROM resumes WHERE id = ? AND user_id = @uid').get(id) as Pick<ResumesRow, 'filename' | 'kind' | 'file' | 'text'> | undefined) ?? null;
+export async function resumeFile(db: Db, id: string) {
+  return (await db.prepare('SELECT filename, kind, file, text FROM resumes WHERE id = ? AND user_id = @uid').get(id) as Pick<ResumesRow, 'filename' | 'kind' | 'file' | 'text'> | undefined) ?? null;
 }
 
-const clearDefault = async (db: Database) => await asEngine(db).prepare('UPDATE resumes SET is_default = 0 WHERE user_id = @uid AND is_default = 1').run();
+const clearDefault = async (db: Db) => await db.prepare('UPDATE resumes SET is_default = 0 WHERE user_id = @uid AND is_default = 1').run();
 
 /** Stores an upload; the first one becomes the default. Returns the new resume. */
-export async function addResume(db: Database, { bytes, filename, label, titles, now = new Date() }: { bytes: Buffer; filename?: string | null; label?: unknown; titles?: unknown; now?: Date }) {
-  const full = async () => ((await asEngine(db).prepare('SELECT COUNT(*) FROM resumes WHERE user_id = @uid').pluck().get()) as number) >= MAX_RESUMES;
+export async function addResume(db: Db, { bytes, filename, label, titles, now = new Date() }: { bytes: Buffer; filename?: string | null; label?: unknown; titles?: unknown; now?: Date }) {
+  const full = async () => ((await db.prepare('SELECT COUNT(*) FROM resumes WHERE user_id = @uid').pluck().get()) as number) >= MAX_RESUMES;
   const tooMany = () => bad(`Keep at most ${MAX_RESUMES} resumes: delete one you no longer use first.`);
   if (await full()) throw tooMany(); // before reading the file
   const { kind, text } = await documentText(bytes, filename);
@@ -77,10 +76,10 @@ export async function addResume(db: Database, { bytes, filename, label, titles, 
   const iso = now.toISOString();
   const name = String(filename || 'resume').slice(0, 200);
   // The count, the first-one check, and the insert are one transaction (the file is read before it).
-  await asEngine(db).tx(async () => {
+  await db.tx(async () => {
     if (await full()) throw tooMany();
-    const first = !(await asEngine(db).prepare('SELECT 1 FROM resumes WHERE user_id = @uid').get());
-    await asEngine(db)
+    const first = !(await db.prepare('SELECT 1 FROM resumes WHERE user_id = @uid').get());
+    await db
       .prepare(`INSERT INTO resumes (id, user_id, label, titles, is_default, filename, kind, size_bytes, file, text, created_at, updated_at)
       VALUES (?, @uid, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(id, cleanLabel(label, name.replace(/\.[a-z]+$/i, '')), cleanTitles(titles), first ? 1 : 0, name, kind, bytes.length, bytes, text, iso, iso);
@@ -89,11 +88,11 @@ export async function addResume(db: Database, { bytes, filename, label, titles, 
 }
 
 /** A new file for an existing resume (its label, titles, and default stay). */
-export async function replaceResumeFile(db: Database, id: string, { bytes, filename, now = new Date() }: { bytes: Buffer; filename?: string | null; now?: Date }) {
+export async function replaceResumeFile(db: Db, id: string, { bytes, filename, now = new Date() }: { bytes: Buffer; filename?: string | null; now?: Date }) {
   if (!(await getResume(db, id))) throw bad('Resume not found.', 404);
   const { kind, text } = await documentText(bytes, filename);
   // The UPDATE names the resume, so one deleted while the file was read is simply not changed.
-  await asEngine(db).prepare('UPDATE resumes SET filename = ?, kind = ?, size_bytes = ?, file = ?, text = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(
+  await db.prepare('UPDATE resumes SET filename = ?, kind = ?, size_bytes = ?, file = ?, text = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(
     String(filename || 'resume').slice(0, 200),
     kind,
     bytes.length,
@@ -106,13 +105,13 @@ export async function replaceResumeFile(db: Database, id: string, { bytes, filen
 }
 
 /** Label, titles, and default (making one the default clears the others). */
-export async function updateResume(db: Database, id: string, { label, titles, isDefault }: { label?: unknown; titles?: unknown; isDefault?: boolean }, now = new Date()) {
+export async function updateResume(db: Db, id: string, { label, titles, isDefault }: { label?: unknown; titles?: unknown; isDefault?: boolean }, now = new Date()) {
   // The read, the default change, and the update are one transaction.
-  return asEngine(db).tx(async () => {
+  return db.tx(async () => {
     const r = await getResume(db, id);
     if (!r) throw bad('Resume not found.', 404);
     if (isDefault === true) await clearDefault(db);
-    await asEngine(db).prepare('UPDATE resumes SET label = ?, titles = ?, is_default = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(
+    await db.prepare('UPDATE resumes SET label = ?, titles = ?, is_default = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(
       label === undefined ? r.label : cleanLabel(label, r.label),
       titles === undefined ? r.titles : cleanTitles(titles),
       isDefault === undefined ? (r.isDefault ? 1 : 0) : isDefault ? 1 : 0,
@@ -124,15 +123,15 @@ export async function updateResume(db: Database, id: string, { label, titles, is
 }
 
 /** Deletes one; when it was the default, the newest remaining one becomes the default. */
-export async function deleteResume(db: Database, id: string) {
+export async function deleteResume(db: Db, id: string) {
   // The delete and choosing the next default are one transaction.
-  return asEngine(db).tx(async () => {
+  return db.tx(async () => {
     const r = await getResume(db, id);
     if (!r) throw bad('Resume not found.', 404);
-    await asEngine(db).prepare('DELETE FROM resumes WHERE id = ? AND user_id = @uid').run(id);
+    await db.prepare('DELETE FROM resumes WHERE id = ? AND user_id = @uid').run(id);
     if (r.isDefault) {
-      const next = await asEngine(db).prepare('SELECT id FROM resumes WHERE user_id = @uid ORDER BY created_at DESC LIMIT 1').pluck().get();
-      if (next) await asEngine(db).prepare('UPDATE resumes SET is_default = 1 WHERE id = ? AND user_id = @uid').run(next);
+      const next = await db.prepare('SELECT id FROM resumes WHERE user_id = @uid ORDER BY created_at DESC LIMIT 1').pluck().get();
+      if (next) await db.prepare('UPDATE resumes SET is_default = 1 WHERE id = ? AND user_id = @uid').run(next);
     }
   });
 }
@@ -141,8 +140,8 @@ export async function deleteResume(db: Database, id: string) {
  * The resume for a job: the one whose titles share the most words with the job title (each listed title counts when
  * all its words appear), else the default, else the only one; null when the user has none. Returns its text too.
  */
-export async function pickResume(db: Database, jobTitle: string | null | undefined): Promise<ChosenResume | null> {
-  const all = await asEngine(db).prepare('SELECT id, label, titles, is_default, text FROM resumes WHERE user_id = @uid ORDER BY is_default DESC, created_at DESC').all() as Array<Pick<ResumesRow, 'id' | 'label' | 'titles' | 'is_default' | 'text'>>;
+export async function pickResume(db: Db, jobTitle: string | null | undefined): Promise<ChosenResume | null> {
+  const all = await db.prepare('SELECT id, label, titles, is_default, text FROM resumes WHERE user_id = @uid ORDER BY is_default DESC, created_at DESC').all() as Array<Pick<ResumesRow, 'id' | 'label' | 'titles' | 'is_default' | 'text'>>;
   if (!all.length) return null;
   const title = new Set(words(jobTitle));
   let best: (typeof all)[number] | null = null;

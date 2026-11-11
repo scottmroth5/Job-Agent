@@ -1,7 +1,6 @@
 // Resume tweaks and cover letters for promoted jobs. Sonnet 5.5 writes both with the Candidate
 // Knowledge doc as the cached system prompt; letters get v1's cleanup and rule checks, then are
 // saved as Google Docs. Nothing existing is ever overwritten.
-import { asEngine } from '../../db/engine/index.ts';
 import { fillTemplate } from '../../tools/template.ts';
 import { sanitizeDashes, truncate } from '../../tools/text.ts';
 import { letterHeader } from '../letter-header.ts';
@@ -13,7 +12,7 @@ import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLett
 import { lookups, sqlList } from '../lookups.ts';
 import { pickResume, withResume } from '../resumes.ts';
 import type { Claude, Run, SendOptions } from '@scottmroth5/agent-core';
-import type { Database, JobStore } from '../../tools/types.ts';
+import type { Db, JobStore } from '../../tools/types.ts';
 import type { JobSearchConfig } from '../../tools/config.ts';
 import type { DriveClient } from '../../tools/google/drive.ts';
 import type { PostingsRow } from '../../db/types.ts';
@@ -44,7 +43,7 @@ const CONTENT_CHARS = 6000;
 const MIN_NOTES = 30;
 
 /** Both hunt prompts in effect (admin-screen edits or the repo defaults), with short version hashes. */
-export async function loadHuntPrompts(db: Database | null = null) {
+export async function loadHuntPrompts(db: Db | null = null) {
   const load = async (name: string) => {
     const p = await getPrompt(db, name);
     return { template: p.template, version: p.version, source: p.source };
@@ -53,7 +52,7 @@ export async function loadHuntPrompts(db: Database | null = null) {
 }
 
 /** Postings eligible for tweaks/letters, with their latest v2 analysis and what already exists. */
-export async function selectForHunt(db: Database, { ids, promoteAt = PROMOTE_AT }: { ids?: number[] | null; promoteAt?: number } = {}): Promise<HuntPosting[]> {
+export async function selectForHunt(db: Db, { ids, promoteAt = PROMOTE_AT }: { ids?: number[] | null; promoteAt?: number } = {}): Promise<HuntPosting[]> {
   const base = `SELECT p.*,
       (SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS analysis_json,
       (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS v2_score,
@@ -62,8 +61,8 @@ export async function selectForHunt(db: Database, { ids, promoteAt = PROMOTE_AT 
       (SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' AND a.source = 'v2'
          AND a.doc_id IS NULL ORDER BY a.id DESC LIMIT 1) AS letter_missing_doc
     FROM (SELECT * FROM postings WHERE user_id = @uid) p`;
-  if (ids?.length) return await asEngine(db).prepare(`${base} WHERE p.id IN (${ids.map(() => '?').join(', ')}) ORDER BY p.id`).all(...ids) as HuntPosting[];
-  return await asEngine(db)
+  if (ids?.length) return await db.prepare(`${base} WHERE p.id IN (${ids.map(() => '?').join(', ')}) ORDER BY p.id`).all(...ids) as HuntPosting[];
+  return await db
     .prepare(`SELECT * FROM (${base} WHERE p.stage IN ${sqlList((await lookups(db)).ids('stage', 'active'))} AND p.status IN ${sqlList((await lookups(db)).ids('status', 'evaluate', 'waiting'))})
       WHERE v2_score >= ? AND (has_tweaks = 0 OR has_letter = 0 OR letter_missing_doc IS NOT NULL) ORDER BY id`)
     .all(promoteAt) as HuntPosting[];
@@ -125,10 +124,10 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
   const prompts = await loadHuntPrompts(db);
   const postings = await selectForHunt(db, { ids, promoteAt });
 
-  const insertArtifact = asEngine(db).prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at, resume_id)
+  const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at, resume_id)
     VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?, ?)`);
-  const setDoc = asEngine(db).prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid');
-  const letterById = asEngine(db).prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid');
+  const setDoc = db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid');
+  const letterById = db.prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid');
 
   const summary = {
     selected: postings.length,

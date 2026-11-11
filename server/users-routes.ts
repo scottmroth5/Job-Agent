@@ -6,14 +6,14 @@ import { listUsers, usageByWeek, usagePeriodStart, usageTotals } from './admin-q
 import { BROWSER_NAMES, DEVICES, SOURCES } from './usage-totals.ts';
 import { deleteAccount } from '../agents/account-data.ts';
 import { ATTACHMENTS_DIR } from './attachments.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { User } from '../db/users.ts';
 import type { App, IdParams, Notices } from './types.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };
 
-export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir = ATTACHMENTS_DIR }: { db: Database; notices?: Notices; attachmentsDir?: string }) {
+export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir = ATTACHMENTS_DIR }: { db: Db; notices?: Notices; attachmentsDir?: string }) {
   // Deleting someone's account removes everything that is theirs; their address must be typed to confirm.
   app.post<{ Params: IdParams; Body: { confirmEmail: string } }>(
     '/api/admin/users/:id/delete',

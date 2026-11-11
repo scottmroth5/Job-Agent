@@ -41,7 +41,7 @@ test('add, note, and remove; adding again updates the note; the owner keeps the 
 });
 
 test("another user's sites from their saved search move into the list, and only theirs apply to them", async () => {
-  const { raw } = openJobStore(':memory:');
+  const { admin: raw } = openJobStore(':memory:');
   const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
   await saveUserConfig(raw, b, { candidate: { name: 'Sam' }, search: { terms: ['Head of Data'], excludedSites: ['old.example'] } }, 'Sam');
   await addExcludedSite(raw, OWNER_ID, { site: 'ownerskip.example' });
@@ -58,12 +58,12 @@ test("another user's sites from their saved search move into the list, and only 
 async function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const add = (/** @type {string} */ url, /** @type {string} */ status) =>
+  const add = async (/** @type {string} */ url, /** @type {string} */ status) =>
     Number(
-      db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
-        VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', ?, '2026-10-01', 'x', 'x')`).run(url, url, `Role ${status} ${url}`, `k ${url}`, status).lastInsertRowid,
+      (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
+        VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', ?, '2026-10-01', 'x', 'x')`).run(url, url, `Role ${status} ${url}`, `k ${url}`, status)).id,
     );
-  const ids = { fresh: add('https://www.paywall.example/job/1', 'new'), applied: add('https://paywall.example/job/2', 'applied'), other: add('https://jobs.example.com/3', 'new') };
+  const ids = { fresh: await add('https://www.paywall.example/job/1', 'new'), applied: await add('https://paywall.example/job/2', 'applied'), other: await add('https://jobs.example.com/3', 'new') };
   const app = await buildApp({ store, config, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });
   return { store, db, app, ids };
 }
@@ -81,17 +81,17 @@ test('the routes: skip from a job link, count saved jobs, remove them (not the a
 
   const removed = await app.inject({ method: 'POST', url: '/api/excluded-sites/paywall.example/remove-jobs' });
   assert.equal(removed.json().removed, 1);
-  const status = (/** @type {number} */ id) => db.prepare('SELECT stage, status FROM postings WHERE id = ? AND user_id = @uid').get(id);
-  assert.deepEqual(status(ids.fresh), { stage: 'archived', status: 'passed' });
-  assert.deepEqual(status(ids.applied), { stage: 'pipeline', status: 'applied' }, 'a job you applied to is kept');
-  assert.deepEqual(status(ids.other), { stage: 'pipeline', status: 'new' });
+  const status = async (/** @type {number} */ id) => await db.prepare('SELECT stage, status FROM postings WHERE id = ? AND user_id = @uid').get(id);
+  assert.deepEqual(await status(ids.fresh), { stage: 'archived', status: 'passed' });
+  assert.deepEqual(await status(ids.applied), { stage: 'pipeline', status: 'applied' }, 'a job you applied to is kept');
+  assert.deepEqual(await status(ids.other), { stage: 'pipeline', status: 'new' });
   assert.equal((await app.inject({ method: 'POST', url: '/api/excluded-sites/unlisted.example/remove-jobs' })).statusCode, 404);
 
   assert.equal((await app.inject({ method: 'PATCH', url: '/api/excluded-sites/paywall.example', payload: { note: 'Paywall I will never pay' } })).json().sites[0].note, 'Paywall I will never pay');
   assert.equal((await app.inject({ method: 'PATCH', url: '/api/excluded-sites/Bad Site', payload: { note: 'x' } })).statusCode, 400);
 
   // What discovery, scoring, and adding a job read (the server's config) has the site at once.
-  assert.ok((await configFor(store.raw, OWNER_ID, config)).search.excludedSites?.includes('paywall.example'));
+  assert.ok((await configFor(store.admin, OWNER_ID, config)).search.excludedSites?.includes('paywall.example'));
 
   assert.deepEqual((await app.inject({ method: 'DELETE', url: '/api/excluded-sites/paywall.example' })).json().sites, []);
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/excluded-sites/paywall.example' })).statusCode, 404);
@@ -101,8 +101,8 @@ test('the routes: skip from a job link, count saved jobs, remove them (not the a
 
 test("each user's list is their own", async () => {
   const { store, app } = await setup();
-  const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
-  await addExcludedSite(store.raw, OWNER_ID, { site: 'ownerskip.example', note: 'Mine' });
+  const b = await addUser(store.admin, { email: 'b@example.com', name: 'Sam' });
+  await addExcludedSite(store.admin, OWNER_ID, { site: 'ownerskip.example', note: 'Mine' });
   assert.deepEqual(await runAsUser(b, async () => await excludedSites(store.db, b)), []);
   assert.deepEqual((await excludedSites(store.db, OWNER_ID)).map((s) => s.site), ['ownerskip.example']);
   await app.close();

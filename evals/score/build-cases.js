@@ -1,13 +1,12 @@
 // Builds scoring eval cases from past postings with a known outcome: applied (positive) or
 // passed (negative). Text comes from the pasted job description, or is fetched again.
 // Cases contain personal job-search data, so they live in gitignored data/evals/.
-import { asEngine } from '../../db/engine/index.ts';
 import { resolveDetails } from '../../agents/discovery/details.ts';
 import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.ts';
 import { checkLocation } from '../../tools/location.ts';
 import { lookups, sqlList } from '../../agents/lookups.ts';
 /**
- * @import { Database } from '../../tools/types.ts'
+ * @import { Db } from '../../tools/types.ts'
  * @import { Http } from '../../tools/http.ts'
  * @import { JobSearchConfig } from '../../tools/config.ts'
  * @import { JobItem, PageRenderer } from '../../agents/discovery/types.ts'
@@ -22,11 +21,11 @@ import { lookups, sqlList } from '../../agents/lookups.ts';
 export const MIN_CASE_TEXT = 500;
 
 /**
- * @param {{ db: Database, http: Http, browser?: PageRenderer | null, config: Pick<JobSearchConfig, 'search'>, log?: (line: string) => void }} opts
+ * @param {{ db: Db, http: Http, browser?: PageRenderer | null, config: Pick<JobSearchConfig, 'search'>, log?: (line: string) => void }} opts
  * @returns {Promise<{cases: ScoreCase[], skipped: {noText: number}, fetched: number}>}
  */
 export async function buildCases({ db, http, browser = null, config, log = () => {} }) {
-  const found = await asEngine(db)
+  const found = await db
     .prepare(`SELECT p.id, p.company, p.title, p.location, p.url, p.status, p.jd_text,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-analysis' ORDER BY s.id DESC LIMIT 1) AS v1_score,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-quick' ORDER BY s.id DESC LIMIT 1) AS v1_quick

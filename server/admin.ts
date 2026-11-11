@@ -1,6 +1,5 @@
 // Admin routes: view and edit the prompts (stored in the database with history), and preview
 // a prompt filled with a real job. Output schemas are shown read-only.
-import { asEngine } from '../db/engine/index.ts';
 import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersions, validateTemplate } from '../agents/prompts.ts';
 import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.ts';
@@ -10,7 +9,7 @@ import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD 
 import { buildClassifyRequest } from '../agents/inbox/classify.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { OWNER_ID } from '../db/users.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { UserConfig } from '../agents/user-config.ts';
 import type { PostingsRow } from '../db/types.ts';
 import type { App } from './types.ts';
@@ -39,7 +38,7 @@ const NAMES = Object.keys(PROMPTS);
 const nameParams = { type: 'object', required: ['name'], properties: { name: { type: 'string', enum: NAMES } } };
 const anyObject = { type: 'object', additionalProperties: true };
 
-async function detail(db: Database, name: string) {
+async function detail(db: Db, name: string) {
   const def = PROMPTS[name];
   const current = await getPrompt(db, name);
   const base = defaultPrompt(name);
@@ -62,13 +61,13 @@ async function detail(db: Database, name: string) {
 }
 
 /** A job to preview with: the one asked for, else a recent one with text (and an analysis for hunt prompts). */
-async function samplePosting(db: Database, name: string, postingId: number | undefined): Promise<SamplePosting | null> {
+async function samplePosting(db: Db, name: string, postingId: number | undefined): Promise<SamplePosting | null> {
   const needsAnalysis = name === 'resume-tweaks' || name === 'cover-letter';
   const track = name === 'score-fractional' ? 'fractional' : name === 'score' ? 'fulltime' : null;
   const analysisSql = `(SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1)`;
-  if (postingId) return (await asEngine(db).prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) as SamplePosting | undefined) ?? null;
+  if (postingId) return (await db.prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) as SamplePosting | undefined) ?? null;
   return (
-    (await asEngine(db)
+    (await db
       .prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p
         WHERE p.user_id = @uid AND (p.fetched_text IS NOT NULL OR p.jd_text IS NOT NULL) ${track ? 'AND p.track = @track' : ''}
         ${needsAnalysis ? `AND ${analysisSql} IS NOT NULL` : ''}
@@ -77,7 +76,7 @@ async function samplePosting(db: Database, name: string, postingId: number | und
   );
 }
 
-export function registerAdminRoutes(app: App, { db, config }: { db: Database; config: UserConfig }) {
+export function registerAdminRoutes(app: App, { db, config }: { db: Db; config: UserConfig }) {
   // The signed-in user's spend: the owner sees everything on their key; anyone else, their own.
   const spending = async (uid = OWNER_ID) => ({ ...await budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: await spendByLabel(db, { uid }) });
 

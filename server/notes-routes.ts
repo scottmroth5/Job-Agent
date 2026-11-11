@@ -1,7 +1,6 @@
 // A job's notes, one entry at a time: add, edit, delete (agents/notes.ts keeps postings.notes in step).
-import { asEngine } from '../db/engine/index.ts';
 import { addNote, deleteNote, listNotes, updateNote, MAX_NOTE_CHARS } from '../agents/notes.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { App, IdParams } from './types.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
@@ -9,13 +8,13 @@ const idParams = { type: 'object', required: ['id'], properties: { id: { type: '
 const noteParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
 const body = { type: 'object', required: ['body'], additionalProperties: false, properties: { body: { type: 'string', maxLength: MAX_NOTE_CHARS } } };
 
-export function registerNoteRoutes(app: App, { db }: { db: Database }) {
+export function registerNoteRoutes(app: App, { db }: { db: Db }) {
   app.get<{ Params: IdParams }>('/api/postings/:id/notes', { schema: { summary: "A job's notes, newest first", params: idParams, response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
     await listNotes(db, req.params.id),
   );
 
   app.post<{ Params: IdParams; Body: { body: string } }>('/api/postings/:id/notes', { schema: { summary: 'Add a note to a job (Markdown)', params: idParams, body, response: { 201: anyObject } } }, async (req, reply) => {
-    if (!await asEngine(db).prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
+    if (!await db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
     return reply.code(201).send(await addNote(db, req.params.id, req.body.body, { source: 'user' }));
   });
 

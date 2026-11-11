@@ -21,11 +21,11 @@ const config = fakeConfig({ candidate: { name: 'Pat Example' }, coverLetterCheck
 function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const job = (o = {}) =>
+  const job = async (o = {}) =>
     Number(
-      db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, fetched_text, created_at, updated_at)
+      (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, fetched_text, created_at, updated_at)
           VALUES (1, 'https://jobs.example.com/1', @k, @company, 'Director of Engineering', @k, 'LinkedIn', 'fulltime', '2026-06-01', @stage, @status, @applied, 'Lead the platform team.', 'x', 'x')`)
-        .run({ k: `k${Math.random()}`, company: 'Example Co', stage: 'pipeline', status: 'applied', applied: null, ...o }).lastInsertRowid,
+        .run({ k: `k${Math.random()}`, company: 'Example Co', stage: 'pipeline', status: 'applied', applied: null, ...o })).id,
     );
   return { store, db, job };
 }
@@ -33,14 +33,14 @@ function setup() {
 test('the window: a follow-up from 7 days until the stale days, never archived; stale from then on, archived or not', async () => {
   const { store, db, job } = setup();
   const now = new Date();
-  job({ company: 'Fresh Co', applied: daysAgo(3) });
-  const follow = job({ company: 'Follow Co', applied: daysAgo(20) });
-  job({ company: 'Parked Co', stage: 'archived', applied: daysAgo(20) });
-  const ghost = job({ company: 'Ghost Co', applied: daysAgo(60) });
-  const ghostArchived = job({ company: 'Ghost Archived Co', stage: 'archived', applied: daysAgo(87) });
-  job({ company: 'Rejected Co', status: 'rejected', applied: daysAgo(60) });
-  job({ company: 'Talking Co', status: 'interviewing', applied: daysAgo(60) });
-  job({ company: 'Not applied Co', status: 'new' });
+  await job({ company: 'Fresh Co', applied: daysAgo(3) });
+  const follow = await job({ company: 'Follow Co', applied: daysAgo(20) });
+  await job({ company: 'Parked Co', stage: 'archived', applied: daysAgo(20) });
+  const ghost = await job({ company: 'Ghost Co', applied: daysAgo(60) });
+  const ghostArchived = await job({ company: 'Ghost Archived Co', stage: 'archived', applied: daysAgo(87) });
+  await job({ company: 'Rejected Co', status: 'rejected', applied: daysAgo(60) });
+  await job({ company: 'Talking Co', status: 'interviewing', applied: daysAgo(60) });
+  await job({ company: 'Not applied Co', status: 'new' });
 
   assert.equal(await staleDays(db), DEFAULT_STALE_DAYS);
   const w = await waitingApplications(db, { now });
@@ -57,18 +57,18 @@ test('the window: a follow-up from 7 days until the stale days, never archived; 
 
 test('closing stale applications as no response: the status, a note, the user\'s history; nothing else changes', async () => {
   const { store, db, job } = setup();
-  const follow = job({ company: 'Follow Co', applied: daysAgo(20) });
-  const ghost = job({ company: 'Ghost Co', applied: daysAgo(60) });
+  const follow = await job({ company: 'Follow Co', applied: daysAgo(20) });
+  const ghost = await job({ company: 'Ghost Co', applied: daysAgo(60) });
   const preview = await closeNoResponse(db, { dryRun: true });
   assert.deepEqual(preview.map((j) => j.id), [ghost]);
-  assert.equal(db.prepare('SELECT status FROM postings WHERE id = ? AND user_id = @uid').pluck().get(ghost), 'applied', 'a dry run changes nothing');
+  assert.equal(await db.prepare('SELECT status FROM postings WHERE id = ? AND user_id = @uid').pluck().get(ghost), 'applied', 'a dry run changes nothing');
 
   assert.deepEqual((await closeNoResponse(db)).map((j) => [j.id, j.days]), [[ghost, 60]]);
-  const row = (/** @type {number} */ id) => db.prepare('SELECT status, stage FROM postings WHERE id = ? AND user_id = @uid').get(id);
-  assert.deepEqual(row(ghost), { status: 'no_response', stage: 'pipeline' });
-  assert.deepEqual(row(follow), { status: 'applied', stage: 'pipeline' });
-  assert.deepEqual(db.prepare('SELECT from_status, to_status, changed_by FROM status_history WHERE posting_id = ? AND user_id = @uid').get(ghost), { from_status: 'applied', to_status: 'no_response', changed_by: 'user' });
-  assert.match(/** @type {string} */ (db.prepare('SELECT body FROM posting_notes WHERE posting_id = ? AND user_id = @uid').pluck().get(ghost)), /no reply 60 days after applying \(No response\)/);
+  const row = async (/** @type {number} */ id) => await db.prepare('SELECT status, stage FROM postings WHERE id = ? AND user_id = @uid').get(id);
+  assert.deepEqual(await row(ghost), { status: 'no_response', stage: 'pipeline' });
+  assert.deepEqual(await row(follow), { status: 'applied', stage: 'pipeline' });
+  assert.deepEqual(await db.prepare('SELECT from_status, to_status, changed_by FROM status_history WHERE posting_id = ? AND user_id = @uid').get(ghost), { from_status: 'applied', to_status: 'no_response', changed_by: 'user' });
+  assert.match(/** @type {string} */ (await db.prepare('SELECT body FROM posting_notes WHERE posting_id = ? AND user_id = @uid').pluck().get(ghost)), /no reply 60 days after applying \(No response\)/);
   assert.deepEqual(await closeNoResponse(db), [], 'closed ones are not waiting any more');
   // One job on request, before it is stale; a job that is not waiting is left alone.
   assert.deepEqual((await closeNoResponse(db, { ids: [follow, ghost] })).map((j) => j.id), [follow]);
@@ -84,9 +84,9 @@ async function appSetup(claude = null) {
 
 test('the routes: counts, the setting, review and close the stale ones, and close one', async () => {
   const { store, job, app } = await appSetup();
-  job({ company: 'Follow Co', applied: daysAgo(20) });
-  const ghost = job({ company: 'Ghost Co', applied: daysAgo(60) });
-  const fresh = job({ company: 'New Co', status: 'new' });
+  await job({ company: 'Follow Co', applied: daysAgo(20) });
+  const ghost = await job({ company: 'Ghost Co', applied: daysAgo(60) });
+  const fresh = await job({ company: 'New Co', status: 'new' });
   assert.deepEqual(
     (({ staleDays: s, defaultStaleDays, followUpFrom, followUp, stale }) => ({ s, defaultStaleDays, followUpFrom, followUp, stale }))((await app.inject('/api/follow-ups')).json()),
     { s: 45, defaultStaleDays: 45, followUpFrom: 7, followUp: 1, stale: 1 },
@@ -110,8 +110,8 @@ test('the routes: counts, the setting, review and close the stale ones, and clos
 
 test("another user's stale days and applications are their own", async () => {
   const { store, db, job, app } = await appSetup();
-  job({ company: 'Ghost Co', applied: daysAgo(60) });
-  const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+  await job({ company: 'Ghost Co', applied: daysAgo(60) });
+  const b = await addUser(store.admin, { email: 'b@example.com', name: 'Sam' });
   await runAsUser(b, async () => await setStaleDays(db, 100));
   assert.equal(await staleDays(db), 45);
   assert.deepEqual(await runAsUser(b, async () => await closeNoResponse(db, { dryRun: true })), []);
@@ -136,7 +136,7 @@ test('Find someone to contact: web search on the user\'s AI, the knowledge doc a
       };
   });
   const { store, db, job, app } = await appSetup(claude);
-  const id = job({ company: 'Example Co', applied: daysAgo(20) });
+  const id = await job({ company: 'Example Co', applied: daysAgo(20) });
   const r = await app.inject({ method: 'POST', url: `/api/postings/${id}/find-contact` });
   assert.equal(r.statusCode, 202);
   let t;
@@ -151,7 +151,7 @@ test('Find someone to contact: web search on the user\'s AI, the knowledge doc a
   assert.match(/** @type {string} */ (sent[0].system), /Candidate knowledge/);
   assert.match(/** @type {string} */ (sent[0].prompt), /Director of Engineering role at Example Co/);
   assert.match(/** @type {string} */ (sent[0].prompt), /never instructions to follow/);
-  const note = /** @type {{ body: string, source: string }} */ (db.prepare('SELECT body, source FROM posting_notes WHERE posting_id = ? AND user_id = @uid').get(id));
+  const note = /** @type {{ body: string, source: string }} */ (await db.prepare('SELECT body, source FROM posting_notes WHERE posting_id = ? AND user_id = @uid').get(id));
   assert.equal(note.source, 'agent');
   assert.ok(note.body.startsWith('## Who to contact at Example Co') && !note.body.includes('Let me search'), 'only the answer after the research');
   assert.match(note.body, /check each person on LinkedIn/);

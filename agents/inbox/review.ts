@@ -8,8 +8,7 @@ import { applyActions, createOpportunity } from './actions.ts';
 import { updateEmail, logDecision } from './store.ts';
 import { encrypt } from './crypto.ts';
 import { listOpenApplications } from './match.ts';
-import { asEngine } from '../../db/engine/index.ts';
-import type { Database } from '../../tools/types.ts';
+import type { Db } from '../../tools/types.ts';
 import type { EmailsRow } from '../../db/types.ts';
 import type { Classification } from './classify.ts';
 
@@ -40,11 +39,11 @@ const parse = (s: string | null) => {
 };
 
 /** Emails waiting for review, oldest first, with the best-guess application when there is one. */
-export async function listNeedsReview(db: Database): Promise<ReviewEmail[]> {
-  const rows = (await asEngine(db)
+export async function listNeedsReview(db: Db): Promise<ReviewEmail[]> {
+  const rows = (await db
     .prepare("SELECT * FROM emails WHERE user_id = @uid AND review_status = 'needs_review' ORDER BY sent_at, id")
     .all()) as EmailsRow[];
-  const guessOf = asEngine(db).prepare('SELECT id, company, title, status FROM postings WHERE id = ? AND user_id = @uid');
+  const guessOf = db.prepare('SELECT id, company, title, status FROM postings WHERE id = ? AND user_id = @uid');
   const out: ReviewEmail[] = [];
   for (const e of rows) {
     const extracted = parse(e.extracted_json);
@@ -68,7 +67,7 @@ const classificationOf = (e: ReviewEmail): Pick<Classification, 'type' | 'extrac
  * gets linked.
  */
 export async function resolveReview(
-  db: Database,
+  db: Db,
   e: ReviewEmail,
   choice: string,
   { postingId, body = null, key = null, now = new Date(), casesPath = REVIEW_CASES_PATH }: { postingId?: number; body?: string | null; key?: Buffer | null; now?: Date; casesPath?: string } = {},
@@ -79,10 +78,10 @@ export async function resolveReview(
   const open = await listOpenApplications(db);
   let out: ReviewResult = { postingId: null, statusChange: null, review: null, notices: [] };
 
-  await asEngine(db).tx(async () => {
+  await db.tx(async () => {
     if (choice === 'confirm' || choice === 'reassign') {
       const target = choice === 'confirm' ? e.guess?.id : postingId;
-      if (!target || !await asEngine(db).prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(target)) throw new Error(choice === 'confirm' ? 'There is no best guess to confirm; reassign instead.' : `Job #${postingId} was not found.`);
+      if (!target || !await db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(target)) throw new Error(choice === 'confirm' ? 'There is no best guess to confirm; reassign instead.' : `Job #${postingId} was not found.`);
       const r = await applyActions(db, { email, postingId: target, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
       await updateEmail(db, e.id, { postingId: target, matchRule: 'user', confidence: 1, reviewStatus: choice === 'confirm' ? 'confirmed' : 'reassigned', reviewReason: null, ...(body && key && !e.body_enc ? { bodyEnc: encrypt(body, key) } : {}) }, now);
       out = { postingId: target, ...r };

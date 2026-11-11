@@ -4,13 +4,12 @@
 // Code that runs for a user reads the right settings without knowing whose they are: userConfigView (the server) and
 // configFor (scripts) pick by the user the request or job runs as (db/scope.ts).
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { asEngine } from '../db/engine/index.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { validateConfig } from '../tools/config.ts';
 import { withExcludedSites } from './excluded-sites.ts';
 import type { JobSearchConfig } from '../tools/config.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 
 /** A user's settings: the job-search config, plus ready (complete enough to search) for anyone but the owner. */
 export type UserConfig = JobSearchConfig & { ready?: boolean };
@@ -26,10 +25,10 @@ export const MAX_PROFILE_CHARS = 50000;
 const MAX_ITEMS = 40;
 const MAX_TEXT = 200;
 
-const readSetting = async (db: Database, uid: number, key: string) =>
-  (await asEngine(db).prepare('SELECT value FROM user_settings WHERE user_id = ? AND key = ?').pluck().get(uid, key) as string | null | undefined) ?? null;
-async function writeSetting(db: Database, uid: number, key: string, value: string) {
-  await asEngine(db).prepare(`INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, ?, ?, ?)
+const readSetting = async (db: Db, uid: number, key: string) =>
+  (await db.prepare('SELECT value FROM user_settings WHERE user_id = ? AND key = ?').pluck().get(uid, key) as string | null | undefined) ?? null;
+async function writeSetting(db: Db, uid: number, key: string, value: string) {
+  await db.prepare(`INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, ?, ?, ?)
     ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`).run(uid, key, value, new Date().toISOString());
 }
 
@@ -85,7 +84,7 @@ export function cleanConfig(input: Loose = {}, name = '') {
 }
 
 /** A user's search settings (never the owner's: callers use the owner's file for them). */
-export async function userConfig(db: Database, uid: number, name = '') {
+export async function userConfig(db: Db, uid: number, name = '') {
   const saved = await readSetting(db, uid, CONFIG_KEY);
   if (!saved) return blankConfig(name);
   try {
@@ -96,7 +95,7 @@ export async function userConfig(db: Database, uid: number, name = '') {
 }
 
 /** Saves a user's search settings; returns them with ready (complete enough to search) and the problems left. */
-export async function saveUserConfig(db: Database, uid: number, input: Loose, name = '') {
+export async function saveUserConfig(db: Db, uid: number, input: Loose, name = '') {
   if (uid === OWNER_ID) throw Object.assign(new Error('Your search settings live in data/config/job-search.json.'), { statusCode: 400 });
   const config = cleanConfig(input, name);
   await writeSetting(db, uid, CONFIG_KEY, JSON.stringify(config));
@@ -105,15 +104,15 @@ export async function saveUserConfig(db: Database, uid: number, input: Loose, na
 }
 
 /** A user's knowledge doc (Settings), or ''. Everyone's, the owner's included. */
-export const userProfile = async (db: Database, uid: number) => await readSetting(db, uid, PROFILE_KEY) ?? '';
+export const userProfile = async (db: Db, uid: number) => await readSetting(db, uid, PROFILE_KEY) ?? '';
 
 /**
  * Saves a user's knowledge doc as a new version; the earlier ones are kept (profileVersions, newest first, at most
  * MAX_PROFILE_VERSIONS). source says how it came: typed, file (filled from a document), draft, or restore.
  */
-export async function saveUserProfile(db: Database, uid: number, value: unknown, { source = 'typed', now = new Date() }: { source?: string; now?: Date } = {}) {
+export async function saveUserProfile(db: Db, uid: number, value: unknown, { source = 'typed', now = new Date() }: { source?: string; now?: Date } = {}) {
   // The versions are read and written in one transaction, so two saves at once keep both versions.
-  return asEngine(db).tx(async () => {
+  return db.tx(async () => {
     const body = String(value ?? '').trim();
     if (body.length > MAX_PROFILE_CHARS) throw Object.assign(new Error(`Keep it under ${MAX_PROFILE_CHARS} characters.`), { statusCode: 400 });
     const versions = await profileVersions(db, uid);
@@ -141,7 +140,7 @@ export interface ProfileVersion {
  * A user's saved knowledge doc versions, newest first. A doc saved before versions were kept
  * starts the list as its one earlier version (source earlier), so the first new save never loses it.
  */
-export async function profileVersions(db: Database, uid: number): Promise<ProfileVersion[]> {
+export async function profileVersions(db: Db, uid: number): Promise<ProfileVersion[]> {
   let list: ProfileVersion[] = [];
   try {
     list = JSON.parse(await readSetting(db, uid, VERSIONS_KEY) ?? '[]');
@@ -151,14 +150,14 @@ export async function profileVersions(db: Database, uid: number): Promise<Profil
   list = Array.isArray(list) ? list.filter((v) => typeof v?.text === 'string') : [];
   const current = await userProfile(db, uid);
   if (!list.length && current) {
-    const at = await asEngine(db).prepare('SELECT updated_at FROM user_settings WHERE user_id = ? AND key = ?').pluck().get(uid, PROFILE_KEY) as string | undefined;
+    const at = await db.prepare('SELECT updated_at FROM user_settings WHERE user_id = ? AND key = ?').pluck().get(uid, PROFILE_KEY) as string | undefined;
     list = [{ text: current, savedAt: at ?? null, source: 'earlier' }];
   }
   return list;
 }
 
 /** The background for scoring and writing; throws a message that says how to fix it when it is too short. */
-export async function profileForAI(db: Database, uid: number) {
+export async function profileForAI(db: Db, uid: number) {
   const body = await userProfile(db, uid);
   if (body.length < MIN_PROFILE_CHARS) {
     throw Object.assign(new Error(`Write your knowledge doc (at least ${MIN_PROFILE_CHARS} characters) under Settings before using AI.`), { statusCode: 400 });
@@ -170,7 +169,7 @@ export async function profileForAI(db: Database, uid: number) {
  * The background scoring and writing read for a user: their knowledge doc (Settings) when it is long enough, else
  * profileForAI's message saying how to fix it. fallback is for tests only: a stand-in for the owner's knowledge doc.
  */
-export async function backgroundFor(db: Database, uid: number, { fallback = null }: { fallback?: (() => string | Promise<string>) | null } = {}) {
+export async function backgroundFor(db: Db, uid: number, { fallback = null }: { fallback?: (() => string | Promise<string>) | null } = {}) {
   const body = await userProfile(db, uid);
   if (body.length >= MIN_PROFILE_CHARS) return body;
   if (uid === OWNER_ID && fallback) return fallback();
@@ -178,24 +177,24 @@ export async function backgroundFor(db: Database, uid: number, { fallback = null
 }
 
 /** Whether a user's pipeline runs on the owner's schedule too. */
-export const scheduledForUser = async (db: Database, uid: number) => await readSetting(db, uid, SCHEDULE_KEY) === 'on';
-export const setScheduledForUser = async (db: Database, uid: number, on: unknown) => await writeSetting(db, uid, SCHEDULE_KEY, on ? 'on' : 'off');
+export const scheduledForUser = async (db: Db, uid: number) => await readSetting(db, uid, SCHEDULE_KEY) === 'on';
+export const setScheduledForUser = async (db: Db, uid: number, on: unknown) => await writeSetting(db, uid, SCHEDULE_KEY, on ? 'on' : 'off');
 
 /** Active users (not the owner) who asked for their pipeline to run on the schedule. */
-export async function scheduledUsers(db: Database): Promise<number[]> {
-  return await asEngine(db)
+export async function scheduledUsers(db: Db): Promise<number[]> {
+  return await db
     .prepare(`SELECT s.user_id FROM user_settings s JOIN users u ON u.id = s.user_id
       WHERE s.key = ? AND s.value = 'on' AND u.status = 'active' AND u.id != ? ORDER BY u.id`)
     .pluck()
     .all(SCHEDULE_KEY, OWNER_ID) as number[];
 }
 
-const views = new Map<number, { base: JobSearchConfig | null; db: Database; config: UserConfig }>(); // uid -> { base, db, config }, cleared when anyone saves settings or skipped sites
+const views = new Map<number, { base: JobSearchConfig | null; db: Db; config: UserConfig }>(); // uid -> { base, db, config }, cleared when anyone saves settings or skipped sites
 /**
  * The settings loaded for the current request or job (withUserConfig), which userConfigView answers from. A Proxy
  * must answer at once, so the settings are read before the route runs, never during a read.
  */
-const loaded = new AsyncLocalStorage<{ uid: number; db: Database; ownerConfig: JobSearchConfig; config: UserConfig }>();
+const loaded = new AsyncLocalStorage<{ uid: number; db: Db; ownerConfig: JobSearchConfig; config: UserConfig }>();
 
 /** Drops the cached settings after a save, and reloads the current request's, so the rest of it sees the save. */
 export async function clearConfigViews() {
@@ -205,7 +204,7 @@ export async function clearConfigViews() {
 }
 
 /** Runs fn with uid's settings loaded (configFor), so userConfigView answers from them for everything fn starts. */
-export async function withUserConfig<T>(db: Database, uid: number, ownerConfig: JobSearchConfig, fn: () => T): Promise<Awaited<T>> {
+export async function withUserConfig<T>(db: Db, uid: number, ownerConfig: JobSearchConfig, fn: () => T): Promise<Awaited<T>> {
   const config = await configFor(db, uid, ownerConfig);
   return await loaded.run({ uid, db, ownerConfig, config }, fn);
 }
@@ -214,13 +213,13 @@ export async function withUserConfig<T>(db: Database, uid: number, ownerConfig: 
  * The settings for whoever this runs as: the owner's file for the owner, else the user's own; either way with the
  * user's skipped sites (Settings) added to search.excludedSites.
  */
-export async function configFor(db: Database, uid: number, ownerConfig: JobSearchConfig): Promise<UserConfig> {
+export async function configFor(db: Db, uid: number, ownerConfig: JobSearchConfig): Promise<UserConfig> {
   const base = uid === OWNER_ID ? ownerConfig : null;
   const seen = views.get(uid);
   if (seen && seen.base === base && seen.db === db) return seen.config;
   let config: UserConfig | null = base;
   if (uid !== OWNER_ID) {
-    const name = (await asEngine(db).prepare('SELECT name FROM users WHERE id = ?').pluck().get(uid) as string | null | undefined) ?? '';
+    const name = (await db.prepare('SELECT name FROM users WHERE id = ?').pluck().get(uid) as string | null | undefined) ?? '';
     config = await userConfig(db, uid, name);
   }
   // config is set: the owner has ownerConfig, anyone else their own settings.
@@ -234,7 +233,7 @@ export async function configFor(db: Database, uid: number, ownerConfig: JobSearc
  * taking `config`; which settings it sees follows the request's user, like store.db. The settings are the ones
  * withUserConfig loaded for this request or job (the server's preHandler does it), else the cached ones for this user.
  */
-export function userConfigView(ownerConfig: JobSearchConfig, db: Database): UserConfig {
+export function userConfigView(ownerConfig: JobSearchConfig, db: Db): UserConfig {
   const current = (): UserConfig => {
     const uid = currentUserId() ?? OWNER_ID;
     const here = loaded.getStore();

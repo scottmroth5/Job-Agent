@@ -6,14 +6,14 @@ import { MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { uploadName } from './account-routes.ts';
 import { disposition } from './attachments.ts';
 import { resumeDocx, resumePdf } from '../tools/resume-format.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { App, FastifyReply, FastifyRequest } from './types.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
 const TYPES: Record<string, string> = { pdf: 'application/pdf', docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', text: 'text/plain; charset=utf-8' };
 
-export function registerResumeRoutes(app: App, { db }: { db: Database }) {
+export function registerResumeRoutes(app: App, { db }: { db: Db }) {
   const fileBody = (req: FastifyRequest, reply: FastifyReply) => {
     if (Buffer.isBuffer(req.body) && req.body.length) return req.body;
     reply.code(400).send({ error: 'Send the file as the request body (application/octet-stream).' });

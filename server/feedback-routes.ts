@@ -1,11 +1,10 @@
 // Send feedback (multi-user, phase 4): any signed-in user writes to the owner from Settings. It is saved (theirs, in the
 // feedback table) and emailed to the owner with the user as reply-to; the owner sees it all on Admin > Users and marks it
 // done. A user may send FEEDBACK_PER_DAY a day, so the form can never be used to flood the owner's inbox.
-import { asEngine } from '../db/engine/index.ts';
 import { randomUUID } from 'node:crypto';
 import { getUser, OWNER_ID } from '../db/users.ts';
 import { listFeedback, markFeedbackDone } from './admin-queries.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { User } from '../db/users.ts';
 import type { App, Notices } from './types.ts';
 
@@ -13,7 +12,7 @@ export const FEEDBACK_PER_DAY = 10;
 export const MAX_FEEDBACK_CHARS = 4000;
 const anyObject = { type: 'object', additionalProperties: true };
 
-export function registerFeedbackRoutes(app: App, { db, notices = {}, admin = true }: { db: Database; notices?: Notices; admin?: boolean }) {
+export function registerFeedbackRoutes(app: App, { db, notices = {}, admin = true }: { db: Db; notices?: Notices; admin?: boolean }) {
   app.post<{ Body: { body: string; page?: string } }>(
     '/api/feedback',
     {
@@ -35,10 +34,10 @@ export function registerFeedbackRoutes(app: App, { db, notices = {}, admin = tru
       const id = randomUUID();
       const page = req.body.page?.replace(/[^\w#/ -]/g, '').slice(0, 100) || null;
       // The day's count and the insert are one transaction, so feedback sent at once can not pass FEEDBACK_PER_DAY.
-      await asEngine(db).tx(async () => {
-        const today = (await asEngine(db).prepare('SELECT COUNT(*) FROM feedback WHERE user_id = @uid AND created_at >= ?').pluck().get(since)) as number;
+      await db.tx(async () => {
+        const today = (await db.prepare('SELECT COUNT(*) FROM feedback WHERE user_id = @uid AND created_at >= ?').pluck().get(since)) as number;
         if (today >= FEEDBACK_PER_DAY) throw Object.assign(new Error('That is a lot of feedback for one day. Try again tomorrow.'), { statusCode: 429 });
-        await asEngine(db).prepare('INSERT INTO feedback (user_id, id, body, page, created_at) VALUES (@uid, ?, ?, ?, ?)').run(id, body, page, new Date().toISOString());
+        await db.prepare('INSERT INTO feedback (user_id, id, body, page, created_at) VALUES (@uid, ?, ?, ?, ?)').run(id, body, page, new Date().toISOString());
       });
       // The owner's own feedback is a note to self: saved, not emailed.
       if ((req.uid ?? OWNER_ID) !== OWNER_ID) await notices.feedback?.((await getUser(db, req.uid as number)) as User, body, page); // a signed-in user has a row

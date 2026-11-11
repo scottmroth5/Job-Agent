@@ -7,14 +7,14 @@ import { addExcludedSite, excludedSites, removeExcludedSite, setExcludedSiteNote
 import { clearConfigViews, userConfig } from '../agents/user-config.ts';
 import { archiveSiteJobs, findListings } from '../agents/hunt/archive.ts';
 import { excludedSite } from '../tools/listings.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { JobSearchConfig } from '../tools/config.ts';
 import type { App, FastifyRequest } from './types.ts';
 
 const anyObject = { type: 'object', additionalProperties: true };
 const siteParams = { type: 'object', required: ['site'], properties: { site: { type: 'string', minLength: 3, maxLength: 253, pattern: '^[a-z0-9.-]+$' } } };
 
-export function registerExcludedSiteRoutes(app: App, { db, ownerConfig = null }: { db: Database; ownerConfig?: JobSearchConfig | null }) {
+export function registerExcludedSiteRoutes(app: App, { db, ownerConfig = null }: { db: Db; ownerConfig?: JobSearchConfig | null }) {
   const uidOf = (req: FastifyRequest) => req.uid ?? OWNER_ID;
   // Sites someone other than the owner listed in their saved search before this list existed (moved in on first change).
   const legacyFor = async (uid: number) => (uid === OWNER_ID ? [] : (await userConfig(db, uid)).search.excludedSites ?? []);

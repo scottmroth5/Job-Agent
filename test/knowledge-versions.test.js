@@ -13,8 +13,8 @@ import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 const doc = (/** @type {number} */ n) => `## 1. Summary\nEngineering leader, version ${n}.\n\n## 2. Experience\n- Grew a platform team from 6 to 45 engineers.`;
 
 test('every save is a version, newest first; the same text again adds none; a doc saved before versions is kept', async () => {
-  const { raw } = openJobStore(':memory:');
-  raw.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, 'profile.text', ?, '2026-10-01T12:00:00.000Z')").run(OWNER_ID, doc(0));
+  const { admin: raw } = openJobStore(':memory:');
+  await raw.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, 'profile.text', ?, '2026-10-01T12:00:00.000Z')").run(OWNER_ID, doc(0));
   assert.deepEqual((await profileVersions(raw, OWNER_ID)).map((v) => [v.source, v.savedAt]), [['earlier', '2026-10-01T12:00:00.000Z']]);
   await saveUserProfile(raw, OWNER_ID, doc(1), { source: 'file', now: new Date('2026-10-28T12:00:00Z') });
   await saveUserProfile(raw, OWNER_ID, doc(1), { now: new Date('2026-10-28T13:00:00Z') });

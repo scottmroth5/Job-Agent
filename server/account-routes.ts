@@ -1,7 +1,6 @@
 // Settings (multi-user, phase 2): the signed-in user's account and their own Claude key. The key is checked with
 // Anthropic's free model list, then sealed (tools/secret-box.ts, bound to the user's id) before it is stored; it is never
 // returned, logged, or shown to anyone, only whether one is set. The owner's AI uses ANTHROPIC_API_KEY instead.
-import { asEngine } from '../db/engine/index.ts';
 import { budgetStatus } from '../agents/budget.ts';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.ts';
 import { boxKey, seal } from '../tools/secret-box.ts';
@@ -15,7 +14,7 @@ import { isTimeZone, localDay } from '../tools/dates.ts';
 import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.ts';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { KNOWLEDGE_SECTIONS, knowledgeTemplate } from '../agents/knowledge-sections.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { User } from '../db/users.ts';
 import type { App, FastifyRequest, Notices } from './types.ts';
 
@@ -36,7 +35,7 @@ const anyObject = { type: 'object', additionalProperties: true };
 // Anthropic API keys: "sk-ant-" then letters, digits, dashes, and underscores.
 const KEY_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,200}$/;
 
-async function account(db: Database, uid: number) {
+async function account(db: Db, uid: number) {
   const u = (await getUser(db, uid)) as User; // the request's own account, which exists
   const budget = await budgetStatus(db, { uid });
   return {
@@ -46,9 +45,9 @@ async function account(db: Database, uid: number) {
     status: u.status,
     // A user who paused themselves can resume themselves; the owner's pause is the owner's to lift.
     // Calendar days follow their own zone; null means the app's (the owner always uses the app's).
-    timeZone: uid === OWNER_ID ? null : (await asEngine(db).prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) ?? null),
+    timeZone: uid === OWNER_ID ? null : (await db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) ?? null),
     appTimeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-    pausedBySelf: u.status === 'paused' && await asEngine(db).prepare('SELECT decided_by FROM users WHERE id = ?').pluck().get(uid) === uid,
+    pausedBySelf: u.status === 'paused' && await db.prepare('SELECT decided_by FROM users WHERE id = ?').pluck().get(uid) === uid,
     owner: uid === OWNER_ID,
     // Where AI calls are paid from: 'env' (the owner's ANTHROPIC_API_KEY), 'owner' (the owner's key, with a cap), 'own'.
     ai: { paidBy: uid === OWNER_ID ? 'env' : u.ai_source, keySet: u.has_key, budget },
@@ -58,7 +57,7 @@ async function account(db: Database, uid: number) {
 /** checkKey is tools/claude.ts claudeKeyWorks (tests pass a fake). */
 export function registerAccountRoutes(
   app: App,
-  { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }: { db: Database; checkKey: (apiKey: string) => Promise<boolean>; notices?: Notices; attachmentsDir?: string; demo?: boolean },
+  { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }: { db: Db; checkKey: (apiKey: string) => Promise<boolean>; notices?: Notices; attachmentsDir?: string; demo?: boolean },
 ) {
   // Phase 6: take your data with you, pause yourself, or delete your account. Deleting needs your address typed.
   app.get('/api/account/export', { schema: { summary: 'Download everything that is yours, as JSON', response: { 200: anyObject } } }, async (req, reply) =>
@@ -100,24 +99,24 @@ export function registerAccountRoutes(
       if (uid === OWNER_ID) throw Object.assign(new Error('Your time zone is TZ in the server settings.'), { statusCode: 400 });
       const zone = req.body.timeZone;
       if (zone !== null && !isTimeZone(zone)) throw Object.assign(new Error('That is not a time zone this server knows.'), { statusCode: 400 });
-      await asEngine(db).prepare('UPDATE users SET time_zone = ?, updated_at = ? WHERE id = ?').run(zone, new Date().toISOString(), uid);
+      await db.prepare('UPDATE users SET time_zone = ?, updated_at = ? WHERE id = ?').run(zone, new Date().toISOString(), uid);
       return account(db, uid);
     },
   );
   app.post('/api/account/pause', { schema: { summary: 'Pause your own account (you can resume it yourself)', response: { 200: anyObject } } }, async (req) => {
     const uid = req.uid ?? OWNER_ID;
     if (uid === OWNER_ID) throw Object.assign(new Error('The owner cannot be paused.'), { statusCode: 400 });
-    await asEngine(db).prepare("UPDATE users SET status = 'paused', decided_at = ?, decided_by = ?, updated_at = ? WHERE id = ? AND status = 'active'").run(new Date().toISOString(), uid, new Date().toISOString(), uid);
+    await db.prepare("UPDATE users SET status = 'paused', decided_at = ?, decided_by = ?, updated_at = ? WHERE id = ? AND status = 'active'").run(new Date().toISOString(), uid, new Date().toISOString(), uid);
     return account(db, uid);
   });
   app.post('/api/account/resume', { schema: { summary: 'Resume your account, when you paused it yourself', response: { 200: anyObject } } }, async (req) => {
     const uid = req.uid ?? OWNER_ID;
     // The check of who paused it and the resume are one transaction, so a pause by the owner meanwhile is not undone.
-    await asEngine(db).tx(async () => {
-      const row = (await asEngine(db).prepare('SELECT status, decided_by FROM users WHERE id = ?').get(uid)) as { status: string; decided_by: number | null } | undefined;
+    await db.tx(async () => {
+      const row = (await db.prepare('SELECT status, decided_by FROM users WHERE id = ?').get(uid)) as { status: string; decided_by: number | null } | undefined;
       if (row?.status !== 'paused') throw Object.assign(new Error('Your account is not paused.'), { statusCode: 400 });
       if (row.decided_by !== uid) throw Object.assign(new Error('The owner paused your account, so only they can resume it.'), { statusCode: 403 });
-      await asEngine(db).prepare("UPDATE users SET status = 'active', decided_at = ?, updated_at = ? WHERE id = ?").run(new Date().toISOString(), new Date().toISOString(), uid);
+      await db.prepare("UPDATE users SET status = 'active', decided_at = ?, updated_at = ? WHERE id = ?").run(new Date().toISOString(), new Date().toISOString(), uid);
     });
     return account(db, uid);
   });

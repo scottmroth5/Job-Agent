@@ -120,18 +120,6 @@ function stateOf(raw: Sqlite): ConnectionState {
   return state;
 }
 
-/**
- * Throws when a synchronous statement (store.db, while Phase 3 converts the app) would run inside an engine transaction
- * that another request or job has open: it can not wait for the lock, and it would otherwise commit or roll back with
- * that transaction. Inside the transaction's own context it runs as part of it. Removed with the synchronous handle.
- */
-export function assertSyncMayRun(raw: Sqlite): void {
-  const state = connections.get(raw);
-  if (state?.open && context.getStore()?.top !== state.open) {
-    throw new Error('A synchronous database call ran while another transaction was open. Convert it to the async engine (db/engine).');
-  }
-}
-
 /** The async Db over a better-sqlite3 connection (the unscoped one; scoping happens here). */
 export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx = process.env.NODE_TEST_CONTEXT !== undefined }: SqliteEngineOptions = {}): Db {
   const userId = userIdOr(fallbackUid);

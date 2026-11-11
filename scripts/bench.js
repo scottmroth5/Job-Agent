@@ -9,7 +9,6 @@
 //
 // Prints median, p95, and mean milliseconds per route from its best round (the lowest median): a busy computer slows
 // whole rounds, so the best round is the steadiest number to compare. Nothing is written to the repo or logged.
-import { asEngine } from '../db/engine/index.ts';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -56,7 +55,7 @@ try {
   const app = await buildApp({ store, config: DEMO_CONFIG, services, authMode: 'none' });
   await app.ready();
 
-  const job = /** @type {number} */ (await asEngine(store.db).prepare('SELECT id FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').pluck().get());
+  const job = /** @type {number} */ (await store.db.prepare('SELECT id FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').pluck().get());
   /** @type {Array<{ name: string, run: () => Promise<void> }>} */
   const routes = [];
   /** @param {string} name @param {InjectOptions} req @param {number} [status] */

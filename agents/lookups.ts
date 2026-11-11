@@ -4,8 +4,8 @@
 // stays valid on the jobs that have it, and drops out of menus and automation targets.
 
 import { BUILT_INS, BUILT_IN_ROLES } from '../db/migrations/009-lookups.ts';
-import { asEngine, connectionKey } from '../db/engine/index.ts';
-import type { AnyDb } from '../db/engine/index.ts';
+import { connectionKey } from '../db/engine/index.ts';
+import type { Db } from '../db/engine/types.ts';
 import { insideTransaction } from '../db/engine/sqlite.ts';
 import type { LookupRolesRow, LookupValuesRow } from '../db/types.ts';
 
@@ -129,7 +129,7 @@ export function builtInLookups(): Lookups {
 }
 
 /** Drops the cached lists (call after any edit). */
-export function invalidateLookups(db: AnyDb) {
+export function invalidateLookups(db: Db) {
   const key = connectionKey(db);
   generations.set(key, (generations.get(key) ?? 0) + 1);
   cache.delete(key);
@@ -139,7 +139,7 @@ export function invalidateLookups(db: AnyDb) {
  * The lists for this database, cached until invalidateLookups(db). Helpers include archived values,
  * because their behavior still applies to the jobs that have them.
  */
-export async function lookups(db: AnyDb | null | undefined): Promise<Lookups> {
+export async function lookups(db: Db | null | undefined): Promise<Lookups> {
   if (!db) return builtInLookups();
   // Inside a transaction (an edit's checks) the lists are read fresh and not cached, as they may not be committed.
   const inTx = insideTransaction();
@@ -147,7 +147,7 @@ export async function lookups(db: AnyDb | null | undefined): Promise<Lookups> {
   const generation = generations.get(key) ?? 0;
   const hit = cache.get(key);
   if (hit && hit.generation === generation && !inTx) return hit.lookups;
-  const q = asEngine(db);
+  const q = db;
   const built = build(
     (await q.prepare('SELECT * FROM lookup_values ORDER BY list, sort_order, id').all()) as ValueRow[],
     (await q.prepare('SELECT list, role, value_id FROM lookup_roles').all()) as LookupRolesRow[],
@@ -216,7 +216,7 @@ function checkList(list: string) {
   if (!LISTS.includes(list)) throw bad(`Unknown list "${list}". Lists: ${LISTS.join(', ')}.`);
 }
 
-async function checkLabel(db: AnyDb, list: string, label: unknown, exceptId: string | null = null) {
+async function checkLabel(db: Db, list: string, label: unknown, exceptId: string | null = null) {
   const l = String(label ?? '').trim();
   if (!l) throw bad('Enter a label.');
   if (l.length > 60) throw bad('Keep the label to 60 characters or fewer.');
@@ -238,9 +238,9 @@ function checkSettings(list: string, settings: { scorePrompt?: string; terms?: u
 }
 
 /** Adds a value; returns its new ID. The label check, the new ID, and the insert are one transaction. */
-export async function addValue(db: AnyDb, list: string, { label, group, settings }: { label: unknown; group?: string; settings?: { scorePrompt?: string; terms?: unknown } }, now = new Date()) {
+export async function addValue(db: Db, list: string, { label, group, settings }: { label: unknown; group?: string; settings?: { scorePrompt?: string; terms?: unknown } }, now = new Date()) {
   checkList(list);
-  const q = asEngine(db);
+  const q = db;
   try {
     return await q.tx(async () => {
       const l = await checkLabel(q, list, label);
@@ -262,14 +262,14 @@ export async function addValue(db: AnyDb, list: string, { label, group, settings
 
 /** Changes a value's label, group, settings, or archived state. Refuses changes that would break a role. */
 export async function updateValue(
-  db: AnyDb,
+  db: Db,
   list: string,
   id: string,
   patch: { label?: unknown; group?: string; settings?: { scorePrompt?: string; terms?: unknown }; archived?: boolean },
   now = new Date(),
 ) {
   checkList(list);
-  const q = asEngine(db);
+  const q = db;
   try {
     await q.tx(async () => {
       await changeValue(q, list, id, patch, now);
@@ -282,7 +282,7 @@ export async function updateValue(
 
 /** updateValue's checks and write, inside its transaction. */
 async function changeValue(
-  db: AnyDb,
+  db: Db,
   list: string,
   id: string,
   patch: { label?: unknown; group?: string; settings?: { scorePrompt?: string; terms?: unknown }; archived?: boolean },
@@ -309,16 +309,16 @@ async function changeValue(
   }
   const keys = Object.keys(set);
   if (keys.length) {
-    await asEngine(db)
+    await db
       .prepare(`UPDATE lookup_values SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @now WHERE list = @list AND id = @id`)
       .run({ ...set, now: now.toISOString(), list, id });
   }
 }
 
 /** Moves a value one place up (-1) or down (+1) in its list. */
-export async function moveValue(db: AnyDb, list: string, id: string, direction: number) {
+export async function moveValue(db: Db, list: string, id: string, direction: number) {
   checkList(list);
-  const q = asEngine(db);
+  const q = db;
   try {
     // The order is read and swapped in one transaction.
     await q.tx(async () => {
@@ -339,11 +339,11 @@ export async function moveValue(db: AnyDb, list: string, id: string, direction: 
 }
 
 /** Points a role (for example the default status) at another value. */
-export async function setRole(db: AnyDb, list: string, role: string, valueId: string) {
+export async function setRole(db: Db, list: string, role: string, valueId: string) {
   checkList(list);
   const listRoles = ROLES[list] as Record<string, string[] | null>;
   if (!listRoles[role] && listRoles[role] !== null) throw bad(`The ${list} list has no role "${role}".`);
-  const q = asEngine(db);
+  const q = db;
   try {
     // The value's checks and the role change are one transaction, so the value can not be archived in between.
     await q.tx(async () => {
@@ -360,7 +360,7 @@ export async function setRole(db: AnyDb, list: string, role: string, valueId: st
 }
 
 /** How many jobs use each value of a list. */
-export async function usageCounts(db: AnyDb, list: string): Promise<Record<string, number>> {
+export async function usageCounts(db: Db, list: string): Promise<Record<string, number>> {
   checkList(list);
-  return Object.fromEntries(((await asEngine(db).prepare(`SELECT ${list} AS id, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY ${list}`).all()) as Array<{ id: string; n: number }>).map((r) => [r.id, r.n]));
+  return Object.fromEntries(((await db.prepare(`SELECT ${list} AS id, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY ${list}`).all()) as Array<{ id: string; n: number }>).map((r) => [r.id, r.n]));
 }

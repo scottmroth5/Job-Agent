@@ -1,6 +1,5 @@
 // Runs the inbox's real decision code (pre-filter, rule cascade, Claude classification, confidence gate,
 // injection guard) over synthetic labeled emails. Each case gets a fresh in-memory database.
-import { asEngine } from '../../db/engine/index.ts';
 import { openJobStore } from '../../db/index.ts';
 import { storedKey } from '../../agents/identity.ts';
 import { prefilter, domainOf } from '../../agents/inbox/prefilter.ts';
@@ -12,7 +11,7 @@ import { parseFrom } from '../../agents/inbox/gmail.ts';
 import { isContact, isCompanyDomain } from '../../agents/inbox/store.ts';
 /**
  * @import { Claude, Run } from '@scottmroth5/agent-core'
- * @import { Database } from '../../tools/types.ts'
+ * @import { Db } from '../../tools/types.ts'
  * @import { InboxConfig } from '../../agents/inbox/config.ts'
  * @import { InboxResult } from './metrics.js'
  */
@@ -25,11 +24,11 @@ import { isContact, isCompanyDomain } from '../../agents/inbox/store.ts';
  */
 
 /**
- * @param {Database} db
+ * @param {Db} db
  * @param {EvalApplication[]} applications
  */
 async function seed(db, applications) {
-  const insert = asEngine(db).prepare(`INSERT INTO postings (user_id, id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
+  const insert = db.prepare(`INSERT INTO postings (user_id, id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
     VALUES (@uid, ?, ?, ?, ?, ?, '2026-09-01', 'pipeline', ?, ?, 'x', 'x')`);
   for (const a of applications) await insert.run(a.id, `eval-${a.id}`, a.company, a.title, storedKey(a), a.status, a.domain ?? null);
 }

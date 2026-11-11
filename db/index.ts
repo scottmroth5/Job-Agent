@@ -1,6 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import Database from 'better-sqlite3';
 import { openStore } from '@scottmroth5/agent-core';
 import { repoPath, dataPath } from '../tools/paths.ts';
 import * as duplicateStatus from './migrations/008-duplicate-status.ts';
@@ -15,21 +14,21 @@ import * as noResponse from './migrations/018-no-response.ts';
 import * as dismissedEmail from './migrations/019-dismissed-email.ts';
 import * as usageBrowser from './migrations/021-usage-browser.ts';
 import * as statusRoles from './migrations/023-status-roles.ts';
-import { scopeDb } from './scope.ts';
-import type { ScopedDatabase } from './scope.ts';
 import { createSqliteEngine } from './engine/sqlite.ts';
+import { appliedIn, backupConnection, copyDatabase } from './engine/files.ts';
 import type { Db } from './engine/types.ts';
-import type { Migration, Store } from '@scottmroth5/agent-core';
+import type { Migration } from '@scottmroth5/agent-core';
 import { OWNER_ID } from './users.ts';
 
-/**
- * openJobStore's store: db is scoped to the current user (db/scope.ts), raw is the unscoped database, and engine is the
- * async data layer over the same connection, scoped the same way (db/engine; v3 Phase 3 moves every call to it).
- */
-export interface JobStore extends Omit<Store, 'db'> {
-  db: ScopedDatabase;
-  raw: Database.Database;
-  engine: Db;
+/** openJobStore's store: the async data layer (db/engine) over one connection. */
+export interface JobStore {
+  /** Scoped to the current user (runAsUser), else fallbackUid: every query on a user table names user_id = @uid. */
+  db: Db;
+  /** Unscoped, for the admin's cross-user reads (server/admin-queries.ts), backups, and account deletion only. */
+  admin: Db;
+  /** An online backup of the open database into a new file (tools/backup). */
+  backup: (to: string) => Promise<void>;
+  close: () => void;
 }
 
 /** Default database file. Gitignored, like everything under data/. */
@@ -42,7 +41,7 @@ const MIGRATIONS_DIR = repoPath('db', 'migrations');
 
 // Migrations that need code rather than plain SQL. Each exports id and up(db); foreignKeys = false marks a table rebuild
 // (agent-core runs it with foreign keys off, then checks them before it commits).
-const CODE_MIGRATIONS: Array<{ id: string; up: (db: Database.Database) => void; foreignKeys?: boolean }> = [duplicateStatus, lookups, postingNotes, users, accounts, activity, timeZoneColumn, resumes, noResponse, dismissedEmail, usageBrowser, statusRoles];
+const CODE_MIGRATIONS: Array<{ id: string; up: Extract<Migration['up'], (...args: never[]) => unknown>; foreignKeys?: boolean }> = [duplicateStatus, lookups, postingNotes, users, accounts, activity, timeZoneColumn, resumes, noResponse, dismissedEmail, usageBrowser, statusRoles];
 
 /** Migrations: the .sql files in db/migrations plus CODE_MIGRATIONS, applied in id (file-name) order. */
 export function loadMigrations(dir = MIGRATIONS_DIR): Migration[] {
@@ -52,43 +51,7 @@ export function loadMigrations(dir = MIGRATIONS_DIR): Migration[] {
   return [...sql, ...CODE_MIGRATIONS.map(({ id, up, foreignKeys }) => ({ id, up, ...(foreignKeys === false ? { foreignKeys } : {}) }))].sort((a, b) => (a.id < b.id ? -1 : 1));
 }
 
-const appliedIds = (db: Database.Database) => db.prepare("SELECT app || ':' || id FROM schema_migrations ORDER BY app, id").pluck().all() as string[];
-
-/** The schema_migrations entries a database file has (empty for a new or migration-less file). Read-only. */
-function appliedIn(path: string) {
-  const db = new Database(path, { readonly: true, fileMustExist: true });
-  try {
-    return db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'schema_migrations'").get() ? appliedIds(db) : [];
-  } finally {
-    db.close();
-  }
-}
-
-/**
- * A consistent single-file copy of a database (VACUUM INTO), checked with PRAGMA integrity_check. Throws when the copy
- * is not sound, after deleting it.
- */
-export function copyDatabase(path: string, to: string) {
-  mkdirSync(dirname(to), { recursive: true });
-  const src = new Database(path, { readonly: true, fileMustExist: true });
-  try {
-    src.prepare('VACUUM INTO ?').run(to);
-  } finally {
-    src.close();
-  }
-  const copy = new Database(to, { readonly: true });
-  let ok;
-  try {
-    ok = copy.pragma('integrity_check', { simple: true }) === 'ok';
-  } finally {
-    copy.close();
-  }
-  if (!ok) {
-    rmSync(to, { force: true });
-    throw new Error(`The copy of ${path} failed its integrity check; not migrating`);
-  }
-  return to;
-}
+export { copyDatabase };
 
 /** Keeps the newest KEEP_MIGRATION_COPIES pre-migration copies in a folder; other files are never touched. */
 export function pruneMigrationCopies(dir: string, keep = KEEP_MIGRATION_COPIES) {
@@ -104,8 +67,8 @@ export function pruneMigrationCopies(dir: string, keep = KEEP_MIGRATION_COPIES) 
  *
  * store.db is scoped to one user (db/scope.ts): queries on user tables run as the user of the current request or job
  * (runAsUser), else as fallbackUid. Command-line scripts and tests act as the owner; the server passes null, so a
- * user-table query outside a request or job throws. store.raw is the unscoped database, for migrations, backups, and
- * server/admin-queries.ts only.
+ * user-table query outside a request or job throws. store.admin is unscoped, for server/admin-queries.ts, backups, and
+ * account deletion only. Migrations run here, on the connection, before either exists.
  * snapshot false: no copy (a throwaway copy itself).
  */
 export function openJobStore(
@@ -127,7 +90,13 @@ export function openJobStore(
   }
   const store = openStore(path, { app: APP, migrations });
   if (copy) pruneMigrationCopies(dirname(copy));
-  return { ...store, raw: store.db, db: scopeDb(store.db, { fallbackUid }), engine: createSqliteEngine(store.db, { fallbackUid }) };
+  const raw = store.db;
+  return {
+    db: createSqliteEngine(raw, { fallbackUid }),
+    admin: createSqliteEngine(raw, { fallbackUid: null }),
+    backup: (to) => backupConnection(raw, to),
+    close: () => store.close(),
+  };
 }
 
 /**
@@ -141,9 +110,8 @@ export function pendingMigrations(path: string, tempDir: string): { pending: str
   try {
     const before = appliedIn(path);
     copyDatabase(path, to);
-    const store = openJobStore(to, { snapshot: false });
-    const after = appliedIds(store.raw);
-    store.close();
+    openJobStore(to, { snapshot: false }).close();
+    const after = appliedIn(to);
     return { pending: after.filter((id) => !before.includes(id)) };
   } finally {
     for (const suffix of ['', '-wal', '-shm']) rmSync(to + suffix, { force: true });

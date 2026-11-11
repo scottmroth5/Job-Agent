@@ -3,7 +3,6 @@
 import { normalizeUrl, companyTitleKey } from '../tools/urls.ts';
 import { parseSheetDate, parsePostedDate, localDay } from '../tools/dates.ts';
 import { adoptNotesText } from '../agents/notes.ts';
-import { asEngine } from './engine/index.ts';
 import type { JobStore } from './index.ts';
 import type { PostingsRow } from './types.ts';
 
@@ -82,7 +81,7 @@ export async function importV1(
   { now = new Date().toISOString(), today = localDay(new Date(now)), runId = null }: { now?: string; today?: string; runId?: number | null } = {},
 ) {
   const { db } = store;
-  const q = asEngine(db);
+  const q = db;
   if (((await q.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get()) as number) > 0) {
     throw new Error('The database already has postings; the v1 import only runs into an empty database (use --reset).');
   }

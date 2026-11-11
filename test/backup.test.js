@@ -1,7 +1,8 @@
 // Encrypted backups. Synthetic data only; Google Drive is faked, nothing touches the network.
+import { openReadOnly } from '../db/engine/files.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
@@ -95,9 +96,10 @@ test('backup: uploads one encrypted, verified file with the database, settings, 
   const drive = fakeDrive();
   const data = sampleData();
   for (let i = 1; i <= 9; i++) drive.files.set(`old${i}`, { id: `old${i}`, name: backupName(`2026-09-${String(20 + i).padStart(2, '0')}`), data: Buffer.from('x') });
-  const tmpBefore = readdirSync(tmpdir()).filter((n) => n.startsWith('ja-backup-')).length;
+  // Its own temp root, so a backup another test file runs at the same time is not counted.
+  const tempRoot = mkdtempSync(join(tmpdir(), 'ja-test-backup-root-'));
 
-  const r = await runBackup({ db, passphrase: PASS, ...data, drive, date: '2026-10-06', kdf: FAST });
+  const r = await runBackup({ backup: (to) => db.backup(to).then(() => {}), passphrase: PASS, ...data, drive, date: '2026-10-06', kdf: FAST, tempRoot });
   assert.ok('driveFileId' in r);
   assert.deepEqual([r.name, r.fileCount, r.attachments, r.kept], ['jobs-2026-10-06.jabk', 4, 2, 7]);
   assert.equal(drive.calls[0][1], DRIVE_FOLDER);
@@ -106,9 +108,10 @@ test('backup: uploads one encrypted, verified file with the database, settings, 
   for (const plain of ['SQLite format 3', 'synthetic a', 'synthetic resume', 'synthetic offer']) assert.ok(!uploaded.includes(Buffer.from(plain)), `nothing readable: ${plain}`);
   assert.deepEqual(unpack(decrypt(uploaded, PASS)).map((f) => f.name), ['job-agent.db', 'config/job-search.json', 'attachments/12/bbbb', 'attachments/7/aaaa']);
   assert.ok(drive.calls.every(([kind]) => ['folder', 'list', 'upload', 'remove'].includes(kind)));
-  assert.equal(readdirSync(tmpdir()).filter((n) => n.startsWith('ja-backup-')).length, tmpBefore, 'temp snapshot deleted');
+  assert.deepEqual(readdirSync(tempRoot), [], 'temp snapshot deleted');
+  rmSync(tempRoot, { recursive: true, force: true });
 
-  const again = await runBackup({ db, passphrase: PASS, drive, date: '2026-10-06', kdf: FAST });
+  const again = await runBackup({ backup: (to) => db.backup(to).then(() => {}), passphrase: PASS, drive, date: '2026-10-06', kdf: FAST });
   assert.equal([...drive.files.values()].filter((f) => f.name === again.name).length, 1, 'a second run the same day replaces the first');
   db.close();
 });
@@ -116,11 +119,11 @@ test('backup: uploads one encrypted, verified file with the database, settings, 
 test('backup: no passphrase or a short one stops before anything is written; --to writes to a folder instead', async () => {
   const db = sampleDb();
   const drive = fakeDrive();
-  await assert.rejects(runBackup({ db, passphrase: undefined, drive, date: '2026-10-06' }), /not set/);
-  await assert.rejects(runBackup({ db, passphrase: 'too short', drive, date: '2026-10-06' }), /at least 16/);
+  await assert.rejects(runBackup({ backup: (to) => db.backup(to).then(() => {}), passphrase: undefined, drive, date: '2026-10-06' }), /not set/);
+  await assert.rejects(runBackup({ backup: (to) => db.backup(to).then(() => {}), passphrase: 'too short', drive, date: '2026-10-06' }), /at least 16/);
   assert.equal(drive.calls.length, 0);
   const dir = mkdtempSync(join(tmpdir(), 'ja-usb-'));
-  const r = await runBackup({ db, passphrase: PASS, toDir: dir, date: '2026-10-06', kdf: FAST });
+  const r = await runBackup({ backup: (to) => db.backup(to).then(() => {}), passphrase: PASS, toDir: dir, date: '2026-10-06', kdf: FAST });
   assert.ok('savedTo' in r);
   assert.equal(r.savedTo, join(dir, 'jobs-2026-10-06.jabk'));
   assert.equal(readFileSync(r.savedTo).subarray(0, 5).toString(), 'JABK1');
@@ -130,13 +133,13 @@ test('backup: no passphrase or a short one stops before anything is written; --t
 test('restore: the database, settings, and attachments come back identical; nothing is ever overwritten', async () => {
   const db = sampleDb();
   const data = sampleData();
-  const r = await runBackup({ db, passphrase: PASS, ...data, toDir: data.dir, date: '2026-10-06', kdf: FAST });
+  const r = await runBackup({ backup: (to) => db.backup(to).then(() => {}), passphrase: PASS, ...data, toDir: data.dir, date: '2026-10-06', kdf: FAST });
   assert.ok('savedTo' in r);
   const outDir = mkdtempSync(join(tmpdir(), 'ja-restore-'));
   const out = join(outDir, 'job-agent.db');
   const res = restoreBackup({ file: readFileSync(r.savedTo), passphrase: PASS, outPath: out });
-  const restored = new Database(out, { readonly: true });
-  assert.deepEqual(/** @type {Array<{ v: string }>} */ (restored.prepare('SELECT v FROM t ORDER BY id').all()).map((x) => x.v), ['synthetic a', 'synthetic b']);
+  const restored = openReadOnly(out);
+  assert.deepEqual(/** @type {Array<{ v: string }>} */ (await restored.db.prepare('SELECT v FROM t ORDER BY id').all()).map((x) => x.v), ['synthetic a', 'synthetic b']);
   restored.close();
   assert.equal(res.files, 3);
   assert.equal(readFileSync(join(outDir, 'restored', 'attachments', '7', 'aaaa'), 'utf8'), '%PDF-1.4 synthetic resume');

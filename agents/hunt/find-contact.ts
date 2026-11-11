@@ -3,7 +3,6 @@
 // voice from the knowledge doc (plus the job's resume) as the system prompt. The result is Markdown, saved as a note
 // on the job (source agent), so it stays with the job and shows in its notes. It never contacts anyone. Logs hold
 // counts only, never names or text.
-import { asEngine } from '../../db/engine/index.ts';
 import { fillTemplate } from '../../tools/template.ts';
 import { truncate } from '../../tools/text.ts';
 import { localDay } from '../../tools/dates.ts';
@@ -69,9 +68,9 @@ export async function findContact({ store, config, claude, knowledge, run = null
   now?: Date;
 }) {
   const { db } = store;
-  const posting = await asEngine(db).prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as PostingsRow | undefined;
+  const posting = await db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as PostingsRow | undefined;
   if (!posting) throw Object.assign(new Error('Job not found'), { statusCode: 404 });
-  const analysisJson = await asEngine(db).prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
+  const analysisJson = await db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
   const prompt = await getPrompt(db, 'find-contact');
   const resume = await pickResume(db, posting.title);
   onStep('Searching for the hiring manager and a recruiter (about a minute)');

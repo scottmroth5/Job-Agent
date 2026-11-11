@@ -43,13 +43,13 @@ test('a user sets plain text only: no patterns, no site search, no private terms
   assert.equal(c.ready, true);
   assert.equal(cleanConfig({}).ready, false);
 
-  const { raw } = openJobStore(':memory:');
+  const { admin: raw } = openJobStore(':memory:');
   await assert.rejects(async () => await saveUserConfig(raw, OWNER_ID, B_SEARCH), /job-search\.json/);
   assert.equal(await saveUserProfile(raw, OWNER_ID, ' Owner background. '), 'Owner background.', 'the owner can keep About you in the app too');
 });
 
 test('the server config reads as whoever the request runs as', async () => {
-  const { raw } = openJobStore(':memory:');
+  const { admin: raw } = openJobStore(':memory:');
   const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
   await saveUserConfig(raw, b, B_SEARCH, 'Sam');
   const config = userConfigView(OWNER_CONFIG, raw);
@@ -73,7 +73,7 @@ async function setup() {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: 'owner@example.com', SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(store.admin, { email: 'b@example.com', name: 'Sam' });
   /** @type {Array<number | undefined>} */
   const runs = [];
   const app = await buildApp({
@@ -116,7 +116,7 @@ test('Settings: a user saves their search, background, and schedule; the owner i
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/profile', headers: asB, payload: { text: about } })).json().profile, about.trim());
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/profile', headers: asB, payload: { text: 'x'.repeat(60000) } })).statusCode, 400);
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/schedule', headers: asB, payload: { on: true } })).json().scheduled, true);
-  assert.deepEqual(await scheduledUsers(store.raw), [b]);
+  assert.deepEqual(await scheduledUsers(store.admin), [b]);
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/schedule', headers: asA, payload: { on: true } })).statusCode, 400);
 
   // What the server shows each of them follows their own settings.
@@ -128,9 +128,9 @@ test('Settings: a user saves their search, background, and schedule; the owner i
     assert.ok(!body.includes('Owner Term') && !body.includes('owner knowledge') && !body.includes('owner-only pattern'), url);
   }
   // A paused user's pipeline is off the schedule.
-  store.raw.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(b);
-  assert.deepEqual(await scheduledUsers(store.raw), []);
-  await setScheduledForUser(store.raw, b, false);
+  await store.admin.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(b);
+  assert.deepEqual(await scheduledUsers(store.admin), []);
+  await setScheduledForUser(store.admin, b, false);
   await done();
 });
 
@@ -152,8 +152,8 @@ test('the pipeline script refuses a user who has not set up a search, before any
   const dir = mkdtempSync(join(tmpdir(), 'pipeline-user-'));
   try {
     const store = openJobStore(join(dir, 'job-agent.db'), { log: {} });
-    const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
-    const paused = await addUser(store.raw, { email: 'c@example.com', status: 'paused' });
+    const b = await addUser(store.admin, { email: 'b@example.com', name: 'Sam' });
+    const paused = await addUser(store.admin, { email: 'c@example.com', status: 'paused' });
     store.close();
     const run = (/** @type {string[]} */ args) => spawnSync(process.execPath, [repoPath('scripts', 'pipeline.js'), ...args, '--no-email'], { env: { ...process.env, DATA_DIR: dir }, encoding: 'utf8', timeout: 30000 });
     const notReady = run([`--user=${b}`]);

@@ -4,13 +4,12 @@
 // so it waits its turn behind an open transaction like any other statement.
 import { createTracer } from '@scottmroth5/agent-core';
 import type { Run } from '@scottmroth5/agent-core';
-import { asEngine } from '../db/engine/index.ts';
-import type { AnyDb } from '../db/engine/index.ts';
+import type { Db } from '../db/engine/types.ts';
 import type { Logger } from './types.ts';
 
 /** createTracer's API; startRun also records runs.user_id. */
-export function createJobTracer({ store, logger }: { store?: { db: AnyDb } | null; logger?: Logger | null } = {}) {
-  const db = store ? asEngine(store.db) : null;
+export function createJobTracer({ store, logger }: { store?: { db: Db } | null; logger?: Logger | null } = {}) {
+  const db = store ? store.db : null;
   const tracer = createTracer({ ...(db ? { store: { db } } : {}), ...(logger ? { logger } : {}) });
   return {
     async startRun(name: string, meta?: object): Promise<Run> {

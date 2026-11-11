@@ -5,7 +5,7 @@ import { getPrompt } from '../../agents/prompts.ts';
 import { letterMetrics } from './metrics.js';
 /**
  * @import { Claude, Run } from '@scottmroth5/agent-core'
- * @import { Database } from '../../tools/types.ts'
+ * @import { Db } from '../../tools/types.ts'
  * @import { LetterResult, PlantedError } from './metrics.js'
  */
 
@@ -29,7 +29,7 @@ const ESTIMATE_RATES = {
  * Estimated cost per model: every letter with its background, posting, and the prompt.
  * @param {LetterCases} cases
  * @param {string[]} models
- * @param {Database | null} [db]
+ * @param {Db | null} [db]
  */
 export async function estimateLetterEval(cases, models, db = null) {
   const templateChars = (await getPrompt(db, 'verify-letter')).template.length;
@@ -46,7 +46,7 @@ export async function estimateLetterEval(cases, models, db = null) {
 
 /**
  * { perModel: { [model]: { results, metrics } } }; one letter at a time per model.
- * @param {{ cases: LetterCases, models: string[], claude: Claude, db?: Database | null, trace?: Run | null, log?: (line: string) => void }} opts
+ * @param {{ cases: LetterCases, models: string[], claude: Claude, db?: Db | null, trace?: Run | null, log?: (line: string) => void }} opts
  */
 export async function runLetterEval({ cases, models, claude, db = null, trace = null, log = () => {} }) {
   const prompt = await getPrompt(db, 'verify-letter');

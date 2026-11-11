@@ -3,11 +3,10 @@
 // (agents/lookups.ts), status history, and linked emails, so statuses added later count automatically.
 // Timing uses only dated events (your changes, the agent's, and emails); v1-imported history has the import
 // date, not the real one, so it counts a milestone but not its timing.
-import { asEngine } from '../db/engine/index.ts';
 import { lookups } from '../agents/lookups.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { EmailsRow, PostingsRow, StatusHistoryRow } from '../db/types.ts';
 
 /** A milestone of an application: whether it was reached, and its day when a dated event shows it. */
@@ -64,22 +63,22 @@ function weekStart(iso: string | null) {
 }
 
 /** One record per application, with each milestone: { reached, date } (date null when only undated evidence). */
-export async function applications(db: Database, { now = new Date() } = {}): Promise<Application[]> {
+export async function applications(db: Db, { now = new Date() } = {}): Promise<Application[]> {
   const lk = await lookups(db);
   const group = (status: string | null) => lk.groupOf('status', status);
   // The status a rejection email moves a job to (Admin > Lists): moves to it count as rejections.
   const rejectedStatus = lk.role('status', 'rejected');
   const isRejected = (s: string | null) => s != null && s === rejectedStatus;
   const history = new Map<number, HistoryRow[]>();
-  for (const h of await asEngine(db).prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history WHERE user_id = @uid ORDER BY changed_at, id').all() as HistoryRow[]) {
+  for (const h of await db.prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history WHERE user_id = @uid ORDER BY changed_at, id').all() as HistoryRow[]) {
     history.set(h.posting_id, [...(history.get(h.posting_id) ?? []), h]);
   }
   const emails = new Map<number, EmailRow[]>();
-  for (const e of await asEngine(db).prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).all() as EmailRow[]) {
+  for (const e of await db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).all() as EmailRow[]) {
     emails.set(e.posting_id as number, [...(emails.get(e.posting_id as number) ?? []), e]);
   }
 
-  const rows = await asEngine(db).prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid').all() as PostingRow[];
+  const rows = await db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid').all() as PostingRow[];
   const out: Application[] = [];
   for (const p of rows) {
     const hist = history.get(p.id) ?? [];
@@ -126,13 +125,13 @@ export async function applications(db: Database, { now = new Date() } = {}): Pro
 }
 
 /** The funnel for applications in the window. days: applied within the last N days (null: all). */
-export async function funnel(db: Database, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS }: { days?: number | null; track?: string | null; now?: Date; staleDays?: number } = {}) {
+export async function funnel(db: Db, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS }: { days?: number | null; track?: string | null; now?: Date; staleDays?: number } = {}) {
   const lk = await lookups(db);
   const since = days ? localDaysAgo(now, days) : null;
   const inWindow = (a: Application) => (!since || a.appliedOn >= since) && (!track || a.track === track);
   const apps = (await applications(db, { now })).filter(inWindow);
 
-  const found = await asEngine(db)
+  const found = await db
     .prepare(`SELECT COUNT(*) AS n,
         SUM(CASE WHEN (SELECT s.score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id ORDER BY CASE WHEN s.source IN ('v2', 'v2-rule') THEN 0 ELSE 1 END, s.id DESC LIMIT 1) >= ? THEN 1 ELSE 0 END) AS strong
       FROM postings p WHERE p.user_id = @uid AND (? IS NULL OR p.discovered_on >= ?) AND (? IS NULL OR p.track = ?)`)
