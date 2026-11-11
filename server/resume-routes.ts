@@ -20,7 +20,7 @@ export function registerResumeRoutes(app: App, { db }: { db: Database }) {
     return null;
   };
 
-  app.get('/api/resumes', { schema: { summary: 'Your resumes, default first (without their files or text)', response: { 200: { type: 'array', items: anyObject } } } }, async () => listResumes(db));
+  app.get('/api/resumes', { schema: { summary: 'Your resumes, default first (without their files or text)', response: { 200: { type: 'array', items: anyObject } } } }, async () => await listResumes(db));
 
   app.post(
     '/api/resumes',
@@ -45,7 +45,7 @@ export function registerResumeRoutes(app: App, { db }: { db: Database }) {
         response: { 200: anyObject },
       },
     },
-    async (req) => updateResume(db, req.params.id, req.body),
+    async (req) => await updateResume(db, req.params.id, req.body),
   );
 
   app.post<{ Params: { id: string } }>(
@@ -59,7 +59,7 @@ export function registerResumeRoutes(app: App, { db }: { db: Database }) {
   );
 
   app.delete<{ Params: { id: string } }>('/api/resumes/:id', { schema: { summary: 'Delete a resume', params: uuidParams } }, async (req, reply) => {
-    deleteResume(db, req.params.id);
+    await deleteResume(db, req.params.id);
     return reply.code(204).send();
   });
 
@@ -74,7 +74,7 @@ export function registerResumeRoutes(app: App, { db }: { db: Database }) {
       },
     },
     async (req, reply) => {
-    const r = resumeFile(db, req.params.id);
+    const r = await resumeFile(db, req.params.id);
     if (!r) return reply.code(404).send({ error: 'Resume not found.' });
     const format = req.query.format ?? 'original';
     const base = r.filename.replace(/\.[A-Za-z0-9]{1,5}$/, '') || 'resume';

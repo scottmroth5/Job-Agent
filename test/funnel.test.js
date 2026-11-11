@@ -28,7 +28,7 @@ function setup() {
   return { store, db, job, history, email };
 }
 
-test('milestones: a response email, an interview by status, a rejection, and a confirmation that is not a response', () => {
+test('milestones: a response email, an interview by status, a rejection, and a confirmation that is not a response', async () => {
   const { store, db, job, history, email } = setup();
   const byEmail = job({ applied: '2026-09-01' });
   email(byEmail, 'confirmation', '2026-09-01');
@@ -42,7 +42,7 @@ test('milestones: a response email, an interview by status, a rejection, and a c
   email(ackOnly, 'interview_request', '2026-09-04', 'needs_review');
   job({ status: 'new' }); // not applied
 
-  const apps = Object.fromEntries(applications(db, { now }).map((a) => [a.id, a]));
+  const apps = Object.fromEntries((await applications(db, { now })).map((a) => [a.id, a]));
   assert.equal(Object.keys(apps).length, 4);
   assert.deepEqual(apps[byEmail].responded, { reached: true, date: '2026-09-05' });
   assert.deepEqual([apps[byStatus].interview.date, apps[byStatus].responded.date], ['2026-09-20', '2026-09-20']);
@@ -50,28 +50,28 @@ test('milestones: a response email, an interview by status, a rejection, and a c
   assert.equal(apps[ackOnly].responded.reached, false, 'a confirmation, or an email still in review, is not a response');
   assert.equal(apps[ackOnly].noReply, true);
 
-  const f = funnel(db, { now });
+  const f = await funnel(db, { now });
   assert.deepEqual(f.totals, { found: 5, scored7: 0, applied: 4, responded: 3, interview: 1, offer: 0, rejected: 1, noReply: 1 });
   assert.equal(f.rates.response, 0.75);
   assert.deepEqual([f.medians.daysToResponse, f.medians.responseSamples], [10, 3]); // 4, 10, 10 days
   store.close();
 });
 
-test('an added status in the In conversation group counts as an interview; imported history counts but is not timed', () => {
+test('an added status in the In conversation group counts as an interview; imported history counts but is not timed', async () => {
   const { store, db, job, history } = setup();
-  addValue(db, 'status', { label: 'Phone screen', group: 'conversation' });
+  await addValue(db, 'status', { label: 'Phone screen', group: 'conversation' });
   const screen = job({ applied: '2026-09-01', status: 'phone_screen' });
   history(screen, 'phone_screen', '2026-09-08');
   const imported = job({ applied: '2026-08-01', status: 'offer' });
   history(imported, 'offer', '2026-09-30', 'import');
-  const f = funnel(db, { now });
+  const f = await funnel(db, { now });
   assert.deepEqual([f.totals.interview, f.totals.offer], [1, 1]);
   assert.deepEqual([f.medians.daysToInterview, f.medians.interviewSamples], [7, 1]);
-  assert.equal(applications(db, { now }).find((a) => a.id === imported)?.offer.date, null);
+  assert.equal((await applications(db, { now })).find((a) => a.id === imported)?.offer.date, null);
   store.close();
 });
 
-test('filters, by-source results, weekly counts, and the follow-up list', () => {
+test('filters, by-source results, weekly counts, and the follow-up list', async () => {
   const { store, db, job, email } = setup();
   const old = job({ applied: '2026-06-01', source: 'Himalayas' });
   const recent = job({ applied: '2026-09-28', source: 'Himalayas' });
@@ -80,11 +80,11 @@ test('filters, by-source results, weekly counts, and the follow-up list', () => 
   job({ applied: '2026-09-29', source: 'manual', track: 'fractional' });
   job({ applied: '2026-09-29', source: 'Manual', track: 'fractional', status: 'new' });
 
-  assert.equal(funnel(db, { now }).totals.applied, 5);
-  assert.equal(funnel(db, { now, days: 30 }).totals.applied, 4);
-  assert.equal(funnel(db, { now, days: 30, track: 'fractional' }).totals.applied, 2);
+  assert.equal((await funnel(db, { now })).totals.applied, 5);
+  assert.equal((await funnel(db, { now, days: 30 })).totals.applied, 4);
+  assert.equal((await funnel(db, { now, days: 30, track: 'fractional' })).totals.applied, 2);
 
-  const f = funnel(db, { now });
+  const f = await funnel(db, { now });
   assert.deepEqual(f.bySource.map((s) => [s.source, s.applied, s.responded]), [['Himalayas', 2, 1], ['manual', 2, 0], ['LinkedIn', 1, 0]]);
   assert.equal(f.weeks.length, 12);
   assert.equal(f.weeks.at(-1)?.weekStart, '2026-10-05');
@@ -93,8 +93,8 @@ test('filters, by-source results, weekly counts, and the follow-up list', () => 
   assert.deepEqual(f.followUps.map((x) => [x.id, x.days]), [[stale, 20]]);
   assert.deepEqual([f.stale, f.staleDays], [1, 45]);
   assert.equal(old > 0, true);
-  assert.deepEqual(funnel(db, { now, staleDays: 200 }).followUps.map((x) => x.id), [old, stale], "a longer stale setting keeps it a follow-up");
-  assert.equal(applications(db, { now }).find((a) => a.id === stale)?.noReply, 20 >= NO_REPLY_DAYS);
+  assert.deepEqual((await funnel(db, { now, staleDays: 200 })).followUps.map((x) => x.id), [old, stale], "a longer stale setting keeps it a follow-up");
+  assert.equal((await applications(db, { now })).find((a) => a.id === stale)?.noReply, 20 >= NO_REPLY_DAYS);
   store.close();
 });
 

@@ -258,7 +258,7 @@ export async function importV1(
   });
 
   // Imported notes text becomes one 'earlier' note per job (its date was never recorded in v1).
-  adoptNotesText(db, { source: 'earlier', now: new Date(now) });
+  await adoptNotesText(db, { source: 'earlier', now: new Date(now) });
 
   counts.byStageStatus = (await q
     .prepare('SELECT stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY stage, status ORDER BY stage, n DESC')

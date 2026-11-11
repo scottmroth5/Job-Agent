@@ -24,7 +24,7 @@ const TYPE_LABEL = { confirmation: 'Confirmation', rejection: 'Rejection', recru
  * @param {Database} db
  */
 async function pickApplication(rl, db) {
-  const open = listOpenApplications(db);
+  const open = await listOpenApplications(db);
   for (;;) {
     const q = (await rl.question('  Search open applications (company or title), or enter a job number: ')).trim();
     if (/^#?\d+$/.test(q)) return Number(q.replace('#', ''));
@@ -44,7 +44,7 @@ async function main() {
   const store = openJobStore();
   const rl = createInterface({ input: stdin, output: stdout });
   try {
-    const queue = listNeedsReview(store.db);
+    const queue = await listNeedsReview(store.db);
     if (!queue.length) {
       console.log('Nothing to review.');
       return;
@@ -76,7 +76,7 @@ async function main() {
           const m = await gmail.getMessage(e.gmail_message_id).catch(() => null);
           body = m ? trimBody(m.rawBody, { html: m.bodyIsHtml, max: cfg.bodyChars }) : null;
         }
-        const r = resolveReview(store.db, e, choice, { postingId, body, key });
+        const r = await resolveReview(store.db, e, choice, { postingId, body, key });
         done += 1;
         if (r.statusChange) console.log(`  Status: ${r.statusChange.from} -> ${r.statusChange.to}`);
         if (r.review) console.log(`  Status not changed: ${r.review}. Change it in the web page if needed.`);

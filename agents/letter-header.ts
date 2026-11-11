@@ -13,8 +13,8 @@ const MAX = { name: 120, signoffName: 120, email: 200, phone: 40, location: 120,
 const bad = (message: string) => Object.assign(new Error(message), { statusCode: 400 });
 
 /** The current user's header: their saved one, else one from config.candidate. saved says which. */
-export function letterHeader(db: Database, config: { candidate?: CandidateFields } | null | undefined): LetterHeader & { saved: boolean } {
-  const raw = getUserSetting(db, KEY);
+export async function letterHeader(db: Database, config: { candidate?: CandidateFields } | null | undefined): Promise<LetterHeader & { saved: boolean }> {
+  const raw = await getUserSetting(db, KEY);
   if (raw) {
     try {
       return { ...clean(JSON.parse(raw)), saved: true };
@@ -40,7 +40,7 @@ function clean(h: Record<string, unknown> = {}): LetterHeader {
 }
 
 /** Saves the current user's header after checking it; returns it as letterHeader does. */
-export function saveLetterHeader(db: Database, input: Record<string, unknown>) {
+export async function saveLetterHeader(db: Database, input: Record<string, unknown>) {
   const h = clean(input);
   if (!h.name) throw bad('Enter your name as it should appear on your letters.');
   if (h.email && !isEmail(h.email)) throw bad('That email address does not look right.');
@@ -48,6 +48,6 @@ export function saveLetterHeader(db: Database, input: Record<string, unknown>) {
     const url = hrefOf(link);
     if (!url || url.startsWith('mailto:')) throw bad(`"${link}" is not a web address. Use one such as github.com/yourname or https://yoursite.com.`);
   }
-  setUserSetting(db, KEY, JSON.stringify(h));
+  await setUserSetting(db, KEY, JSON.stringify(h));
   return { ...h, saved: true };
 }

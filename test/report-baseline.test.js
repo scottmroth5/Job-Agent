@@ -48,7 +48,7 @@ test('baseline: counts, sizes, spend, and outcome data across users, read-only a
   const { dir, path, attachmentsDir } = await build();
   try {
     const before = readFileSync(path);
-    const r = baselineReport(path, { attachmentsDir, now });
+    const r = await baselineReport(path, { attachmentsDir, now });
     assert.deepEqual(readFileSync(path), before, 'the file is unchanged');
 
     assert.equal(r.tables.find((t) => t.table === 'postings')?.rows, 5);
@@ -66,16 +66,16 @@ test('baseline: counts, sizes, spend, and outcome data across users, read-only a
       // No company, title, or email address from any row (a regex: CodeQL reads includes() of a host as a URL check).
       assert.doesNotMatch(out, new RegExp(`${SECRET}|CTO|@`), 'no text from any row');
     }
-    assert.deepEqual(baselineReport(path, { attachmentsDir: join(dir, 'none'), now }).attachments, { files: 0, bytes: 0 }, 'no attachments folder yet');
+    assert.deepEqual((await baselineReport(path, { attachmentsDir: join(dir, 'none'), now })).attachments, { files: 0, bytes: 0 }, 'no attachments folder yet');
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-test('baseline: a missing database is an error, never a new file', () => {
+test('baseline: a missing database is an error, never a new file', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'baseline-'));
   try {
-    assert.throws(() => baselineReport(join(dir, 'none.db')));
+    await assert.rejects(async () => await baselineReport(join(dir, 'none.db')));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

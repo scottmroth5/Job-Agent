@@ -23,36 +23,36 @@ test('a site is the link or domain as a lowercase host without www', () => {
   }
 });
 
-test('add, note, and remove; adding again updates the note; the owner keeps the file entries too', () => {
+test('add, note, and remove; adding again updates the note; the owner keeps the file entries too', async () => {
   const { db } = openJobStore(':memory:');
-  assert.deepEqual(excludedSites(db, OWNER_ID), []);
-  addExcludedSite(db, OWNER_ID, { site: 'https://paywall.example/job/1', note: 'Paywall' });
-  addExcludedSite(db, OWNER_ID, { site: 'reposts.example' });
-  addExcludedSite(db, OWNER_ID, { site: 'www.paywall.example', note: 'Paywall I will never pay' });
-  assert.deepEqual(excludedSites(db, OWNER_ID).map(({ site, note }) => [site, note]), [['paywall.example', 'Paywall I will never pay'], ['reposts.example', '']]);
-  setExcludedSiteNote(db, OWNER_ID, 'reposts.example', 'Old reposts');
-  assert.equal(excludedSites(db, OWNER_ID)[1].note, 'Old reposts');
-  assert.deepEqual(withExcludedSites(db, OWNER_ID, config).search.excludedSites, ['filesite.example', 'paywall.example', 'reposts.example']);
+  assert.deepEqual(await excludedSites(db, OWNER_ID), []);
+  await addExcludedSite(db, OWNER_ID, { site: 'https://paywall.example/job/1', note: 'Paywall' });
+  await addExcludedSite(db, OWNER_ID, { site: 'reposts.example' });
+  await addExcludedSite(db, OWNER_ID, { site: 'www.paywall.example', note: 'Paywall I will never pay' });
+  assert.deepEqual((await excludedSites(db, OWNER_ID)).map(({ site, note }) => [site, note]), [['paywall.example', 'Paywall I will never pay'], ['reposts.example', '']]);
+  await setExcludedSiteNote(db, OWNER_ID, 'reposts.example', 'Old reposts');
+  assert.equal((await excludedSites(db, OWNER_ID))[1].note, 'Old reposts');
+  assert.deepEqual((await withExcludedSites(db, OWNER_ID, config)).search.excludedSites, ['filesite.example', 'paywall.example', 'reposts.example']);
   assert.deepEqual(config.search.excludedSites, ['filesite.example'], 'the base config is not changed');
-  assert.deepEqual(configFor(db, OWNER_ID, config).search.excludedSites, ['filesite.example', 'paywall.example', 'reposts.example'], 'scripts and the server see them');
-  removeExcludedSite(db, OWNER_ID, 'reposts.example');
-  assert.throws(() => removeExcludedSite(db, OWNER_ID, 'reposts.example'), /not on your list/);
-  assert.deepEqual(excludedSites(db, OWNER_ID).map((s) => s.site), ['paywall.example']);
+  assert.deepEqual((await configFor(db, OWNER_ID, config)).search.excludedSites, ['filesite.example', 'paywall.example', 'reposts.example'], 'scripts and the server see them');
+  await removeExcludedSite(db, OWNER_ID, 'reposts.example');
+  await assert.rejects(async () => await removeExcludedSite(db, OWNER_ID, 'reposts.example'), /not on your list/);
+  assert.deepEqual((await excludedSites(db, OWNER_ID)).map((s) => s.site), ['paywall.example']);
 });
 
 test("another user's sites from their saved search move into the list, and only theirs apply to them", async () => {
   const { raw } = openJobStore(':memory:');
   const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
-  saveUserConfig(raw, b, { candidate: { name: 'Sam' }, search: { terms: ['Head of Data'], excludedSites: ['old.example'] } }, 'Sam');
-  addExcludedSite(raw, OWNER_ID, { site: 'ownerskip.example' });
+  await saveUserConfig(raw, b, { candidate: { name: 'Sam' }, search: { terms: ['Head of Data'], excludedSites: ['old.example'] } }, 'Sam');
+  await addExcludedSite(raw, OWNER_ID, { site: 'ownerskip.example' });
   const legacy = ['old.example'];
-  assert.deepEqual(excludedSites(raw, b, { legacy }).map((s) => s.site), ['old.example']);
-  addExcludedSite(raw, b, { site: 'new.example', note: 'Charges to apply' }, { legacy });
-  assert.deepEqual(excludedSites(raw, b, { legacy }).map((s) => s.site), ['old.example', 'new.example']);
-  removeExcludedSite(raw, b, 'old.example', { legacy });
+  assert.deepEqual((await excludedSites(raw, b, { legacy })).map((s) => s.site), ['old.example']);
+  await addExcludedSite(raw, b, { site: 'new.example', note: 'Charges to apply' }, { legacy });
+  assert.deepEqual((await excludedSites(raw, b, { legacy })).map((s) => s.site), ['old.example', 'new.example']);
+  await removeExcludedSite(raw, b, 'old.example', { legacy });
   // For anyone but the owner the owner's settings file is not read.
   const noOwnerFile = /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null));
-  assert.deepEqual(configFor(raw, b, noOwnerFile).search.excludedSites, ['new.example'], "removed stays removed; the owner's are not theirs");
+  assert.deepEqual((await configFor(raw, b, noOwnerFile)).search.excludedSites, ['new.example'], "removed stays removed; the owner's are not theirs");
 });
 
 async function setup() {
@@ -91,7 +91,7 @@ test('the routes: skip from a job link, count saved jobs, remove them (not the a
   assert.equal((await app.inject({ method: 'PATCH', url: '/api/excluded-sites/Bad Site', payload: { note: 'x' } })).statusCode, 400);
 
   // What discovery, scoring, and adding a job read (the server's config) has the site at once.
-  assert.ok(configFor(store.raw, OWNER_ID, config).search.excludedSites?.includes('paywall.example'));
+  assert.ok((await configFor(store.raw, OWNER_ID, config)).search.excludedSites?.includes('paywall.example'));
 
   assert.deepEqual((await app.inject({ method: 'DELETE', url: '/api/excluded-sites/paywall.example' })).json().sites, []);
   assert.equal((await app.inject({ method: 'DELETE', url: '/api/excluded-sites/paywall.example' })).statusCode, 404);
@@ -102,9 +102,9 @@ test('the routes: skip from a job link, count saved jobs, remove them (not the a
 test("each user's list is their own", async () => {
   const { store, app } = await setup();
   const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
-  addExcludedSite(store.raw, OWNER_ID, { site: 'ownerskip.example', note: 'Mine' });
-  assert.deepEqual(runAsUser(b, () => excludedSites(store.db, b)), []);
-  assert.deepEqual(excludedSites(store.db, OWNER_ID).map((s) => s.site), ['ownerskip.example']);
+  await addExcludedSite(store.raw, OWNER_ID, { site: 'ownerskip.example', note: 'Mine' });
+  assert.deepEqual(await runAsUser(b, async () => await excludedSites(store.db, b)), []);
+  assert.deepEqual((await excludedSites(store.db, OWNER_ID)).map((s) => s.site), ['ownerskip.example']);
   await app.close();
   store.close();
 });

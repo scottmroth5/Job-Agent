@@ -31,7 +31,7 @@ test('totals: recall by kind, clean letters flagged, cost, and failures', () => 
   assert.equal(m.costPerLetter, 0.015);
 });
 
-test('the cases: every letter names a posting, every planted kind is real, each kind has two or more, and all addresses are examples', () => {
+test('the cases: every letter names a posting, every planted kind is real, each kind has two or more, and all addresses are examples', async () => {
   /** @type {Record<string, number>} */
   const kinds = {};
   for (const l of cases.letters) {
@@ -44,7 +44,7 @@ test('the cases: every letter names a posting, every planted kind is real, each 
   for (const k of ['title', 'employer', 'number', 'credential', 'date']) assert.ok(kinds[k] >= 2, k);
   assert.ok(cases.letters.filter((/** @type {JsonRow} */ l) => !l.expect).length >= 4, 'clean letters');
   for (const email of JSON.stringify(cases).match(/[\w.]+@[\w-]+(?:\.[\w-]+)+/g) ?? []) assert.match(email, /@example\.com$/);
-  const est = estimateLetterEval(cases, ['claude-haiku-4-5', 'claude-sonnet-5-5']);
+  const est = await estimateLetterEval(cases, ['claude-haiku-4-5', 'claude-sonnet-5-5']);
   const [sonnet, haiku] = [est['claude-sonnet-5-5'], est['claude-haiku-4-5']];
   assert.ok(sonnet != null && haiku != null && sonnet > haiku && sonnet < 1);
 });

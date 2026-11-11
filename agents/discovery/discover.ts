@@ -23,6 +23,7 @@ import type { LocationCheck } from '../../tools/location.ts';
 import type { JobStore } from '../../tools/types.ts';
 import type { DetailsState } from './details.ts';
 import type { JobItem, PageRenderer, SourceContext, SourceResult } from './types.ts';
+import { asEngine } from '../../db/engine/index.ts';
 
 /** A job source module: its name and its search. */
 export interface Source {
@@ -96,14 +97,14 @@ async function resolveAll(
     concurrency: number;
     pauseMs: number;
     linkedinPauseMs: number;
-    onDone: (item: RunItem) => void;
+    onDone: (item: RunItem) => void | Promise<void>;
   },
 ) {
   const viaLinkedIn = items.filter((i) => i.linkedinJobId);
   const others = items.filter((i) => !i.linkedinJobId);
   const run = async (item: RunItem) => {
     await resolveDetails(item, { http, browser, state });
-    onDone(item);
+    await onDone(item);
   };
   await Promise.all([
     mapLimit(viaLinkedIn, 1, linkedinPauseMs, http.sleep, run),
@@ -187,30 +188,30 @@ export async function runDiscovery({ store, config, http, browser = null, source
   });
 
   // 4. Dedupe against the database and within this run
-  const byUrl = db.prepare('SELECT id, source, stage FROM postings WHERE url_key = ? AND user_id = @uid');
-  const byCompanyTitle = db.prepare('SELECT id, source, stage FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1');
+  const byUrl = asEngine(db).prepare('SELECT id, source, stage FROM postings WHERE url_key = ? AND user_id = @uid');
+  const byCompanyTitle = asEngine(db).prepare('SELECT id, source, stage FROM postings WHERE company_title_key = ? AND user_id = @uid ORDER BY id LIMIT 1');
   const sightings: Array<{ postingId: number; source: string; url: string | null }> = [];
   const upgrades: Array<{ id: number; item: RunItem }> = []; // existing discovered postings that a higher-priority source found again
   const seenUrl = new Set<string>();
   const seenCt = new Set<string>();
   const fresh: RunItem[] = [];
 
-  const findExisting = (item: RunItem) => {
+  const findExisting = async (item: RunItem) => {
     const urlKey = normalizeUrl(item.url);
     const ctKey = identityKey(item);
-    const existing = ((urlKey && byUrl.get(urlKey)) || (ctKey && byCompanyTitle.get(ctKey)) || null) as Existing | null;
+    const existing = ((urlKey && await byUrl.get(urlKey)) || (ctKey && await byCompanyTitle.get(ctKey)) || null) as Existing | null;
     return { urlKey, ctKey, existing };
   };
-  const recordDuplicate = (item: RunItem, existing: Existing) => {
+  const recordDuplicate = async (item: RunItem, existing: Existing) => {
     stat(item.source).duplicates += 1;
     sightings.push({ postingId: existing.id, source: item.source, url: item.url });
-    if (lookups(db).groupOf('stage', existing.stage) === 'found' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
+    if ((await lookups(db)).groupOf('stage', existing.stage) === 'found' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
   };
 
   for (const item of candidates) {
-    const { urlKey, ctKey, existing } = findExisting(item);
+    const { urlKey, ctKey, existing } = await findExisting(item);
     if (existing) {
-      recordDuplicate(item, existing);
+      await recordDuplicate(item, existing);
       continue;
     }
     if ((urlKey && seenUrl.has(urlKey)) || (ctKey && seenCt.has(ctKey))) {
@@ -250,9 +251,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const seenAfter = new Set<string>();
   for (const item of selected) {
     if (skipReason(item, config)) continue; // a Google redirect resolved to a skipped site or a list of jobs
-    const { ctKey, existing } = findExisting(item);
+    const { ctKey, existing } = await findExisting(item);
     if (existing) {
-      recordDuplicate(item, existing);
+      await recordDuplicate(item, existing);
       continue;
     }
     if (ctKey && seenAfter.has(ctKey)) {
@@ -275,27 +276,28 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const insertedIds: number[] = [];
   if (!dryRun) {
     const nowIso = now.toISOString();
-    const found = sqlList(lookups(db).ids('stage', 'found'));
-    const insert = db.prepare(`INSERT INTO postings
+    const lk = await lookups(db); // before the transaction, which is still synchronous
+    const found = sqlList(lk.ids('stage', 'found'));
+    const insert = asEngine(db).prepare(`INSERT INTO postings
       (user_id, url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
        discovered_on, stage, status, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, workplace, location_check,
        source_job_id, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
       VALUES (@uid, @url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on, @posted_raw,
        @discovered_on, @stage, @status, @fetched_text, @fetched_at, @fetch_status, @fetch_method, @fetch_attempts, @workplace, @location_check,
        @source_job_id, @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra_json, @now, @now)`);
-    const history = db.prepare(`INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)`);
-    const sighting = db.prepare('INSERT OR IGNORE INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?)');
-    const upgrade = db.prepare(`UPDATE postings SET url = @url, url_key = @url_key, source = @source,
+    const history = asEngine(db).prepare(`INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)`);
+    const sighting = asEngine(db).prepare('INSERT OR IGNORE INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?)');
+    const upgrade = asEngine(db).prepare(`UPDATE postings SET url = @url, url_key = @url_key, source = @source,
         fetched_text = COALESCE(fetched_text, @fetched_text), location = COALESCE(location, @location),
         salary = COALESCE(salary, @salary), posted_on = COALESCE(posted_on, @posted_on),
         workplace = COALESCE(workplace, @workplace), updated_at = @now
       WHERE id = @id AND user_id = @uid AND stage IN ${found}`);
 
-    store.tx(() => {
+    await asEngine(store.db).tx(async () => {
       for (const item of toInsert) {
         const company = knownCompany(item.company) ? withoutPictographs(item.company) : UNKNOWN_COMPANY;
         const id = Number(
-          insert.run({
+          (await insert.run({
             url: item.url,
             url_key: normalizeUrl(item.url),
             company,
@@ -316,9 +318,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
             workplace: item.workplace ?? null,
             location_check: item.locationCheck,
             source_job_id: item.sourceJobId ?? null,
-            track: item.track ?? lookups(db).role('track', 'default'),
-            stage: lookups(db).role('stage', 'default'),
-            status: lookups(db).role('status', 'default'),
+            track: item.track ?? lk.role('track', 'default'),
+            stage: lk.role('stage', 'default'),
+            status: lk.role('status', 'default'),
             rate_text: item.rateText ?? null,
             rate_min: item.rate?.min ?? null,
             rate_max: item.rate?.max ?? null,
@@ -327,16 +329,16 @@ export async function runDiscovery({ store, config, http, browser = null, source
             hours_max: item.hours?.max ?? null,
             extra_json: item.extra && Object.keys(item.extra).length ? JSON.stringify(item.extra) : null,
             now: nowIso,
-          }).lastInsertRowid,
+          })).id,
         );
-        history.run(id, lookups(db).role('status', 'default'), nowIso);
-        sighting.run(id, item.source, item.url ?? null, today);
+        await history.run(id, lk.role('status', 'default'), nowIso);
+        await sighting.run(id, item.source, item.url ?? null, today);
         insertedIds.push(id);
       }
-      for (const s of sightings) sighting.run(s.postingId, s.source, s.url ?? null, today);
+      for (const s of sightings) await sighting.run(s.postingId, s.source, s.url ?? null, today);
       for (const { id, item } of upgrades) {
         try {
-          upgrade.run({
+          await upgrade.run({
             id,
             url: item.url,
             url_key: normalizeUrl(item.url),
@@ -358,9 +360,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
   // 8. Retry recent postings whose full text failed on an earlier run (rate limits, timeouts)
   const retried = { attempted: 0, fixed: 0 };
   if (!dryRun && details && retryPending) {
-    const pending = db
+    const pending = await asEngine(db)
       .prepare(`SELECT id, url, company, title, location, workplace, source_job_id, source FROM postings
-        WHERE user_id = @uid AND stage IN ${sqlList(lookups(db).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
+        WHERE user_id = @uid AND stage IN ${sqlList((await lookups(db)).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
           AND fetch_attempts < ? AND discovered_on >= ?
           ${insertedIds.length ? `AND id NOT IN (${insertedIds.map(() => '?').join(', ')})` : ''}`)
       .all(...RETRYABLE, MAX_FETCH_ATTEMPTS, since, ...insertedIds) as Array<{ id: number; url: string | null; company: string; title: string; location: string | null; workplace: string | null }>;
@@ -376,7 +378,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
       description: null,
     })) as RunItem[];
     if (items.length) log('info', `Retrying full text for ${items.length} earlier postings`);
-    const update = db.prepare(`UPDATE postings SET fetched_text = @text, fetched_at = @fetchedAt, fetch_status = @status,
+    const update = asEngine(db).prepare(`UPDATE postings SET fetched_text = @text, fetched_at = @fetchedAt, fetch_status = @status,
         fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
         workplace = COALESCE(workplace, @workplace), location_check = @locationCheck,
         company = CASE WHEN company = '${UNKNOWN_COMPANY}' AND @company IS NOT NULL THEN @company ELSE company END,
@@ -389,11 +391,11 @@ export async function runDiscovery({ store, config, http, browser = null, source
       concurrency,
       pauseMs,
       linkedinPauseMs,
-      onDone: (item) => {
+      onDone: async (item) => {
         retried.attempted += 1;
         if (item.fetchStatus === 'ok') retried.fixed += 1;
         const nowIso = new Date().toISOString();
-        update.run({
+        await update.run({
           id: item.id,
           text: item.description ?? null,
           fetchedAt: item.description ? nowIso : null,

@@ -35,8 +35,8 @@ async function mapLimit(items, limit, fn) {
  * @param {Pick<JobSearchConfig, 'search'>} config the search settings runEval scores with, so excluded-site cases count as rule scored (free)
  * @param {Database | null} [db]
  */
-export function estimateEval(cases, models, knowledgeChars, config, db = null) {
-  const templateChars = loadScorePrompt('fulltime', db).template.length;
+export async function estimateEval(cases, models, knowledgeChars, config, db = null) {
+  const templateChars = (await loadScorePrompt('fulltime', db)).template.length;
   return Object.fromEntries(models.map((m) => [m, estimateCost(cases, { model: m, knowledgeChars, templateChars, config })]));
 }
 
@@ -46,7 +46,7 @@ export function estimateEval(cases, models, knowledgeChars, config, db = null) {
  * @returns {Promise<{ perModel: Record<string, {results: ScoreResult[], summary: ReturnType<typeof summarize>, costUsd: number, avgMs: number}>, v1: ReturnType<typeof summarize>, promptVersion: string }>}
  */
 export async function runEval({ cases, models, claude, config, knowledge, run, db = null, concurrency = 3, promoteAt = PROMOTE_AT, log = () => {} }) {
-  const prompt = loadScorePrompt('fulltime', db);
+  const prompt = await loadScorePrompt('fulltime', db);
   /** @type {Record<string, {results: ScoreResult[], summary: ReturnType<typeof summarize>, costUsd: number, avgMs: number}>} */
   const perModel = {};
   for (const model of models) {

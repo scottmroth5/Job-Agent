@@ -20,11 +20,11 @@ test('backgroundFor: the knowledge doc when long enough, else how to fix it; nev
   const raw = store.raw;
   const b = await addUser(raw, { email: 'b@example.com' });
   await assert.rejects(backgroundFor(raw, OWNER_ID), /Write your knowledge doc/, 'the owner too: no Google Doc to fall back on');
-  saveUserProfile(raw, OWNER_ID, LONG('Owner'));
+  await saveUserProfile(raw, OWNER_ID, LONG('Owner'));
   assert.equal(await backgroundFor(raw, OWNER_ID), LONG('Owner').trim());
-  saveUserProfile(raw, b, LONG('Sam'));
+  await saveUserProfile(raw, b, LONG('Sam'));
   assert.equal(await backgroundFor(raw, b), LONG('Sam').trim());
-  saveUserProfile(raw, b, 'too short');
+  await saveUserProfile(raw, b, 'too short');
   await assert.rejects(backgroundFor(raw, b), /at least 500 characters/);
   store.close();
 });
@@ -53,7 +53,7 @@ test('the owner keeps their knowledge doc in Settings like everyone else; the Go
   const { store, app, owner, done } = await setup();
   const s = (await app.inject({ method: 'PUT', url: '/api/account/profile', headers: owner, payload: { text: LONG('Edited') } })).json();
   assert.equal(s.profile, LONG('Edited').trim());
-  assert.equal(userProfile(store.raw, OWNER_ID), LONG('Edited').trim());
+  assert.equal(await userProfile(store.raw, OWNER_ID), LONG('Edited').trim());
   assert.equal(s.knowledgeSections.length, 7, 'Settings gets the sections for its checklist');
   assert.equal((await app.inject({ method: 'POST', url: '/api/account/profile/from-google-doc', headers: owner })).statusCode, 404);
   await done();
@@ -66,7 +66,7 @@ test('Fill from a document returns the text and saves nothing; bad files say wha
   const res = await upload(docx, 'My resume.docx');
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.json(), { kind: 'docx', text: 'Sam Example\n\nHead of Data at Example Co, 2021 to now, team of 12.' });
-  assert.equal(userProfile(store.raw, b), '', 'nothing saved until Save');
+  assert.equal(await userProfile(store.raw, b), '', 'nothing saved until Save');
   const refused = await upload(Buffer.from('x'.repeat(100)), 'old.doc');
   assert.equal(refused.statusCode, 400);
   assert.match(refused.json().error, /\.docx or PDF/);

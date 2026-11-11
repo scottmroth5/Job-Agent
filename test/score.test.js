@@ -27,7 +27,7 @@ const config = fakeConfig({
   search: { homeAreaLabel: 'the Anytown area', homeLocations: ['Anytown, ST'], terms: ['x'], relevantTitleKeywords: ['x'] },
 });
 const KNOWLEDGE = 'Section 5: Job Targets. Senior engineering leadership roles. '.repeat(20);
-const prompt = loadScorePrompt();
+const prompt = await loadScorePrompt();
 
 const result = (/** @type {Record<string, unknown>} */ o = {}) => ({
   score: 8,
@@ -157,8 +157,8 @@ test('scorePostings stores scores, applies the rule, promotes 8+, and skips scor
   assert.equal(store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(low), 'discovered');
   assert.equal(JSON.parse(/** @type {string} */ (store.db.prepare('SELECT analysis_json FROM scores WHERE posting_id = ?').pluck().get(high))).topTalkingPoint, 'Platform growth');
 
-  assert.equal(selectPostings(store.db).length, 0, 'a second run scores nothing');
-  assert.equal(selectPostings(store.db, { allUnscored: true }).length, 1, '--all-unscored includes v1 history');
+  assert.equal((await selectPostings(store.db)).length, 0, 'a second run scores nothing');
+  assert.equal((await selectPostings(store.db, { allUnscored: true })).length, 1, '--all-unscored includes v1 history');
   store.close();
 });
 
@@ -185,8 +185,8 @@ test('scorePostings refuses to run without usable knowledge', async () => {
   store.close();
 });
 
-test('fractional postings use the fractional prompt with stacking target and posted terms', () => {
-  const prompts = { fulltime: prompt, fractional: loadScorePrompt('fractional') };
+test('fractional postings use the fractional prompt with stacking target and posted terms', async () => {
+  const prompts = { fulltime: prompt, fractional: await loadScorePrompt('fractional') };
   const fcfg = fakeConfig({ ...config, fractional: { targetAnnual: [200000, 250000], weeksPerYear: 48 } });
   const posting = { track: 'fractional', company: 'Example Co', title: 'Fractional CTO', location: 'Remote', location_check: 'remote', rate_text: '$5K - $6K / mo', hours_min: 5, hours_max: 8, fetched_text: 'x' };
   const req = buildScoreRequest(posting, { config: fcfg, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5', prompts });

@@ -20,7 +20,7 @@ import { timeZone } from '../tools/dates.ts';
 import { countryLookup, geoAllowFromEnv, openGeo, openRelay } from './geo.ts';
 import { createAlerts } from './alerts.ts';
 import { createNotices } from './notices.ts';
-import { getSetting, setSetting } from '../db/settings.ts';
+import { claimSetting } from '../db/settings.ts';
 import { getUser, OWNER_ID, syncOwnerEmail } from '../db/users.ts';
 import { sendEmail } from '../tools/google/gmail.ts';
 import { assertSafeBinding, authSettings } from './auth.ts';
@@ -55,8 +55,8 @@ const onCapReached = async (uid: number, error: Error) => {
   const err = error as BudgetExceededError; // the cap's refusal (tools/claude.ts)
   if (uid === OWNER_ID || err.scope !== 'user') return;
   const key = `allowance-notice:${uid}`;
-  if (getSetting(store.raw, key) === err.status.month) return;
-  setSetting(store.raw, key, err.status.month);
+  // The check and the mark are one transaction, so two refusals at once send one notice.
+  if (!(await claimSetting(store.raw, key, err.status.month, (last) => last !== err.status.month))) return;
   await notices.allowanceReached?.((await getUser(store.raw, uid)) as User, err.status); // a user on the owner's key has a row
 };
 // The owner's account row carries their first allowed address, for the Users screen.
@@ -137,12 +137,12 @@ if (geoAllow.length) {
 if (geoAllow.length && !relay) {
   services.alerts?.alert('geo-relay', 'iCloud Private Relay list missing', "Apple's iCloud Private Relay address list is missing from the server image, so visitors using Private Relay are checked against the location database only, and some in the allowed countries may be refused. Blocking is still on. The next image build (or the weekly rebuild) adds it.", { once: true }).catch(() => {});
 } else if (relay) {
-  services.alerts?.recovered('geo-relay');
+  await services.alerts?.recovered('geo-relay');
 }
 if (geoAllow.length && !geo.lookup) {
   services.alerts?.alert('geo-db', 'US-only blocking is off', 'The location database is missing from the server image, so visitors outside the allowed countries are not blocked. The next image build (or the weekly rebuild) adds it.', { once: true }).catch(() => {});
 } else if (geo.lookup) {
-  services.alerts?.recovered('geo-db');
+  await services.alerts?.recovered('geo-db');
 }
 // The admin's usage totals (server/usage-totals.ts): the personal site and demo hosts that name a source.
 const usage = { location: lookups?.location ?? null, siteHost: process.env.SOURCE_SITE_HOST, demoHost: process.env.SOURCE_DEMO_HOST };

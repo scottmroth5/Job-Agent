@@ -23,7 +23,7 @@ const c = (o = {}) => /** @type {Classification} */ ({
   ...(o.extracted ? { extracted: { company: null, role_title: null, contact_name: null, contact_email: null, interview_times: [], deadline: null, ...o.extracted } } : {}),
 });
 
-function setup(status = 'applied') {
+async function setup(status = 'applied') {
   const store = openJobStore(':memory:');
   const { db } = store;
   const postingId = Number(
@@ -34,12 +34,12 @@ function setup(status = 'applied') {
   );
   const fields = { gmailMessageId: 'g1', threadId: 't1', senderEmail: 'pat.recruiter@example.com', senderDomain: 'example.com', sentAt: '2026-09-30T14:00:00Z', subject: 's' };
   /** @type {Email} */
-  const email = { ...fields, id: insertEmail(db, { ...fields, reviewStatus: 'auto' }, now) };
+  const email = { ...fields, id: await insertEmail(db, { ...fields, reviewStatus: 'auto' }, now) };
   return { store, db, postingId, email };
 }
 
 /** @param {Database} db @param {number} postingId @param {Email} email @param {Classification} cls */
-const act = (db, postingId, email, cls) => applyActions(db, { email, postingId, c: cls, decidedBy: 'rule:thread', promptVersion: 'pv1', now });
+const act = async (db, postingId, email, cls) => await applyActions(db, { email, postingId, c: cls, decidedBy: 'rule:thread', promptVersion: 'pv1', now });
 const status = (/** @type {Database} */ db, /** @type {number} */ id) => /** @type {{ status: string, applied_on: string | null }} */ (db.prepare('SELECT status, applied_on FROM postings WHERE id = ?').get(id));
 
 test('the confidence gate: rule matches are certain, 0.85 links, 0.84 goes to review', () => {
@@ -76,9 +76,9 @@ test('status never moves backward or reopens a closed application automatically'
   assert.match(review('offer', 'interview_request'), /backward/);
 });
 
-test('a confirmation moves new to applied with the email date, and logs the decision', () => {
-  const { store, db, postingId, email } = setup('new');
-  const r = act(db, postingId, email, c({ type: 'confirmation' }));
+test('a confirmation moves new to applied with the email date, and logs the decision', async () => {
+  const { store, db, postingId, email } = await setup('new');
+  const r = await act(db, postingId, email, c({ type: 'confirmation' }));
   assert.deepEqual(r.statusChange, { from: 'new', to: 'applied' });
   assert.deepEqual(status(db, postingId), { status: 'applied', applied_on: '2026-09-30' });
   const log = /** @type {Record<string, unknown>} */ (db.prepare("SELECT * FROM decision_log WHERE action = 'status_change'").get());
@@ -89,9 +89,9 @@ test('a confirmation moves new to applied with the email date, and logs the deci
   store.close();
 });
 
-test('a rejection after an offer changes nothing and asks for review', () => {
-  const { store, db, postingId, email } = setup('offer');
-  const r = act(db, postingId, email, c({ type: 'rejection' }));
+test('a rejection after an offer changes nothing and asks for review', async () => {
+  const { store, db, postingId, email } = await setup('offer');
+  const r = await act(db, postingId, email, c({ type: 'rejection' }));
   assert.equal(r.statusChange, null);
   assert.match(/** @type {string} */ (r.review), /after an offer/);
   assert.equal(status(db, postingId).status, 'offer');
@@ -99,9 +99,9 @@ test('a rejection after an offer changes nothing and asks for review', () => {
   store.close();
 });
 
-test('an interview request stores the times and contact and prints a notice', () => {
-  const { store, db, postingId, email } = setup();
-  const r = act(db, postingId, email, c({ type: 'interview_request', extracted: { contact_name: 'Pat Example', contact_email: 'pat@example.com', interview_times: ['October 8, 2026 2:00 PM ET'] } }));
+test('an interview request stores the times and contact and prints a notice', async () => {
+  const { store, db, postingId, email } = await setup();
+  const r = await act(db, postingId, email, c({ type: 'interview_request', extracted: { contact_name: 'Pat Example', contact_email: 'pat@example.com', interview_times: ['October 8, 2026 2:00 PM ET'] } }));
   assert.equal(status(db, postingId).status, 'interviewing');
   assert.match(r.notices[0], /^INTERVIEW REQUEST: VP of Engineering at Example Co \(proposed: October 8, 2026 2:00 PM ET\), from Pat Example$/);
   const rem = db.prepare('SELECT kind, note FROM reminders').get();
@@ -110,20 +110,20 @@ test('an interview request stores the times and contact and prints a notice', ()
   store.close();
 });
 
-test('an assessment creates a reminder with its deadline; an offer prints a notice', () => {
-  const { store, db, postingId, email } = setup('interviewing');
-  const a = act(db, postingId, email, c({ type: 'assessment', extracted: { deadline: 'October 9, 2026' } }));
+test('an assessment creates a reminder with its deadline; an offer prints a notice', async () => {
+  const { store, db, postingId, email } = await setup('interviewing');
+  const a = await act(db, postingId, email, c({ type: 'assessment', extracted: { deadline: 'October 9, 2026' } }));
   assert.equal(status(db, postingId).status, 'interviewing');
   assert.equal(/** @type {string} */ (db.prepare('SELECT due_at FROM reminders WHERE id = ?').pluck().get(a.reminderId)).slice(0, 10), '2026-10-09');
-  const o = act(db, postingId, { ...email, gmailMessageId: 'g2' }, c({ type: 'offer' }));
+  const o = await act(db, postingId, { ...email, gmailMessageId: 'g2' }, c({ type: 'offer' }));
   assert.deepEqual(o.notices, ['OFFER: VP of Engineering at Example Co']);
   assert.equal(parseDeadline('next week sometime'), null);
   store.close();
 });
 
-test('unmatched recruiter outreach creates a discovered opportunity without copying the body', () => {
-  const { store, db, email } = setup();
-  const id = createOpportunity(db, { email: { ...email, threadId: 't9' }, c: c({ type: 'recruiter_outreach', summary: 'A recruiter asks about a CTO role.', extracted: { company: 'Sample Labs', role_title: 'CTO' } }), decidedBy: 'model:m', promptVersion: 'pv1', now });
+test('unmatched recruiter outreach creates a discovered opportunity without copying the body', async () => {
+  const { store, db, email } = await setup();
+  const id = await createOpportunity(db, { email: { ...email, threadId: 't9' }, c: c({ type: 'recruiter_outreach', summary: 'A recruiter asks about a CTO role.', extracted: { company: 'Sample Labs', role_title: 'CTO' } }), decidedBy: 'model:m', promptVersion: 'pv1', now });
   const p = /** @type {Record<string, string | null>} */ (db.prepare('SELECT company, title, source, stage, status, notes, jd_text FROM postings WHERE id = ?').get(id));
   assert.deepEqual([p.company, p.title, p.source, p.stage, p.status, p.jd_text], ['Sample Labs', 'CTO', 'email', 'discovered', 'new', null]);
   assert.match(/** @type {string} */ (p.notes), /#all\/t9/);
@@ -131,11 +131,11 @@ test('unmatched recruiter outreach creates a discovered opportunity without copy
   store.close();
 });
 
-test('company domains are learned from employer mail only', () => {
-  const { store, db, postingId } = setup();
-  assert.equal(learnDomain(db, postingId, 'us.greenhouse.io', cfg), false);
-  assert.equal(learnDomain(db, postingId, 'gmail.com', cfg), false);
-  assert.equal(learnDomain(db, postingId, 'example.com', cfg), true);
-  assert.ok(isCompanyDomain(db)('talent.example.com'));
+test('company domains are learned from employer mail only', async () => {
+  const { store, db, postingId } = await setup();
+  assert.equal(await learnDomain(db, postingId, 'us.greenhouse.io', cfg), false);
+  assert.equal(await learnDomain(db, postingId, 'gmail.com', cfg), false);
+  assert.equal(await learnDomain(db, postingId, 'example.com', cfg), true);
+  assert.ok((await isCompanyDomain(db))('talent.example.com'));
   store.close();
 });

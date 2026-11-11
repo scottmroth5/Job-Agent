@@ -53,4 +53,4 @@ export type Notices = Partial<ReturnType<typeof createNotices>>;
 export type TaskStep = (message: string, opts?: { log?: boolean }) => void;
 
 /** buildApp's startTask: a traced background task for the current user; returns its id. */
-export type StartTask = (kind: string, meta: Record<string, unknown>, fn: (step: TaskStep, ctx: { run: Run; browser: PageRenderer | null }) => Promise<unknown>) => string;
+export type StartTask = (kind: string, meta: Record<string, unknown>, fn: (step: TaskStep, ctx: { run: Run; browser: PageRenderer | null }) => Promise<unknown>) => Promise<string>;

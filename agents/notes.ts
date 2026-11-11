@@ -4,7 +4,9 @@
 //   source: 'user' (typed by the user), 'agent' (written by Job Agent), 'earlier' (notes from before entries existed,
 //   whose dates are unknown)
 import { randomUUID } from 'node:crypto';
-import type { Database } from '../tools/types.ts';
+import { asEngine } from '../db/engine/index.ts';
+import type { AnyDb } from '../db/engine/index.ts';
+import type { Db } from '../db/engine/types.ts';
 import type { PostingNotesRow } from '../db/types.ts';
 
 /** A note as the app shows it. */
@@ -23,34 +25,38 @@ export const MAX_NOTE_CHARS = 20000;
 const toEntry = (r: PostingNotesRow): Note => ({ id: r.id, postingId: r.posting_id, body: r.body, source: r.source, createdAt: r.created_at, updatedAt: r.updated_at });
 
 /** Rewrites postings.notes from the entries. */
-function refresh(db: Database, postingId: number, nowIso: string | null) {
-  const text = db
+async function refresh(q: Db, postingId: number, nowIso: string | null) {
+  const text = ((await q
     .prepare('SELECT body FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at, rowid')
     .pluck()
-    .all(postingId)
+    .all(postingId)) as string[])
     .join('\n');
-  db.prepare(`UPDATE postings SET notes = ?${nowIso ? ', updated_at = ?' : ''} WHERE id = ? AND user_id = @uid`).run(...[text || null, ...(nowIso ? [nowIso] : []), postingId]);
+  await q.prepare(`UPDATE postings SET notes = ?${nowIso ? ', updated_at = ?' : ''} WHERE id = ? AND user_id = @uid`).run(...[text || null, ...(nowIso ? [nowIso] : []), postingId]);
 }
 
 /**
  * Turns notes written straight into postings.notes (before entries existed, or by an insert) into one entry, for
- * jobs that have notes text but no entries. With postingId, only that job.
+ * jobs that have notes text but no entries. With postingId, only that job. The check and the inserts are one
+ * transaction (a savepoint inside a caller's), so two calls at once adopt a job's text once.
  * Returns how many entries were created.
  */
-export function adoptNotesText(db: Database, { postingId = null, source = 'earlier', now = new Date() }: { postingId?: number | null; source?: string; now?: Date } = {}) {
+export async function adoptNotesText(db: AnyDb, { postingId = null, source = 'earlier', now = new Date() }: { postingId?: number | null; source?: string; now?: Date } = {}) {
   const nowIso = now.toISOString();
-  const rows = db
-    .prepare(`SELECT id, notes FROM postings p WHERE p.user_id = @uid AND TRIM(COALESCE(p.notes, '')) <> ''
+  const q = asEngine(db);
+  return q.tx(async () => {
+    const rows = (await q
+      .prepare(`SELECT id, notes FROM postings p WHERE p.user_id = @uid AND TRIM(COALESCE(p.notes, '')) <> ''
       AND NOT EXISTS (SELECT 1 FROM posting_notes n WHERE n.posting_id = p.id AND n.user_id = p.user_id) ${postingId ? 'AND p.id = ?' : ''}`)
-    .all(...(postingId ? [postingId] : [])) as Array<{ id: number; notes: string }>;
-  const insert = db.prepare('INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) VALUES (@uid, ?, ?, ?, ?, ?, ?)');
-  for (const r of rows) insert.run(randomUUID(), r.id, r.notes.trim(), source, nowIso, nowIso);
-  return rows.length;
+      .all(...(postingId ? [postingId] : []))) as Array<{ id: number; notes: string }>;
+    const insert = q.prepare('INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) VALUES (@uid, ?, ?, ?, ?, ?, ?)');
+    for (const r of rows) await insert.run(randomUUID(), r.id, r.notes.trim(), source, nowIso, nowIso);
+    return rows.length;
+  });
 }
 
 /** A job's notes, newest first. */
-export function listNotes(db: Database, postingId: number) {
-  return (db.prepare('SELECT * FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC, rowid DESC').all(postingId) as PostingNotesRow[]).map(toEntry);
+export async function listNotes(db: AnyDb, postingId: number) {
+  return ((await asEngine(db).prepare('SELECT * FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC, rowid DESC').all(postingId)) as PostingNotesRow[]).map(toEntry);
 }
 
 const checkBody = (body: unknown) => {
@@ -61,46 +67,52 @@ const checkBody = (body: unknown) => {
 };
 
 /** Adds a note to a job. */
-export function addNote(db: Database, postingId: number, body: unknown, { source = 'user', now = new Date() }: { source?: string; now?: Date } = {}) {
+export async function addNote(db: AnyDb, postingId: number, body: unknown, { source = 'user', now = new Date() }: { source?: string; now?: Date } = {}) {
   const text = checkBody(body);
   if (!NOTE_SOURCES.includes(source)) throw new Error(`Unknown note source: ${source}`);
   const nowIso = now.toISOString();
   const id = randomUUID();
-  db.transaction(() => {
-    adoptNotesText(db, { postingId, now });
+  const q = asEngine(db);
+  return q.tx(async () => {
+    await adoptNotesText(q, { postingId, now });
     // The note takes its owner from the job, so a job that is not this user's gets no note.
-    const added = db
+    const added = await q
       .prepare('INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) SELECT user_id, ?, id, ?, ?, ?, ? FROM postings WHERE id = ? AND user_id = @uid')
       .run(id, text, source, nowIso, nowIso, postingId);
     if (!added.changes) throw Object.assign(new Error('Job not found.'), { statusCode: 404 });
-    refresh(db, postingId, nowIso);
-  })();
-  return toEntry(db.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(id) as PostingNotesRow);
+    await refresh(q, postingId, nowIso);
+    return toEntry((await q.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(id)) as PostingNotesRow);
+  });
 }
 
-/** Edits a note's text; its created date stays, its updated date moves. Null when there is no such note. */
-export function updateNote(db: Database, noteId: string, body: unknown, { now = new Date() }: { now?: Date } = {}) {
+/**
+ * Edits a note's text; its created date stays, its updated date moves. Null when there is no such note. The read and
+ * the write are one transaction.
+ */
+export async function updateNote(db: AnyDb, noteId: string, body: unknown, { now = new Date() }: { now?: Date } = {}) {
   const text = checkBody(body);
-  const row = db.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId) as PostingNotesRow | undefined;
-  if (!row) return null;
-  if (text === row.body) return toEntry(row);
-  const nowIso = now.toISOString();
-  db.transaction(() => {
-    db.prepare('UPDATE posting_notes SET body = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(text, nowIso, noteId);
-    refresh(db, row.posting_id, nowIso);
-  })();
-  return toEntry(db.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId) as PostingNotesRow);
+  const q = asEngine(db);
+  return q.tx(async () => {
+    const row = (await q.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId)) as PostingNotesRow | undefined;
+    if (!row) return null;
+    if (text === row.body) return toEntry(row);
+    const nowIso = now.toISOString();
+    await q.prepare('UPDATE posting_notes SET body = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(text, nowIso, noteId);
+    await refresh(q, row.posting_id, nowIso);
+    return toEntry((await q.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId)) as PostingNotesRow);
+  });
 }
 
-/** Deletes a note. False when there is no such note. */
-export function deleteNote(db: Database, noteId: string, { now = new Date() }: { now?: Date } = {}) {
-  const row = db.prepare('SELECT posting_id FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId) as { posting_id: number } | undefined;
-  if (!row) return false;
-  db.transaction(() => {
-    db.prepare('DELETE FROM posting_notes WHERE id = ? AND user_id = @uid').run(noteId);
-    refresh(db, row.posting_id, now.toISOString());
-  })();
-  return true;
+/** Deletes a note. False when there is no such note. The read and the delete are one transaction. */
+export async function deleteNote(db: AnyDb, noteId: string, { now = new Date() }: { now?: Date } = {}) {
+  const q = asEngine(db);
+  return q.tx(async () => {
+    const row = (await q.prepare('SELECT posting_id FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId)) as { posting_id: number } | undefined;
+    if (!row) return false;
+    await q.prepare('DELETE FROM posting_notes WHERE id = ? AND user_id = @uid').run(noteId);
+    await refresh(q, row.posting_id, now.toISOString());
+    return true;
+  });
 }
 
 const day = (iso: string) => new Date(iso).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });

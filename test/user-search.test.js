@@ -13,7 +13,7 @@ import { addUser, OWNER_ID } from '../db/users.ts';
 import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
-import { cleanConfig, configFor, saveUserConfig, saveUserProfile, scheduledUsers, setScheduledForUser, userConfigView } from '../agents/user-config.ts';
+import { cleanConfig, configFor, saveUserConfig, saveUserProfile, scheduledUsers, setScheduledForUser, userConfigView, withUserConfig } from '../agents/user-config.ts';
 import { repoPath } from '../tools/paths.ts';
 import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
@@ -27,7 +27,7 @@ const OWNER_CONFIG = fakeConfig({
 });
 const B_SEARCH = { candidate: { name: 'Sam' }, search: { terms: ['Head of Data'], relevantTitleKeywords: ['data'], homeLocations: ['Remote'] } };
 
-test('a user sets plain text only: no patterns, no site search, no private terms; the owner keeps their file', () => {
+test('a user sets plain text only: no patterns, no site search, no private terms; the owner keeps their file', async () => {
   const c = cleanConfig({
     ...B_SEARCH,
     coverLetterChecks: [{ label: 'evil', text: '(a+)+$' }],
@@ -44,22 +44,29 @@ test('a user sets plain text only: no patterns, no site search, no private terms
   assert.equal(cleanConfig({}).ready, false);
 
   const { raw } = openJobStore(':memory:');
-  assert.throws(() => saveUserConfig(raw, OWNER_ID, B_SEARCH), /job-search\.json/);
-  assert.equal(saveUserProfile(raw, OWNER_ID, ' Owner background. '), 'Owner background.', 'the owner can keep About you in the app too');
+  await assert.rejects(async () => await saveUserConfig(raw, OWNER_ID, B_SEARCH), /job-search\.json/);
+  assert.equal(await saveUserProfile(raw, OWNER_ID, ' Owner background. '), 'Owner background.', 'the owner can keep About you in the app too');
 });
 
 test('the server config reads as whoever the request runs as', async () => {
   const { raw } = openJobStore(':memory:');
   const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
-  saveUserConfig(raw, b, B_SEARCH, 'Sam');
+  await saveUserConfig(raw, b, B_SEARCH, 'Sam');
   const config = userConfigView(OWNER_CONFIG, raw);
-  assert.deepEqual(config.search.terms, ['Owner Term'], 'outside a request: the owner');
-  assert.deepEqual(runAsUser(b, () => config.search.terms), ['Head of Data']);
-  assert.deepEqual(runAsUser(b, () => config.coverLetterChecks), []);
-  assert.deepEqual(runAsUser(b, () => ({ ...config }).candidate.name), 'Sam', 'spreading works too');
-  saveUserConfig(raw, b, { ...B_SEARCH, search: { ...B_SEARCH.search, terms: ['Chief Data Officer'] } }, 'Sam');
-  assert.deepEqual(runAsUser(b, () => config.search.terms), ['Chief Data Officer'], 'a save shows at once');
-  assert.deepEqual(configFor(raw, OWNER_ID, OWNER_CONFIG), OWNER_CONFIG, "the owner's file, with no sites skipped on Settings");
+  // The server loads the settings before each route (withUserConfig in its preHandler); reads then answer at once.
+  const as = (/** @type {number} */ uid, /** @type {() => unknown} */ fn) => runAsUser(uid, () => withUserConfig(raw, uid, OWNER_CONFIG, fn));
+  assert.throws(() => config.search, /before they were loaded/, 'never a guess: unloaded settings are an error');
+  assert.deepEqual(await as(OWNER_ID, () => config.search.terms), ['Owner Term'], 'the owner: their file');
+  assert.deepEqual(await as(b, () => config.search.terms), ['Head of Data']);
+  assert.deepEqual(await as(b, () => config.coverLetterChecks), []);
+  assert.deepEqual(await as(b, () => ({ ...config }).candidate.name), 'Sam', 'spreading works too');
+  const seen = await as(b, async () => {
+    await saveUserConfig(raw, b, { ...B_SEARCH, search: { ...B_SEARCH.search, terms: ['Chief Data Officer'] } }, 'Sam');
+    return config.search.terms;
+  });
+  assert.deepEqual(seen, ['Chief Data Officer'], 'a save shows at once, in the rest of the same request too');
+  assert.deepEqual(await as(b, () => config.search.terms), ['Chief Data Officer'], 'and in the next one');
+  assert.deepEqual(await configFor(raw, OWNER_ID, OWNER_CONFIG), OWNER_CONFIG, "the owner's file, with no sites skipped on Settings");
 });
 
 async function setup() {
@@ -109,7 +116,7 @@ test('Settings: a user saves their search, background, and schedule; the owner i
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/profile', headers: asB, payload: { text: about } })).json().profile, about.trim());
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/profile', headers: asB, payload: { text: 'x'.repeat(60000) } })).statusCode, 400);
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/schedule', headers: asB, payload: { on: true } })).json().scheduled, true);
-  assert.deepEqual(scheduledUsers(store.raw), [b]);
+  assert.deepEqual(await scheduledUsers(store.raw), [b]);
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/schedule', headers: asA, payload: { on: true } })).statusCode, 400);
 
   // What the server shows each of them follows their own settings.
@@ -122,8 +129,8 @@ test('Settings: a user saves their search, background, and schedule; the owner i
   }
   // A paused user's pipeline is off the schedule.
   store.raw.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(b);
-  assert.deepEqual(scheduledUsers(store.raw), []);
-  setScheduledForUser(store.raw, b, false);
+  assert.deepEqual(await scheduledUsers(store.raw), []);
+  await setScheduledForUser(store.raw, b, false);
   await done();
 });
 

@@ -31,8 +31,8 @@ const ESTIMATE_RATES = {
  * @param {string[]} models
  * @param {Database | null} [db]
  */
-export function estimateLetterEval(cases, models, db = null) {
-  const templateChars = getPrompt(db, 'verify-letter').template.length;
+export async function estimateLetterEval(cases, models, db = null) {
+  const templateChars = (await getPrompt(db, 'verify-letter')).template.length;
   const background = cases.knowledge.length + cases.resume.length;
   return Object.fromEntries(
     models.map((m) => {
@@ -49,7 +49,7 @@ export function estimateLetterEval(cases, models, db = null) {
  * @param {{ cases: LetterCases, models: string[], claude: Claude, db?: Database | null, trace?: Run | null, log?: (line: string) => void }} opts
  */
 export async function runLetterEval({ cases, models, claude, db = null, trace = null, log = () => {} }) {
-  const prompt = getPrompt(db, 'verify-letter');
+  const prompt = await getPrompt(db, 'verify-letter');
   const background = `${cases.knowledge}\n\nRESUME:\n${cases.resume}`;
   const config = { candidate: cases.candidate };
   /** @type {Record<string, { results: LetterResult[], metrics: ReturnType<typeof letterMetrics> }>} */

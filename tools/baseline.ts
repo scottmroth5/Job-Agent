@@ -34,7 +34,7 @@ function folderSize(dir: string): { files: number; bytes: number } {
  * @param {string} path  the SQLite file (opened read-only; it must exist)
  * @param {{ attachmentsDir?: string, now?: Date }} [options]
  */
-export function baselineReport(path: string, { attachmentsDir = null, now = new Date() }: { attachmentsDir?: string | null; now?: Date } = {}) {
+export async function baselineReport(path: string, { attachmentsDir = null, now = new Date() }: { attachmentsDir?: string | null; now?: Date } = {}) {
   const raw = new Database(path, { readonly: true, fileMustExist: true });
   try {
     const tables = raw
@@ -54,11 +54,11 @@ export function baselineReport(path: string, { attachmentsDir = null, now = new 
     const db = scopeDb(raw);
     const outcomes = { applications: 0, noAppliedOn: 0, withLinkedEmail: 0, followUp: 0, stale: 0 };
     for (const uid of raw.prepare('SELECT id FROM users ORDER BY id').pluck().all() as number[]) {
-      runAsUser(uid, () => {
-        const apps = applications(db, { now });
+      await runAsUser(uid, async () => {
+        const apps = await applications(db, { now });
         const noDate = new Set(db.prepare('SELECT id FROM postings WHERE user_id = @uid AND applied_on IS NULL').pluck().all());
         const linked = new Set(db.prepare(`SELECT DISTINCT posting_id FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).pluck().all());
-        const waiting = waitingApplications(db, { now });
+        const waiting = await waitingApplications(db, { now });
         outcomes.applications += apps.length;
         outcomes.noAppliedOn += apps.filter((a) => noDate.has(a.id)).length;
         outcomes.withLinkedEmail += apps.filter((a) => linked.has(a.id)).length;
@@ -81,7 +81,7 @@ export function baselineReport(path: string, { attachmentsDir = null, now = new 
   }
 }
 
-export type Baseline = ReturnType<typeof baselineReport>;
+export type Baseline = Awaited<ReturnType<typeof baselineReport>>;
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 

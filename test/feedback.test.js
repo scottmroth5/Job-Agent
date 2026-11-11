@@ -61,11 +61,21 @@ test('feedback: saved as the sender\'s, emailed to the owner with the sender as 
   await done();
 });
 
+test('feedback sent at once never passes the day\'s limit', async () => {
+  const { store, app, asPat, done } = await setup();
+  const send = (/** @type {string} */ body) => app.inject({ method: 'POST', url: '/api/feedback', headers: asPat, payload: { body } });
+  for (let i = 1; i < FEEDBACK_PER_DAY; i += 1) await send(`note ${i}`);
+  const codes = (await Promise.all([send('last one'), send('and another')])).map((r) => r.statusCode).sort();
+  assert.deepEqual(codes, [201, 429]);
+  assert.equal(store.raw.prepare('SELECT COUNT(*) FROM feedback').pluck().get(), FEEDBACK_PER_DAY);
+  await done();
+});
+
 test('the Users screen: last seen, last pipeline run, and setup; no one\'s background or key text', async () => {
   const { store, app, pat, asOwner, asPat, done } = await setup();
   await app.inject({ url: '/api/postings', headers: asPat });
-  saveUserConfig(store.raw, pat, { search: { terms: ['Head of Data'], relevantTitleKeywords: ['data'], homeLocations: ['Remote'] } }, 'Pat');
-  saveUserProfile(store.raw, pat, 'A private background sentence. '.repeat(30));
+  await saveUserConfig(store.raw, pat, { search: { terms: ['Head of Data'], relevantTitleKeywords: ['data'], homeLocations: ['Remote'] } }, 'Pat');
+  await saveUserProfile(store.raw, pat, 'A private background sentence. '.repeat(30));
   store.raw.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('pipeline', 'ok', '2026-10-26T10:00:00Z', ?)").run(pat);
   const res = await app.inject({ url: '/api/admin/users', headers: asOwner });
   const p = res.json().find((/** @type {JsonRow} */ u) => u.email === 'pat@example.com');

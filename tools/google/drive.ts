@@ -46,7 +46,7 @@ const PREP_FOLDER_SETTING = 'drive.meetingPrepFolderId';
 
 /** A remembered app folder, or a new one if it was never made, deleted, or trashed. */
 async function ensureAppFolder(client: DriveClient, db: Database, name: string, setting: string) {
-  const known = getUserSetting(db, setting);
+  const known = await getUserSetting(db, setting);
   if (known) {
     try {
       const file = await client.getFile(known);
@@ -56,7 +56,7 @@ async function ensureAppFolder(client: DriveClient, db: Database, name: string, 
     }
   }
   const id = await client.createFolder(name);
-  setUserSetting(db, setting, id);
+  await setUserSetting(db, setting, id);
   return id;
 }
 

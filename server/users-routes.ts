@@ -29,7 +29,7 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
       const user = await getUser(db, req.params.id);
       if (!user) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
       if (req.body.confirmEmail.trim().toLowerCase() !== user.email) throw Object.assign(new Error(`Type ${user.email} to confirm.`), { statusCode: 400 });
-      const counts = deleteAccount(db, user.id, { attachmentsDir });
+      const counts = await deleteAccount(db, user.id, { attachmentsDir });
       await notices.accountDeleted?.(user, { byOwner: true });
       return { deleted: true, jobs: counts.postings ?? 0 };
     },
@@ -82,11 +82,11 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
         },
       },
     },
-    async (req) => ({ weeks: usageByWeek(db, { weeks: req.query.weeks }), ...usageTotals(db, { since: usagePeriodStart(req.query.weeks) }) }),
+    async (req) => ({ weeks: await usageByWeek(db, { weeks: req.query.weeks }), ...await usageTotals(db, { since: usagePeriodStart(req.query.weeks) }) }),
   );
 
   app.get('/api/admin/users', { schema: { summary: 'Every account, with its AI setup and this month\'s spend (admin)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
-    listUsers(db),
+    await listUsers(db),
   );
 
   app.post<{ Params: { id: number; decision: string } }>(

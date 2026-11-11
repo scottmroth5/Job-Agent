@@ -32,10 +32,10 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const store = openJobStore();
-  const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
+  const config = await configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   if (!args.dryRun) {
     try {
-      assertNoRunningRun(store.db, 'discover');
+      await assertNoRunningRun(store.db, 'discover');
     } catch (err) {
       store.close();
       throw err;
