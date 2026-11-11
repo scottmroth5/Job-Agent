@@ -1,5 +1,6 @@
 // Runs the inbox's real decision code (pre-filter, rule cascade, Claude classification, confidence gate,
 // injection guard) over synthetic labeled emails. Each case gets a fresh in-memory database.
+import { asEngine } from '../../db/engine/index.ts';
 import { openJobStore } from '../../db/index.ts';
 import { storedKey } from '../../agents/identity.ts';
 import { prefilter, domainOf } from '../../agents/inbox/prefilter.ts';
@@ -27,10 +28,10 @@ import { isContact, isCompanyDomain } from '../../agents/inbox/store.ts';
  * @param {Database} db
  * @param {EvalApplication[]} applications
  */
-function seed(db, applications) {
-  const insert = db.prepare(`INSERT INTO postings (user_id, id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
+async function seed(db, applications) {
+  const insert = asEngine(db).prepare(`INSERT INTO postings (user_id, id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
     VALUES (@uid, ?, ?, ?, ?, ?, '2026-09-01', 'pipeline', ?, ?, 'x', 'x')`);
-  for (const a of applications) insert.run(a.id, `eval-${a.id}`, a.company, a.title, storedKey(a), a.status, a.domain ?? null);
+  for (const a of applications) await insert.run(a.id, `eval-${a.id}`, a.company, a.title, storedKey(a), a.status, a.domain ?? null);
 }
 
 /**
@@ -69,7 +70,7 @@ export async function runInboxEval({ cases, applications, claude, cfg, model = c
     const store = openJobStore(':memory:');
     try {
       const { db } = store;
-      seed(db, applications);
+      await seed(db, applications);
       const email = toEmail(c, cfg.bodyChars);
       const pass = prefilter(email, { threadStartedByMe: Boolean(c.email.threadStartedByMe), isContact: await isContact(db), isCompanyDomain: await isCompanyDomain(db), atsDomains: cfg.atsDomains });
       if (!pass.pass) {
