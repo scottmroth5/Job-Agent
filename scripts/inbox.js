@@ -31,7 +31,7 @@ async function main() {
     const gmail = createGmail({ auth: getInboxAuth(), onWait: (ms) => console.log(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
     const name = mode === 'backfill' ? 'inbox-backfill' : 'inbox';
     if (!dryRun) assertNoRunningRun(store.db, name);
-    const run = dryRun ? null : createJobTracer({ store }).startRun(name, { model: cfg.model, promptVersion: getPrompt(store.db, 'inbox-classify').version });
+    const run = dryRun ? null : await createJobTracer({ store }).startRun(name, { model: cfg.model, promptVersion: getPrompt(store.db, 'inbox-classify').version });
     try {
       /**
        * @param {'info' | 'warn' | 'error'} level
@@ -40,7 +40,7 @@ async function main() {
       const log = (level, m) => (run ? run.log(level, m) : console.log(m));
       const s = await runInbox({ store, gmail, claude: createJobClaude(store.db), cfg, key: /** @type {Buffer} */ (key), run, log, options: { mode, days, dryRun } });
       // A dry run stores no bodies (key null) and records no run; it returns before totals are read.
-      const totals = /** @type {NonNullable<ReturnType<NonNullable<typeof run>['finish']>>} */ (run?.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length }));
+      const totals = /** @type {Awaited<ReturnType<NonNullable<typeof run>["finish"]>>} */ (await run?.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length }));
 
       console.log(`\n${dryRun ? 'DRY RUN: ' : ''}${s.fetched} messages checked (${s.source}); ${s.alreadySeen} already processed, ${s.skipped} not job related.`);
       if (dryRun) {
@@ -59,7 +59,7 @@ async function main() {
       if (s.failures.length) console.log(`${s.failures.length} emails failed to classify; the next run retries them.`);
       console.log(`Cost: $${totals.costUsd.toFixed(4)} (${totals.calls} Claude calls).`);
     } catch (err) {
-      run?.finish('failed', { error: `${/** @type {Error} */ (err).name}: ${/** @type {Error} */ (err).message}` });
+      await run?.finish('failed', { error: `${/** @type {Error} */ (err).name}: ${/** @type {Error} */ (err).message}` });
       throw err;
     }
   } finally {

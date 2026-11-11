@@ -250,14 +250,14 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     }
     return tasks.start(kind, meta, async (step, { logger }) => {
       // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
-      const run = createJobTracer({ store, logger }).startRun(`ui-${kind}`, meta);
+      const run = await createJobTracer({ store, logger }).startRun(`ui-${kind}`, meta);
       const browser = services.createBrowser ? await services.createBrowser() : null;
       try {
         const result = await fn(step, { run, browser });
-        run.finish('ok', result && typeof result === 'object' ? { ...result, materials: undefined } : null);
+        await run.finish('ok', result && typeof result === 'object' ? { ...result, materials: undefined } : null);
         return result;
       } catch (err) {
-        run.finish('failed', { error: (err as Error).message });
+        await run.finish('failed', { error: (err as Error).message });
         throw err;
       } finally {
         await browser?.close?.();

@@ -27,7 +27,7 @@ async function setup() {
   /** @type {SendOptions[]} */
   const asked = [];
   const claude = createJobClaude(store.db, {
-    ownerClient: fakeClaude(async (opts) => { asked.push(opts); opts.trace?.recordCall?.(/** @type {CallInfo} */ ({ label: opts.label, model: opts.model, inputTokens: 10, outputTokens: 5, costUsd: 0.001, durationMs: 1 })); return { text: 'Open Settings, then Your search.' }; }),
+    ownerClient: fakeClaude(async (opts) => { asked.push(opts); await opts.trace?.recordCall?.(/** @type {CallInfo} */ ({ label: opts.label, model: opts.model, inputTokens: 10, outputTokens: 5, costUsd: 0.001, durationMs: 1 })); return { text: 'Open Settings, then Your search.' }; }),
     env: {},
   });
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, claude, log: { info() {}, warn() {}, error() {} } }) });

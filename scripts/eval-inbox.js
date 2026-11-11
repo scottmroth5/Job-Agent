@@ -30,11 +30,11 @@ async function main() {
 
   const store = openJobStore();
   const promptVersion = getPrompt(store.db, 'inbox-classify').version;
-  const run = createJobTracer({ store }).startRun('eval-inbox', { model, promptVersion });
+  const run = await createJobTracer({ store }).startRun('eval-inbox', { model, promptVersion });
   try {
     const results = await runInboxEval({ cases, applications, claude: createJobClaude(store.db), cfg, model, trace: run, log: argv.includes('--verbose') ? (m) => console.log(`  ${m}`) : () => {} });
     const m = inboxMetrics(results);
-    const totals = run.finish('ok', { ...m, model, promptVersion });
+    const totals = await run.finish('ok', { ...m, model, promptVersion });
     const dir = dataPath('evals', 'inbox');
     mkdirSync(dir, { recursive: true });
     writeFileSync(`${dir}/results-${new Date().toISOString().slice(0, 10)}-${model}.json`, JSON.stringify({ model, promptVersion, metrics: m, results }, null, 2));
@@ -54,7 +54,7 @@ async function main() {
     if (dropped.length) console.log(`Job emails the pre-filter dropped: ${dropped.join(', ')}`);
     console.log(`\nCost: $${totals.costUsd.toFixed(4)} (${totals.calls} Claude calls).`);
   } catch (err) {
-    run.finish('failed');
+    await run.finish('failed');
     throw err;
   } finally {
     store.close();

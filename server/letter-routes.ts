@@ -177,13 +177,13 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       revisions.set(uid, [...recent, Date.now()]);
       const resume = pickResume(db, posting.title);
       const background = withResume(await services.knowledge(), resume);
-      const run = createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-revise', { posting: posting.id });
+      const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-revise', { posting: posting.id });
       try {
         const r = await reviseLetter({ claude: services.claude, background, posting, analysis: latestAnalysis(posting.id), letter: req.body.letter, feedback: req.body.feedback, history: req.body.history ?? [], config, trace: run });
-        run.finish('ok', { flags: r.flags.length });
+        await run.finish('ok', { flags: r.flags.length });
         return { ...r, resume: resume?.label ?? null };
       } catch (err) {
-        run.finish('failed', { error: (err as Error).name });
+        await run.finish('failed', { error: (err as Error).name });
         throw err;
       }
     },
@@ -229,9 +229,9 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       if (recent.length >= CHECKS_PER_DAY) return reply.code(429).send({ error: 'That is a lot of fact checks for one day. Try again tomorrow.' });
       checks.set(uid, [...recent, Date.now()]);
       const background = withResume(await services.knowledge(), pickResume(db, posting.title));
-      const run = createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-check', { posting: posting.id });
+      const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-check', { posting: posting.id });
       const r = await runCheck({ db, claude: services.claude, background, posting, artifactId: v.id, letter: v.content, config, trace: run });
-      run.finish(r.check?.status === 'checked' ? 'ok' : 'failed', { flagged: r.flagged, ...(r.error ? { error: (r.error as Error).name } : {}) });
+      await run.finish(r.check?.status === 'checked' ? 'ok' : 'failed', { flagged: r.flagged, ...(r.error ? { error: (r.error as Error).name } : {}) });
       return publicCheck(r.check);
     },
   );

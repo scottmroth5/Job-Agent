@@ -57,7 +57,7 @@ async function main() {
     assertNoRunningRun(store.db, 'score');
     const knowledge = await ownerBackground(store);
     console.log(`Candidate Knowledge loaded: ${knowledge.length.toLocaleString()} characters.`);
-    const run = createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });
+    const run = await createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });
     try {
       const summary = await scorePostings({
         store,
@@ -68,7 +68,7 @@ async function main() {
         run,
         options: { ids: args.ids, allUnscored: args.allUnscored, limit: args.limit },
       });
-      const totals = run.finish(summary.aborted ? 'aborted' : summary.failures.length ? 'partial' : 'ok', summary);
+      const totals = await run.finish(summary.aborted ? 'aborted' : summary.failures.length ? 'partial' : 'ok', summary);
 
       console.log(`\nScored ${summary.scored} of ${summary.selected} postings with ${args.model} (${summary.ruleScored} by location rule).`);
       const dist = Object.entries(summary.distribution).sort(([a], [b]) => Number(b) - Number(a)).map(([s, n]) => `${s}: ${n}`).join('  ');
@@ -81,7 +81,7 @@ async function main() {
       if (summary.aborted) console.log('Stopped early after repeated failures. Check the API key and network.');
       console.log(`Cost: $${totals.costUsd.toFixed(4)} (${totals.calls} Claude calls, ${totals.cacheReadTokens} cached input tokens).`);
     } catch (err) {
-      run.finish('failed');
+      await run.finish('failed');
       throw err;
     }
   } finally {

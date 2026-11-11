@@ -41,7 +41,7 @@ async function main() {
       throw err;
     }
   }
-  const run = createJobTracer({ store }).startRun('discover', { dryRun: args.dryRun, sources: Object.keys(args.sources), limit: args.limit });
+  const run = await createJobTracer({ store }).startRun('discover', { dryRun: args.dryRun, sources: Object.keys(args.sources), limit: args.limit });
   const browser = args.details ? await createBrowser() : null;
   if (args.details && !browser) console.log('Playwright is not installed; pages that need JavaScript will be marked needs_browser.');
 
@@ -80,12 +80,12 @@ async function main() {
     if (summary.linkedinRateLimited) console.log('LinkedIn rate limited full-text requests; the rest will be retried on the next run.');
 
     const { insertedIds, ...rest } = summary;
-    run.finish(Object.values(summary.bySource).some((s) => s.errors.length || s.rateLimited) ? 'partial' : 'ok', {
+    await run.finish(Object.values(summary.bySource).some((s) => s.errors.length || s.rateLimited) ? 'partial' : 'ok', {
       ...rest,
       insertedCount: insertedIds.length,
     });
   } catch (err) {
-    run.finish('failed');
+    await run.finish('failed');
     throw err;
   } finally {
     await browser?.close();

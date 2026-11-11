@@ -82,17 +82,17 @@ export function registerInboxRoutes(app: App, { store, tasks, claude, inbox }: {
       checkTaskId = tasks.start('inbox', { by }, async (step: TaskStep, { logger }: { logger: Logger }) => {
         const gmail = inbox.gmail({ onWait: (ms) => logger.warn(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
         // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
-        const run = createJobTracer({ store, logger }).startRun('inbox', { model: inbox.cfg.model });
+        const run = await createJobTracer({ store, logger }).startRun('inbox', { model: inbox.cfg.model });
         try {
           step('Reading new mail');
           // claude is set wherever Gmail can be ready (the demo has neither, and ready() refused above).
           const s = await runInbox({ store, gmail, claude: claude as Claude, cfg: inbox.cfg, key: inbox.key(), run, log: run.log });
           for (const n of s.notices) logger.info(n);
-          run.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length });
+          await run.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length });
           step(`Done: ${s.considered} job emails, ${s.matched} linked, ${s.needsReview} to review`);
           return { considered: s.considered, matched: s.matched, needsReview: s.needsReview, opportunities: s.opportunities, statusChanges: s.statusChanges.length, notices: s.notices, failures: s.failures.length };
         } catch (err) {
-          run.finish('failed', { error: (err as Error).message });
+          await run.finish('failed', { error: (err as Error).message });
           throw err;
         }
       });

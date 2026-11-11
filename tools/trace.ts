@@ -9,8 +9,8 @@ import type { Database, Logger } from './types.ts';
 export function createJobTracer({ store, logger }: { store?: { db: Database } | null; logger?: Logger | null } = {}) {
   const tracer = createTracer({ ...(store ? { store } : {}), ...(logger ? { logger } : {}) });
   return {
-    startRun(name: string, meta?: object): Run {
-      const run = tracer.startRun(name, meta);
+    async startRun(name: string, meta?: object): Promise<Run> {
+      const run = await tracer.startRun(name, meta);
       if (store && run.id != null) store.db.prepare('UPDATE runs SET user_id = @uid WHERE id = ? AND user_id IS NULL').run(run.id);
       return run;
     },

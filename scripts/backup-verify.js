@@ -32,7 +32,7 @@ const quiet = { info() {}, warn() {}, error() {}, log() {} };
  * @returns the restore test's result plus the file's name
  */
 export async function restoreTestJob({ store, passphrase, drive, fromFile }) {
-  const run = createJobTracer({ store, logger: quiet }).startRun('restore-test', { from: fromFile ? 'file' : 'google-drive' });
+  const run = await createJobTracer({ store, logger: quiet }).startRun('restore-test', { from: fromFile ? 'file' : 'google-drive' });
   try {
     let name;
     let file;
@@ -47,10 +47,10 @@ export async function restoreTestJob({ store, passphrase, drive, fromFile }) {
       file = await from.download(newest.id);
     }
     const r = restoreTest({ file, passphrase, live: store.raw });
-    run.finish(r.ok ? 'ok' : 'failed', { file: name, tables: r.tables, rowsBackup: r.rowsBackup, rowsLive: r.rowsLive, differences: r.differences.length, problems: r.problems });
+    await run.finish(r.ok ? 'ok' : 'failed', { file: name, tables: r.tables, rowsBackup: r.rowsBackup, rowsLive: r.rowsLive, differences: r.differences.length, problems: r.problems });
     return { ...r, file: name };
   } catch (err) {
-    run.finish('failed', { error: /** @type {Error} */ (err).message });
+    await run.finish('failed', { error: /** @type {Error} */ (err).message });
     throw err;
   }
 }

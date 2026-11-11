@@ -46,7 +46,7 @@ async function main() {
   const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   const auth = getGoogleAuth();
   const browser = await createBrowser();
-  const run = createJobTracer({ store }).startRun('add', { url: input.url ?? null });
+  const run = await createJobTracer({ store }).startRun('add', { url: input.url ?? null });
   try {
     const result = await addPosting(input, {
       store,
@@ -59,10 +59,10 @@ async function main() {
       run,
       onStep: () => {}, // steps are already logged by the run
     });
-    run.finish('ok', result);
+    await run.finish('ok', result);
     console.log(result.created ? `Added job #${result.id}: scored ${result.score}${result.promoted ? ', in your pipeline' : ''}.` : `Already saved as job #${result.id}.`);
   } catch (err) {
-    run.finish('failed', { error: /** @type {Error} */ (err).message });
+    await run.finish('failed', { error: /** @type {Error} */ (err).message });
     throw err;
   } finally {
     await browser?.close();

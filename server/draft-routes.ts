@@ -39,13 +39,13 @@ export function registerDraftRoutes(app: App, { store, services }: { store: JobS
       const recent = (drafts.get(uid) ?? []).filter((t) => t > day);
       if (recent.length >= DRAFTS_PER_DAY) throw Object.assign(new Error('That is a lot of drafts for one day. Edit the last one, or try again tomorrow.'), { statusCode: 429 });
       drafts.set(uid, [...recent, Date.now()]);
-      const run = createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('draft-profile', { files: req.body.files?.length ?? 0 });
+      const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('draft-profile', { files: req.body.files?.length ?? 0 });
       try {
         const draft = await draftProfile({ claude: services.claude, input: req.body, trace: run });
-        run.finish('ok', { questions: draft.questions.length });
+        await run.finish('ok', { questions: draft.questions.length });
         return draft;
       } catch (err) {
-        run.finish('failed', { error: (err as Error).name });
+        await run.finish('failed', { error: (err as Error).name });
         throw err;
       }
     },

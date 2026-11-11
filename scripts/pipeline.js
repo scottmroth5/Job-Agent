@@ -49,15 +49,15 @@ const STEPS = ['discover', 'score', 'hunt', 'archive', 'report'];
  */
 async function step(tracer, name, fn, statusOf = (/** @type {T} */ _summary) => 'ok') {
   console.log(`[pipeline] Step ${STEPS.indexOf(name) + 1}/${STEPS.length}: ${name}`);
-  const run = tracer.startRun(name);
+  const run = await tracer.startRun(name);
   try {
     const summary = await fn(run);
-    run.finish(statusOf(summary), summary);
+    await run.finish(statusOf(summary), summary);
     return summary;
   } catch (err) {
     const e = /** @type {Error} */ (err);
     run.log('error', `${name} failed: ${e.name}: ${e.message}`);
-    run.finish('failed', { error: `${e.name}: ${e.message}` });
+    await run.finish('failed', { error: `${e.name}: ${e.message}` });
     return null;
   }
 }
@@ -74,7 +74,7 @@ async function main() {
   }
   for (const name of ['pipeline', 'discover', 'score', 'hunt']) assertNoRunningRun(store.db, name);
   const tracer = createJobTracer({ store });
-  const pipelineRun = tracer.startRun('pipeline');
+  const pipelineRun = await tracer.startRun('pipeline');
   // Google (Docs, Drive, the report email) is the owner's sign-in; others' runs never touch it.
   const auth = owner ? getGoogleAuth() : null;
   const ownerAuth = /** @type {OAuth2Client} */ (auth); // read only where owner is true
@@ -112,7 +112,7 @@ async function main() {
       const r = archivePostings(store.db);
       return { archived: r.archived.map(({ id, reason }) => ({ id, reason })), remaining: r.remaining };
     });
-    pipelineRun.finish(knowledge ? 'ok' : 'partial');
+    await pipelineRun.finish(knowledge ? 'ok' : 'partial');
 
     console.log(`[pipeline] Step ${STEPS.length}/${STEPS.length}: report`);
     // The report goes only to the owner (it is job data; others see their results in the app).
@@ -126,7 +126,7 @@ async function main() {
       console.log(`Sent "${r.subject}" (${r.text}).`);
     }
   } catch (err) {
-    pipelineRun.finish('failed');
+    await pipelineRun.finish('failed');
     throw err;
   } finally {
     await browser?.close();
