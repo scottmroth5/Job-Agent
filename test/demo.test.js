@@ -83,11 +83,11 @@ test('the seed builds a full sample search: jobs in every stage, scores, letters
 
 test('the seed only ever replaces a database it made', async () => {
   const { dbPath } = await seeded();
-  assert.equal(isDemoDatabase(dbPath), true);
+  assert.equal(await isDemoDatabase(dbPath), true);
   const real = join(mkdtempSync(join(tmpdir(), 'real-')), 'job-agent.db');
   openJobStore(real).close();
-  assert.equal(isDemoDatabase(real), false);
-  assert.equal(isDemoDatabase(join(tmpdir(), 'no-such-dir', 'job-agent.db')), true);
+  assert.equal(await isDemoDatabase(real), false);
+  assert.equal(await isDemoDatabase(join(tmpdir(), 'no-such-dir', 'job-agent.db')), true);
 });
 
 test('demo mode refuses every request that would change data, without sign-in, except the prompt preview', async () => {

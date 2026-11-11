@@ -14,7 +14,7 @@
 /** A parsed schedule: weekdays (days) or a day of the month, a time, and, for "|" specs, each part. */
 export type Schedule = { spec: string; hour: number; minute: number; days: Set<number> | null; monthDay?: number; parts?: Schedule[] };
 /** A scheduled job: run starts it and resolves when it is done; lastRanAt is when it last started (ISO), from the runs table. */
-export type ScheduledJob = { name: string; schedule: Schedule; run: () => Promise<unknown>; lastRanAt: () => string | null };
+export type ScheduledJob = { name: string; schedule: Schedule; run: () => Promise<unknown>; lastRanAt: () => string | null | Promise<string | null> };
 type Timer = ReturnType<typeof setInterval>;
 
 const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -149,12 +149,12 @@ export function createScheduler({
   };
 
   return {
-    /** Starts checking, after running any job whose last scheduled time was missed. */
-    start() {
+    /** Starts checking, after running any job whose last scheduled time was missed (lastRanAt reads the runs table). */
+    async start() {
       const t = now();
       for (const job of state) {
         const missed = lastRun(job.schedule, t);
-        const ran = job.lastRanAt();
+        const ran = await job.lastRanAt();
         if (missed && t.getTime() - missed.getTime() <= CATCH_UP_HOURS * 3600 * 1000 && (!ran || new Date(ran) < missed)) void fire(job, 'missed while the server was off');
       }
       timer = every(tick, CHECK_EVERY_MS);

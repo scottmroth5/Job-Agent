@@ -1,6 +1,7 @@
 // Follow-ups (agents/follow-ups.ts): the user's stale-application days (Settings > Follow-ups), closing applications
 // with no reply as no response (one job, or every stale one from Home), and Find someone to contact for one job (a
 // task on the user's AI, saved as a note on the job; agents/hunt/find-contact.ts).
+import { asEngine } from '../db/engine/index.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_STALE_DAYS, FOLLOW_UP_FROM, MAX_STALE_DAYS, MIN_STALE_DAYS } from '../agents/follow-ups.ts';
 import { findContact } from '../agents/hunt/find-contact.ts';
@@ -24,7 +25,7 @@ export function registerFollowUpRoutes(
   // never spends anything, and saves nothing. Registered only in the demo.
   if (demo) {
     app.get<{ Params: IdParams }>('/api/postings/:id/find-contact/sample', { schema: { summary: 'Demo only: a sample Find someone to contact answer for this job (no AI, nothing saved)', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
-      const p = db.prepare('SELECT company, title, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id) as { company: string; title: string; applied_on: string | null } | undefined;
+      const p = await asEngine(db).prepare('SELECT company, title, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id) as { company: string; title: string; applied_on: string | null } | undefined;
       if (!p) return reply.code(404).send({ error: 'Job not found' });
       return { sample: true, markdown: demoContactResult({ company: p.company, title: p.title, appliedOn: p.applied_on }) };
     });
@@ -57,7 +58,7 @@ export function registerFollowUpRoutes(
   });
 
   app.post<{ Params: IdParams }>('/api/postings/:id/close-no-response', { schema: { summary: 'Close one application with no reply as no response', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
-    if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
+    if (!await asEngine(db).prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
     const jobs = await closeNoResponse(db, { ids: [req.params.id] });
     if (!jobs.length) return reply.code(409).send({ error: 'This job is not an application waiting for a reply.' });
     return { closed: 1, jobs };
@@ -69,7 +70,7 @@ export function registerFollowUpRoutes(
     async (req, reply) => {
       if (!services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
       const id = req.params.id;
-      if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id)) return reply.code(404).send({ error: 'Job not found' });
+      if (!await asEngine(db).prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id)) return reply.code(404).send({ error: 'Job not found' });
       const uid = req.uid ?? OWNER_ID;
       const day = Date.now() - 24 * 3600 * 1000;
       const recent = (searches.get(uid) ?? []).filter((t) => t > day);

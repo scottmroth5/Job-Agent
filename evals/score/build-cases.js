@@ -1,6 +1,7 @@
 // Builds scoring eval cases from past postings with a known outcome: applied (positive) or
 // passed (negative). Text comes from the pasted job description, or is fetched again.
 // Cases contain personal job-search data, so they live in gitignored data/evals/.
+import { asEngine } from '../../db/engine/index.ts';
 import { resolveDetails } from '../../agents/discovery/details.ts';
 import { jobIdFromUrl } from '../../agents/discovery/sources/linkedin.ts';
 import { checkLocation } from '../../tools/location.ts';
@@ -25,7 +26,7 @@ export const MIN_CASE_TEXT = 500;
  * @returns {Promise<{cases: ScoreCase[], skipped: {noText: number}, fetched: number}>}
  */
 export async function buildCases({ db, http, browser = null, config, log = () => {} }) {
-  const found = db
+  const found = await asEngine(db)
     .prepare(`SELECT p.id, p.company, p.title, p.location, p.url, p.status, p.jd_text,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-analysis' ORDER BY s.id DESC LIMIT 1) AS v1_score,
         (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v1-quick' ORDER BY s.id DESC LIMIT 1) AS v1_quick

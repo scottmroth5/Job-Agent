@@ -5,6 +5,7 @@
 // item for all of them, in a job's Next step box that job.
 // Each item opens its job. Built from status groups, so statuses added later count automatically.
 // With jobId it is one job's next steps (the job panel's Next step box): every open reminder, however far out.
+import { asEngine } from '../db/engine/index.ts';
 import { lookups, sqlList } from '../agents/lookups.ts';
 import { waitingApplications } from '../agents/follow-ups.ts';
 import type { Database } from '../tools/types.ts';
@@ -20,7 +21,7 @@ export async function today(db: Database, { now = new Date(), jobId = null }: { 
   const params = jobId == null ? {} : { jobId: Number(jobId) };
   const lk = await lookups(db);
   const horizon = new Date(now.getTime() + REMINDER_DAYS * DAY).toISOString();
-  const reminders = (db
+  const reminders = (await asEngine(db)
     .prepare(
       `SELECT r.id, r.kind, r.due_at AS due, r.note, p.id AS jobId, p.company, p.title
        FROM reminders r JOIN postings p ON p.id = r.posting_id AND p.user_id = r.user_id
@@ -40,7 +41,7 @@ export async function today(db: Database, { now = new Date(), jobId = null }: { 
     }));
   const decision = lk.ids('status', 'decision');
   const offers = decision.length
-    ? (db
+    ? (await asEngine(db)
         .prepare(
           `SELECT p.id AS jobId, p.company, p.title, p.status FROM postings p
            WHERE p.user_id = @uid AND p.status IN ${sqlList(decision)} AND p.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} ${one}
