@@ -6,6 +6,7 @@ import { trimBody } from './atsParse.ts';
 import { classifyEmail, looksLikeInjection } from './classify.ts';
 import { decideLink, applyActions, createOpportunity } from './actions.ts';
 import { insertEmail, updateEmail, emailSeen, logDecision, isContact, isCompanyDomain, learnDomain } from './store.ts';
+import { asEngine } from '../../db/engine/index.ts';
 import { encrypt } from './crypto.ts';
 import { makeEvent, createEmitter } from './events.ts';
 import { labelName } from './gmail.ts';
@@ -57,13 +58,13 @@ const IGNORED_LABELS = ['SPAM', 'TRASH', 'CHAT', 'DRAFT'];
  * (an email with instructions aimed at an AI is held for review with no action, even when a rule links it,
  * because its type still comes from the model). Shared by the inbox run and the inbox eval.
  */
-export function decideEmail(
+export async function decideEmail(
   db: Database,
   email: Parameters<typeof matchEmail>[1],
   c: Pick<Classification, 'applicationId' | 'confidence' | 'type'>,
   { cfg, open }: { cfg: Pick<InboxConfig, 'atsDomains' | 'autoLinkAt'>; open: OpenApplication[] },
-): LinkDecision {
-  const ruleMatch = matchEmail(db, email, { atsDomains: cfg.atsDomains, open });
+): Promise<LinkDecision> {
+  const ruleMatch = await matchEmail(db, email, { atsDomains: cfg.atsDomains, open });
   const link = decideLink({ ruleMatch, classification: c, threshold: cfg.autoLinkAt });
   if (!looksLikeInjection(email)) return link;
   return { ...link, postingId: null, opportunity: false, reviewStatus: 'needs_review' as const, reason: 'contains instructions aimed at an AI; no action taken', bestGuess: link.postingId ?? link.bestGuess };
@@ -86,7 +87,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
   const { db } = store;
   const { mode = 'new', days = cfg.backfillDays, dryRun = false } = options;
   const emitter = createEmitter();
-  const prompt = getPrompt(db, 'inbox-classify');
+  const prompt = await getPrompt(db, 'inbox-classify');
   const summary: InboxSummary = { mode, fetched: 0, alreadySeen: 0, skipped: 0, considered: 0, matched: 0, needsReview: 0, opportunities: 0, statusChanges: [], notices: [], labelErrors: 0, failures: [], dryRun };
 
   const batch = mode === 'backfill' ? await backfillMessageIds({ gmail, days }) : await newMessageIds({ gmail, db, fallbackDays: cfg.fallbackDays });
@@ -96,7 +97,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
   const me = (await gmail.profile()).emailAddress;
   // "A thread I started": any thread I sent a message in, over the backfill window (one cheap list call).
   const sentThreads = await gmail.sentThreadIds(Math.max(days, cfg.backfillDays));
-  let open = listOpenApplications(db);
+  let open = await listOpenApplications(db);
   const toClassify: Array<{ bodyChars: number }> = [];
 
   for (const [i, id] of batch.messageIds.entries()) {
@@ -137,12 +138,12 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
       log('warn', `Classification failed for one message: ${e.name}`);
       continue;
     }
-    const link = decideEmail(db, email, c, { cfg, open });
+    const link = await decideEmail(db, email, c, { cfg, open });
     const decidedBy = link.rule && link.rule !== 'model' ? `rule:${link.rule}` : `model:${c.model}`;
     const at = now();
 
     let company: string | null = null;
-    store.tx(() => {
+    await asEngine(db).tx(async () => {
       const emailId = insertEmail(
         db,
         {
@@ -165,7 +166,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
       emitter.emit(makeEvent('email.received', { emailId }, at));
 
       if (link.postingId) {
-        const r = applyActions(db, { email: row, postingId: link.postingId, c, decidedBy, promptVersion: c.promptVersion, now: at });
+        const r = await applyActions(db, { email: row, postingId: link.postingId, c, decidedBy, promptVersion: c.promptVersion, now: at });
         learnDomain(db, link.postingId, email.senderDomain, cfg);
         company = db.prepare('SELECT company FROM postings WHERE id = ? AND user_id = @uid').pluck().get(link.postingId) as string;
         summary.matched += 1;
@@ -178,7 +179,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
           emitter.emit(makeEvent('email.needs_review', { emailId, postingId: link.postingId }, at));
         }
       } else if (link.opportunity) {
-        const postingId = createOpportunity(db, { email: row, c, decidedBy, promptVersion: c.promptVersion, now: at });
+        const postingId = await createOpportunity(db, { email: row, c, decidedBy, promptVersion: c.promptVersion, now: at });
         updateEmail(db, emailId, { postingId, matchRule: 'model', bodyEnc: encrypt(email.body, key) }, at);
         company = c.extracted.company;
         summary.opportunities += 1;
@@ -192,7 +193,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
     });
     if (company) {
       // Linked emails can also open new applications to match (an opportunity), so refresh the list.
-      open = listOpenApplications(db);
+      open = await listOpenApplications(db);
       try {
         await gmail.addThreadLabel(email.threadId, await gmail.ensureLabel(labelName(company)));
       } catch (err) {
@@ -206,7 +207,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
     summary.estimatedUsd = estimateCostUsd(toClassify, open.length);
   } else if (!summary.failures.length) {
     // On failures the cursor stays put, so the next run sees those messages again (stored ones are skipped).
-    saveCursor(db, batch.nextHistoryId);
+    await saveCursor(db, batch.nextHistoryId);
   }
   summary.events = emitter.counts();
   return summary;

@@ -197,7 +197,7 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
   // 3. Location, track, pay and hours
   const rate = parseRate(item.rateText);
   const hours = parseHours(item.hoursText);
-  const lk = lookups(db);
+  const lk = await lookups(db);
   if (input.track && !lk.selectable('track', input.track)) throw new Error(`"${input.track}" is not an available track.`);
   const track = input.track ?? detectTrack({ ...item, hoursMax: hours?.max });
   const locationCheck = checkLocation({ location: item.location, workplace: item.workplace, text: item.description }, config.search.homeLocations);
@@ -242,7 +242,7 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
       }).lastInsertRowid,
   );
   db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'user', ?)").run(id, lk.role('status', 'default'), nowIso);
-  adoptNotesText(db, { postingId: id, source: 'user' });
+  await adoptNotesText(db, { postingId: id, source: 'user' });
   step(`Saved as job #${id} (${lk.label('track', track)})`);
 
   // 5. Score

@@ -217,8 +217,8 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
   const prepInput = normalizePrepInput(input);
   const analysisJson = db.prepare("SELECT analysis_json FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule') ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | null | undefined;
   const letter = db.prepare("SELECT content FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'cover_letter' ORDER BY id DESC LIMIT 1").pluck().get(postingId) as string | undefined;
-  const prompt = getPrompt(db, 'meeting-prep');
-  const notes = notesForPrompt(listNotes(db, postingId));
+  const prompt = await getPrompt(db, 'meeting-prep');
+  const notes = notesForPrompt(await listNotes(db, postingId));
   const resume = pickResume(db, posting.title); // the user's resume for this job (agents/resumes.ts), if any
 
   const people = prepInput.attendees.length;
@@ -260,7 +260,7 @@ export async function writeMeetingPrep({ store, config, claude, knowledge, drive
     onStep('Saving it as a Google Doc');
     try {
       const folderId = await ensurePrepFolder(drive, db);
-      const name = prepDocName(letterHeader(db, config).name, posting.company, prepInput.attendees);
+      const name = prepDocName((await letterHeader(db, config)).name, posting.company, prepInput.attendees);
       const doc = await drive.createDocFromHtml({ name, html: prepHtml(content), folderId });
       db.prepare('UPDATE meeting_preps SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
       docUrl = doc.url;

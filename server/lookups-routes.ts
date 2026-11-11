@@ -11,12 +11,14 @@ const valueParams = { type: 'object', required: ['list', 'id'], properties: { li
 const settingsSchema = { type: 'object', additionalProperties: false, properties: { scorePrompt: { type: 'string', enum: SCORE_PROMPTS }, terms: { type: 'boolean' } } };
 
 /** Everything the UI needs to show and choose values: lists (archived values included, flagged), groups, roles. */
-export function lookupsPayload(db: Database, { counts = false }: { counts?: boolean } = {}) {
-  const lk = lookups(db);
+export async function lookupsPayload(db: Database, { counts = false }: { counts?: boolean } = {}) {
+  const lk = await lookups(db);
+  const usage: Record<string, Record<string, number>> = {};
+  if (counts) for (const list of LISTS) usage[list] = await usageCounts(db, list);
   return {
     lists: Object.fromEntries(
       LISTS.map((list) => {
-        const used = counts ? usageCounts(db, list) : null;
+        const used = counts ? usage[list] : null;
         return [list, lk.values(list).map((v) => ({ ...v, ...(used ? { jobs: used[v.id] ?? 0 } : {}) }))];
       }),
     ),
@@ -27,9 +29,9 @@ export function lookupsPayload(db: Database, { counts = false }: { counts?: bool
 }
 
 export function registerLookupRoutes(app: App, { db }: { db: Database }) {
-  app.get('/api/lookups', { schema: { summary: 'Status, stage, and track lists with their groups and roles', response: { 200: anyObject } } }, async () => lookupsPayload(db));
+  app.get('/api/lookups', { schema: { summary: 'Status, stage, and track lists with their groups and roles', response: { 200: anyObject } } }, async () => await lookupsPayload(db));
 
-  app.get('/api/admin/lookups', { schema: { summary: 'The lists with how many jobs use each value', response: { 200: anyObject } } }, async () => lookupsPayload(db, { counts: true }));
+  app.get('/api/admin/lookups', { schema: { summary: 'The lists with how many jobs use each value', response: { 200: anyObject } } }, async () => await lookupsPayload(db, { counts: true }));
 
   app.post<{ Params: { list: string }; Body: { label: string; group?: string; settings?: ValueSettings } }>(
     '/api/admin/lookups/:list',
@@ -42,8 +44,8 @@ export function registerLookupRoutes(app: App, { db }: { db: Database }) {
       },
     },
     async (req) => {
-      const id = addValue(db, req.params.list, req.body);
-      return { id, ...lookupsPayload(db, { counts: true }) };
+      const id = await addValue(db, req.params.list, req.body);
+      return { id, ...await lookupsPayload(db, { counts: true }) };
     },
   );
 
@@ -71,9 +73,9 @@ export function registerLookupRoutes(app: App, { db }: { db: Database }) {
     async (req) => {
       const { list, id } = req.params;
       const { move, ...patch } = req.body;
-      if (move) moveValue(db, list, id, move === 'up' ? -1 : 1);
-      if (Object.keys(patch).length) updateValue(db, list, id, patch);
-      return lookupsPayload(db, { counts: true });
+      if (move) await moveValue(db, list, id, move === 'up' ? -1 : 1);
+      if (Object.keys(patch).length) await updateValue(db, list, id, patch);
+      return await lookupsPayload(db, { counts: true });
     },
   );
 
@@ -88,8 +90,8 @@ export function registerLookupRoutes(app: App, { db }: { db: Database }) {
       },
     },
     async (req) => {
-      setRole(db, req.params.list, req.body.role, req.body.valueId);
-      return lookupsPayload(db, { counts: true });
+      await setRole(db, req.params.list, req.body.role, req.body.valueId);
+      return await lookupsPayload(db, { counts: true });
     },
   );
 }

@@ -30,35 +30,35 @@ export function registerFollowUpRoutes(
     });
   }
   const searches = new Map<number, number[]>(); // uid -> timestamps in the last day
-  const settings = () => ({ staleDays: staleDays(db), defaultStaleDays: DEFAULT_STALE_DAYS, followUpFrom: FOLLOW_UP_FROM, min: MIN_STALE_DAYS, max: MAX_STALE_DAYS });
+  const settings = async () => ({ staleDays: await staleDays(db), defaultStaleDays: DEFAULT_STALE_DAYS, followUpFrom: FOLLOW_UP_FROM, min: MIN_STALE_DAYS, max: MAX_STALE_DAYS });
 
   app.get('/api/follow-ups', { schema: { summary: 'Your follow-up settings and how many applications are waiting: worth a follow-up, and stale', response: { 200: anyObject } } }, async () => {
-    const w = waitingApplications(db);
-    return { ...settings(), followUp: w.followUp.length, stale: w.stale.length };
+    const w = await waitingApplications(db);
+    return { ...await settings(), followUp: w.followUp.length, stale: w.stale.length };
   });
 
   app.put<{ Body: { staleDays: number } }>(
     '/api/follow-ups/settings',
     { schema: { summary: 'Set the days with no reply after which an application is stale', body: { type: 'object', required: ['staleDays'], additionalProperties: false, properties: { staleDays: { type: 'integer' } } }, response: { 200: anyObject } } },
     async (req) => {
-      setStaleDays(db, req.body.staleDays);
-      return settings();
+      await setStaleDays(db, req.body.staleDays);
+      return await settings();
     },
   );
 
   app.get('/api/follow-ups/stale', { schema: { summary: 'Your stale applications (no reply after your stale days), oldest first; nothing changes', response: { 200: anyObject } } }, async () => ({
-    staleDays: staleDays(db),
-    jobs: closeNoResponse(db, { dryRun: true }),
+    staleDays: await staleDays(db),
+    jobs: await closeNoResponse(db, { dryRun: true }),
   }));
 
   app.post('/api/follow-ups/close-stale', { schema: { summary: 'Close every stale application (no reply after your stale days) as no response', response: { 200: anyObject } } }, async () => {
-    const jobs = closeNoResponse(db);
+    const jobs = await closeNoResponse(db);
     return { closed: jobs.length, jobs };
   });
 
   app.post<{ Params: IdParams }>('/api/postings/:id/close-no-response', { schema: { summary: 'Close one application with no reply as no response', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
     if (!db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(req.params.id)) return reply.code(404).send({ error: 'Job not found' });
-    const jobs = closeNoResponse(db, { ids: [req.params.id] });
+    const jobs = await closeNoResponse(db, { ids: [req.params.id] });
     if (!jobs.length) return reply.code(409).send({ error: 'This job is not an application waiting for a reply.' });
     return { closed: 1, jobs };
   });

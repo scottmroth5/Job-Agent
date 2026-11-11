@@ -31,7 +31,7 @@ async function main() {
   const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   try {
     if (args.dryRun) {
-      const postings = selectForHunt(store.db, { ids: args.ids });
+      const postings = await selectForHunt(store.db, { ids: args.ids });
       console.log(`DRY RUN: ${postings.length} postings need tweaks, a letter, or a letter Doc.`);
       for (const p of postings) {
         const needs = [!p.has_tweaks && 'tweaks', !p.has_letter && 'letter', p.letter_missing_doc && 'Doc only'].filter(Boolean).join(', ');

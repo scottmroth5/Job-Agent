@@ -3,7 +3,7 @@
 // is missing. At most one email per kind of problem per day (the day is kept in app_settings as alert:<key>, so a
 // restart never resends), and with once, none again until it has recovered. Emails go only to the owner's own address
 // (EMAIL_ADDRESS, the same as the run report) and carry job names, dates and error messages only, like the log lines.
-import { getSetting, setSetting } from '../db/settings.ts';
+import { claimSetting } from '../db/settings.ts';
 import { localDay } from '../tools/dates.ts';
 import type { Database } from 'better-sqlite3';
 
@@ -24,9 +24,8 @@ export function createAlerts({ db, send, to, appUrl = () => '', clock = () => ne
   /** Sends one email for this kind of problem, unless one went out today (or, with once, since it last recovered). */
   async function alert(k: string, subject: string, text: string, { once = false } = {}) {
     const today = localDay(clock());
-    const last = getSetting(db, key(k));
-    if (last === today || (once && last)) return false;
-    setSetting(db, key(k), today);
+    // The check and the mark are one transaction, so two failures at once send one email.
+    if (!(await claimSetting(db, key(k), today, (last) => last !== today && !(once && last)))) return false;
     log.info?.(`[alert] ${k}`);
     const address = to();
     if (!send || !address) return false;

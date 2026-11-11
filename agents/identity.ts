@@ -55,19 +55,19 @@ export function rekeyPostings(db: Database) {
  * SQL condition (on alias q) for a copy worth pointing out: still in play, or one the user acted on.
  * Copies already archived as duplicates or skipped (status new, or changed by the agent) are left out.
  */
-export function liveCopySql(db: Database) {
-  const lk = lookups(db);
+export async function liveCopySql(db: Database) {
+  const lk = await lookups(db);
   const duplicate = lk.role('status', 'duplicate');
   return `q.status NOT IN ${sqlList(duplicate ? [duplicate] : [])} AND (q.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR (q.status NOT IN ${sqlList(lk.ids('status', 'evaluate'))}
   AND COALESCE((SELECT h.changed_by FROM status_history h WHERE h.posting_id = q.id AND h.user_id = q.user_id ORDER BY h.id DESC LIMIT 1), '') != 'agent'))`;
 }
 
 /** Other postings that are the same job as this one (same identity key) and still matter, oldest first. */
-export function findCopies(db: Database, posting: Named & { id: number }) {
+export async function findCopies(db: Database, posting: Named & { id: number }) {
   const key = identityKey(posting);
   if (!key) return [];
   return db
     .prepare(`SELECT id, company, title, stage, status, applied_on AS appliedOn, discovered_on AS discoveredOn FROM postings q
-      WHERE user_id = @uid AND company_title_key = ? AND id != ? AND ${liveCopySql(db)} ORDER BY id`)
+      WHERE user_id = @uid AND company_title_key = ? AND id != ? AND ${await liveCopySql(db)} ORDER BY id`)
     .all(key, posting.id) as Array<{ id: number; company: string; title: string; stage: string; status: string; appliedOn: string | null; discoveredOn: string }>;
 }

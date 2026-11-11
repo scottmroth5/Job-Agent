@@ -11,13 +11,14 @@ import { localDay } from '../tools/dates.ts';
 import { describeVersion } from '../agents/prompts.ts';
 import { budgetStatus } from '../agents/budget.ts';
 import { currentUserId } from '../db/scope.ts';
+import { asEngine } from '../db/engine/index.ts';
 import { OWNER_ID } from '../db/users.ts';
 import type { Database } from '../tools/types.ts';
 import type { JobSearchConfig } from '../tools/config.ts';
 import type { Rate, RateUnit } from '../tools/rates.ts';
 import type { PostingsRow } from '../db/types.ts';
 
-type Lookups = ReturnType<typeof lookups>;
+type Lookups = Awaited<ReturnType<typeof lookups>>;
 /** The parts of the user's config these reads use. */
 type QueryConfig = Partial<Pick<JobSearchConfig, 'fractional' | 'search'>>;
 /** A posting row from base(): the job with its latest score and letter, and counts. */
@@ -92,17 +93,20 @@ const awaitingDescription = (lk: Lookups) => `(${NO_TEXT} AND p.status IN ${sqlL
 
 // The row query; db supplies the lists (agents/lookups.ts) the status and stage conditions use. p is the current
 // user's postings only (a subquery SQLite flattens, so callers add their own WHERE and indexes still apply).
-const base = (db: Database, lk = lookups(db)) => `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
+const base = async (db: Database, lkGiven?: Lookups) => {
+  const lk = lkGiven ?? (await lookups(db));
+  return `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
     ls.model AS score_model, ls.prompt_version AS score_prompt_version, ls.created_at AS scored_at,
     ${awaitingDescription(lk)} AS awaiting_description,
     -- flagged only while this job still waits on the user (new) and another live copy exists
-    p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.user_id = p.user_id AND q.company_title_key = p.company_title_key AND q.id != p.id AND ${liveCopySql(db)}) AS shares_key,
+    p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.user_id = p.user_id AND q.company_title_key = p.company_title_key AND q.id != p.id AND ${await liveCopySql(db)}) AS shares_key,
     ll.doc_url AS letter_url, ll.doc_name AS letter_name, ll.flags_json AS letter_flags, ll.id AS letter_id,
     EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks') AS has_tweaks,
     (SELECT COUNT(*) FROM attachments f WHERE f.posting_id = p.id AND f.user_id = p.user_id) AS attachment_count
   FROM (SELECT * FROM postings WHERE user_id = @uid) p
   LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id
   LEFT JOIN artifacts ll ON ll.id = ${LATEST_LETTER} AND ll.user_id = p.user_id`;
+};
 
 /**
  * The pay to show: the job's own terms (fractional rate, or what the user typed), then the salary the
@@ -157,8 +161,8 @@ function toRow(r: JobRow, config: QueryConfig) {
 }
 
 /** Filtered list. filters: { track, stage, status, needsDescription, discoveredAfter, q, minScore, limit } ('all' or empty means no filter; status 'active' (Needs action) or 'progress' (In progress) means those status groups). */
-export function listPostings(db: Database, filters: PostingFilters = {}, config: QueryConfig = {}) {
-  const lk = lookups(db);
+export async function listPostings(db: Database, filters: PostingFilters = {}, config: QueryConfig = {}) {
+  const lk = await lookups(db);
   const where: string[] = [];
   const params: Record<string, string | number> = {};
   if (filters.track && filters.track !== 'all') {
@@ -189,14 +193,14 @@ export function listPostings(db: Database, filters: PostingFilters = {}, config:
     params.minScore = Number(filters.minScore);
   }
   const limit = Math.min(Number(filters.limit) || 500, 2000);
-  const sql = `${base(db)} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+  const sql = `${await base(db)} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY COALESCE(ls.score, 0) DESC, p.discovered_on DESC, p.id DESC LIMIT ${limit}`;
   return (db.prepare(sql).all(params) as JobRow[]).map((r) => toRow(r, config));
 }
 
 /** Full detail for one posting, or null. */
-export function getPosting(db: Database, id: number, config: QueryConfig = {}) {
-  const r = db.prepare(`${base(db)} WHERE p.id = ?`).get(id) as JobRow | undefined;
+export async function getPosting(db: Database, id: number, config: QueryConfig = {}) {
+  const r = db.prepare(`${await base(db)} WHERE p.id = ?`).get(id) as JobRow | undefined;
   if (!r) return null;
   const tweaks = db
     .prepare("SELECT content, model, created_at, resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
@@ -210,12 +214,12 @@ export function getPosting(db: Database, id: number, config: QueryConfig = {}) {
   const resumeLabel = (rid: string | null) => (rid ? (db.prepare('SELECT label FROM resumes WHERE id = ? AND user_id = @uid').pluck().get(rid) ?? null) : null);
   return {
     ...toRow(r, config),
-    copies: findCopies(db, r),
+    copies: await findCopies(db, r),
     attachments: listAttachments(db, r.id),
     meetingPreps: listPreps(db, r.id),
-    noteEntries: listNotes(db, r.id),
+    noteEntries: await listNotes(db, r.id),
     analysis: parse(r.analysis_json),
-    scoreDetails: scoreDetails(db, r),
+    scoreDetails: await scoreDetails(db, r),
     notes: r.notes,
     text: r.jd_text ?? r.fetched_text ?? null,
     textSource: r.jd_text ? 'pasted' : r.fetched_text ? 'fetched' : null,
@@ -236,7 +240,7 @@ export function getPosting(db: Database, id: number, config: QueryConfig = {}) {
  * How the current score was made, for the job panel: when, by which model, from the posting text or the title alone
  * (capped), with which prompt (agents/prompts.ts describeVersion), and whether text has arrived since a capped score.
  */
-function scoreDetails(db: Database, r: JobRow) {
+async function scoreDetails(db: Database, r: JobRow) {
   if (r.score == null) return null;
   const analysis = parse(r.analysis_json) ?? {};
   const capped = analysis.uncappedScore != null;
@@ -248,7 +252,7 @@ function scoreDetails(db: Database, r: JobRow) {
     from: r.score_source === 'v1-quick' || capped ? 'title' : String(r.score_source).startsWith('v1') ? 'v1' : r.score_source === 'v2-rule' ? 'rule' : 'text',
     uncappedScore: capped ? analysis.uncappedScore : null,
     textSinceScore: capped && hasText,
-    prompt: r.score_source === 'v2' ? describeVersion(db, lookups(db).scorePrompt(r.track), r.score_prompt_version) : null,
+    prompt: r.score_source === 'v2' ? await describeVersion(db, (await lookups(db)).scorePrompt(r.track), r.score_prompt_version) : null,
   };
 }
 
@@ -260,75 +264,78 @@ function scoreDetails(db: Database, r: JobRow) {
  * pointing at the other.
  * Marking a job applied without a date sets today's date. Returns the updated detail, or null if not found.
  */
-export function updatePosting(db: Database, id: number, patch: PostingPatch, config: QueryConfig = {}, now = new Date()) {
-  const lk = lookups(db);
-  const current = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
-  if (!current) return null;
-  const set: Partial<PostingsRow> = {};
-  const nowIso = now.toISOString();
-  // A new choice must be a value in its list that is not archived; a job keeps an archived value it already has.
-  for (const list of ['status', 'stage', 'track'] as const) {
-    if (patch[list] !== undefined && patch[list] !== current[list] && !lk.selectable(list, patch[list] as string)) {
-      throw Object.assign(new Error(`"${patch[list]}" is not an available ${list}. Choose one from the list.`), { statusCode: 400 });
-    }
-  }
-  if (patch.status !== undefined && patch.status !== current.status) {
-    set.status = patch.status;
-    if (lk.groupOf('status', patch.status) === 'waiting' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = localDay(now);
-  }
-  if (patch.appliedOn !== undefined) set.applied_on = patch.appliedOn || null;
-  const newNotes: Array<{ body: string; source: string }> = [];
-  if (patch.notes?.trim()) newNotes.push({ body: patch.notes, source: 'user' });
-  if (patch.stage !== undefined) set.stage = patch.stage;
-  if (patch.track !== undefined) set.track = patch.track;
-  if (patch.title !== undefined && patch.title.trim()) set.title = patch.title.trim();
-  if (patch.company !== undefined && patch.company.trim()) set.company = patch.company.trim();
-  if (set.title !== undefined || set.company !== undefined) {
-    set.company_title_key = storedKey({ company: set.company ?? current.company, title: set.title ?? current.title });
-  }
-  if (patch.duplicateOf !== undefined) {
-    const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf) as
-      | Pick<PostingsRow, 'id' | 'company' | 'title' | 'stage' | 'status'>
-      | undefined;
-    if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
-    const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${localDay(now)}.`;
-    set.stage = lk.role('stage', 'archive') as string; // the stage list always has an archive role
-    const duplicate = lk.role('status', 'duplicate') as string; // 023 sets it, and a role is moved, never removed
-    if (current.status !== duplicate) set.status = duplicate;
-    newNotes.push({ body: note, source: 'agent' });
-  }
-  if (patch.location !== undefined) set.location = patch.location || null;
-  if (patch.description !== undefined) set.jd_text = patch.description?.trim() || null;
-  if (patch.rateText !== undefined) {
-    const rate = parseRate(patch.rateText);
-    Object.assign(set, { rate_text: patch.rateText || null, rate_min: rate?.min ?? null, rate_max: rate?.max ?? null, rate_unit: rate?.unit ?? null });
-  }
-  if (patch.hoursText !== undefined) {
-    const hours = parseHours(patch.hoursText);
-    Object.assign(set, { hours_min: hours?.min ?? null, hours_max: hours?.max ?? null });
-  }
-  if (set.location !== undefined || set.jd_text !== undefined) {
-    set.location_check = checkLocation(
-      { location: set.location ?? current.location, workplace: current.workplace, text: set.jd_text ?? current.jd_text ?? current.fetched_text },
-      config.search?.homeLocations ?? [],
-    );
-  }
-  const keys = Object.keys(set);
-  if (keys.length || newNotes.length) {
-    db.transaction(() => {
-      if (keys.length) db.prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id AND user_id = @uid`).run({ ...set, updated_at: nowIso, id });
-      if (set.status) {
-        db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
+export async function updatePosting(db: Database, id: number, patch: PostingPatch, config: QueryConfig = {}, now = new Date()) {
+  // The read of the job and the writes are one transaction, so two edits at once can not record a stale status.
+  return asEngine(db).tx(async () => {
+    const lk = await lookups(db);
+    const current = db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
+    if (!current) return null;
+    const set: Partial<PostingsRow> = {};
+    const nowIso = now.toISOString();
+    // A new choice must be a value in its list that is not archived; a job keeps an archived value it already has.
+    for (const list of ['status', 'stage', 'track'] as const) {
+      if (patch[list] !== undefined && patch[list] !== current[list] && !lk.selectable(list, patch[list] as string)) {
+        throw Object.assign(new Error(`"${patch[list]}" is not an available ${list}. Choose one from the list.`), { statusCode: 400 });
       }
-      for (const n of newNotes) addNote(db, id, n.body, { source: n.source, now });
-    })();
-  }
-  return getPosting(db, id, config);
+    }
+    if (patch.status !== undefined && patch.status !== current.status) {
+      set.status = patch.status;
+      if (lk.groupOf('status', patch.status) === 'waiting' && !current.applied_on && patch.appliedOn === undefined) set.applied_on = localDay(now);
+    }
+    if (patch.appliedOn !== undefined) set.applied_on = patch.appliedOn || null;
+    const newNotes: Array<{ body: string; source: string }> = [];
+    if (patch.notes?.trim()) newNotes.push({ body: patch.notes, source: 'user' });
+    if (patch.stage !== undefined) set.stage = patch.stage;
+    if (patch.track !== undefined) set.track = patch.track;
+    if (patch.title !== undefined && patch.title.trim()) set.title = patch.title.trim();
+    if (patch.company !== undefined && patch.company.trim()) set.company = patch.company.trim();
+    if (set.title !== undefined || set.company !== undefined) {
+      set.company_title_key = storedKey({ company: set.company ?? current.company, title: set.title ?? current.title });
+    }
+    if (patch.duplicateOf !== undefined) {
+      const other = db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf) as
+        | Pick<PostingsRow, 'id' | 'company' | 'title' | 'stage' | 'status'>
+        | undefined;
+      if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
+      const note = `Duplicate of #${other.id}, ${other.title} at ${other.company} (${other.stage}/${other.status}); archived ${localDay(now)}.`;
+      set.stage = lk.role('stage', 'archive') as string; // the stage list always has an archive role
+      const duplicate = lk.role('status', 'duplicate') as string; // 023 sets it, and a role is moved, never removed
+      if (current.status !== duplicate) set.status = duplicate;
+      newNotes.push({ body: note, source: 'agent' });
+    }
+    if (patch.location !== undefined) set.location = patch.location || null;
+    if (patch.description !== undefined) set.jd_text = patch.description?.trim() || null;
+    if (patch.rateText !== undefined) {
+      const rate = parseRate(patch.rateText);
+      Object.assign(set, { rate_text: patch.rateText || null, rate_min: rate?.min ?? null, rate_max: rate?.max ?? null, rate_unit: rate?.unit ?? null });
+    }
+    if (patch.hoursText !== undefined) {
+      const hours = parseHours(patch.hoursText);
+      Object.assign(set, { hours_min: hours?.min ?? null, hours_max: hours?.max ?? null });
+    }
+    if (set.location !== undefined || set.jd_text !== undefined) {
+      set.location_check = checkLocation(
+        { location: set.location ?? current.location, workplace: current.workplace, text: set.jd_text ?? current.jd_text ?? current.fetched_text },
+        config.search?.homeLocations ?? [],
+      );
+    }
+    const keys = Object.keys(set);
+    if (keys.length || newNotes.length) {
+      await asEngine(db).tx(async () => {
+        if (keys.length) db.prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id AND user_id = @uid`).run({ ...set, updated_at: nowIso, id });
+        if (set.status) {
+          db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
+        }
+        for (const n of newNotes) await addNote(db, id, n.body, { source: n.source, now });
+      });
+    }
+    return await getPosting(db, id, config);
+  });
 }
 
 /** Counts and spend for the header. */
-export function summary(db: Database, config: QueryConfig = {}, now = new Date()) {
-  const lk = lookups(db);
+export async function summary(db: Database, config: QueryConfig = {}, now = new Date()) {
+  const lk = await lookups(db);
   const uid = currentUserId() ?? OWNER_ID;
   // runs is not a user table (agent-core writes the row first): the user's runs, and for the owner the ones from before runs had a user.
   const mine = '(user_id = @me OR (@me = 1 AND user_id IS NULL))';
@@ -349,7 +356,7 @@ export function summary(db: Database, config: QueryConfig = {}, now = new Date()
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
     spend30Days: db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= @since AND ${mine}`).pluck().get({ since, me: uid }),
-    budget: budgetStatus(db, { now, uid }),
+    budget: await budgetStatus(db, { now, uid }),
     inboxNeedsReview: db.prepare("SELECT COUNT(*) FROM emails WHERE user_id = @uid AND review_status = 'needs_review'").pluck().get(),
     lastRun: db.prepare(`SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') AND ${mine} ORDER BY id DESC LIMIT 1`).get({ me: uid }) ?? null,
   };

@@ -34,7 +34,7 @@ const LETTER_MODEL = 'claude-sonnet-5-5';
  * Builds the demo database at dbPath (and its config beside it). Returns counts. now is injectable for tests.
  * @param {{ dbPath?: string, configPath?: string, now?: Date, prompts?: ReturnType<typeof samplePrompts> }} [opts]
  */
-export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataPath('config', 'job-search.json'), now = new Date(), prompts = samplePrompts() } = {}) {
+export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataPath('config', 'job-search.json'), now = new Date(), prompts = samplePrompts() } = {}) {
   /**
    * @param {number} days
    * @param {number} [hour]
@@ -59,7 +59,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
 
   const store = openJobStore(dbPath);
   const { db } = store;
-  setSetting(db, MARKER, 'true');
+  await setSetting(db, MARKER, 'true');
 
   const insertPosting = db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, location, salary, posted_on,
       discovered_on, stage, status, applied_on, fetched_text, fetched_at, fetch_status, fetch_method, workplace, location_check, track,
@@ -180,8 +180,8 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     }
 
     // The sample data's tuples ([days ago, text], [type, days ago, subject, summary], [kind, due in, note]) infer as arrays.
-    for (const [daysAgo, body] of /** @type {Array<[number, string]>} */ (job.notes ?? [])) addNote(db, id, body, { source: 'user', now: at(daysAgo, 17, 10) });
-    if (job.closeNote) addNote(db, id, job.closeNote, { source: 'user', now: at((/** @type {Array<[string, number]> | undefined} */ (job.history)?.at(-1)?.[1] ?? job.days) - 0, 18, 0) });
+    for (const [daysAgo, body] of /** @type {Array<[number, string]>} */ (job.notes ?? [])) await addNote(db, id, body, { source: 'user', now: at(daysAgo, 17, 10) });
+    if (job.closeNote) await addNote(db, id, job.closeNote, { source: 'user', now: at((/** @type {Array<[string, number]> | undefined} */ (job.history)?.at(-1)?.[1] ?? job.days) - 0, 18, 0) });
 
     const threadId = `demo-thread-${id}`;
     for (const [type, days, subject, summary] of /** @type {Array<[string, number, string, string]>} */ (job.emails ?? [])) {
@@ -470,7 +470,7 @@ A 45 minute video interview with Morgan Lee (CTO) and Riley Chen (VP Product). E
 }
 
 // Command line: build (or with --force, rebuild) the demo database in DATA_DIR. Returns the exit code.
-export function main(args = process.argv.slice(2)) {
+export async function main(args = process.argv.slice(2)) {
   if (!process.env.DATA_DIR) {
     console.error('demo-seed: set DATA_DIR to the demo data folder (for example DATA_DIR=demo-data) so the real data folder is never touched.');
     return 1;
@@ -487,9 +487,9 @@ export function main(args = process.argv.slice(2)) {
     }
     for (const suffix of ['', '-wal', '-shm']) rmSync(`${dbPath}${suffix}`, { force: true });
   }
-  const counts = seedDemo({ dbPath });
+  const counts = await seedDemo({ dbPath });
   console.log(`Demo data in ${DATA_DIR}: ${counts.postings} jobs, ${counts.emails} emails, ${counts.runs} pipeline runs, ${counts.prompts} prompt edits.`);
   return 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) process.exitCode = main();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) process.exitCode = await main();

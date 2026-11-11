@@ -48,13 +48,13 @@ const parse = (s: string | null) => {
 };
 
 /** Gathers everything the report shows for runs started at or after `since` (ISO timestamp). */
-export function collectReport(db: Database, { since, promoteAt = PROMOTE_AT }: { since: string; promoteAt?: number }): ReportData {
+export async function collectReport(db: Database, { since, promoteAt = PROMOTE_AT }: { since: string; promoteAt?: number }): Promise<ReportData> {
   const runs = (db
     .prepare('SELECT id, name, status, cost_usd, calls, summary, started_at FROM runs WHERE started_at >= ? ORDER BY id')
     .all(since) as Array<Pick<RunsRow, 'id' | 'name' | 'status' | 'cost_usd' | 'calls' | 'summary' | 'started_at'>>)
     .map((r) => ({ ...r, summary: parse(r.summary) }));
   const latest = (name: string) => [...runs].reverse().find((r) => r.name === name) ?? null;
-  const lk = lookups(db);
+  const lk = await lookups(db);
   const active = sqlList(lk.ids('stage', 'active'));
   const orderCase = `CASE ${REPORT_ORDER.map((g, i) => lk.ids('status', g).length ? `WHEN p.status IN ${sqlList(lk.ids('status', g))} THEN ${i}` : '').join(' ')} ELSE ${REPORT_ORDER.length} END`;
 
@@ -193,7 +193,7 @@ export function renderReport(data: ReportData, { now = new Date(), promoteAt = P
 
 /** Collects, renders and sends the report to `to`. Returns { subject, text, messageId }. */
 export async function sendReport({ db, auth, to, since, now = new Date() }: { db: Database; auth: OAuth2Client; to: string; since: string; now?: Date }) {
-  const report = renderReport(collectReport(db, { since }), { now });
+  const report = renderReport(await collectReport(db, { since }), { now });
   const messageId = await sendEmail(auth, { to, subject: report.subject, html: report.html });
   return { subject: report.subject, text: report.text, messageId };
 }

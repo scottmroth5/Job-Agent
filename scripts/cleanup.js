@@ -22,8 +22,8 @@ try {
   // Keys are derived data, so they are recomputed even in a dry run; the preview then reflects the current rules.
   const rekeyed = rekeyPostings(store.db);
   if (rekeyed) console.log(`Updated the duplicate key on ${rekeyed} jobs.`);
-  const { archived } = archiveListings(store.db, { config, dryRun });
-  const { demoted } = demoteWithoutText(store.db, { dryRun });
+  const { archived } = await archiveListings(store.db, { config, dryRun });
+  const { demoted } = await demoteWithoutText(store.db, { dryRun });
   /**
    * @param {string} would
    * @param {string} did

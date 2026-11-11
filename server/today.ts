@@ -15,10 +15,10 @@ export const REMINDER_DAYS = 14;
 const DAY = 24 * 3600 * 1000;
 
 /** The Today list for the current user, or one job's: { items: [{ kind, jobId, company, title, text, id?, due?, overdue?, days? }] }. */
-export function today(db: Database, { now = new Date(), jobId = null }: { now?: Date; jobId?: number | string | null } = {}) {
+export async function today(db: Database, { now = new Date(), jobId = null }: { now?: Date; jobId?: number | string | null } = {}) {
   const one = jobId == null ? '' : 'AND p.id = @jobId';
   const params = jobId == null ? {} : { jobId: Number(jobId) };
-  const lk = lookups(db);
+  const lk = await lookups(db);
   const horizon = new Date(now.getTime() + REMINDER_DAYS * DAY).toISOString();
   const reminders = (db
     .prepare(
@@ -49,7 +49,7 @@ export function today(db: Database, { now = new Date(), jobId = null }: { now?: 
         .all(params) as Array<{ jobId: number; company: string; title: string; status: string }>)
         .map((p) => ({ kind: 'offer', jobId: p.jobId, company: p.company, title: p.title, text: `${lk.label('status', p.status)}: decide and reply` }))
     : [];
-  const waiting = waitingApplications(db, { now });
+  const waiting = await waitingApplications(db, { now });
   const mine = (a: { id: number }) => jobId == null || a.id === Number(jobId);
   const followUps = waiting.followUp
     .filter(mine)

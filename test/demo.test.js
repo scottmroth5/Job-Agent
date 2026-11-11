@@ -18,11 +18,11 @@ import { fakeServices } from './fixtures/fakes.js';
 
 const NOW = new Date('2026-10-23T15:00:00Z');
 
-function seeded() {
+async function seeded() {
   const dir = mkdtempSync(join(tmpdir(), 'demo-'));
   const dbPath = join(dir, 'job-agent.db');
   const configPath = join(dir, 'config', 'job-search.json');
-  const counts = seedDemo({ dbPath, configPath, now: NOW });
+  const counts = await seedDemo({ dbPath, configPath, now: NOW });
   return { dir, dbPath, configPath, counts };
 }
 
@@ -52,8 +52,8 @@ async function demoApp(/** @type {string} */ dbPath) {
 
 const sampleUrl = (/** @type {string} */ url) => url.replace(/:(\w+)/g, (_, /** @type {string} */ name) => (name === 'id' ? '1' : name === 'action' ? 'score' : name === 'list' ? 'status' : name === 'name' ? 'score' : 'x')).replaceAll('*', 'index.html');
 
-test('the seed builds a full sample search: jobs in every stage, scores, letters, emails, runs, and prompt edits', () => {
-  const { dbPath, configPath, counts } = seeded();
+test('the seed builds a full sample search: jobs in every stage, scores, letters, emails, runs, and prompt edits', async () => {
+  const { dbPath, configPath, counts } = await seeded();
   assert.equal(counts.postings, JOBS.length);
   assert.ok(counts.runs > 10);
   const store = openJobStore(dbPath);
@@ -81,8 +81,8 @@ test('the seed builds a full sample search: jobs in every stage, scores, letters
   assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), DEMO_CONFIG);
 });
 
-test('the seed only ever replaces a database it made', () => {
-  const { dbPath } = seeded();
+test('the seed only ever replaces a database it made', async () => {
+  const { dbPath } = await seeded();
   assert.equal(isDemoDatabase(dbPath), true);
   const real = join(mkdtempSync(join(tmpdir(), 'real-')), 'job-agent.db');
   openJobStore(real).close();
@@ -91,7 +91,7 @@ test('the seed only ever replaces a database it made', () => {
 });
 
 test('demo mode refuses every request that would change data, without sign-in, except the prompt preview', async () => {
-  const { dbPath } = seeded();
+  const { dbPath } = await seeded();
   const { app, store } = await demoApp(dbPath);
   await app.ready();
   const before = store.db.prepare('SELECT COUNT(*) FROM postings').pluck().get();
@@ -120,7 +120,7 @@ test('demo mode refuses every request that would change data, without sign-in, e
 });
 
 test('demo mode serves every screen without sign-in and says it is the demo', async () => {
-  const { dbPath } = seeded();
+  const { dbPath } = await seeded();
   const { app, store } = await demoApp(dbPath);
   const me = (await app.inject('/api/me')).json();
   assert.deepEqual({ authMode: me.authMode, demo: me.demo }, { authMode: 'demo', demo: true });
@@ -166,7 +166,7 @@ test('the demo caps every request per address, so a script cannot hammer the ser
 });
 
 test("the demo's Find someone to contact is a canned sample: a read, no AI, nothing saved, and only in the demo", async () => {
-  const { dbPath } = seeded();
+  const { dbPath } = await seeded();
   const { app, store } = await demoApp(dbPath);
   const job = /** @type {{ id: number, company: string, title: string }} */ (store.db.prepare('SELECT id, company, title FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').get());
   const notes = () => store.db.prepare('SELECT COUNT(*) FROM posting_notes WHERE user_id = @uid').pluck().get();

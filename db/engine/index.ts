@@ -4,7 +4,7 @@
 // (db/engine/sqlite.ts), so these views are safe together. The last Phase 3 step narrows AnyDb to Db and removes this.
 import type { Database } from 'better-sqlite3';
 import type { ScopedDatabase } from '../scope.ts';
-import { createSqliteEngine } from './sqlite.ts';
+import { connectionOf, createSqliteEngine } from './sqlite.ts';
 import type { Db } from './types.ts';
 
 export type AnyDb = Db | Database | ScopedDatabase;
@@ -24,4 +24,10 @@ export function asEngine(db: AnyDb): Db {
     views.set(db, engine);
   }
   return engine;
+}
+
+/** One key per connection, whichever view of it db is: for caches of app-wide data (the lists) that every view shares. */
+export function connectionKey(db: AnyDb): object {
+  if (isSync(db)) return (db as Partial<ScopedDatabase>).unscoped ?? db;
+  return connectionOf(db) ?? db;
 }

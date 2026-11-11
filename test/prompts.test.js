@@ -10,7 +10,7 @@ test('every default prompt passes its own validation', () => {
   for (const name of Object.keys(PROMPTS)) assert.deepEqual(validateTemplate(name, defaultPrompt(name).template), [], name);
 });
 
-test('validation rejects unknown, missing, spaced and unmatched placeholders', () => {
+test('validation rejects unknown, missing, spaced and unmatched placeholders', async () => {
   const base = defaultPrompt('cover-letter').template;
   assert.match(validateTemplate('cover-letter', `${base} {{salary}}`).join(' '), /Unknown placeholder: \{\{salary\}\}/);
   assert.match(validateTemplate('cover-letter', base.replaceAll('{{analysis}}', '')).join(' '), /Required placeholder is missing: \{\{analysis\}\}/);
@@ -18,36 +18,36 @@ test('validation rejects unknown, missing, spaced and unmatched placeholders', (
   assert.match(validateTemplate('cover-letter', `${base} {{oops`).join(' '), /unmatched/);
   assert.match(validateTemplate('score', '').join(' '), /empty/);
   assert.deepEqual(placeholdersIn('{{a}} {{b}} {{a}}'), ['a', 'b']);
-  assert.throws(() => getPrompt(null, 'nope'), /Unknown prompt/);
+  await assert.rejects(async () => await getPrompt(null, 'nope'), /Unknown prompt/);
 });
 
-test('save, history and restore; version hashes match the default when unchanged', () => {
+test('save, history and restore; version hashes match the default when unchanged', async () => {
   const store = openJobStore(':memory:');
   const { db } = store;
-  const original = getPrompt(db, 'score');
+  const original = await getPrompt(db, 'score');
   assert.equal(original.source, 'default');
-  assert.equal(getPrompt(null, 'score').version, original.version);
+  assert.equal((await getPrompt(null, 'score')).version, original.version);
 
   const edited = `${original.template}\nKeep the reason under 25 words.`;
-  const saved = savePrompt(db, 'score', { template: edited, note: 'shorter reasons' });
+  const saved = await savePrompt(db, 'score', { template: edited, note: 'shorter reasons' });
   assert.deepEqual([saved.source, saved.note], ['custom', 'shorter reasons']);
   assert.notEqual(saved.version, original.version);
-  assert.equal(savePrompt(db, 'score', { template: edited }).versionId, saved.versionId, 'saving the same text adds no version');
+  assert.equal((await savePrompt(db, 'score', { template: edited })).versionId, saved.versionId, 'saving the same text adds no version');
 
-  const second = savePrompt(db, 'score', { template: `${edited}\nBe concise.` });
-  const versions = listVersions(db, 'score');
+  const second = await savePrompt(db, 'score', { template: `${edited}\nBe concise.` });
+  const versions = await listVersions(db, 'score');
   assert.deepEqual(versions.map((v) => v.active), [true, false]);
 
-  assert.equal(restorePrompt(db, 'score', saved.versionId).template, edited);
-  assert.deepEqual(listVersions(db, 'score').map((v) => v.active), [false, true]);
-  const back = restorePrompt(db, 'score', null);
+  assert.equal((await restorePrompt(db, 'score', saved.versionId)).template, edited);
+  assert.deepEqual((await listVersions(db, 'score')).map((v) => v.active), [false, true]);
+  const back = await restorePrompt(db, 'score', null);
   assert.deepEqual([back.source, back.version], ['default', original.version]);
-  assert.equal(listVersions(db, 'score').length, 2, 'history is kept after restoring the default');
+  assert.equal((await listVersions(db, 'score')).length, 2, 'history is kept after restoring the default');
   assert.equal(Number(second.versionId) > Number(saved.versionId), true);
 
   /** @typedef {Error & { statusCode?: number }} HttpError */
-  assert.throws(() => savePrompt(db, 'score', { template: 'no placeholders' }), (/** @type {HttpError} */ e) => e.statusCode === 400 && /Required placeholders/.test(e.message));
-  assert.throws(() => restorePrompt(db, 'score', 9999), (/** @type {HttpError} */ e) => e.statusCode === 404);
+  await assert.rejects(async () => await savePrompt(db, 'score', { template: 'no placeholders' }), (/** @type {HttpError} */ e) => e.statusCode === 400 && /Required placeholders/.test(e.message));
+  await assert.rejects(async () => await restorePrompt(db, 'score', 9999), (/** @type {HttpError} */ e) => e.statusCode === 404);
   store.close();
 });
 
@@ -55,7 +55,7 @@ test('scoring uses the active edited prompt and records its version', async () =
   const store = openJobStore(':memory:');
   const { db } = store;
   const marker = 'EDITED-PROMPT-MARKER';
-  const custom = savePrompt(db, 'score', { template: `${getPrompt(db, 'score').template}\n${marker}` });
+  const custom = await savePrompt(db, 'score', { template: `${(await getPrompt(db, 'score')).template}\n${marker}` });
   db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, fetch_status, fetched_text, location, location_check, discovered_on, created_at, updated_at)
     VALUES (1, 'u', 'u', 'Example Co', 'CTO', 'k', 'ok', 'Lead the team.', 'Remote', 'remote', '2026-09-30', 'x', 'x')`).run();
   /** @type {string[]} */

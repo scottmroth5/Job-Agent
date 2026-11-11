@@ -38,8 +38,8 @@ test('input: people are trimmed and required, unsafe links dropped, unknown choi
   assert.throws(() => normalizePrepInput({ attendees: Array.from({ length: 9 }, (_, i) => ({ name: `P${i}` })) }), /At most 8/);
 });
 
-test('request: Opus 5.5 with the knowledge as the system prompt, web research only when asked, everything in the prompt', () => {
-  const prompt = getPrompt(null, 'meeting-prep');
+test('request: Opus 5.5 with the knowledge as the system prompt, web research only when asked, everything in the prompt', async () => {
+  const prompt = await getPrompt(null, 'meeting-prep');
   const req = buildPrepRequest(posting, input, { config, knowledge: KNOWLEDGE, prompt, analysis: { score: 8, reason: 'Strong', strengths: ['Scale'], watchOuts: [], topTalkingPoint: 'Growth' }, letter: 'Letter body', now: new Date(2026, 9, 12) });
   assert.equal(req.model, PREP_MODEL);
   assert.equal(req.system, KNOWLEDGE);

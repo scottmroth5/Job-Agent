@@ -28,7 +28,7 @@ const MARKERS = JOBS.map((j) => j.company);
 async function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'isolation-'));
   const dbPath = join(dir, 'job-agent.db');
-  seedDemo({ dbPath, configPath: join(dir, 'config', 'job-search.json'), now: new Date('2026-10-23T15:00:00Z') });
+  await seedDemo({ dbPath, configPath: join(dir, 'config', 'job-search.json'), now: new Date('2026-10-23T15:00:00Z') });
   const store = openJobStore(dbPath, { fallbackUid: null }); // as the server opens it: no user outside a request
   const B = await addUser(store.raw, { email: 'b@example.com' });
   const secret = randomBytes(48).toString('base64');

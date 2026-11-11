@@ -67,7 +67,7 @@ export function createJobClaude(db: Database, { forKey, ownerClient, onCapReache
       const uid = currentUserId() ?? OWNER_ID;
       const client = await clientFor(uid);
       try {
-        checkBudget(db, { uid, now: now(), env });
+        await checkBudget(db, { uid, now: now(), env });
       } catch (err) {
         if (err instanceof BudgetExceededError) await Promise.resolve(onCapReached?.(uid, err)).catch(() => {});
         throw err;

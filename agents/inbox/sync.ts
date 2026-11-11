@@ -14,7 +14,7 @@ const windowQuery = (days: number) => `newer_than:${days}d -in:chats`;
  * The cursor is not saved here: call saveCursor(db, nextHistoryId) once the messages are processed.
  */
 export async function newMessageIds({ gmail, db, fallbackDays = 7 }: { gmail: Pick<Gmail, 'historySince' | 'profile' | 'listMessages'>; db: Database; fallbackDays?: number }) {
-  const stored = getUserSetting(db, CURSOR_KEY);
+  const stored = await getUserSetting(db, CURSOR_KEY);
   if (stored) {
     try {
       const { messageIds, historyId } = await gmail.historySince(stored);
@@ -34,4 +34,4 @@ export async function backfillMessageIds({ gmail, days = 180 }: { gmail: Pick<Gm
   return { messageIds: await gmail.listMessages(windowQuery(days)), nextHistoryId: historyId, mode: 'backfill' };
 }
 
-export const saveCursor = (db: Database, historyId: string | null | undefined) => historyId && setUserSetting(db, CURSOR_KEY, String(historyId));
+export const saveCursor = async (db: Database, historyId: string | null | undefined) => historyId && await setUserSetting(db, CURSOR_KEY, String(historyId));

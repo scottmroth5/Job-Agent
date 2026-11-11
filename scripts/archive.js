@@ -9,7 +9,7 @@ const dryRun = process.argv.includes('--dry-run');
 const store = openJobStore();
 try {
   const run = dryRun ? null : await createJobTracer({ store }).startRun('archive');
-  const result = archivePostings(store.db, { dryRun });
+  const result = await archivePostings(store.db, { dryRun });
   const after = dryRun ? result.remaining - result.archived.length : result.remaining;
   console.log(`${dryRun ? 'DRY RUN: would archive' : 'Archived'} ${result.archived.length} jobs; ${after} ${dryRun ? 'would remain' : 'remain'} in the pipeline.`);
   for (const m of result.archived) console.log(`  #${m.id} ${m.company} | ${m.title} (${m.reason})`);

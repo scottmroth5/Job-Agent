@@ -201,16 +201,16 @@ export async function runDiscovery({ store, config, http, browser = null, source
     const existing = ((urlKey && byUrl.get(urlKey)) || (ctKey && byCompanyTitle.get(ctKey)) || null) as Existing | null;
     return { urlKey, ctKey, existing };
   };
-  const recordDuplicate = (item: RunItem, existing: Existing) => {
+  const recordDuplicate = async (item: RunItem, existing: Existing) => {
     stat(item.source).duplicates += 1;
     sightings.push({ postingId: existing.id, source: item.source, url: item.url });
-    if (lookups(db).groupOf('stage', existing.stage) === 'found' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
+    if ((await lookups(db)).groupOf('stage', existing.stage) === 'found' && rank(item.source) < rank(existing.source)) upgrades.push({ id: existing.id, item });
   };
 
   for (const item of candidates) {
     const { urlKey, ctKey, existing } = findExisting(item);
     if (existing) {
-      recordDuplicate(item, existing);
+      await recordDuplicate(item, existing);
       continue;
     }
     if ((urlKey && seenUrl.has(urlKey)) || (ctKey && seenCt.has(ctKey))) {
@@ -252,7 +252,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
     if (skipReason(item, config)) continue; // a Google redirect resolved to a skipped site or a list of jobs
     const { ctKey, existing } = findExisting(item);
     if (existing) {
-      recordDuplicate(item, existing);
+      await recordDuplicate(item, existing);
       continue;
     }
     if (ctKey && seenAfter.has(ctKey)) {
@@ -275,7 +275,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
   const insertedIds: number[] = [];
   if (!dryRun) {
     const nowIso = now.toISOString();
-    const found = sqlList(lookups(db).ids('stage', 'found'));
+    const lk = await lookups(db); // before the transaction, which is still synchronous
+    const found = sqlList(lk.ids('stage', 'found'));
     const insert = db.prepare(`INSERT INTO postings
       (user_id, url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
        discovered_on, stage, status, fetched_text, fetched_at, fetch_status, fetch_method, fetch_attempts, workplace, location_check,
@@ -316,9 +317,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
             workplace: item.workplace ?? null,
             location_check: item.locationCheck,
             source_job_id: item.sourceJobId ?? null,
-            track: item.track ?? lookups(db).role('track', 'default'),
-            stage: lookups(db).role('stage', 'default'),
-            status: lookups(db).role('status', 'default'),
+            track: item.track ?? lk.role('track', 'default'),
+            stage: lk.role('stage', 'default'),
+            status: lk.role('status', 'default'),
             rate_text: item.rateText ?? null,
             rate_min: item.rate?.min ?? null,
             rate_max: item.rate?.max ?? null,
@@ -329,7 +330,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
             now: nowIso,
           }).lastInsertRowid,
         );
-        history.run(id, lookups(db).role('status', 'default'), nowIso);
+        history.run(id, lk.role('status', 'default'), nowIso);
         sighting.run(id, item.source, item.url ?? null, today);
         insertedIds.push(id);
       }
@@ -360,7 +361,7 @@ export async function runDiscovery({ store, config, http, browser = null, source
   if (!dryRun && details && retryPending) {
     const pending = db
       .prepare(`SELECT id, url, company, title, location, workplace, source_job_id, source FROM postings
-        WHERE user_id = @uid AND stage IN ${sqlList(lookups(db).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
+        WHERE user_id = @uid AND stage IN ${sqlList((await lookups(db)).ids('stage', 'found'))} AND fetch_status IN (${RETRYABLE.map(() => '?').join(', ')})
           AND fetch_attempts < ? AND discovered_on >= ?
           ${insertedIds.length ? `AND id NOT IN (${insertedIds.map(() => '?').join(', ')})` : ''}`)
       .all(...RETRYABLE, MAX_FETCH_ATTEMPTS, since, ...insertedIds) as Array<{ id: number; url: string | null; company: string; title: string; location: string | null; workplace: string | null }>;

@@ -278,14 +278,14 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         response: { 200: anyObject },
       },
     },
-    async (req) => funnel(db, { days: !req.query.days || req.query.days === 'all' ? null : Number(req.query.days), track: req.query.track && req.query.track !== 'all' ? req.query.track : null, staleDays: staleDays(db) }),
+    async (req) => await funnel(db, { days: !req.query.days || req.query.days === 'all' ? null : Number(req.query.days), track: req.query.track && req.query.track !== 'all' ? req.query.track : null, staleDays: await staleDays(db) }),
   );
 
   app.get('/api/summary', { schema: { summary: 'Counts, the Today list, fractional target, spend, and saved layouts', response: { 200: anyObject } } }, async (req) => ({
-    ...summary(db, config),
+    ...await summary(db, config),
     // Home's Today list: reminders due, offers, and follow-ups (server/today.ts).
-    today: today(db).items,
-    layout: getLayout(db),
+    today: (await today(db)).items,
+    layout: await getLayout(db),
     // A new user's setup (the Home checklist): AI paid for, About you long enough, search complete.
     ...(req.uid && req.uid !== OWNER_ID ? { setup: setupOf(req.uid) } : {}),
     // What waits for an admin (the Admin tile's count): requests for access and open feedback.
@@ -314,20 +314,20 @@ export async function buildApp({ store, config, services: given, webDir, authMod
       },
     },
     async (req) => {
-      const lk = lookups(db);
+      const lk = await lookups(db);
       const special: Record<string, string[]> = { status: ['all', 'active', 'progress'], stage: ['all'], track: ['all'] };
       for (const list of ['status', 'stage', 'track'] as const) {
         const v = req.query[list];
         if (v && !special[list].includes(v) && !lk.get(list, v)) throw Object.assign(new Error(`Unknown ${list} "${v}".`), { statusCode: 400 });
       }
-      return listPostings(db, req.query, config);
+      return await listPostings(db, req.query, config);
     },
   );
 
   app.get<{ Params: IdParams }>('/api/postings/:id', { schema: { summary: 'Job detail', params: idParams, response: { 200: anyObject } } }, async (req, reply) => {
-    const job = getPosting(db, req.params.id, config);
+    const job = await getPosting(db, req.params.id, config);
     // Its next steps (open reminders, an offer, a follow-up due): the panel's Next step box (server/today.ts).
-    return job ? { ...job, nextSteps: today(db, { jobId: job.id }).items } : notFound(reply);
+    return job ? { ...job, nextSteps: (await today(db, { jobId: job.id })).items } : notFound(reply);
   });
 
   app.patch<{ Params: IdParams; Body: PostingPatch }>(
@@ -358,7 +358,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         response: { 200: anyObject },
       },
     },
-    async (req, reply) => updatePosting(db, req.params.id, req.body, config) ?? notFound(reply),
+    async (req, reply) => await updatePosting(db, req.params.id, req.body, config) ?? notFound(reply),
   );
 
   app.post<{ Body: ManualInput }>(
@@ -431,7 +431,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
           return { scored: s.scored, promoted: s.promoted.includes(id) };
         }
         if (action === 'write-materials' || action === 'regenerate') {
-          const lk = lookups(db);
+          const lk = await lookups(db);
           if (lk.groupOf('stage', posting.stage) === 'found') db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), new Date().toISOString(), id);
           const hasScore = db.prepare("SELECT 1 FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule')").get(id);
           const knowledge = await services.knowledge();

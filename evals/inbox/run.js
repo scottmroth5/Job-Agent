@@ -76,9 +76,9 @@ export async function runInboxEval({ cases, applications, claude, cfg, model = c
         results.push({ id: c.id, expected: c.expected, passed: false, predicted: null, rule: null });
         continue;
       }
-      const open = listOpenApplications(db);
+      const open = await listOpenApplications(db);
       const cls = await classifyEmail(email, { claude, db, model, open, trace });
-      const link = decideEmail(db, email, cls, { cfg, open });
+      const link = await decideEmail(db, email, cls, { cfg, open });
       results.push({
         id: c.id,
         expected: c.expected,

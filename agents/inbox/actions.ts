@@ -2,7 +2,7 @@
 // why. Status only ever moves forward automatically; anything else is flagged for review instead.
 import { storedKey } from '../identity.ts';
 import { logDecision, linkThread, upsertContact, addReminder } from './store.ts';
-import { lookups } from '../lookups.ts';
+import { builtInLookups, lookups } from '../lookups.ts';
 import { adoptNotesText } from '../notes.ts';
 import { localDay } from '../../tools/dates.ts';
 import type { Database } from '../../tools/types.ts';
@@ -56,7 +56,7 @@ export function decideLink({ ruleMatch, classification: c, threshold }: { ruleMa
  *   { change: { from, to } } | { review: reason } | { none: true }
  * lk: lookups(db), or the built-in lists when omitted. An archived target status sends the email to review.
  */
-export function planStatus(current: string, type: string, lk: Lookups = lookups(null)): StatusPlan {
+export function planStatus(current: string, type: string, lk: Lookups = builtInLookups()): StatusPlan {
   const role = TARGET[type];
   const to = role ? lk.role('status', role) : null;
   if (!to || to === current) return { none: true };
@@ -82,7 +82,7 @@ export function parseDeadline(text: string | null | undefined) {
  * senderEmail); c: the validated classification; decidedBy: 'rule:<name>' | 'model:<id>' | 'user'.
  * Returns { statusChange, review, notices[], reminderId }.
  */
-export function applyActions(
+export async function applyActions(
   db: Database,
   { email, postingId, c, decidedBy, promptVersion, now = new Date() }: { email: ActionEmail; postingId: number; c: ActionClassification; decidedBy: string; promptVersion?: string | null; now?: Date },
 ) {
@@ -103,7 +103,7 @@ export function applyActions(
     if (personal) upsertContact(db, { email: personal, name: c.extracted.contact_name, company: posting.company, postingId }, now);
   }
 
-  const lk = lookups(db);
+  const lk = await lookups(db);
   const plan = planStatus(posting.status, c.type, lk);
   let statusChange: { from: string; to: string } | null = null;
   if (plan.change) {
@@ -136,11 +136,11 @@ export function applyActions(
 }
 
 /** A new opportunity from recruiter outreach that matches no application. The email body is not copied. */
-export function createOpportunity(
+export async function createOpportunity(
   db: Database,
   { email, c, decidedBy, promptVersion, now = new Date() }: { email: ActionEmail; c: ActionClassification; decidedBy: string; promptVersion?: string | null; now?: Date },
 ) {
-  const lk = lookups(db);
+  const lk = await lookups(db);
   const nowIso = now.toISOString();
   const company = c.extracted.company ?? 'Unknown';
   const title = c.extracted.role_title ?? 'Recruiter outreach';
@@ -152,7 +152,7 @@ export function createOpportunity(
       .run(company, title, storedKey({ company, title }), localDay(now), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso).lastInsertRowid,
   );
   db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
-  adoptNotesText(db, { postingId: id, source: 'agent', now });
+  await adoptNotesText(db, { postingId: id, source: 'agent', now });
   linkThread(db, email.threadId, id, 'outreach', now);
   upsertContact(db, { email: c.extracted.contact_email ?? email.senderEmail, name: c.extracted.contact_name, company, postingId: id }, now);
   logDecision(db, { postingId: id, emailId: email.id, gmailMessageId: email.gmailMessageId, action: 'opportunity', decidedBy, promptVersion, detail: { company, title } }, now);

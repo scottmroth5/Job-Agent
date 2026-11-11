@@ -110,8 +110,8 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     if (drive) {
       try {
         const folderId = await ensureLetterFolder(drive, db);
-        const name = letterDocName(letterHeader(db, config).name, posting.title, posting.company);
-        const doc = await drive.createDocFromHtml({ name, folderId, html: letterHtml({ candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body: content }) });
+        const name = letterDocName((await letterHeader(db, config)).name, posting.title, posting.company);
+        const doc = await drive.createDocFromHtml({ name, folderId, html: letterHtml({ candidate: await letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body: content }) });
         db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid').run(doc.id, doc.url, name, id);
       } catch {
         docError = 'Saved here; the Google Doc could not be made.';
@@ -135,9 +135,9 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     },
   };
   app.get('/api/letter-header', { schema: { summary: 'Your cover letter header (name, email, phone, location, sign-off, links); saved is false until you save one', response: { 200: anyObject } } }, async () =>
-    letterHeader(db, config),
+    await letterHeader(db, config),
   );
-  app.put<{ Body: Record<string, unknown> }>('/api/letter-header', { schema: { summary: 'Save your cover letter header', body: headerBody, response: { 200: anyObject } } }, async (req) => saveLetterHeader(db, req.body));
+  app.put<{ Body: Record<string, unknown> }>('/api/letter-header', { schema: { summary: 'Save your cover letter header', body: headerBody, response: { 200: anyObject } } }, async (req) => await saveLetterHeader(db, req.body));
 
   app.get<{ Params: IdParams }>('/api/postings/:id/letters', { schema: { summary: "A job's cover letter versions, newest (current) first", params: idParams, response: { 200: { type: 'array', items: anyObject } } } }, async (req, reply) =>
     job(req.params.id) ? versions(req.params.id) : reply.code(404).send({ error: 'Job not found' }),
@@ -290,7 +290,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     if (!version?.content) return reply.code(404).send({ error: 'No cover letter for this job yet.' });
     // A version was found, so the job was too (posting!).
     const written = new Date(version.created_at);
-    const letter = { candidate: letterHeader(db, config), company: posting!.company, title: posting!.title, date: longDate(written), body: version.content };
+    const letter = { candidate: await letterHeader(db, config), company: posting!.company, title: posting!.title, date: longDate(written), body: version.content };
     const name = letterDocName(letter.candidate.name, posting!.title, posting!.company);
     const [type, body, file] =
       format === 'pdf'

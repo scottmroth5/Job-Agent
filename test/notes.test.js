@@ -42,34 +42,34 @@ test('migration: each job with notes text gets one "earlier" note; jobs without 
   raw.close();
 });
 
-test('add, edit, and delete keep their dates and keep postings.notes in step (oldest first)', () => {
+test('add, edit, and delete keep their dates and keep postings.notes in step (oldest first)', async () => {
   const { db } = openJobStore(':memory:');
   const id = job(db);
-  const first = addNote(db, id, '  First call went well  ', { now: new Date('2026-10-10T15:00:00Z') });
-  const second = addNote(db, id, 'Second round **Tuesday**', { now: new Date('2026-10-12T15:00:00Z') });
+  const first = await addNote(db, id, '  First call went well  ', { now: new Date('2026-10-10T15:00:00Z') });
+  const second = await addNote(db, id, 'Second round **Tuesday**', { now: new Date('2026-10-12T15:00:00Z') });
   assert.equal(first.body, 'First call went well', 'trimmed');
-  assert.deepEqual(listNotes(db, id).map((n) => n.id), [second.id, first.id], 'newest first');
+  assert.deepEqual((await listNotes(db, id)).map((n) => n.id), [second.id, first.id], 'newest first');
   assert.equal(cache(db, id), 'First call went well\nSecond round **Tuesday**');
 
-  const edited = updateNote(db, first.id, 'First call went very well', { now: new Date('2026-10-14T09:00:00Z') });
+  const edited = await updateNote(db, first.id, 'First call went very well', { now: new Date('2026-10-14T09:00:00Z') });
   assert.deepEqual([edited?.createdAt, edited?.updatedAt], ['2026-10-10T15:00:00.000Z', '2026-10-14T09:00:00.000Z']);
-  assert.equal(updateNote(db, first.id, 'First call went very well', { now: new Date('2026-10-20T09:00:00Z') })?.updatedAt, '2026-10-14T09:00:00.000Z', 'no change, no new date');
+  assert.equal((await updateNote(db, first.id, 'First call went very well', { now: new Date('2026-10-20T09:00:00Z') }))?.updatedAt, '2026-10-14T09:00:00.000Z', 'no change, no new date');
   assert.equal(cache(db, id), 'First call went very well\nSecond round **Tuesday**');
 
-  assert.equal(deleteNote(db, second.id), true);
+  assert.equal(await deleteNote(db, second.id), true);
   assert.equal(cache(db, id), 'First call went very well');
-  assert.equal(deleteNote(db, first.id), true);
+  assert.equal(await deleteNote(db, first.id), true);
   assert.equal(cache(db, id), null);
-  assert.equal(deleteNote(db, first.id), false);
-  assert.equal(updateNote(db, first.id, 'x'), null);
-  assert.throws(() => addNote(db, id, '   '), /needs some text/);
+  assert.equal(await deleteNote(db, first.id), false);
+  assert.equal(await updateNote(db, first.id, 'x'), null);
+  await assert.rejects(async () => await addNote(db, id, '   '), /needs some text/);
 });
 
-test('notes written as text before (or by an insert) become an entry before a new one is added', () => {
+test('notes written as text before (or by an insert) become an entry before a new one is added', async () => {
   const { db } = openJobStore(':memory:');
   const id = job(db, 'Typed long ago');
-  addNote(db, id, 'New note', { now: new Date('2026-10-16T12:00:00Z') });
-  assert.deepEqual(listNotes(db, id).map((n) => [n.source, n.body]), [['user', 'New note'], ['earlier', 'Typed long ago']]);
+  await addNote(db, id, 'New note', { now: new Date('2026-10-16T12:00:00Z') });
+  assert.deepEqual((await listNotes(db, id)).map((n) => [n.source, n.body]), [['user', 'New note'], ['earlier', 'Typed long ago']]);
   assert.equal(cache(db, id), 'Typed long ago\nNew note');
 });
 

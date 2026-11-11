@@ -63,8 +63,8 @@ function weekStart(iso: string | null) {
 }
 
 /** One record per application, with each milestone: { reached, date } (date null when only undated evidence). */
-export function applications(db: Database, { now = new Date() } = {}): Application[] {
-  const lk = lookups(db);
+export async function applications(db: Database, { now = new Date() } = {}): Promise<Application[]> {
+  const lk = await lookups(db);
   const group = (status: string | null) => lk.groupOf('status', status);
   // The status a rejection email moves a job to (Admin > Lists): moves to it count as rejections.
   const rejectedStatus = lk.role('status', 'rejected');
@@ -125,10 +125,11 @@ export function applications(db: Database, { now = new Date() } = {}): Applicati
 }
 
 /** The funnel for applications in the window. days: applied within the last N days (null: all). */
-export function funnel(db: Database, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS }: { days?: number | null; track?: string | null; now?: Date; staleDays?: number } = {}) {
+export async function funnel(db: Database, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS }: { days?: number | null; track?: string | null; now?: Date; staleDays?: number } = {}) {
+  const lk = await lookups(db);
   const since = days ? localDaysAgo(now, days) : null;
   const inWindow = (a: Application) => (!since || a.appliedOn >= since) && (!track || a.track === track);
-  const apps = applications(db, { now }).filter(inWindow);
+  const apps = (await applications(db, { now })).filter(inWindow);
 
   const found = db
     .prepare(`SELECT COUNT(*) AS n,
@@ -170,7 +171,7 @@ export function funnel(db: Database, { days = null, track = null, now = new Date
     w.setUTCDate(w.getUTCDate() - i * 7);
     weeks.push({ weekStart: w.toISOString().slice(0, 10), applied: 0 });
   }
-  for (const a of applications(db, { now }).filter((x) => !track || x.track === track)) {
+  for (const a of (await applications(db, { now })).filter((x) => !track || x.track === track)) {
     const w = weeks.find((x) => x.weekStart === weekStart(a.appliedOn));
     if (w) w.applied += 1;
   }
@@ -185,7 +186,7 @@ export function funnel(db: Database, { days = null, track = null, now = new Date
     staleDays,
     stale: apps.filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= staleDays).length,
     followUps: apps
-      .filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= FOLLOW_UP_DAYS && a.waitingDays < staleDays && lookups(db).groupOf('stage', a.stage) !== 'archived')
+      .filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= FOLLOW_UP_DAYS && a.waitingDays < staleDays && lk.groupOf('stage', a.stage) !== 'archived')
       .sort((a, b) => b.waitingDays - a.waitingDays)
       .map(({ id, company, title, appliedOn, waitingDays, status }) => ({ id, company, title, appliedOn, days: waitingDays, status })),
   };

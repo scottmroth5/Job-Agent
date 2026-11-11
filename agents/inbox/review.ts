@@ -8,6 +8,7 @@ import { applyActions, createOpportunity } from './actions.ts';
 import { updateEmail, logDecision } from './store.ts';
 import { encrypt } from './crypto.ts';
 import { listOpenApplications } from './match.ts';
+import { asEngine } from '../../db/engine/index.ts';
 import type { Database } from '../../tools/types.ts';
 import type { EmailsRow } from '../../db/types.ts';
 import type { Classification } from './classify.ts';
@@ -63,34 +64,34 @@ const classificationOf = (e: ReviewEmail): Pick<Classification, 'type' | 'extrac
  * (off the list, no action, no case). body is the trimmed email text (re-read from Gmail), stored encrypted when the email
  * gets linked.
  */
-export function resolveReview(
+export async function resolveReview(
   db: Database,
   e: ReviewEmail,
   choice: string,
   { postingId, body = null, key = null, now = new Date(), casesPath = REVIEW_CASES_PATH }: { postingId?: number; body?: string | null; key?: Buffer | null; now?: Date; casesPath?: string } = {},
-): ReviewResult {
+): Promise<ReviewResult> {
   if (!CHOICES.includes(choice)) throw new Error(`Unknown review choice: ${choice}`);
   const c = classificationOf(e);
   const email = { id: e.id, gmailMessageId: e.gmail_message_id, threadId: e.thread_id, sentAt: e.sent_at, senderEmail: e.sender };
-  const open = listOpenApplications(db);
+  const open = await listOpenApplications(db);
   let out: ReviewResult = { postingId: null, statusChange: null, review: null, notices: [] };
 
-  db.transaction(() => {
+  await asEngine(db).tx(async () => {
     if (choice === 'confirm' || choice === 'reassign') {
       const target = choice === 'confirm' ? e.guess?.id : postingId;
       if (!target || !db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(target)) throw new Error(choice === 'confirm' ? 'There is no best guess to confirm; reassign instead.' : `Job #${postingId} was not found.`);
-      const r = applyActions(db, { email, postingId: target, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
+      const r = await applyActions(db, { email, postingId: target, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
       updateEmail(db, e.id, { postingId: target, matchRule: 'user', confidence: 1, reviewStatus: choice === 'confirm' ? 'confirmed' : 'reassigned', reviewReason: null, ...(body && key && !e.body_enc ? { bodyEnc: encrypt(body, key) } : {}) }, now);
       out = { postingId: target, ...r };
     } else if (choice === 'not_job' || choice === 'dismiss') {
       updateEmail(db, e.id, { postingId: null, matchRule: null, reviewStatus: choice === 'dismiss' ? 'dismissed' : 'not_job', reviewReason: null, bodyEnc: null }, now);
     } else {
-      const id = createOpportunity(db, { email, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
+      const id = await createOpportunity(db, { email, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
       updateEmail(db, e.id, { postingId: id, matchRule: 'user', reviewStatus: 'new_opportunity', reviewReason: null, ...(body && key ? { bodyEnc: encrypt(body, key) } : {}) }, now);
       out = { ...out, postingId: id };
     }
     logDecision(db, { postingId: out.postingId, emailId: e.id, gmailMessageId: e.gmail_message_id, action: `review:${choice}`, decidedBy: 'user', promptVersion: e.prompt_version, detail: { previousGuess: e.guess?.id ?? null } }, now);
-  })();
+  });
 
   if (choice === 'dismiss') return out;
   saveEvalCase(casesPath, {

@@ -15,7 +15,7 @@ function addPosting(db, { stage = 'pipeline', status = 'new', discovered = '2026
   );
 }
 
-test('collectReport and renderReport cover new, promoted, pipeline, cost and failures, all escaped', () => {
+test('collectReport and renderReport cover new, promoted, pipeline, cost and failures, all escaped', async () => {
   const store = openJobStore(':memory:');
   const { db } = store;
   const since = '2026-09-30T00:00:00.000Z';
@@ -34,7 +34,7 @@ test('collectReport and renderReport cover new, promoted, pipeline, cost and fai
   db.prepare(`INSERT INTO scores (user_id, posting_id, score, source, created_at) VALUES (1, ?, 9, 'v2', '2026-09-20T00:00:00.000Z')`).run(old); // promoted earlier
   addPosting(db, { stage: 'discovered' });
 
-  const data = collectReport(db, { since });
+  const data = await collectReport(db, { since });
   assert.equal(data.promoted.length, 1);
   assert.equal(data.pipeline.length, 2);
   assert.ok(Math.abs(data.costUsd - 0.52) < 1e-9, 'only runs since the start count');
@@ -55,7 +55,7 @@ test('collectReport and renderReport cover new, promoted, pipeline, cost and fai
   store.close();
 });
 
-test('archive moves closed/passed/rejected now and stale jobs after 30 days, keeping active conversations', () => {
+test('archive moves closed/passed/rejected now and stale jobs after 30 days, keeping active conversations', async () => {
   const store = openJobStore(':memory:');
   const { db } = store;
   const now = new Date(2026, 8, 30);
@@ -66,15 +66,15 @@ test('archive moves closed/passed/rejected now and stale jobs after 30 days, kee
   addPosting(db, { status: 'new', discovered: '2026-09-25' }); // recent, kept
   addPosting(db, { stage: 'discovered', status: 'closed' }); // not in the pipeline
 
-  const preview = archivePostings(db, { now, dryRun: true });
+  const preview = await archivePostings(db, { now, dryRun: true });
   assert.deepEqual(preview.archived.map((m) => m.id), [closed, passed, staleApplied]);
   assert.match(preview.archived[2].reason, /over 30 days/);
   assert.equal(db.prepare("SELECT COUNT(*) FROM postings WHERE stage = 'pipeline'").pluck().get(), 5, 'dry run changes nothing');
 
-  const done = archivePostings(db, { now });
+  const done = await archivePostings(db, { now });
   assert.equal(done.archived.length, 3);
   assert.equal(done.remaining, 2);
   assert.equal(db.prepare("SELECT stage || '/' || status FROM postings WHERE id = ?").pluck().get(passed), 'archived/passed');
-  assert.equal(findArchivable(db, { now }).length, 0);
+  assert.equal((await findArchivable(db, { now })).length, 0);
   store.close();
 });

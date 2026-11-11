@@ -79,7 +79,7 @@ async function evaluate(argv) {
   const store = openJobStore();
   const knowledge = await ownerBackground(store); // the owner's knowledge doc from Settings
   if (knowledge.length < MIN_KNOWLEDGE_CHARS) throw new Error('The knowledge doc is too short.');
-  const estimate = estimateEval(cases, models, knowledge.length, config, store.db);
+  const estimate = await estimateEval(cases, models, knowledge.length, config, store.db);
   const total = Object.values(estimate).reduce((/** @type {number} */ a, b) => a + (b ?? 0), 0);
   console.log(`${cases.length} cases x ${models.length} models. Estimated cost: ${Object.entries(estimate).map(([m, u]) => `${m} ~$${u == null ? '?' : u.toFixed(2)}`).join(', ')} (total ~$${total.toFixed(2)}).`);
   const noPrice = unpriced(estimate);

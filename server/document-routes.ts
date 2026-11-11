@@ -26,7 +26,7 @@ export function registerDocumentRoutes(app: App, { db, config }: { db: Database;
         attendees = [];
       }
       const buffer = await prepDocx(prep.content);
-      return send(reply, prepDocName(letterHeader(db, config).name, prep.company, attendees), buffer);
+      return send(reply, prepDocName((await letterHeader(db, config)).name, prep.company, attendees), buffer);
     },
   );
 }

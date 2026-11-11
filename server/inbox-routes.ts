@@ -24,7 +24,7 @@ const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
 
 /** Everything the Inbox screen shows. */
-export function inboxOverview(db: Database, { ready }: { ready: boolean }) {
+export async function inboxOverview(db: Database, { ready }: { ready: boolean }) {
   return {
     signedIn: ready,
     lastCheck: db.prepare("SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name IN ('inbox', 'inbox-backfill') ORDER BY id DESC LIMIT 1").get() ?? null,
@@ -50,7 +50,7 @@ export function inboxOverview(db: Database, { ready }: { ready: boolean }) {
         FROM emails e JOIN postings p ON p.id = e.posting_id AND p.user_id = e.user_id
         WHERE e.user_id = @uid AND e.review_status IN ('auto', 'confirmed', 'reassigned', 'new_opportunity') ORDER BY e.sent_at DESC LIMIT 40`)
       .all(),
-    openApplications: listOpenApplications(db).map(({ id, company, title, status }) => ({ id, company, title, status })),
+    openApplications: (await listOpenApplications(db)).map(({ id, company, title, status }) => ({ id, company, title, status })),
   };
 }
 
@@ -60,7 +60,7 @@ export function registerInboxRoutes(app: App, { store, tasks, claude, inbox }: {
 
   app.get('/api/inbox', { schema: { summary: 'Emails to review, open reminders, recent linked emails, last check', response: { 200: anyObject } } }, async () => {
     const task = checkTaskId ? tasks.get(checkTaskId) : null;
-    return { ...inboxOverview(db, { ready: inbox.ready() }), checkTaskId: task?.status === 'running' ? checkTaskId : null };
+    return { ...await inboxOverview(db, { ready: inbox.ready() }), checkTaskId: task?.status === 'running' ? checkTaskId : null };
   });
 
   app.post(
@@ -127,7 +127,7 @@ export function registerInboxRoutes(app: App, { store, tasks, claude, inbox }: {
         body = m ? trimBody(m.rawBody, { html: m.bodyIsHtml, max: inbox.cfg.bodyChars }) : null;
       }
       try {
-        const r = resolveReview(db, e, choice, { postingId, body, key: body ? inbox.key() : null });
+        const r = await resolveReview(db, e, choice, { postingId, body, key: body ? inbox.key() : null });
         return { postingId: r.postingId, statusChange: r.statusChange, review: r.review, notices: r.notices.filter((n) => !n.startsWith('Needs review')) };
       } catch (err) {
         return reply.code(400).send({ error: (err as Error).message });

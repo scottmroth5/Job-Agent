@@ -76,7 +76,7 @@ export const flagged = <T extends { verdict: string }>(claims: T[]) => [...claim
  * Checks one letter on the user's AI. Returns { claims, model, promptVersion, costUsd }; throws when the call fails
  * (the caller records a failed check).
  */
-export async function verifyLetter({ claude, db = null, background, posting, letter, config, trace = null, model = VERIFY_MODEL, prompt = getPrompt(db, 'verify-letter') }: {
+export async function verifyLetter({ claude, db = null, background, posting, letter, config, trace = null, model = VERIFY_MODEL, prompt: promptGiven }: {
   claude: Claude;
   db?: Database | null;
   background: string;
@@ -87,6 +87,7 @@ export async function verifyLetter({ claude, db = null, background, posting, let
   model?: string;
   prompt?: Pick<Prompt, 'template' | 'schema' | 'version'>;
 }) {
+  const prompt = promptGiven ?? (await getPrompt(db, 'verify-letter'));
   const res = await claude.send({ ...buildVerifyRequest({ posting, letter, background, prompt, config, model }), trace });
   return { claims: cleanClaims(res.data), model, promptVersion: prompt.version, costUsd: res.costUsd ?? null };
 }

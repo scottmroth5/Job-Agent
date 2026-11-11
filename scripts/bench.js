@@ -39,7 +39,7 @@ function stats(times) {
 const dir = mkdtempSync(join(tmpdir(), 'job-agent-bench-'));
 try {
   const dbPath = join(dir, 'job-agent.db');
-  seedDemo({ dbPath, configPath: join(dir, 'config', 'job-search.json') });
+  await seedDemo({ dbPath, configPath: join(dir, 'config', 'job-search.json') });
   const store = openJobStore(dbPath);
   // Every outside service is off: the benchmarked routes never reach them.
   const services = /** @type {AppServices} */ (/** @type {unknown} */ ({

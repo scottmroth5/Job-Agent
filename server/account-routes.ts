@@ -37,7 +37,7 @@ const KEY_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,200}$/;
 
 async function account(db: Database, uid: number) {
   const u = (await getUser(db, uid)) as User; // the request's own account, which exists
-  const budget = budgetStatus(db, { uid });
+  const budget = await budgetStatus(db, { uid });
   return {
     email: u.email,
     name: u.name,

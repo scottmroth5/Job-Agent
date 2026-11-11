@@ -109,7 +109,7 @@ async function main() {
       );
     }
     await step(tracer, 'archive', async () => {
-      const r = archivePostings(store.db);
+      const r = await archivePostings(store.db);
       return { archived: r.archived.map(({ id, reason }) => ({ id, reason })), remaining: r.remaining };
     });
     await pipelineRun.finish(knowledge ? 'ok' : 'partial');
@@ -117,7 +117,7 @@ async function main() {
     console.log(`[pipeline] Step ${STEPS.length}/${STEPS.length}: report`);
     // The report goes only to the owner (it is job data; others see their results in the app).
     if (noEmail || !owner) {
-      const r = renderReport(collectReport(store.db, { since: started }));
+      const r = renderReport(await collectReport(store.db, { since: started }));
       console.log(`${r.subject}\n${r.text}`);
     } else {
       const to = process.env.EMAIL_ADDRESS;

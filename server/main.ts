@@ -20,7 +20,7 @@ import { timeZone } from '../tools/dates.ts';
 import { countryLookup, geoAllowFromEnv, openGeo, openRelay } from './geo.ts';
 import { createAlerts } from './alerts.ts';
 import { createNotices } from './notices.ts';
-import { getSetting, setSetting } from '../db/settings.ts';
+import { claimSetting } from '../db/settings.ts';
 import { getUser, OWNER_ID, syncOwnerEmail } from '../db/users.ts';
 import { sendEmail } from '../tools/google/gmail.ts';
 import { assertSafeBinding, authSettings } from './auth.ts';
@@ -55,8 +55,8 @@ const onCapReached = async (uid: number, error: Error) => {
   const err = error as BudgetExceededError; // the cap's refusal (tools/claude.ts)
   if (uid === OWNER_ID || err.scope !== 'user') return;
   const key = `allowance-notice:${uid}`;
-  if (getSetting(store.raw, key) === err.status.month) return;
-  setSetting(store.raw, key, err.status.month);
+  // The check and the mark are one transaction, so two refusals at once send one notice.
+  if (!(await claimSetting(store.raw, key, err.status.month, (last) => last !== err.status.month))) return;
   await notices.allowanceReached?.((await getUser(store.raw, uid)) as User, err.status); // a user on the owner's key has a row
 };
 // The owner's account row carries their first allowed address, for the Users screen.
