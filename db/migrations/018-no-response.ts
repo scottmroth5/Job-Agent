@@ -2,7 +2,7 @@
 // a built-in closed status, after Rejected, and the status list's noResponse role pointing at it (Admin > Lists can point
 // it elsewhere). A list that already has a no_response value (a custom one) keeps it and gets the role.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '018-no-response';
 

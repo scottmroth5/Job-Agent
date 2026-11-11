@@ -11,7 +11,7 @@ const since = new Date(Date.now() - hours * 3600 * 1000).toISOString();
 const store = openJobStore();
 try {
   if (process.argv.includes('--no-email')) {
-    const r = renderReport(collectReport(store.db, { since }));
+    const r = renderReport(await collectReport(store.db, { since }));
     console.log(`${r.subject}\n${r.text}`);
   } else {
     const to = process.env.EMAIL_ADDRESS;

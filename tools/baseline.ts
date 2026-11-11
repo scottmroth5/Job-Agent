@@ -1,10 +1,10 @@
 // The v3 baseline (docs/v3/PLAN.md, Phase 0): counts that size the move to PostgreSQL and show how complete the outcome
 // data is. Opens the database read-only (no migrations, no pre-migration copy) and reads no text columns: table row counts,
 // file and attachment sizes, Claude spend by month, accounts by status, and per-user outcome counts summed over users.
-import Database from 'better-sqlite3';
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { runAsUser, scopeDb } from '../db/scope.ts';
+import { runAsUser } from '../db/scope.ts';
+import { openReadOnly } from '../db/engine/files.ts';
 import { applications } from '../server/funnel.ts';
 import { waitingApplications } from '../agents/follow-ups.ts';
 
@@ -34,31 +34,28 @@ function folderSize(dir: string): { files: number; bytes: number } {
  * @param {string} path  the SQLite file (opened read-only; it must exist)
  * @param {{ attachmentsDir?: string, now?: Date }} [options]
  */
-export function baselineReport(path: string, { attachmentsDir = null, now = new Date() }: { attachmentsDir?: string | null; now?: Date } = {}) {
-  const raw = new Database(path, { readonly: true, fileMustExist: true });
+export async function baselineReport(path: string, { attachmentsDir = null, now = new Date() }: { attachmentsDir?: string | null; now?: Date } = {}) {
+  // Unscoped: inside runAsUser below, @uid is that user.
+  const { db, close } = openReadOnly(path);
   try {
-    const tables = raw
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-      .pluck()
-      .all()
-      .map((name) => name as string)
-      .map((name) => ({ table: name, rows: raw.prepare(`SELECT COUNT(*) FROM "${name.replaceAll('"', '""')}"`).pluck().get() as number }));
-    const pageSize = raw.pragma('page_size', { simple: true }) as number;
-    const pageCount = raw.pragma('page_count', { simple: true }) as number;
-    const spendByMonth = raw
+    const names = (await db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all()) as string[];
+    const tables: Array<{ table: string; rows: number }> = [];
+    for (const name of names) tables.push({ table: name, rows: (await db.prepare(`SELECT COUNT(*) FROM "${name.replaceAll('"', '""')}"`).pluck().get()) as number });
+    const pageSize = (await db.prepare('SELECT page_size FROM pragma_page_size').pluck().get()) as number;
+    const pageCount = (await db.prepare('SELECT page_count FROM pragma_page_count').pluck().get()) as number;
+    const spendByMonth = (await db
       .prepare('SELECT substr(created_at, 1, 7) AS month, ROUND(SUM(cost_usd), 2) AS usd, COUNT(*) AS calls FROM run_calls WHERE cost_usd IS NOT NULL GROUP BY month ORDER BY month')
-      .all() as Array<{ month: string; usd: number; calls: number }>;
-    const usersByStatus = raw.prepare('SELECT status, COUNT(*) AS count FROM users GROUP BY status ORDER BY status').all() as Array<{ status: string; count: number }>;
+      .all()) as Array<{ month: string; usd: number; calls: number }>;
+    const usersByStatus = (await db.prepare('SELECT status, COUNT(*) AS count FROM users GROUP BY status ORDER BY status').all()) as Array<{ status: string; count: number }>;
 
     // Outcome data quality, each user's counts through the same code the Funnel and follow-ups use, summed.
-    const db = scopeDb(raw);
     const outcomes = { applications: 0, noAppliedOn: 0, withLinkedEmail: 0, followUp: 0, stale: 0 };
-    for (const uid of raw.prepare('SELECT id FROM users ORDER BY id').pluck().all() as number[]) {
-      runAsUser(uid, () => {
-        const apps = applications(db, { now });
-        const noDate = new Set(db.prepare('SELECT id FROM postings WHERE user_id = @uid AND applied_on IS NULL').pluck().all());
-        const linked = new Set(db.prepare(`SELECT DISTINCT posting_id FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).pluck().all());
-        const waiting = waitingApplications(db, { now });
+    for (const uid of (await db.prepare('SELECT id FROM users ORDER BY id').pluck().all()) as number[]) {
+      await runAsUser(uid, async () => {
+        const apps = await applications(db, { now });
+        const noDate = new Set(await db.prepare('SELECT id FROM postings WHERE user_id = @uid AND applied_on IS NULL').pluck().all());
+        const linked = new Set(await db.prepare(`SELECT DISTINCT posting_id FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).pluck().all());
+        const waiting = await waitingApplications(db, { now });
         outcomes.applications += apps.length;
         outcomes.noAppliedOn += apps.filter((a) => noDate.has(a.id)).length;
         outcomes.withLinkedEmail += apps.filter((a) => linked.has(a.id)).length;
@@ -77,11 +74,11 @@ export function baselineReport(path: string, { attachmentsDir = null, now = new 
       outcomes,
     };
   } finally {
-    raw.close();
+    close();
   }
 }
 
-export type Baseline = ReturnType<typeof baselineReport>;
+export type Baseline = Awaited<ReturnType<typeof baselineReport>>;
 
 const mb = (bytes: number) => `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 

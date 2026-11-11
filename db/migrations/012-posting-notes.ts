@@ -4,7 +4,7 @@
 // A migration keeps its own copy of what it runs: app code changes later (agents/notes.ts queries gained user_id in
 // 013), and an old migration must do on a fresh database exactly what it did when it was written.
 import { randomUUID } from 'node:crypto';
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 function adoptNotesText(db: Database, { source }: { source: string }) {
   const nowIso = new Date().toISOString();

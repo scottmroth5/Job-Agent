@@ -79,7 +79,7 @@ async function evaluate(argv) {
   const store = openJobStore();
   const knowledge = await ownerBackground(store); // the owner's knowledge doc from Settings
   if (knowledge.length < MIN_KNOWLEDGE_CHARS) throw new Error('The knowledge doc is too short.');
-  const estimate = estimateEval(cases, models, knowledge.length, config, store.db);
+  const estimate = await estimateEval(cases, models, knowledge.length, config, store.db);
   const total = Object.values(estimate).reduce((/** @type {number} */ a, b) => a + (b ?? 0), 0);
   console.log(`${cases.length} cases x ${models.length} models. Estimated cost: ${Object.entries(estimate).map(([m, u]) => `${m} ~$${u == null ? '?' : u.toFixed(2)}`).join(', ')} (total ~$${total.toFixed(2)}).`);
   const noPrice = unpriced(estimate);
@@ -92,10 +92,10 @@ async function evaluate(argv) {
     throw new Error(`Estimate is over the $${maxUsd.toFixed(2)} budget. Raise --max-usd or use --limit.`);
   }
 
-  const run = createJobTracer({ store }).startRun('eval-score', { models, cases: cases.length });
+  const run = await createJobTracer({ store }).startRun('eval-score', { models, cases: cases.length });
   try {
     const result = await runEval({ cases, models, claude: createJobClaude(store.db), config, knowledge, run, db: store.db, log: (m) => console.log(`  ${m}`) });
-    const totals = run.finish('ok', { models, cases: cases.length });
+    const totals = await run.finish('ok', { models, cases: cases.length });
 
     const rows = [
       { scorer: 'v1 (stored scores)', ...result.v1, cost: '-', 'avg ms': '-' },
@@ -119,7 +119,7 @@ async function evaluate(argv) {
     writeFileSync(file, JSON.stringify({ models, promptVersion: result.promptVersion, v1: result.v1, perModel: result.perModel }, null, 2));
     console.log(`Details saved to ${file}`);
   } catch (err) {
-    run.finish('failed');
+    await run.finish('failed');
     throw err;
   } finally {
     store.close();

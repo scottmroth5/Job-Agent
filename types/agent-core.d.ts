@@ -95,10 +95,17 @@ declare module '@scottmroth5/agent-core' {
   export interface Run {
     /** runs.id when persisted. */
     id: number | null;
-    recordCall(info: CallInfo): void;
+    /** Awaited by createClaude().send; resolves once the call's run_calls row is written (0.4.0). */
+    recordCall(info: CallInfo): Promise<void>;
     log(level: 'info' | 'warn' | 'error', msg: string, fields?: object): void;
-    /** Idempotent; later calls return the first totals. */
-    finish(status?: string, summary?: object | null): Totals;
+    /** Idempotent; later calls (even before the first settles) resolve to the first totals (0.4.0: a promise). */
+    finish(status?: string, summary?: object | null): Promise<Totals>;
+  }
+
+  /** What the tracer writes through: better-sqlite3 (openStore) or an async data layer, whose run resolves later. */
+  type TraceRunResult = { lastInsertRowid?: number | bigint; id?: number };
+  export interface TraceDb {
+    prepare(sql: string): { run(...params: unknown[]): TraceRunResult | Promise<TraceRunResult> };
   }
 
   export interface Logger {
@@ -108,8 +115,9 @@ declare module '@scottmroth5/agent-core' {
     error: (...args: any[]) => void;
   }
 
-  export function createTracer(options?: { store?: { db: Database }; logger?: Logger }): {
-    startRun(name: string, meta?: object): Run;
+  export function createTracer(options?: { store?: { db: TraceDb }; logger?: Logger }): {
+    /** 0.4.0: resolves to the run once its runs row is written. */
+    startRun(name: string, meta?: object): Promise<Run>;
   };
 
   export interface Migration {

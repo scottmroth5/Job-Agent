@@ -39,12 +39,12 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const store = openJobStore();
-  const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
+  const config = await configFor(store.admin, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   try {
     if (args.dryRun) {
-      const postings = selectPostings(store.db, args);
+      const postings = await selectPostings(store.db, args);
       const rule = postings.filter((p) => p.location_check === 'conflict').length;
-      const usd = estimateCost(postings, { model: args.model, config, knowledgeChars: 10000, templateChars: loadScorePrompt('fulltime', store.db).template.length });
+      const usd = estimateCost(postings, { model: args.model, config, knowledgeChars: 10000, templateChars: (await loadScorePrompt('fulltime', store.db)).template.length });
       console.log(`DRY RUN: ${postings.length} postings to score with ${args.model} (${rule} by location rule, no AI call).`);
       console.log(usd == null ? `Estimated cost: unknown (no price for ${args.model} in agents/discovery/score.ts ESTIMATE_RATES).` : `Estimated cost: about $${usd.toFixed(2)}.`);
       /** @type {Record<string, number>} */
@@ -54,10 +54,10 @@ async function main() {
       return;
     }
 
-    assertNoRunningRun(store.db, 'score');
+    await assertNoRunningRun(store.db, 'score');
     const knowledge = await ownerBackground(store);
     console.log(`Candidate Knowledge loaded: ${knowledge.length.toLocaleString()} characters.`);
-    const run = createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: loadScorePrompt('fulltime', store.db).version });
+    const run = await createJobTracer({ store }).startRun('score', { model: args.model, promptVersion: (await loadScorePrompt('fulltime', store.db)).version });
     try {
       const summary = await scorePostings({
         store,
@@ -68,7 +68,7 @@ async function main() {
         run,
         options: { ids: args.ids, allUnscored: args.allUnscored, limit: args.limit },
       });
-      const totals = run.finish(summary.aborted ? 'aborted' : summary.failures.length ? 'partial' : 'ok', summary);
+      const totals = await run.finish(summary.aborted ? 'aborted' : summary.failures.length ? 'partial' : 'ok', summary);
 
       console.log(`\nScored ${summary.scored} of ${summary.selected} postings with ${args.model} (${summary.ruleScored} by location rule).`);
       const dist = Object.entries(summary.distribution).sort(([a], [b]) => Number(b) - Number(a)).map(([s, n]) => `${s}: ${n}`).join('  ');
@@ -81,7 +81,7 @@ async function main() {
       if (summary.aborted) console.log('Stopped early after repeated failures. Check the API key and network.');
       console.log(`Cost: $${totals.costUsd.toFixed(4)} (${totals.calls} Claude calls, ${totals.cacheReadTokens} cached input tokens).`);
     } catch (err) {
-      run.finish('failed');
+      await run.finish('failed');
       throw err;
     }
   } finally {

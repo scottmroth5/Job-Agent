@@ -2,7 +2,7 @@
 // about off the review list with no action and no eval case. Loosens the CHECK in place like 008 (every existing
 // row already satisfies the new list), so the table is not rebuilt.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '019-dismissed-email';
 

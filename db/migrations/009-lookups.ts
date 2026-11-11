@@ -4,7 +4,7 @@
 // as safe, and no table rebuild means nothing can cascade) and replaced by triggers that accept any ID in
 // lookup_values. Portable types; in PostgreSQL the triggers become foreign keys. Any failure rolls back.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '009-lookups';
 

@@ -13,7 +13,7 @@ import { identityKey, isRealCompany } from '../identity.ts';
 import { lookups, sqlList } from '../lookups.ts';
 import { addNote } from '../notes.ts';
 import { localDay, localDaysAgo } from '../../tools/dates.ts';
-import type { Database } from '../../tools/types.ts';
+import type { Db } from '../../tools/types.ts';
 import type { PostingsRow } from '../../db/types.ts';
 
 /** A job a cleanup removes, with the reason (written into its note). */
@@ -25,12 +25,12 @@ type Listing = Pick<PostingsRow, 'id' | 'company' | 'title' | 'url' | 'stage' | 
 export const ARCHIVE_AFTER_DAYS = 30;
 
 /** Returns the active-stage postings to archive, each with a reason. */
-export function findArchivable(db: Database, { now = new Date(), days = ARCHIVE_AFTER_DAYS }: { now?: Date; days?: number } = {}) {
-  const lk = lookups(db);
+export async function findArchivable(db: Db, { now = new Date(), days = ARCHIVE_AFTER_DAYS }: { now?: Date; days?: number } = {}) {
+  const lk = await lookups(db);
   const closed = lk.closed();
   const keep = lk.neverAutoArchived();
   const cutoffIso = localDaysAgo(now, days);
-  return (db
+  return (await db
     .prepare(`SELECT id, company, title, status, discovered_on FROM postings WHERE user_id = @uid AND stage IN ${sqlList(lk.ids('stage', 'active'))} ORDER BY id`)
     .all() as Array<Pick<PostingsRow, 'id' | 'company' | 'title' | 'status' | 'discovered_on'>>)
     .map((p) => {
@@ -46,10 +46,10 @@ export function findArchivable(db: Database, { now = new Date(), days = ARCHIVE_
  * Postings that are never kept (see tools/listings.ts: list-of-jobs pages, excluded sites) and are not
  * yet archived, or archived but still to evaluate. Jobs in progress are left alone.
  */
-export function findListings(db: Database, config: Parameters<typeof skipReason>[1]) {
-  const lk = lookups(db);
+export async function findListings(db: Db, config: Parameters<typeof skipReason>[1]) {
+  const lk = await lookups(db);
   const inProgress = lk.inProgress();
-  return (db
+  return (await db
     .prepare(`SELECT id, company, title, url, stage, status FROM postings
       WHERE user_id = @uid AND (stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR status IN ${sqlList(lk.ids('status', 'evaluate'))}) ORDER BY id`)
     .all() as Listing[])
@@ -65,8 +65,8 @@ const GROUP_RANK: Record<string, number> = { decision: 0, conversation: 1, waiti
  * Extra copies of one job (same company and title, including "See posting" rows whose Google title
  * names the company). Only unarchived copies still to evaluate are returned; the best copy is kept.
  */
-export function findDuplicates(db: Database) {
-  const lk = lookups(db);
+export async function findDuplicates(db: Db) {
+  const lk = await lookups(db);
   const archived = lk.ids('stage', 'archived');
   const active = lk.ids('stage', 'active');
   const evaluate = lk.ids('status', 'evaluate');
@@ -84,7 +84,7 @@ export function findDuplicates(db: Database) {
     const y = keepRank(b);
     return x.reduce((d, v, i) => d || v - y[i], 0);
   };
-  const rows = (db
+  const rows = (await db
     .prepare(`SELECT id, company, title, url, stage, status, company_title_key,
         TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != '' AS has_text,
         -- removed by cleanup: the agent changed an existing status (discovery's first status, from nothing, does not count)
@@ -114,11 +114,11 @@ export function findDuplicates(db: Database) {
  * history (changed_by 'agent', which the scoring eval ignores). They stay in the database so their links are
  * recognized and never added again.
  */
-export function archiveListings(db: Database, { config, now = new Date(), dryRun = false }: { config?: Parameters<typeof skipReason>[1]; now?: Date; dryRun?: boolean } = {}) {
-  const skipped = findListings(db, config);
+export async function archiveListings(db: Db, { config, now = new Date(), dryRun = false }: { config?: Parameters<typeof skipReason>[1]; now?: Date; dryRun?: boolean } = {}) {
+  const skipped = await findListings(db, config);
   const seen = new Set(skipped.map((p) => p.id));
-  const found = [...skipped, ...findDuplicates(db).filter((p) => !seen.has(p.id))];
-  if (!dryRun && found.length) archiveFound(db, found, now);
+  const found = [...skipped, ...(await findDuplicates(db)).filter((p) => !seen.has(p.id))];
+  if (!dryRun && found.length) await archiveFound(db, found, now);
   return { archived: found, dryRun };
 }
 
@@ -126,64 +126,73 @@ export function archiveListings(db: Database, { config, now = new Date(), dryRun
  * The saved jobs from one skipped site that cleanup would remove (not archived or still to evaluate, and not in
  * progress), or archives them: Skip this site's "remove the saved ones". Jobs you applied to are never touched.
  */
-export function archiveSiteJobs(db: Database, site: string, { now = new Date(), dryRun = false }: { now?: Date; dryRun?: boolean } = {}) {
-  const found = findListings(db, { search: { excludedSites: [site] } }).filter((p) => p.reason.startsWith('excluded site'));
-  if (!dryRun && found.length) archiveFound(db, found, now);
+export async function archiveSiteJobs(db: Db, site: string, { now = new Date(), dryRun = false }: { now?: Date; dryRun?: boolean } = {}) {
+  const found = (await findListings(db, { search: { excludedSites: [site] } })).filter((p) => p.reason.startsWith('excluded site'));
+  if (!dryRun && found.length) await archiveFound(db, found, now);
   return { archived: found, dryRun };
 }
 
 // Archives each one and marks it with the passed (or duplicate) role's status, with a note and status history, changed_by 'agent'.
-function archiveFound(db: Database, found: Found[], now: Date) {
-  const lk = lookups(db);
-  const evaluate = lk.ids('status', 'evaluate');
-  const nowIso = now.toISOString();
-  const update = db.prepare('UPDATE postings SET stage = @stage, status = @status, updated_at = @now WHERE id = @id AND user_id = @uid');
-  const history = db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)");
-  const stage = lk.role('stage', 'archive');
-  // 023 sets both roles, and a role is moved, never removed.
-  const [duplicate, passed] = [lk.role('status', 'duplicate') as string, lk.role('status', 'passed') as string];
-  db.transaction(() => {
-    for (const p of found) {
-      const status = !evaluate.includes(p.status) ? p.status : /^duplicate of/.test(p.reason) ? duplicate : passed;
-      update.run({ id: p.id, stage, status, now: nowIso });
-      addNote(db, p.id, `Removed ${localDay(now)}: ${p.reason}.`, { source: 'agent', now });
-      if (status !== p.status) history.run(p.id, p.status, status, nowIso);
-    }
-  })();
+async function archiveFound(db: Db, found: Found[], now: Date) {
+  // The jobs are found and archived in one transaction.
+  return db.tx(async () => {
+    const lk = await lookups(db);
+    const evaluate = lk.ids('status', 'evaluate');
+    const nowIso = now.toISOString();
+    const update = db.prepare('UPDATE postings SET stage = @stage, status = @status, updated_at = @now WHERE id = @id AND user_id = @uid');
+    const history = db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)");
+    const stage = lk.role('stage', 'archive');
+    // 023 sets both roles, and a role is moved, never removed.
+    const [duplicate, passed] = [lk.role('status', 'duplicate') as string, lk.role('status', 'passed') as string];
+    await db.tx(async () => {
+      for (const p of found) {
+        const status = !evaluate.includes(p.status) ? p.status : /^duplicate of/.test(p.reason) ? duplicate : passed;
+        await update.run({ id: p.id, stage, status, now: nowIso });
+        await addNote(db, p.id, `Removed ${localDay(now)}: ${p.reason}.`, { source: 'agent', now });
+        if (status !== p.status) await history.run(p.id, p.status, status, nowIso);
+      }
+    });
+  });
 }
 
 /**
  * Active jobs still to evaluate that have no description (v1 promoted many from the title alone). They go
  * back to the default stage, where the UI flags them, until a description is pasted and they are re-scored.
  */
-export function demoteWithoutText(db: Database, { now = new Date(), dryRun = false }: { now?: Date; dryRun?: boolean } = {}) {
-  const lk = lookups(db);
-  const active = sqlList(lk.ids('stage', 'active'));
-  const found = db
-    .prepare(`SELECT id, company, title, status FROM postings WHERE user_id = @uid AND stage IN ${active} AND status IN ${sqlList(lk.ids('status', 'evaluate'))}
-      AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) = '' ORDER BY id`)
-    .all() as Array<Pick<PostingsRow, 'id' | 'company' | 'title' | 'status'>>;
-  if (!dryRun && found.length) {
-    const update = db.prepare(`UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${active}`);
-    db.transaction(() => {
-      for (const p of found) update.run(lk.role('stage', 'default'), now.toISOString(), p.id);
-    })();
-  }
-  return { demoted: found, dryRun };
+export async function demoteWithoutText(db: Db, { now = new Date(), dryRun = false }: { now?: Date; dryRun?: boolean } = {}) {
+  // Read and moved in one transaction.
+  return db.tx(async () => {
+    const lk = await lookups(db);
+    const active = sqlList(lk.ids('stage', 'active'));
+    const found = await db
+      .prepare(`SELECT id, company, title, status FROM postings WHERE user_id = @uid AND stage IN ${active} AND status IN ${sqlList(lk.ids('status', 'evaluate'))}
+        AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) = '' ORDER BY id`)
+      .all() as Array<Pick<PostingsRow, 'id' | 'company' | 'title' | 'status'>>;
+    if (!dryRun && found.length) {
+      const update = db.prepare(`UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${active}`);
+      await db.tx(async () => {
+        for (const p of found) await update.run(lk.role('stage', 'default'), now.toISOString(), p.id);
+      });
+    }
+    return { demoted: found, dryRun };
+  });
 }
 
 /** Archives them (unless dryRun). Returns { archived: [...], remaining: number }. */
-export function archivePostings(db: Database, { now = new Date(), days = ARCHIVE_AFTER_DAYS, dryRun = false }: { now?: Date; days?: number; dryRun?: boolean } = {}) {
-  const lk = lookups(db);
-  const active = sqlList(lk.ids('stage', 'active'));
-  const moves = findArchivable(db, { now, days });
-  if (!dryRun && moves.length) {
-    const update = db.prepare(`UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${active}`);
-    const nowIso = now.toISOString();
-    db.transaction(() => {
-      for (const m of moves) update.run(lk.role('stage', 'archive'), nowIso, m.id);
-    })();
-  }
-  const total = db.prepare(`SELECT COUNT(*) FROM postings WHERE user_id = @uid AND stage IN ${active}`).pluck().get() as number;
-  return { archived: moves, remaining: total, dryRun };
+export async function archivePostings(db: Db, { now = new Date(), days = ARCHIVE_AFTER_DAYS, dryRun = false }: { now?: Date; days?: number; dryRun?: boolean } = {}) {
+  // Read and archived in one transaction.
+  return db.tx(async () => {
+    const lk = await lookups(db);
+    const active = sqlList(lk.ids('stage', 'active'));
+    const moves = await findArchivable(db, { now, days });
+    if (!dryRun && moves.length) {
+      const update = db.prepare(`UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${active}`);
+      const nowIso = now.toISOString();
+      await db.tx(async () => {
+        for (const m of moves) await update.run(lk.role('stage', 'archive'), nowIso, m.id);
+      });
+    }
+    const total = await db.prepare(`SELECT COUNT(*) FROM postings WHERE user_id = @uid AND stage IN ${active}`).pluck().get() as number;
+    return { archived: moves, remaining: total, dryRun };
+  });
 }

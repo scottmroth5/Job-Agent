@@ -1,8 +1,9 @@
 ## Purpose
 Job Discovery and Job Hunt agents built on the shared agent-core package.
 agent-core comes from the public Agent-Core repo as a git dependency pinned to a version tag
-("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.3.0"; meeting prep needs 0.2.2's tools, streaming, and pause_turn resume;
-migration 013 needs 0.2.3's foreignKeys: false table rebuilds; 0.3.0 moves the Anthropic SDK to 1.x, whose default API version is 2026-10-21). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
+("@scottmroth5/agent-core": "github:scottmroth5/Agent-Core#semver:^0.4.0"; meeting prep needs 0.2.2's tools, streaming, and pause_turn resume;
+migration 013 needs 0.2.3's foreignKeys: false table rebuilds; 0.3.0 moves the Anthropic SDK to 1.x, whose default API version is 2026-10-21;
+0.4.0's tracer is async: await createJobTracer().startRun() and run.finish(), and its store may be the async db/engine). Upgrade with npm install "github:scottmroth5/Agent-Core#semver:^<x.y.z>"; test unreleased changes with npm link ../Agent-Core.
 Job specific logic stays in this repo; never add it to agent-core.
 v3: docs/v3/PLAN.md is the phased plan (one phase at a time, plan mode first, its stop-and-ask list applies); docs/architecture/
 holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-final tags the last v2 commit.
@@ -18,6 +19,8 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
                     Change notes only through this module: it keeps postings.notes as every entry's text, oldest first, for
                     code that reads notes as one text. Code that inserts a job with notes text calls adoptNotesText
 /db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.ts, applied in id order), openJobStore, v1 import.
+                    db/engine is the async data layer every call goes through (see Database below): types.ts (Db), sqlite.ts
+                    (the SQLite engine), files.ts (read-only opens, copies, online backups, integrity checks).
                     db/types.ts is generated (npm run db:types after a new migration): a row type per table, for query results.
                     Rebuild a table only in a migration that exports foreignKeys = false (agent-core runs it with foreign keys off,
                     then foreign_key_check and integrity_check must pass before it commits); in any other migration a drop cascades.
@@ -116,10 +119,11 @@ db/users.ts: users table, the owner is user 1 (admin); every row before 013 is t
 db/migrations/013-users.ts) has user_id NOT NULL, and keys that were unique app-wide are unique per user. Every query on a
 user table says "user_id = @uid" (joins and subqueries too: "s.user_id = p.user_id"); inserts give user_id @uid, or copy it
 from the job row (INSERT ... SELECT ... FROM postings WHERE id = ? AND user_id = @uid) so another user's job gets nothing.
-store.db is scoped (db/scope.ts): @uid is the user of the current request or job (runAsUser, AsyncLocalStorage), else
-fallbackUid: the owner for scripts and tests; the server has none, so a user-table query outside a request or job throws.
-store.raw is unscoped: migrations, backups, and server/admin-queries.ts (the admin's cross-user reads: counts and account
-facts, never anyone's jobs or key) only.
+store.db is scoped (the engine binds @uid; db/scope.ts): @uid is the user of the current request or job (runAsUser,
+AsyncLocalStorage), else fallbackUid: the owner for scripts and tests; the server has none, so a user-table query outside
+a request or job throws. store.admin is unscoped: queries that name their user themselves (configFor, backgroundFor,
+account facts by id), app-wide tables, and server/admin-queries.ts (the admin's cross-user reads: counts and account
+facts, never anyone's jobs or key). test/admin-handle.test.js lists its callers; a new one is added there with its reason.
 Accounts (phase 2): any verified Google address signs in (server/auth.ts); AUTH_ALLOWED_EMAILS are the owner's addresses
 (accountFor; syncOwnerEmail gives user 1 the first). Anyone else: no row goes to /auth/register (name, note, 18 or older, terms; a form
 post, no script; MAX_PENDING open requests at most), pending to /auth/waiting, rejected to /auth/not-approved; API calls get
@@ -284,7 +288,7 @@ Change the prompt, schema, model, or threshold only after rerunning the scoring 
 Never kept (tools/listings.ts): list-of-jobs pages and search.excludedSites links; discovery and manual add drop them, scoring gives 1.
 Job sites to skip (agents/excluded-sites.ts, server/excluded-sites-routes.ts, Settings and Skip this site under the job panel's
 link): each user's own list with a note per site in user_settings; configFor adds it to search.excludedSites (the owner's
-file entries stay, shown as from the file), so scripts read config through configFor(store.raw, OWNER_ID, loadConfig()).
+file entries stay, shown as from the file), so scripts read config through configFor(store.admin, OWNER_ID, loadConfig()).
 Saved jobs from a site are removed only on request (archiveSiteJobs; never one applied to). test/excluded-sites.test.js.
 Without posting text a score is capped at 5 (analysis.uncappedScore keeps the original) and the job is never promoted; the UI flags 7+ ones.
 The job panel's score details (server/queries.ts scoreDetails) say when, by which model, from text or title, and with
@@ -308,6 +312,20 @@ scripts, evals, and test stay JavaScript (deploy.sh, compose.yml, the Windows ta
 typed with JSDoc (@param, @typedef, /** @import { X } from '...' */, casts as /** @type {T} */ (x)) and checked by the
 root tsconfig.json (checkJs: true), so a new .js file there is checked too. Tests build stand-ins through test/fixtures/fakes.js.
 The any count and each reason are in docs/v3/PLAN.md (Phase 2); a new any updates that table.
+
+## Database (v3 Phase 3, async on SQLite)
+Every database call is async through db/engine's Db: prepare(sql).get/all/run return promises (run gives { changes, id }),
+pluck(), and tx(fn). better-sqlite3 is imported only in db/engine, db/migrations (they run on the connection while
+openJobStore opens it, before the engine), types/, and tests (lint no-restricted-imports); work on database files
+(read-only opens, copies, backups, integrity checks) goes through db/engine/files.ts or store.backup.
+Transactions: db.tx serializes them (a mutex), and a statement from outside waits while one is open; a nested tx is a
+savepoint. A tx body waits only on the database: no Claude, Google, browser, or timer waits (the engine fails such a
+transaction under node --test; Claude and HTTP calls refuse to run inside one). A read and the write it decides go in one
+tx (counts against a cap, check-then-update, versions); with a network call between them, say so where it happens.
+In-memory per-day caps check and record with no await in between. Task starts that check for a running run go through
+tools/runs.ts oneStartAtATime. `config` in the server is a Proxy that must answer at once: the preHandler and the
+scheduler load each user's settings first (agents/user-config.ts withUserConfig). Never pass an async function to an
+array method (.map, .filter, .some) except into Promise.all.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),

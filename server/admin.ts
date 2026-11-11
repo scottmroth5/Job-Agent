@@ -9,7 +9,7 @@ import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD 
 import { buildClassifyRequest } from '../agents/inbox/classify.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { OWNER_ID } from '../db/users.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { UserConfig } from '../agents/user-config.ts';
 import type { PostingsRow } from '../db/types.ts';
 import type { App } from './types.ts';
@@ -38,9 +38,9 @@ const NAMES = Object.keys(PROMPTS);
 const nameParams = { type: 'object', required: ['name'], properties: { name: { type: 'string', enum: NAMES } } };
 const anyObject = { type: 'object', additionalProperties: true };
 
-function detail(db: Database, name: string) {
+async function detail(db: Db, name: string) {
   const def = PROMPTS[name];
-  const current = getPrompt(db, name);
+  const current = await getPrompt(db, name);
   const base = defaultPrompt(name);
   return {
     name,
@@ -56,18 +56,18 @@ function detail(db: Database, name: string) {
     allowed: def.allowed,
     required: def.required,
     schema: base.schemaText,
-    versions: listVersions(db, name),
+    versions: await listVersions(db, name),
   };
 }
 
 /** A job to preview with: the one asked for, else a recent one with text (and an analysis for hunt prompts). */
-function samplePosting(db: Database, name: string, postingId: number | undefined): SamplePosting | null {
+async function samplePosting(db: Db, name: string, postingId: number | undefined): Promise<SamplePosting | null> {
   const needsAnalysis = name === 'resume-tweaks' || name === 'cover-letter';
   const track = name === 'score-fractional' ? 'fractional' : name === 'score' ? 'fulltime' : null;
   const analysisSql = `(SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1)`;
-  if (postingId) return (db.prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) as SamplePosting | undefined) ?? null;
+  if (postingId) return (await db.prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) as SamplePosting | undefined) ?? null;
   return (
-    (db
+    (await db
       .prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p
         WHERE p.user_id = @uid AND (p.fetched_text IS NOT NULL OR p.jd_text IS NOT NULL) ${track ? 'AND p.track = @track' : ''}
         ${needsAnalysis ? `AND ${analysisSql} IS NOT NULL` : ''}
@@ -76,13 +76,13 @@ function samplePosting(db: Database, name: string, postingId: number | undefined
   );
 }
 
-export function registerAdminRoutes(app: App, { db, config }: { db: Database; config: UserConfig }) {
+export function registerAdminRoutes(app: App, { db, config }: { db: Db; config: UserConfig }) {
   // The signed-in user's spend: the owner sees everything on their key; anyone else, their own.
-  const spending = (uid = OWNER_ID) => ({ ...budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: spendByLabel(db, { uid }) });
+  const spending = async (uid = OWNER_ID) => ({ ...await budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: await spendByLabel(db, { uid }) });
 
   // Your own spend (everyone: Settings, and Admin > Spending for the owner, where it is everything on their key). Setting
   // the cap below stays the owner's.
-  app.get('/api/spending', { schema: { summary: "Your Claude spend this month, by feature, against your cap or allowance if you have one", response: { 200: anyObject } } }, async (req) => spending(req.uid));
+  app.get('/api/spending', { schema: { summary: "Your Claude spend this month, by feature, against your cap or allowance if you have one", response: { 200: anyObject } } }, async (req) => await spending(req.uid));
 
   app.put<{ Body: { limitUsd: number } }>(
     '/api/admin/budget',
@@ -94,20 +94,22 @@ export function registerAdminRoutes(app: App, { db, config }: { db: Database; co
       },
     },
     async (req) => {
-      setBudgetLimit(db, req.body.limitUsd);
-      return spending(req.uid);
+      await setBudgetLimit(db, req.body.limitUsd);
+      return await spending(req.uid);
     },
   );
 
   app.get('/api/prompts', { schema: { summary: 'The editable prompts', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
-    NAMES.map((name) => {
-      const p = getPrompt(db, name);
-      return { name, label: PROMPTS[name].label, usedBy: PROMPTS[name].usedBy, source: p.source, version: p.version, updatedAt: p.updatedAt, versions: listVersions(db, name).length };
-    }),
+    Promise.all(
+      NAMES.map(async (name) => {
+        const p = await getPrompt(db, name);
+        return { name, label: PROMPTS[name].label, usedBy: PROMPTS[name].usedBy, source: p.source, version: p.version, updatedAt: p.updatedAt, versions: (await listVersions(db, name)).length };
+      }),
+    ),
   );
 
   app.get<{ Params: { name: string } }>('/api/prompts/:name', { schema: { summary: 'A prompt with its default, placeholders, schema and history', params: nameParams, response: { 200: anyObject } } }, async (req) =>
-    detail(db, req.params.name),
+    await detail(db, req.params.name),
   );
 
   app.put<{ Params: { name: string }; Body: { template: string; note?: string } }>(
@@ -121,8 +123,8 @@ export function registerAdminRoutes(app: App, { db, config }: { db: Database; co
       },
     },
     async (req) => {
-      savePrompt(db, req.params.name, req.body);
-      return detail(db, req.params.name);
+      await savePrompt(db, req.params.name, req.body);
+      return await detail(db, req.params.name);
     },
   );
 
@@ -137,8 +139,8 @@ export function registerAdminRoutes(app: App, { db, config }: { db: Database; co
       },
     },
     async (req) => {
-      restorePrompt(db, req.params.name, req.body.versionId);
-      return detail(db, req.params.name);
+      await restorePrompt(db, req.params.name, req.body.versionId);
+      return await detail(db, req.params.name);
     },
   );
 
@@ -158,10 +160,10 @@ export function registerAdminRoutes(app: App, { db, config }: { db: Database; co
       if (problems.length) return { problems, text: null, posting: null };
       if (name === 'inbox-classify') {
         const draft = { template: req.body.template, schema: defaultPrompt(name).schema };
-        const text = buildClassifyRequest(SAMPLE_EMAIL, { open: listOpenApplications(db).slice(0, 25), model: 'preview', prompt: draft }).prompt;
+        const text = buildClassifyRequest(SAMPLE_EMAIL, { open: (await listOpenApplications(db)).slice(0, 25), model: 'preview', prompt: draft }).prompt;
         return { problems: [], text, posting: null, message: 'Previewed with a made-up sample email and your open applications.' };
       }
-      const posting = samplePosting(db, name, req.body.postingId);
+      const posting = await samplePosting(db, name, req.body.postingId);
       if (!posting) return { problems: [], text: null, posting: null, message: 'No job with posting text (and, for resume tweaks and letters, a v2 analysis) to preview with yet.' };
       const draft = { template: req.body.template, schema: defaultPrompt(name).schema, version: 'draft', track: posting.track };
       let text: string | undefined;
@@ -176,7 +178,7 @@ export function registerAdminRoutes(app: App, { db, config }: { db: Database; co
         text = buildContactRequest(posting, { config, knowledge: '', prompt: draft, analysis, notes: posting.notes ?? '' }).prompt;
       } else {
         const analysis = JSON.parse(posting.analysis_json as string); // samplePosting gave a job with one
-        const current = { tweaks: getPrompt(db, 'resume-tweaks'), letter: getPrompt(db, 'cover-letter') };
+        const current = { tweaks: await getPrompt(db, 'resume-tweaks'), letter: await getPrompt(db, 'cover-letter') };
         const prompts = name === 'resume-tweaks' ? { ...current, tweaks: draft } : { ...current, letter: draft };
         const build = name === 'resume-tweaks' ? buildTweaksRequest : buildLetterRequest;
         text = build(posting, analysis, { config, knowledge: '', prompts }).prompt;

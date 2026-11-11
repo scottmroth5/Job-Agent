@@ -28,10 +28,10 @@ async function main() {
   }
   const toDir = arg('--to');
   const store = openJobStore();
-  const run = createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('backup', { to: toDir ? 'folder' : 'google-drive' });
+  const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('backup', { to: toDir ? 'folder' : 'google-drive' });
   try {
     const r = await runBackup({
-      db: store.db,
+      backup: store.backup,
       passphrase,
       extras: [{ name: 'config/job-search.json', path: dataPath('config', 'job-search.json') }],
       folders: [{ name: 'attachments', dir: ATTACHMENTS_DIR }],
@@ -41,14 +41,14 @@ async function main() {
     });
     // With toDir the result says where it was saved; without it, what the upload kept and deleted.
     const { savedTo, kept, deleted } = /** @type {{ savedTo?: string, kept?: number, deleted?: number }} */ (r);
-    run.finish('ok', { file: r.name, bytes: r.bytes, files: r.fileCount, attachments: r.attachments, ...(toDir ? { savedTo } : { kept, deleted }) });
+    await run.finish('ok', { file: r.name, bytes: r.bytes, files: r.fileCount, attachments: r.attachments, ...(toDir ? { savedTo } : { kept, deleted }) });
     const kb = Math.round(r.bytes / 1024).toLocaleString();
     const what = `${kb} KB; the database, settings, and ${r.attachments} attachment${r.attachments === 1 ? '' : 's'}`;
     console.log(toDir
       ? `Encrypted backup written: ${savedTo} (${what})`
       : `Encrypted backup uploaded to Google Drive: ${r.name} (${what}). Kept ${kept}, deleted ${deleted}.`);
   } catch (err) {
-    run.finish('error', { error: /** @type {Error} */ (err).message });
+    await run.finish('error', { error: /** @type {Error} */ (err).message });
     throw err;
   } finally {
     store.close();

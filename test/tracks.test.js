@@ -43,9 +43,9 @@ test('detectTrack', () => {
   assert.equal(detectTrack({ source: 'Himalayas', title: 'VP Engineering', description: 'Full-time role.' }), 'fulltime');
 });
 
-test('005 migration adds track, rate and hours columns defaulting to full-time', () => {
+test('005 migration adds track, rate and hours columns defaulting to full-time', async () => {
   const store = openJobStore(':memory:');
-  const cols = /** @type {Array<{ name: string }>} */ (store.db.prepare('PRAGMA table_info(postings)').all()).map((c) => c.name);
+  const cols = /** @type {Array<{ name: string }>} */ (await store.db.prepare('PRAGMA table_info(postings)').all()).map((c) => c.name);
   for (const c of ['track', 'rate_text', 'rate_min', 'rate_max', 'rate_unit', 'hours_min', 'hours_max', 'extra_json']) assert.ok(cols.includes(c), c);
   store.close();
 });

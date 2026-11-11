@@ -11,7 +11,7 @@ import { parseFrom } from '../../agents/inbox/gmail.ts';
 import { isContact, isCompanyDomain } from '../../agents/inbox/store.ts';
 /**
  * @import { Claude, Run } from '@scottmroth5/agent-core'
- * @import { Database } from '../../tools/types.ts'
+ * @import { Db } from '../../tools/types.ts'
  * @import { InboxConfig } from '../../agents/inbox/config.ts'
  * @import { InboxResult } from './metrics.js'
  */
@@ -24,13 +24,13 @@ import { isContact, isCompanyDomain } from '../../agents/inbox/store.ts';
  */
 
 /**
- * @param {Database} db
+ * @param {Db} db
  * @param {EvalApplication[]} applications
  */
-function seed(db, applications) {
+async function seed(db, applications) {
   const insert = db.prepare(`INSERT INTO postings (user_id, id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
     VALUES (@uid, ?, ?, ?, ?, ?, '2026-09-01', 'pipeline', ?, ?, 'x', 'x')`);
-  for (const a of applications) insert.run(a.id, `eval-${a.id}`, a.company, a.title, storedKey(a), a.status, a.domain ?? null);
+  for (const a of applications) await insert.run(a.id, `eval-${a.id}`, a.company, a.title, storedKey(a), a.status, a.domain ?? null);
 }
 
 /**
@@ -69,16 +69,16 @@ export async function runInboxEval({ cases, applications, claude, cfg, model = c
     const store = openJobStore(':memory:');
     try {
       const { db } = store;
-      seed(db, applications);
+      await seed(db, applications);
       const email = toEmail(c, cfg.bodyChars);
-      const pass = prefilter(email, { threadStartedByMe: Boolean(c.email.threadStartedByMe), isContact: isContact(db), isCompanyDomain: isCompanyDomain(db), atsDomains: cfg.atsDomains });
+      const pass = prefilter(email, { threadStartedByMe: Boolean(c.email.threadStartedByMe), isContact: await isContact(db), isCompanyDomain: await isCompanyDomain(db), atsDomains: cfg.atsDomains });
       if (!pass.pass) {
         results.push({ id: c.id, expected: c.expected, passed: false, predicted: null, rule: null });
         continue;
       }
-      const open = listOpenApplications(db);
+      const open = await listOpenApplications(db);
       const cls = await classifyEmail(email, { claude, db, model, open, trace });
-      const link = decideEmail(db, email, cls, { cfg, open });
+      const link = await decideEmail(db, email, cls, { cfg, open });
       results.push({
         id: c.id,
         expected: c.expected,

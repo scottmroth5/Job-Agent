@@ -28,10 +28,10 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const store = openJobStore();
-  const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
+  const config = await configFor(store.admin, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   try {
     if (args.dryRun) {
-      const postings = selectForHunt(store.db, { ids: args.ids });
+      const postings = await selectForHunt(store.db, { ids: args.ids });
       console.log(`DRY RUN: ${postings.length} postings need tweaks, a letter, or a letter Doc.`);
       for (const p of postings) {
         const needs = [!p.has_tweaks && 'tweaks', !p.has_letter && 'letter', p.letter_missing_doc && 'Doc only'].filter(Boolean).join(', ');
@@ -41,20 +41,20 @@ async function main() {
       return;
     }
 
-    assertNoRunningRun(store.db, 'hunt');
+    await assertNoRunningRun(store.db, 'hunt');
     const auth = getGoogleAuth();
     const knowledge = await ownerBackground(store);
     const claude = createJobClaude(store.db);
     const tracer = createJobTracer({ store });
 
     if (args.ids?.length) {
-      const scoreRun = tracer.startRun('score', { ids: args.ids });
+      const scoreRun = await tracer.startRun('score', { ids: args.ids });
       const s = await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run: scoreRun, options: { ids: args.ids } });
-      scoreRun.finish(s.failures.length ? 'partial' : 'ok', s);
+      await scoreRun.finish(s.failures.length ? 'partial' : 'ok', s);
       if (s.scored) console.log(`Scored ${s.scored} of the requested postings first.`);
     }
 
-    const run = tracer.startRun('hunt', { ids: args.ids ?? null, regenerate: args.regenerate });
+    const run = await tracer.startRun('hunt', { ids: args.ids ?? null, regenerate: args.regenerate });
     try {
       const summary = await generateForPostings({
         store,
@@ -65,7 +65,7 @@ async function main() {
         run,
         options: { ids: args.ids, regenerate: args.regenerate },
       });
-      const totals = run.finish(summary.aborted ? 'aborted' : summary.failures.length || summary.docFailures.length ? 'partial' : 'ok', summary);
+      const totals = await run.finish(summary.aborted ? 'aborted' : summary.failures.length || summary.docFailures.length ? 'partial' : 'ok', summary);
       console.log(`\n${summary.selected} postings: ${summary.tweaks} resume tweaks, ${summary.letters} cover letters (${summary.checked} fact checked, ${summary.claimFlags} claims to look at), ${summary.docs} Google Docs.`);
       for (const f of summary.flagged) console.log(`  #${f.id} letter needs review: ${f.flags.join('; ')}`);
       for (const f of summary.docFailures) console.log(`  #${f.id} Doc not saved (${f.error}); the next run retries it.`);
@@ -74,7 +74,7 @@ async function main() {
       if (summary.aborted) console.log('Stopped early after repeated failures.');
       console.log(`Cost: $${totals.costUsd.toFixed(4)} (${totals.calls} Claude calls).`);
     } catch (err) {
-      run.finish('failed');
+      await run.finish('failed');
       throw err;
     }
   } finally {

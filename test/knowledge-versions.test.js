@@ -12,19 +12,19 @@ import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 const doc = (/** @type {number} */ n) => `## 1. Summary\nEngineering leader, version ${n}.\n\n## 2. Experience\n- Grew a platform team from 6 to 45 engineers.`;
 
-test('every save is a version, newest first; the same text again adds none; a doc saved before versions is kept', () => {
-  const { raw } = openJobStore(':memory:');
-  raw.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, 'profile.text', ?, '2026-10-01T12:00:00.000Z')").run(OWNER_ID, doc(0));
-  assert.deepEqual(profileVersions(raw, OWNER_ID).map((v) => [v.source, v.savedAt]), [['earlier', '2026-10-01T12:00:00.000Z']]);
-  saveUserProfile(raw, OWNER_ID, doc(1), { source: 'file', now: new Date('2026-10-28T12:00:00Z') });
-  saveUserProfile(raw, OWNER_ID, doc(1), { now: new Date('2026-10-28T13:00:00Z') });
-  saveUserProfile(raw, OWNER_ID, doc(2), { source: 'nonsense', now: new Date('2026-10-29T12:00:00Z') });
-  assert.deepEqual(profileVersions(raw, OWNER_ID).map((v) => [v.text, v.source]), [[doc(2), 'typed'], [doc(1), 'file'], [doc(0), 'earlier']]);
-  for (let i = 3; i < 30; i++) saveUserProfile(raw, OWNER_ID, doc(i));
-  assert.equal(profileVersions(raw, OWNER_ID).length, MAX_PROFILE_VERSIONS);
-  assert.equal(userProfile(raw, OWNER_ID), doc(29));
-  const b = addUser(raw, { email: 'b@example.com', name: 'Sam' });
-  assert.deepEqual(profileVersions(raw, b), [], "another user's are their own");
+test('every save is a version, newest first; the same text again adds none; a doc saved before versions is kept', async () => {
+  const { admin: raw } = openJobStore(':memory:');
+  await raw.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, 'profile.text', ?, '2026-10-01T12:00:00.000Z')").run(OWNER_ID, doc(0));
+  assert.deepEqual((await profileVersions(raw, OWNER_ID)).map((v) => [v.source, v.savedAt]), [['earlier', '2026-10-01T12:00:00.000Z']]);
+  await saveUserProfile(raw, OWNER_ID, doc(1), { source: 'file', now: new Date('2026-10-28T12:00:00Z') });
+  await saveUserProfile(raw, OWNER_ID, doc(1), { now: new Date('2026-10-28T13:00:00Z') });
+  await saveUserProfile(raw, OWNER_ID, doc(2), { source: 'nonsense', now: new Date('2026-10-29T12:00:00Z') });
+  assert.deepEqual((await profileVersions(raw, OWNER_ID)).map((v) => [v.text, v.source]), [[doc(2), 'typed'], [doc(1), 'file'], [doc(0), 'earlier']]);
+  for (let i = 3; i < 30; i++) await saveUserProfile(raw, OWNER_ID, doc(i));
+  assert.equal((await profileVersions(raw, OWNER_ID)).length, MAX_PROFILE_VERSIONS);
+  assert.equal(await userProfile(raw, OWNER_ID), doc(29));
+  const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
+  assert.deepEqual(await profileVersions(raw, b), [], "another user's are their own");
 });
 
 test('the routes: list, view, make current, and download the current doc or a version as Word', async () => {

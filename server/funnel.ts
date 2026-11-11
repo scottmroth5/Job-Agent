@@ -6,7 +6,7 @@
 import { lookups } from '../agents/lookups.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { EmailsRow, PostingsRow, StatusHistoryRow } from '../db/types.ts';
 
 /** A milestone of an application: whether it was reached, and its day when a dated event shows it. */
@@ -63,22 +63,22 @@ function weekStart(iso: string | null) {
 }
 
 /** One record per application, with each milestone: { reached, date } (date null when only undated evidence). */
-export function applications(db: Database, { now = new Date() } = {}): Application[] {
-  const lk = lookups(db);
+export async function applications(db: Db, { now = new Date() } = {}): Promise<Application[]> {
+  const lk = await lookups(db);
   const group = (status: string | null) => lk.groupOf('status', status);
   // The status a rejection email moves a job to (Admin > Lists): moves to it count as rejections.
   const rejectedStatus = lk.role('status', 'rejected');
   const isRejected = (s: string | null) => s != null && s === rejectedStatus;
   const history = new Map<number, HistoryRow[]>();
-  for (const h of db.prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history WHERE user_id = @uid ORDER BY changed_at, id').all() as HistoryRow[]) {
+  for (const h of await db.prepare('SELECT posting_id, to_status, changed_by, changed_at FROM status_history WHERE user_id = @uid ORDER BY changed_at, id').all() as HistoryRow[]) {
     history.set(h.posting_id, [...(history.get(h.posting_id) ?? []), h]);
   }
   const emails = new Map<number, EmailRow[]>();
-  for (const e of db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).all() as EmailRow[]) {
+  for (const e of await db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).all() as EmailRow[]) {
     emails.set(e.posting_id as number, [...(emails.get(e.posting_id as number) ?? []), e]);
   }
 
-  const rows = db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid').all() as PostingRow[];
+  const rows = await db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid').all() as PostingRow[];
   const out: Application[] = [];
   for (const p of rows) {
     const hist = history.get(p.id) ?? [];
@@ -125,12 +125,13 @@ export function applications(db: Database, { now = new Date() } = {}): Applicati
 }
 
 /** The funnel for applications in the window. days: applied within the last N days (null: all). */
-export function funnel(db: Database, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS }: { days?: number | null; track?: string | null; now?: Date; staleDays?: number } = {}) {
+export async function funnel(db: Db, { days = null, track = null, now = new Date(), staleDays = DEFAULT_STALE_DAYS }: { days?: number | null; track?: string | null; now?: Date; staleDays?: number } = {}) {
+  const lk = await lookups(db);
   const since = days ? localDaysAgo(now, days) : null;
   const inWindow = (a: Application) => (!since || a.appliedOn >= since) && (!track || a.track === track);
-  const apps = applications(db, { now }).filter(inWindow);
+  const apps = (await applications(db, { now })).filter(inWindow);
 
-  const found = db
+  const found = await db
     .prepare(`SELECT COUNT(*) AS n,
         SUM(CASE WHEN (SELECT s.score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id ORDER BY CASE WHEN s.source IN ('v2', 'v2-rule') THEN 0 ELSE 1 END, s.id DESC LIMIT 1) >= ? THEN 1 ELSE 0 END) AS strong
       FROM postings p WHERE p.user_id = @uid AND (? IS NULL OR p.discovered_on >= ?) AND (? IS NULL OR p.track = ?)`)
@@ -170,7 +171,7 @@ export function funnel(db: Database, { days = null, track = null, now = new Date
     w.setUTCDate(w.getUTCDate() - i * 7);
     weeks.push({ weekStart: w.toISOString().slice(0, 10), applied: 0 });
   }
-  for (const a of applications(db, { now }).filter((x) => !track || x.track === track)) {
+  for (const a of (await applications(db, { now })).filter((x) => !track || x.track === track)) {
     const w = weeks.find((x) => x.weekStart === weekStart(a.appliedOn));
     if (w) w.applied += 1;
   }
@@ -185,7 +186,7 @@ export function funnel(db: Database, { days = null, track = null, now = new Date
     staleDays,
     stale: apps.filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= staleDays).length,
     followUps: apps
-      .filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= FOLLOW_UP_DAYS && a.waitingDays < staleDays && lookups(db).groupOf('stage', a.stage) !== 'archived')
+      .filter((a) => !a.responded.reached && !a.closed && a.waitingDays >= FOLLOW_UP_DAYS && a.waitingDays < staleDays && lk.groupOf('stage', a.stage) !== 'archived')
       .sort((a, b) => b.waitingDays - a.waitingDays)
       .map(({ id, company, title, appliedOn, waitingDays, status }) => ({ id, company, title, appliedOn, days: waitingDays, status })),
   };

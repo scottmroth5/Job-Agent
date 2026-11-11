@@ -6,10 +6,14 @@ import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { createSqliteEngine, insideTransaction } from '../db/engine/sqlite.ts';
 import { runAsUser } from '../db/scope.ts';
-import { openJobStore } from '../db/index.ts';
+import { loadMigrations, openJobStore } from '../db/index.ts';
+import { openStore } from '@scottmroth5/agent-core';
 import { createJobClaude } from '../tools/claude.ts';
 import { createHttp } from '../tools/http.ts';
 import { fakeClaude } from './fixtures/fakes.js';
+import { addUser, decide, getUser, requestAccess } from '../db/users.ts';
+import { createJobTracer } from '../tools/trace.ts';
+import { oneStartAtATime } from '../tools/runs.ts';
 
 function setup(/** @type {import('../db/engine/sqlite.ts').SqliteEngineOptions} */ options = {}) {
   const raw = new Database(':memory:');
@@ -48,7 +52,7 @@ test('get, all, run, and pluck answer like better-sqlite3, as promises', async (
 test('@uid binds the current user, or fallbackUid; with neither, the query rejects', async () => {
   const { db, raw } = setup();
   raw.exec("INSERT INTO things (user_id, name) VALUES (1, 'mine'), (2, 'theirs')");
-  const mine = () => db.prepare('SELECT name FROM things WHERE user_id = @uid').pluck().all();
+  const mine = async () => await db.prepare('SELECT name FROM things WHERE user_id = @uid').pluck().all();
   assert.deepEqual(await runAsUser(2, mine), ['theirs']);
   await assert.rejects(mine(), /needs a user, but it is running outside a request or job/);
   // A query that does not name @uid runs anywhere.
@@ -123,7 +127,7 @@ test('a statement from outside waits while a transaction is open, and is not rol
   const outside = (async () => {
     await db.prepare("INSERT INTO things (user_id, name) VALUES (@uid, 'outside')").run();
     outsideDone = true;
-    return db.prepare('SELECT name FROM things ORDER BY id').pluck().all();
+    return await db.prepare('SELECT name FROM things ORDER BY id').pluck().all();
   })();
   await new Promise((r) => setImmediate(r));
   assert.equal(outsideDone, false, 'the outside write waits for the transaction');
@@ -154,7 +158,7 @@ test('Claude and HTTP calls refuse to run inside a transaction, and run outside 
   const { db } = setup({ fallbackUid: 1, strictTx: false });
   /** @type {string[]} */
   const sent = [];
-  const claude = createJobClaude(/** @type {Database.Database} */ (/** @type {unknown} */ (null)), {
+  const claude = createJobClaude(/** @type {import('../db/engine/types.ts').Db} */ (/** @type {unknown} */ (null)), {
     ownerClient: fakeClaude(async () => {
       sent.push('claude');
       return { text: 'ok' };
@@ -183,18 +187,105 @@ test('the guard is on under node --test by default', async () => {
   );
 });
 
-test('openJobStore gives store.engine over the same connection, scoped like store.db', async () => {
+test('openJobStore: db is scoped, admin is not, both over one connection', async () => {
   const store = openJobStore(':memory:');
-  const sync = store.db.prepare('SELECT COUNT(*) FROM users').pluck().get();
-  assert.equal(await store.engine.prepare('SELECT COUNT(*) FROM users').pluck().get(), sync);
-  await store.engine.tx(async () => {
-    await store.engine.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('engine-test', '1', 'x')").run();
+  await store.db.tx(async () => {
+    await store.db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('engine-test', '1', 'x')").run();
   });
-  assert.equal(store.db.prepare("SELECT value FROM app_settings WHERE key = 'engine-test'").pluck().get(), '1');
+  assert.equal(await store.admin.prepare("SELECT value FROM app_settings WHERE key = 'engine-test'").pluck().get(), '1', 'one connection');
+  assert.equal(await store.db.prepare('SELECT @uid').pluck().get(), 1, 'db: the owner outside a request (scripts and tests)');
+  await assert.rejects(store.admin.prepare('SELECT @uid').pluck().get(), /needs a user/, 'admin has no fallback user');
   store.close();
 
   const server = openJobStore(':memory:', { fallbackUid: null });
-  await assert.rejects(server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get(), /needs a user/);
-  assert.equal(await runAsUser(1, () => server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get()), 0);
+  await assert.rejects(server.db.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get(), /needs a user/);
+  assert.equal(await runAsUser(1, async () => await server.db.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get()), 0);
   server.close();
+});
+
+/** The app's tables on agent-core's connection, with engines over it as openJobStore makes them, and the connection. */
+function appConnection() {
+  const conn = openStore(':memory:', { app: 'job-agent', migrations: loadMigrations() });
+  return { db: createSqliteEngine(conn.db, { fallbackUid: 1 }), admin: createSqliteEngine(conn.db, { fallbackUid: null }), connection: conn.db, close: () => conn.close() };
+}
+
+test('every engine over one connection shares its transaction lock', async () => {
+  const store = appConnection();
+  const hold = deferred();
+  const order = /** @type {string[]} */ ([]);
+  // The holder has the guard off, so the test can keep its transaction open across a macrotask.
+  const holder = createSqliteEngine(store.connection, { fallbackUid: 1, strictTx: false });
+  const inside = holder.tx(async () => {
+    await holder.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('a', '1', 'x')").run();
+    await hold.promise;
+    order.push('tx done');
+  });
+  await new Promise((r) => setImmediate(r));
+  const viaScoped = store.db.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`scoped saw ${n}`));
+  const viaAdmin = store.admin.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`admin saw ${n}`));
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(order, [], 'both wait for the open transaction');
+  hold.resolve();
+  await Promise.all([inside, viaScoped, viaAdmin]);
+  assert.deepEqual(order, ['tx done', 'scoped saw 1', 'admin saw 1']);
+  store.close();
+});
+
+test('users: two decisions at once can not both pass the status check; two requests from one address make one row', async () => {
+  const store = openJobStore(':memory:');
+  const id = await addUser(store.db, { email: 'pending@example.com', status: 'pending' });
+  const results = await Promise.allSettled([decide(store.db, id, 'reject', { by: 1 }), decide(store.db, id, 'reject', { by: 1 })]);
+  assert.deepEqual(results.map((r) => r.status).sort(), ['fulfilled', 'rejected']);
+  assert.match(String(/** @type {PromiseRejectedResult} */ (results.find((r) => r.status === 'rejected')).reason), /A rejected account cannot be rejected./);
+
+  const [a, b] = await Promise.all([
+    requestAccess(store.db, { email: 'new@example.com', name: 'New' }),
+    requestAccess(store.db, { email: 'NEW@example.com', name: 'New' }),
+  ]);
+  assert.equal(a.id, b.id);
+  assert.deepEqual([a.created, b.created].sort(), [false, true]);
+  assert.equal(await store.db.prepare("SELECT COUNT(*) FROM users WHERE email = 'new@example.com'").pluck().get(), 1);
+  assert.equal((await getUser(store.db, a.id))?.status, 'pending');
+  store.close();
+});
+
+test('trace writes go through the engine: a run started during an open transaction waits for it', async () => {
+  const store = appConnection();
+  const hold = deferred();
+  const holder = createSqliteEngine(store.connection, { fallbackUid: 1, strictTx: false });
+  const inside = holder.tx(async () => {
+    await holder.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('a', '1', 'x')").run();
+    await hold.promise;
+  });
+  await new Promise((r) => setImmediate(r));
+  let started = false;
+  const run = createJobTracer({ store }).startRun('trace-test').then((r) => ((started = true), r));
+  await new Promise((r) => setImmediate(r));
+  assert.equal(started, false, 'the runs row waits for the open transaction');
+  hold.resolve();
+  await inside;
+  const r = await run;
+  assert.deepEqual(await store.admin.prepare('SELECT name, user_id FROM runs WHERE id = ?').get(r.id), { name: 'trace-test', user_id: 1 });
+  await r.finish('ok');
+  assert.equal(await store.admin.prepare('SELECT status FROM runs WHERE id = ?').pluck().get(r.id), 'ok');
+  store.close();
+});
+
+test('oneStartAtATime: starts run in order, one at a time, and a failed start does not block the next', async () => {
+  const order = /** @type {string[]} */ ([]);
+  const slow = oneStartAtATime(async () => {
+    order.push('a begins');
+    await new Promise((r) => setImmediate(r));
+    order.push('a ends');
+    return 'a';
+  });
+  const failing = oneStartAtATime(async () => {
+    order.push('b');
+    throw new Error('refused');
+  });
+  const after = oneStartAtATime(() => (order.push('c'), 'c'));
+  assert.equal(await slow, 'a');
+  await assert.rejects(failing, /refused/);
+  assert.equal(await after, 'c');
+  assert.deepEqual(order, ['a begins', 'a ends', 'b', 'c']);
 });

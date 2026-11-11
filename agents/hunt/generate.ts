@@ -12,7 +12,7 @@ import { roleTypeText, formatAnalysis, stripSalutationAndSignoff, checkCoverLett
 import { lookups, sqlList } from '../lookups.ts';
 import { pickResume, withResume } from '../resumes.ts';
 import type { Claude, Run, SendOptions } from '@scottmroth5/agent-core';
-import type { Database, JobStore } from '../../tools/types.ts';
+import type { Db, JobStore } from '../../tools/types.ts';
 import type { JobSearchConfig } from '../../tools/config.ts';
 import type { DriveClient } from '../../tools/google/drive.ts';
 import type { PostingsRow } from '../../db/types.ts';
@@ -43,16 +43,16 @@ const CONTENT_CHARS = 6000;
 const MIN_NOTES = 30;
 
 /** Both hunt prompts in effect (admin-screen edits or the repo defaults), with short version hashes. */
-export function loadHuntPrompts(db: Database | null = null) {
-  const load = (name: string) => {
-    const p = getPrompt(db, name);
+export async function loadHuntPrompts(db: Db | null = null) {
+  const load = async (name: string) => {
+    const p = await getPrompt(db, name);
     return { template: p.template, version: p.version, source: p.source };
   };
-  return { tweaks: load('resume-tweaks'), letter: load('cover-letter') };
+  return { tweaks: await load('resume-tweaks'), letter: await load('cover-letter') };
 }
 
 /** Postings eligible for tweaks/letters, with their latest v2 analysis and what already exists. */
-export function selectForHunt(db: Database, { ids, promoteAt = PROMOTE_AT }: { ids?: number[] | null; promoteAt?: number } = {}): HuntPosting[] {
+export async function selectForHunt(db: Db, { ids, promoteAt = PROMOTE_AT }: { ids?: number[] | null; promoteAt?: number } = {}): Promise<HuntPosting[]> {
   const base = `SELECT p.*,
       (SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS analysis_json,
       (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS v2_score,
@@ -61,9 +61,9 @@ export function selectForHunt(db: Database, { ids, promoteAt = PROMOTE_AT }: { i
       (SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' AND a.source = 'v2'
          AND a.doc_id IS NULL ORDER BY a.id DESC LIMIT 1) AS letter_missing_doc
     FROM (SELECT * FROM postings WHERE user_id = @uid) p`;
-  if (ids?.length) return db.prepare(`${base} WHERE p.id IN (${ids.map(() => '?').join(', ')}) ORDER BY p.id`).all(...ids) as HuntPosting[];
-  return db
-    .prepare(`SELECT * FROM (${base} WHERE p.stage IN ${sqlList(lookups(db).ids('stage', 'active'))} AND p.status IN ${sqlList(lookups(db).ids('status', 'evaluate', 'waiting'))})
+  if (ids?.length) return await db.prepare(`${base} WHERE p.id IN (${ids.map(() => '?').join(', ')}) ORDER BY p.id`).all(...ids) as HuntPosting[];
+  return await db
+    .prepare(`SELECT * FROM (${base} WHERE p.stage IN ${sqlList((await lookups(db)).ids('stage', 'active'))} AND p.status IN ${sqlList((await lookups(db)).ids('status', 'evaluate', 'waiting'))})
       WHERE v2_score >= ? AND (has_tweaks = 0 OR has_letter = 0 OR letter_missing_doc IS NOT NULL) ORDER BY id`)
     .all(promoteAt) as HuntPosting[];
 }
@@ -121,8 +121,8 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
 }) {
   const { ids, regenerate = false, promoteAt = PROMOTE_AT, maxConsecutiveFailures = 3 } = options;
   const { db } = store;
-  const prompts = loadHuntPrompts(db);
-  const postings = selectForHunt(db, { ids, promoteAt });
+  const prompts = await loadHuntPrompts(db);
+  const postings = await selectForHunt(db, { ids, promoteAt });
 
   const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at, resume_id)
     VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?, ?)`);
@@ -149,10 +149,10 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
     if (!drive) return;
     try {
       folderId ??= await ensureLetterFolder(drive, db);
-      const name = letterDocName(letterHeader(db, config).name, posting.title, posting.company);
-      const html = letterHtml({ candidate: letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body });
+      const name = letterDocName((await letterHeader(db, config)).name, posting.title, posting.company);
+      const html = letterHtml({ candidate: await letterHeader(db, config), company: posting.company, title: posting.title, date: longDate(now), body });
       const doc = await drive.createDocFromHtml({ name, html, folderId });
-      setDoc.run(doc.id, doc.url, name, artifactId);
+      await setDoc.run(doc.id, doc.url, name, artifactId);
       summary.docs += 1;
       run?.log?.('info', `#${posting.id}: letter saved as a Google Doc`);
     } catch (err) {
@@ -179,23 +179,23 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
     const nowIso = new Date().toISOString();
     const tag = `#${p.id} (${i + 1}/${postings.length})`;
     // The user's resume for this job (agents/resumes.ts), read with the background; none uploaded means the background alone.
-    const resume = pickResume(db, p.title);
+    const resume = await pickResume(db, p.title);
     const background = withResume(knowledge, resume);
     try {
       if (!p.has_tweaks || regenerate) {
         log(`${tag}: writing resume tweaks`);
         const tweaks = sanitizeDashes(await call(buildTweaksRequest(p, analysis, { config, knowledge: background, prompts })));
-        insertArtifact.run(p.id, 'resume_tweaks', tweaks, null, HUNT_MODEL, prompts.tweaks.version, run?.id ?? null, nowIso, resume?.id ?? null);
+        await insertArtifact.run(p.id, 'resume_tweaks', tweaks, null, HUNT_MODEL, prompts.tweaks.version, run?.id ?? null, nowIso, resume?.id ?? null);
         summary.tweaks += 1;
       }
       if (p.letter_missing_doc && !regenerate) {
         log(`${tag}: saving the earlier letter as a Google Doc`);
-        await saveDoc(p, p.letter_missing_doc, (letterById.get(p.letter_missing_doc) as { content: string }).content);
+        await saveDoc(p, p.letter_missing_doc, (await letterById.get(p.letter_missing_doc) as { content: string }).content);
       } else if (!p.has_letter || regenerate) {
         log(`${tag}: writing cover letter`);
         const { body, flags } = finishLetter(await call(buildLetterRequest(p, analysis, { config, knowledge: background, prompts })), config);
         const artifactId = Number(
-          insertArtifact.run(p.id, 'cover_letter', body, flags.length ? JSON.stringify(flags) : null, HUNT_MODEL, prompts.letter.version, run?.id ?? null, nowIso, resume?.id ?? null).lastInsertRowid,
+          (await insertArtifact.run(p.id, 'cover_letter', body, flags.length ? JSON.stringify(flags) : null, HUNT_MODEL, prompts.letter.version, run?.id ?? null, nowIso, resume?.id ?? null)).id,
         );
         summary.letters += 1;
         if (flags.length) summary.flagged.push({ id: p.id, flags });

@@ -11,39 +11,44 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import Database from 'better-sqlite3';
+import { openReadOnly } from '../../db/engine/files.ts';
 import { isBackupName, restoreBackup } from './run.ts';
 import type { BackupDrive } from './drive.ts';
+import type { Db } from '../../db/engine/types.ts';
 
 export const EMPTY_TABLE_MIN_ROWS = 10;
 
-const tableCounts = (db: Database.Database): Record<string, number> => Object.fromEntries((db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
-  .pluck().all() as string[]).map((t) => [t, db.prepare(`SELECT COUNT(*) FROM "${t.replace(/"/g, '""')}"`).pluck().get() as number]));
+async function tableCounts(q: Db): Promise<Record<string, number>> {
+  const tables = (await q.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all()) as string[];
+  const counts: Record<string, number> = {};
+  for (const t of tables) counts[t] = (await q.prepare(`SELECT COUNT(*) FROM "${t.replace(/"/g, '""')}"`).pluck().get()) as number;
+  return counts;
+}
 
 /**
  * file is the encrypted backup; live is the live database (only counted). Throws when the backup cannot be decrypted, is
  * not a database, or fails the integrity check.
  */
-export function restoreTest({ file, passphrase, live }: { file: Buffer; passphrase: string; live: Database.Database }) {
+export async function restoreTest({ file, passphrase, live }: { file: Buffer; passphrase: string; live: Db }) {
   const dir = mkdtempSync(join(tmpdir(), 'ja-restore-test-'));
   try {
     const { database } = restoreBackup({ file, passphrase, outPath: join(dir, 'restored.db') });
-    const restored = new Database(database, { readonly: true });
-    const lastMigration = (db: Database.Database): string | null => {
+    const restored = openReadOnly(database);
+    const lastMigration = async (db: Db): Promise<string | null> => {
       // This app's migrations (agent-core's share the table under their own app name).
-      try { return db.prepare("SELECT MAX(id) FROM schema_migrations WHERE app = 'job-agent'").pluck().get() as string | null ?? null; } catch { return null; }
+      try { return ((await db.prepare("SELECT MAX(id) FROM schema_migrations WHERE app = 'job-agent'").pluck().get()) as string | null) ?? null; } catch { return null; }
     };
     let backupCounts: Record<string, number>;
     let backupSchema: string | null;
     try {
-      backupCounts = tableCounts(restored);
-      backupSchema = lastMigration(restored);
+      backupCounts = await tableCounts(restored.db);
+      backupSchema = await lastMigration(restored.db);
     } finally {
       restored.close();
     }
-    const liveCounts = tableCounts(live);
+    const liveCounts = await tableCounts(live);
     // A backup taken before a migration lacks that migration's new tables; that is expected, not a fault.
-    const olderSchema = backupSchema !== null && backupSchema < (lastMigration(live) as string);
+    const olderSchema = backupSchema !== null && backupSchema < ((await lastMigration(live)) as string);
     const problems: string[] = [];
     const differences: Array<{ table: string; backup: number | null; live: number }> = [];
     for (const [table, n] of Object.entries(liveCounts)) {

@@ -39,7 +39,7 @@ function stats(times) {
 const dir = mkdtempSync(join(tmpdir(), 'job-agent-bench-'));
 try {
   const dbPath = join(dir, 'job-agent.db');
-  seedDemo({ dbPath, configPath: join(dir, 'config', 'job-search.json') });
+  await seedDemo({ dbPath, configPath: join(dir, 'config', 'job-search.json') });
   const store = openJobStore(dbPath);
   // Every outside service is off: the benchmarked routes never reach them.
   const services = /** @type {AppServices} */ (/** @type {unknown} */ ({
@@ -55,7 +55,7 @@ try {
   const app = await buildApp({ store, config: DEMO_CONFIG, services, authMode: 'none' });
   await app.ready();
 
-  const job = /** @type {number} */ (store.db.prepare('SELECT id FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').pluck().get());
+  const job = /** @type {number} */ (await store.db.prepare('SELECT id FROM postings WHERE user_id = @uid ORDER BY id LIMIT 1').pluck().get());
   /** @type {Array<{ name: string, run: () => Promise<void> }>} */
   const routes = [];
   /** @param {string} name @param {InjectOptions} req @param {number} [status] */

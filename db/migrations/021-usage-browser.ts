@@ -3,7 +3,7 @@
 // rebuilt the way SQLite documents it (new table, rows copied, old dropped, new renamed). Nothing references it,
 // but the rule for rebuilds still applies: foreign keys off, checks before commit.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '021-usage-browser';
 export const foreignKeys = false;

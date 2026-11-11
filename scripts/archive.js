@@ -8,12 +8,12 @@ import { archivePostings } from '../agents/hunt/archive.ts';
 const dryRun = process.argv.includes('--dry-run');
 const store = openJobStore();
 try {
-  const run = dryRun ? null : createJobTracer({ store }).startRun('archive');
-  const result = archivePostings(store.db, { dryRun });
+  const run = dryRun ? null : await createJobTracer({ store }).startRun('archive');
+  const result = await archivePostings(store.db, { dryRun });
   const after = dryRun ? result.remaining - result.archived.length : result.remaining;
   console.log(`${dryRun ? 'DRY RUN: would archive' : 'Archived'} ${result.archived.length} jobs; ${after} ${dryRun ? 'would remain' : 'remain'} in the pipeline.`);
   for (const m of result.archived) console.log(`  #${m.id} ${m.company} | ${m.title} (${m.reason})`);
-  run?.finish('ok', { archived: result.archived.map(({ id, reason }) => ({ id, reason })), remaining: result.remaining });
+  await run?.finish('ok', { archived: result.archived.map(({ id, reason }) => ({ id, reason })), remaining: result.remaining });
 } finally {
   store.close();
 }

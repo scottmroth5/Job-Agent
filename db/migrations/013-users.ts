@@ -10,7 +10,7 @@
 // Settings that belong to a person (the inbox cursor, their Drive folders, the Home tile order) move from
 // app_settings to the new user_settings table.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '013-users';
 export const foreignKeys = false;

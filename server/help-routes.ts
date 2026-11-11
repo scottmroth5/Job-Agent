@@ -61,13 +61,13 @@ export function registerHelpRoutes(app: App, { store, services, guides = loadGui
       const recent = (asks.get(uid) ?? []).filter((t) => t > day);
       if (recent.length >= ASKS_PER_DAY) throw Object.assign(new Error('That is a lot of questions for one day. Try the guides, or ask again tomorrow.'), { statusCode: 429 });
       asks.set(uid, [...recent, Date.now()]);
-      const run = createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('help');
+      const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('help');
       try {
         const res = await services.claude.send({ model: HELP_MODEL, maxTokens: 600, system: SYSTEM(guides), prompt: question, trace: run, label: 'help' });
-        run.finish('ok', { calls: 1 });
+        await run.finish('ok', { calls: 1 });
         return { answer: String(res.text ?? '').trim() };
       } catch (err) {
-        run.finish('failed', { error: (err as Error).name });
+        await run.finish('failed', { error: (err as Error).name });
         throw err;
       }
     },

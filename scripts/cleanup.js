@@ -16,14 +16,14 @@ import { rekeyPostings } from '../agents/identity.ts';
 
 const dryRun = process.argv.includes('--dry-run');
 const store = openJobStore();
-const config = configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
+const config = await configFor(store.admin, OWNER_ID, loadConfig()); // with the skipped sites from Settings
 try {
-  const run = dryRun ? null : createJobTracer({ store }).startRun('cleanup');
+  const run = dryRun ? null : await createJobTracer({ store }).startRun('cleanup');
   // Keys are derived data, so they are recomputed even in a dry run; the preview then reflects the current rules.
-  const rekeyed = rekeyPostings(store.db);
+  const rekeyed = await rekeyPostings(store.db);
   if (rekeyed) console.log(`Updated the duplicate key on ${rekeyed} jobs.`);
-  const { archived } = archiveListings(store.db, { config, dryRun });
-  const { demoted } = demoteWithoutText(store.db, { dryRun });
+  const { archived } = await archiveListings(store.db, { config, dryRun });
+  const { demoted } = await demoteWithoutText(store.db, { dryRun });
   /**
    * @param {string} would
    * @param {string} did
@@ -33,7 +33,7 @@ try {
   for (const p of archived) console.log(`  #${p.id} [${p.stage}/${p.status}] ${p.title} (${p.reason})`);
   console.log(`${verb('move', 'Moved')} ${demoted.length} pipeline jobs without a description back to Discovered.`);
   for (const p of demoted) console.log(`  #${p.id} ${p.title}`);
-  run?.finish('ok', { removed: archived.map(({ id }) => id), demoted: demoted.map(({ id }) => id) });
+  await run?.finish('ok', { removed: archived.map(({ id }) => id), demoted: demoted.map(({ id }) => id) });
 } finally {
   store.close();
 }

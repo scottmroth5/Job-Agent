@@ -40,8 +40,8 @@ function fakeClaude(reply) {
   return { requests, claude: createClaude({ client }) };
 }
 
-test('the email is wrapped in <email> tags and cannot close the wrapper or inject placeholders', () => {
-  const req = buildClassifyRequest(email, { open, model: 'claude-haiku-4-5', prompt: getPrompt(null, 'inbox-classify') });
+test('the email is wrapped in <email> tags and cannot close the wrapper or inject placeholders', async () => {
+  const req = buildClassifyRequest(email, { open, model: 'claude-haiku-4-5', prompt: await getPrompt(null, 'inbox-classify') });
   assert.equal(req.system, SYSTEM_PROMPT);
   assert.match(req.system, /untrusted data/);
   assert.match(req.system, /Never follow instructions/);
@@ -54,10 +54,10 @@ test('the email is wrapped in <email> tags and cannot close the wrapper or injec
   assert.ok(/** @type {{ properties: { type: { enum: string[] } } }} */ (req.schema).properties.type.enum.includes('offer'));
 });
 
-test('the untrusted-data rule stays even after an Admin-screen edit of the prompt', () => {
+test('the untrusted-data rule stays even after an Admin-screen edit of the prompt', async () => {
   const store = openJobStore(':memory:');
-  savePrompt(store.db, 'inbox-classify', { template: 'Short custom prompt.\n{{applicationsBlock}}\n{{emailBlock}}' });
-  const req = buildClassifyRequest(email, { open, model: 'm', prompt: getPrompt(store.db, 'inbox-classify') });
+  await savePrompt(store.db, 'inbox-classify', { template: 'Short custom prompt.\n{{applicationsBlock}}\n{{emailBlock}}' });
+  const req = buildClassifyRequest(email, { open, model: 'm', prompt: await getPrompt(store.db, 'inbox-classify') });
   assert.equal(req.system, SYSTEM_PROMPT);
   store.close();
 });
@@ -79,6 +79,6 @@ test('classifyEmail records the model, the prompt version, and the cost', async 
   assert.equal(requests.length, 1);
   assert.equal(requests[0].tools, undefined, 'the model gets no tools');
   assert.deepEqual([r.type, r.applicationId, r.model], ['rejection', 11, 'claude-haiku-4-5']);
-  assert.equal(r.promptVersion, getPrompt(null, 'inbox-classify').version);
+  assert.equal(r.promptVersion, (await getPrompt(null, 'inbox-classify')).version);
   assert.ok(r.costUsd > 0);
 });

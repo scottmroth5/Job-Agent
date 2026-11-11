@@ -36,7 +36,7 @@ export function classifySheetFiles(names) {
   };
 }
 
-function main() {
+async function main() {
   if (!existsSync(SHEETS_DIR)) throw new Error(`No sheet exports found at ${SHEETS_DIR}.`);
   const files = classifySheetFiles(readdirSync(SHEETS_DIR));
   if (files.discovered.length !== 1) throw new Error(`Expected one Discovered Jobs CSV, found ${files.discovered.length}.`);
@@ -48,9 +48,9 @@ function main() {
   }
 
   const store = openJobStore();
-  const run = createJobTracer({ store }).startRun('import-v1', { files: files.hunt.length + 1 });
+  const run = await createJobTracer({ store }).startRun('import-v1', { files: files.hunt.length + 1 });
   try {
-    const counts = importV1(
+    const counts = await importV1(
       store,
       {
         discovered: readCsv(join(SHEETS_DIR, files.discovered[0])),
@@ -58,7 +58,7 @@ function main() {
       },
       { runId: run.id },
     );
-    run.finish('ok', { postings: counts.postingsCreated });
+    await run.finish('ok', { postings: counts.postingsCreated });
 
     console.log(`\nImported into ${DB_PATH}`);
     console.log(`  rows read: ${counts.discoveredRows} discovered, ${counts.huntRows} hunt (${files.hunt.map((f) => f.name).join(', ')})`);
@@ -74,7 +74,7 @@ function main() {
     const unknown = Object.entries(counts.unknownStatuses);
     if (unknown.length) console.log(`  unrecognized statuses (imported as new): ${unknown.map(([s, n]) => `"${s}" x${n}`).join(', ')}`);
   } catch (err) {
-    run.finish('failed');
+    await run.finish('failed');
     throw err;
   } finally {
     store.close();
@@ -83,7 +83,7 @@ function main() {
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
-    main();
+    await main();
   } catch (err) {
     console.error(/** @type {Error} */ (err).message);
     process.exitCode = 1;

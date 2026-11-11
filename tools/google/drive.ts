@@ -3,7 +3,7 @@
 import { drive as driveApi } from '@googleapis/drive';
 import { getUserSetting, setUserSetting } from '../../db/settings.ts';
 import type { OAuth2Client } from 'google-auth-library';
-import type { Database } from '../types.ts';
+import type { Db } from '../types.ts';
 
 const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const DOC_MIME = 'application/vnd.google-apps.document';
@@ -45,8 +45,8 @@ export const PREP_FOLDER_NAME = 'Job Agent Meeting Prep';
 const PREP_FOLDER_SETTING = 'drive.meetingPrepFolderId';
 
 /** A remembered app folder, or a new one if it was never made, deleted, or trashed. */
-async function ensureAppFolder(client: DriveClient, db: Database, name: string, setting: string) {
-  const known = getUserSetting(db, setting);
+async function ensureAppFolder(client: DriveClient, db: Db, name: string, setting: string) {
+  const known = await getUserSetting(db, setting);
   if (known) {
     try {
       const file = await client.getFile(known);
@@ -56,12 +56,12 @@ async function ensureAppFolder(client: DriveClient, db: Database, name: string, 
     }
   }
   const id = await client.createFolder(name);
-  setUserSetting(db, setting, id);
+  await setUserSetting(db, setting, id);
   return id;
 }
 
 /** The cover letter folder. */
-export const ensureLetterFolder = (client: DriveClient, db: Database) => ensureAppFolder(client, db, LETTER_FOLDER_NAME, FOLDER_SETTING);
+export const ensureLetterFolder = (client: DriveClient, db: Db) => ensureAppFolder(client, db, LETTER_FOLDER_NAME, FOLDER_SETTING);
 
 /** The meeting prep folder. */
-export const ensurePrepFolder = (client: DriveClient, db: Database) => ensureAppFolder(client, db, PREP_FOLDER_NAME, PREP_FOLDER_SETTING);
+export const ensurePrepFolder = (client: DriveClient, db: Db) => ensureAppFolder(client, db, PREP_FOLDER_NAME, PREP_FOLDER_SETTING);

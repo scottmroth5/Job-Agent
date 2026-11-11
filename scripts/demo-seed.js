@@ -13,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 import { dataPath, DATA_DIR } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.ts';
 import { localDay } from '../tools/dates.ts';
-import Database from 'better-sqlite3';
+import { openReadOnly } from '../db/engine/files.ts';
 import { setSetting } from '../db/settings.ts';
 import { addNote } from '../agents/notes.ts';
 import { companyTitleKey } from '../tools/urls.ts';
@@ -23,7 +23,7 @@ import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_
 import { saveCheck } from '../agents/letter-checks.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.ts';
-/** @import { Database as Db } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 
 /** @typedef {typeof JOBS[number]} Job one sample job (demo/sample-data.ts) */
 
@@ -34,7 +34,7 @@ const LETTER_MODEL = 'claude-sonnet-5-5';
  * Builds the demo database at dbPath (and its config beside it). Returns counts. now is injectable for tests.
  * @param {{ dbPath?: string, configPath?: string, now?: Date, prompts?: ReturnType<typeof samplePrompts> }} [opts]
  */
-export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataPath('config', 'job-search.json'), now = new Date(), prompts = samplePrompts() } = {}) {
+export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataPath('config', 'job-search.json'), now = new Date(), prompts = samplePrompts() } = {}) {
   /**
    * @param {number} days
    * @param {number} [hour]
@@ -59,7 +59,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
 
   const store = openJobStore(dbPath);
   const { db } = store;
-  setSetting(db, MARKER, 'true');
+  await setSetting(db, MARKER, 'true');
 
   const insertPosting = db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, location, salary, posted_on,
       discovered_on, stage, status, applied_on, fetched_text, fetched_at, fetch_status, fetch_method, workplace, location_check, track,
@@ -101,16 +101,16 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     const started = d.toISOString();
     const finished = new Date(d.getTime() + (9 + (days % 5)) * 60000).toISOString();
     const summary = { discovered: scored + 11, scored, promoted: 1 + (days % 4), letters, archived: 3 + (days % 6) };
-    const id = Number(insertRun.run('pipeline', null, 'ok', started, finished, 9 * 60000, scored + letters * 2, scored * 5200, scored * 380, scored * 4100, cost, JSON.stringify(summary)).lastInsertRowid);
+    const id = Number((await insertRun.run('pipeline', null, 'ok', started, finished, 9 * 60000, scored + letters * 2, scored * 5200, scored * 380, scored * 4100, cost, JSON.stringify(summary))).id);
     for (let i = 0; i < Math.min(scored, 6); i += 1) {
-      insertCall.run(id, i % 4 === 3 ? 'score-fractional' : 'score', DEFAULT_SCORE_MODEL, 5200, 380, 4100, Number((cost * 0.12).toFixed(4)), 4200, started);
+      await insertCall.run(id, i % 4 === 3 ? 'score-fractional' : 'score', DEFAULT_SCORE_MODEL, 5200, 380, 4100, Number((cost * 0.12).toFixed(4)), 4200, started);
     }
     for (let i = 0; i < letters; i += 1) {
-      insertCall.run(id, 'cover-letter', LETTER_MODEL, 7800, 900, 4100, 0.06, 18000, started);
-      insertCall.run(id, 'resume-tweaks', LETTER_MODEL, 7600, 600, 4100, 0.03, 12000, started);
+      await insertCall.run(id, 'cover-letter', LETTER_MODEL, 7800, 900, 4100, 0.06, 18000, started);
+      await insertCall.run(id, 'resume-tweaks', LETTER_MODEL, 7600, 600, 4100, 0.03, 12000, started);
     }
-    const inbox = insertRun.run('inbox', null, 'ok', finished, finished, 40000, 3, 2400, 150, 0, 0.004, JSON.stringify({ fetched: 9, linked: 2, needsReview: 0 })).lastInsertRowid;
-    insertCall.run(Number(inbox), 'inbox-classify', 'claude-haiku-4-5', 2400, 150, 0, 0.004, 1500, finished);
+    const inbox = (await insertRun.run('inbox', null, 'ok', finished, finished, 40000, 3, 2400, 150, 0, 0.004, JSON.stringify({ fetched: 9, linked: 2, needsReview: 0 }))).id;
+    await insertCall.run(Number(inbox), 'inbox-classify', 'claude-haiku-4-5', 2400, 150, 0, 0.004, 1500, finished);
     runIds.push({ id, days });
   }
   const runFor = (/** @type {number} */ days) => (runIds.find((r) => r.days <= days + 3 && r.days >= days) ?? /** @type {{ id: number }} */ (runIds.at(-1))).id; // the history above always has runs
@@ -123,7 +123,7 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     const text = job.noText ? null : description(job);
     const discoveredAt = iso(job.days, 6, 5 + (i % 40));
     const id = Number(
-      insertPosting.run({
+      (await insertPosting.run({
         url,
         company: job.company,
         title: job.title,
@@ -151,42 +151,42 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
         hoursMax: job.hours?.[1] ?? null,
         createdAt: discoveredAt,
         updatedAt: discoveredAt,
-      }).lastInsertRowid,
+      })).id,
     );
     postings += 1;
-    insertSighting.run(id, job.source, url, day(job.days));
+    await insertSighting.run(id, job.source, url, day(job.days));
 
     const run = runFor(job.days);
     const analysis = analysisFor(job, i, text);
-    insertScore.run(id, analysis.score, analysis.reason, JSON.stringify(analysis), DEFAULT_SCORE_MODEL, scoreVersion(job), run, discoveredAt);
+    await insertScore.run(id, analysis.score, analysis.reason, JSON.stringify(analysis), DEFAULT_SCORE_MODEL, scoreVersion(job), run, discoveredAt);
 
     if (job.letter) {
       const flags = i % 5 === 2 ? ['over the word limit'] : [];
-      const letterId = Number(insertArtifact.run(id, 'cover_letter', letter(job), `Cover letter: ${job.company}, ${job.title}`, JSON.stringify(flags), LETTER_MODEL, run, discoveredAt).lastInsertRowid);
-      saveCheck(db, letterId, { status: 'checked', claims: SAMPLE_CHECK_CLAIMS, model: VERIFY_MODEL, promptVersion: versionOf('verify-letter', defaultPrompt('verify-letter').template), runId: run }, new Date(discoveredAt));
+      const letterId = Number((await insertArtifact.run(id, 'cover_letter', letter(job), `Cover letter: ${job.company}, ${job.title}`, JSON.stringify(flags), LETTER_MODEL, run, discoveredAt)).id);
+      await saveCheck(db, letterId, { status: 'checked', claims: SAMPLE_CHECK_CLAIMS, model: VERIFY_MODEL, promptVersion: versionOf('verify-letter', defaultPrompt('verify-letter').template), runId: run }, new Date(discoveredAt));
     }
-    if (job.tweaks) insertArtifact.run(id, 'resume_tweaks', tweaks(job, i), null, null, LETTER_MODEL, run, discoveredAt);
+    if (job.tweaks) await insertArtifact.run(id, 'resume_tweaks', tweaks(job, i), null, null, LETTER_MODEL, run, discoveredAt);
 
     // Status history: promotion by the agent, then the candidate's own moves.
-    insertHistory.run(id, null, 'new', 'agent', discoveredAt);
+    await insertHistory.run(id, null, 'new', 'agent', discoveredAt);
     let status = 'new';
     if (job.applied != null) {
-      insertHistory.run(id, status, 'applied', 'user', iso(job.applied, 10, 15));
+      await insertHistory.run(id, status, 'applied', 'user', iso(job.applied, 10, 15));
       status = 'applied';
     }
     for (const [to, days] of /** @type {Array<[string, number]>} */ (job.history ?? [])) {
-      insertHistory.run(id, status, to, ['passed', 'closed'].includes(to) ? 'user' : 'agent', iso(days, 14, 30));
+      await insertHistory.run(id, status, to, ['passed', 'closed'].includes(to) ? 'user' : 'agent', iso(days, 14, 30));
       status = to;
     }
 
     // The sample data's tuples ([days ago, text], [type, days ago, subject, summary], [kind, due in, note]) infer as arrays.
-    for (const [daysAgo, body] of /** @type {Array<[number, string]>} */ (job.notes ?? [])) addNote(db, id, body, { source: 'user', now: at(daysAgo, 17, 10) });
-    if (job.closeNote) addNote(db, id, job.closeNote, { source: 'user', now: at((/** @type {Array<[string, number]> | undefined} */ (job.history)?.at(-1)?.[1] ?? job.days) - 0, 18, 0) });
+    for (const [daysAgo, body] of /** @type {Array<[number, string]>} */ (job.notes ?? [])) await addNote(db, id, body, { source: 'user', now: at(daysAgo, 17, 10) });
+    if (job.closeNote) await addNote(db, id, job.closeNote, { source: 'user', now: at((/** @type {Array<[string, number]> | undefined} */ (job.history)?.at(-1)?.[1] ?? job.days) - 0, 18, 0) });
 
     const threadId = `demo-thread-${id}`;
     for (const [type, days, subject, summary] of /** @type {Array<[string, number, string, string]>} */ (job.emails ?? [])) {
       const emailId = randomUUID();
-      insertEmail.run({
+      await insertEmail.run({
         id: emailId,
         gmailId: `demo-${randomUUID()}`,
         threadId,
@@ -207,14 +207,14 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
     // An open reminder (an interview or a take home exercise coming up), tied to the job's latest email.
     if (job.reminder) {
       const [kind, dueIn, note] = /** @type {[string, number, string]} */ (job.reminder);
-      const lastEmail = db.prepare('SELECT id FROM emails WHERE posting_id = ? AND user_id = @uid ORDER BY sent_at DESC LIMIT 1').pluck().get(id) ?? null;
-      insertReminder.run(randomUUID(), id, lastEmail, kind, at(dueIn, 13, 0).toISOString(), note, 'open', iso(1, 9, 0));
+      const lastEmail = await db.prepare('SELECT id FROM emails WHERE posting_id = ? AND user_id = @uid ORDER BY sent_at DESC LIMIT 1').pluck().get(id) ?? null;
+      await insertReminder.run(randomUUID(), id, lastEmail, kind, at(dueIn, 13, 0).toISOString(), note, 'open', iso(1, 9, 0));
     }
-    if (job.prep) insertPrep(db, id, job, at(2, 19, 0).toISOString(), run);
+    if (job.prep) await insertPrep(db, id, job, at(2, 19, 0).toISOString(), run);
   }
 
   // One email the inbox could not place, so the review queue has something to show.
-  insertEmail.run({
+  await insertEmail.run({
     id: randomUUID(),
     gmailId: `demo-${randomUUID()}`,
     threadId: 'demo-thread-review',
@@ -234,22 +234,22 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
 
   // Prompt edits shown on the Admin screen, each a saved version on top of the repo default.
   const savePrompt = db.prepare('INSERT INTO prompt_versions (user_id, name, template, note, active, created_at) VALUES (@uid, ?, ?, ?, 1, ?)');
-  for (const [i, p] of prompts.entries()) savePrompt.run(p.name, p.template, p.note ?? 'Tuned for this search', iso(20 - i, 16, 0));
+  for (const [i, p] of prompts.entries()) await savePrompt.run(p.name, p.template, p.note ?? 'Tuned for this search', iso(20 - i, 16, 0));
 
   // Sample resumes (Settings > Resumes), the first the default, and which one each sample letter and tweak came from.
   const insertResume = db.prepare(`INSERT INTO resumes (id, user_id, label, titles, is_default, filename, kind, size_bytes, file, text, created_at, updated_at)
     VALUES (?, @uid, ?, ?, ?, ?, 'text', ?, ?, ?, ?, ?)`);
-  DEMO_RESUMES.forEach((r, i) => {
+  for (const [i, r] of DEMO_RESUMES.entries()) {
     const bytes = Buffer.from(r.text);
-    insertResume.run(randomUUID(), r.label, r.titles, i === 0 ? 1 : 0, r.filename, bytes.length, bytes, r.text, iso(40 - i, 10, 0), iso(12 - i, 10, 0));
-  });
+    await insertResume.run(randomUUID(), r.label, r.titles, i === 0 ? 1 : 0, r.filename, bytes.length, bytes, r.text, iso(40 - i, 10, 0), iso(12 - i, 10, 0));
+  }
   // Job sites to skip (Settings), with notes.
   const skipped = DEMO_SKIPPED_SITES.map(({ site, note, daysAgo }) => ({ site, note, addedAt: iso(daysAgo, 9, 0) }));
-  db.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (@uid, 'search.excludedSites', ?, ?)").run(JSON.stringify(skipped), iso(12, 9, 0));
+  await db.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (@uid, 'search.excludedSites', ?, ?)").run(JSON.stringify(skipped), iso(12, 9, 0));
 
   const setResume = db.prepare('UPDATE artifacts SET resume_id = ? WHERE id = ? AND user_id = @uid');
-  for (const a of /** @type {Array<{ id: number, title: string }>} */ (db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all())) {
-    setResume.run(pickResume(db, a.title)?.id ?? null, a.id);
+  for (const a of /** @type {Array<{ id: number, title: string }>} */ (await db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all())) {
+    await setResume.run((await pickResume(db, a.title))?.id ?? null, a.id);
   }
 
   store.close();
@@ -260,14 +260,14 @@ export function seedDemo({ dbPath = dataPath('job-agent.db'), configPath = dataP
  * True when the database at path was made by this script (or does not exist yet). Opens it read-only.
  * @param {string} path
  */
-export function isDemoDatabase(path) {
+export async function isDemoDatabase(path) {
   if (!existsSync(path)) return true;
-  const db = new Database(path, { readonly: true, fileMustExist: true });
+  const { db, close } = openReadOnly(path);
   try {
-    const hasSettings = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_settings'").get();
-    return Boolean(hasSettings && db.prepare('SELECT value FROM app_settings WHERE key = ?').pluck().get(MARKER) === 'true');
+    const hasSettings = await db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_settings'").get();
+    return Boolean(hasSettings && (await db.prepare('SELECT value FROM app_settings WHERE key = ?').pluck().get(MARKER)) === 'true');
   } finally {
-    db.close();
+    close();
   }
 }
 
@@ -389,7 +389,7 @@ function tweaks(job, i) {
  * @param {string} createdAt
  * @param {number} runId
  */
-function insertCasePrep(db, postingId, job, createdAt, runId) {
+async function insertCasePrep(db, postingId, job, createdAt, runId) {
   const attendees = [{ name: 'Avery Brooks', role: 'CEO', firm: job.company, link: null, notes: 'Ran the first conversation; former site operations lead' }];
   const content = `# Meeting prep: ${job.company}, ${job.title}
 
@@ -417,7 +417,7 @@ A 60 minute video session with Avery Brooks (CEO) to walk through your 90 day pl
 ## Not known yet
 - The size of the current engineering team and its split between product and site support; ask before committing to dates.
 - Whether the plan should assume the current vendor contracts stay in place.`;
-  db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
+  await db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
       doc_name, model, prompt_version, cost_usd, web_searches, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, 'Executive, owner, or investor', 'video', ?, 1, ?, ?, 'claude-opus-5-5', 'default', 1.18, 7, ?, ?)`).run(
     randomUUID(), postingId, JSON.stringify(attendees), null, 'Walk through the take home case: a 90 day plan for the site platform.', content,
@@ -432,8 +432,8 @@ A 60 minute video session with Avery Brooks (CEO) to walk through your 90 day pl
  * @param {string} createdAt
  * @param {number} runId
  */
-function insertPrep(db, postingId, job, createdAt, runId) {
-  if (job.prep === 'case') return insertCasePrep(db, postingId, job, createdAt, runId);
+async function insertPrep(db, postingId, job, createdAt, runId) {
+  if (job.prep === 'case') return await insertCasePrep(db, postingId, job, createdAt, runId);
   const attendees = [
     { name: 'Morgan Lee', role: 'CTO', firm: job.company, link: null, notes: 'Hiring manager; ex consulting' },
     { name: 'Riley Chen', role: 'VP Product', firm: job.company, link: null, notes: '' },
@@ -461,7 +461,7 @@ A 45 minute video interview with Morgan Lee (CTO) and Riley Chen (VP Product). E
 ## Watch outs
 - They may probe depth in their exact market; connect it to the regulated platform work you have done.
 - Ask early about the reporting line and the team's current managers.`;
-  db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
+  await db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
       doc_name, model, prompt_version, cost_usd, web_searches, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, 'interview', 'video', ?, 1, ?, ?, 'claude-opus-5-5', 'default', 1.42, 9, ?, ?)`).run(
     randomUUID(), postingId, JSON.stringify(attendees), null, 'Second round; they asked for a 90 day plan conversation.', content,
@@ -470,14 +470,14 @@ A 45 minute video interview with Morgan Lee (CTO) and Riley Chen (VP Product). E
 }
 
 // Command line: build (or with --force, rebuild) the demo database in DATA_DIR. Returns the exit code.
-export function main(args = process.argv.slice(2)) {
+export async function main(args = process.argv.slice(2)) {
   if (!process.env.DATA_DIR) {
     console.error('demo-seed: set DATA_DIR to the demo data folder (for example DATA_DIR=demo-data) so the real data folder is never touched.');
     return 1;
   }
   const dbPath = dataPath('job-agent.db');
   if (existsSync(dbPath)) {
-    if (!isDemoDatabase(dbPath)) {
+    if (!await isDemoDatabase(dbPath)) {
       console.error(`demo-seed: ${dbPath} is not a demo database; refusing to replace it.`);
       return 1;
     }
@@ -487,9 +487,9 @@ export function main(args = process.argv.slice(2)) {
     }
     for (const suffix of ['', '-wal', '-shm']) rmSync(`${dbPath}${suffix}`, { force: true });
   }
-  const counts = seedDemo({ dbPath });
+  const counts = await seedDemo({ dbPath });
   console.log(`Demo data in ${DATA_DIR}: ${counts.postings} jobs, ${counts.emails} emails, ${counts.runs} pipeline runs, ${counts.prompts} prompt edits.`);
   return 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) process.exitCode = main();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) process.exitCode = await main();

@@ -48,8 +48,12 @@ flowchart LR
   - the pipeline and other scripts as child processes, one pipeline at a time across the app;
   - Chromium for pages that need JavaScript.
 - **The demo container:** the same image with `AUTH_MODE=demo`. It has its own sample database, no secrets, and no Claude.
-- **Storage:** one SQLite file through synchronous `better-sqlite3`, plus attachment files.
-  - Every user table carries `user_id`, and queries are scoped by `db/scope.ts`.
+- **Storage:** one SQLite file, plus attachment files.
+  - Since v3 Phase 3, every call goes through the async data layer (`db/engine`): statements return promises, and
+    transactions are serialized so nothing from another request lands inside one. `better-sqlite3` sits underneath
+    it and the migrations only.
+  - Every user table carries `user_id`, and the engine binds `@uid` to the user of the current request or job
+    (`db/scope.ts`).
 
 ## Outside services
 

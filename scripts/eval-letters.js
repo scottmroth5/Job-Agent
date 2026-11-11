@@ -24,7 +24,7 @@ async function main() {
   const cases = JSON.parse(readFileSync(repoPath('evals', 'letters', 'cases.json'), 'utf8'));
   const store = openJobStore();
   try {
-    const estimate = estimateLetterEval(cases, models, store.db);
+    const estimate = await estimateLetterEval(cases, models, store.db);
     const total = Object.values(estimate).reduce((/** @type {number} */ s, x) => s + (x ?? 0), 0);
     for (const [m, usd] of Object.entries(estimate)) console.log(`${m}: ${cases.letters.length} letters, estimated $${usd == null ? '?' : usd.toFixed(3)}`);
     console.log(`Estimated total: $${total.toFixed(3)} (limit --max-usd=${maxUsd}).`);
@@ -33,10 +33,10 @@ async function main() {
     if (noPrice.length) throw new Error(`No price for ${noPrice.join(', ')} in evals/letters/run.js ESTIMATE_RATES, so --max-usd cannot be checked. Add its rates first.`);
     if (total > maxUsd) throw new Error(`Estimated cost is over --max-usd=${maxUsd}.`);
 
-    const run = createJobTracer({ store }).startRun('eval-letters', { models });
+    const run = await createJobTracer({ store }).startRun('eval-letters', { models });
     try {
       const { perModel, promptVersion } = await runLetterEval({ cases, models, claude: createJobClaude(store.db), db: store.db, trace: run, log: argv.includes('--verbose') ? (m) => console.log(`  ${m}`) : () => {} });
-      const totals = run.finish('ok', { models, promptVersion, ...Object.fromEntries(Object.entries(perModel).map(([m, r]) => [m, { recall: r.metrics.recall, falseFlagRate: r.metrics.falseFlagRate }])) });
+      const totals = await run.finish('ok', { models, promptVersion, ...Object.fromEntries(Object.entries(perModel).map(([m, r]) => [m, { recall: r.metrics.recall, falseFlagRate: r.metrics.falseFlagRate }])) });
       const dir = dataPath('evals', 'letters');
       mkdirSync(dir, { recursive: true });
       writeFileSync(`${dir}/results-${new Date().toISOString().slice(0, 10)}.json`, JSON.stringify({ promptVersion, perModel }, null, 2));
@@ -51,7 +51,7 @@ async function main() {
       }
       console.log(`\nTotal cost: $${totals.costUsd.toFixed(4)} (${totals.calls} Claude calls).`);
     } catch (err) {
-      run.finish('failed');
+      await run.finish('failed');
       throw err;
     }
   } finally {
