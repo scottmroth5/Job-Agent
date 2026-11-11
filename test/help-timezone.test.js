@@ -32,9 +32,9 @@ async function setup() {
   });
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, claude, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
-  const given = addUser(store.raw, { email: 'given@example.com', aiSource: 'owner' });
+  const given = await addUser(store.raw, { email: 'given@example.com', aiSource: 'owner' });
   store.raw.prepare('UPDATE users SET ai_cap_usd = 5 WHERE id = ?').run(given);
-  const keyless = addUser(store.raw, { email: 'keyless@example.com' });
+  const keyless = await addUser(store.raw, { email: 'keyless@example.com' });
   return { store, app, asked, given, keyless, asOwner: as('owner@example.com'), asGiven: as('given@example.com'), asKeyless: as('keyless@example.com'), done: async () => { await app.close(); store.close(); } };
 }
 

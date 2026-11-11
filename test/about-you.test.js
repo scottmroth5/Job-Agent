@@ -18,7 +18,7 @@ const LONG = (/** @type {string} */ who) => `${who} background. `.repeat(40);
 test('backgroundFor: the knowledge doc when long enough, else how to fix it; never the Google Doc', async () => {
   const store = openJobStore(':memory:');
   const raw = store.raw;
-  const b = addUser(raw, { email: 'b@example.com' });
+  const b = await addUser(raw, { email: 'b@example.com' });
   await assert.rejects(backgroundFor(raw, OWNER_ID), /Write your knowledge doc/, 'the owner too: no Google Doc to fall back on');
   saveUserProfile(raw, OWNER_ID, LONG('Owner'));
   assert.equal(await backgroundFor(raw, OWNER_ID), LONG('Owner').trim());
@@ -33,7 +33,7 @@ async function setup() {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: 'owner@example.com', SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const b = addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
   const app = await buildApp({
     store,
     config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }),

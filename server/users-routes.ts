@@ -26,7 +26,7 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
       },
     },
     async (req) => {
-      const user = getUser(db, req.params.id);
+      const user = await getUser(db, req.params.id);
       if (!user) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
       if (req.body.confirmEmail.trim().toLowerCase() !== user.email) throw Object.assign(new Error(`Type ${user.email} to confirm.`), { statusCode: 400 });
       const counts = deleteAccount(db, user.id, { attachmentsDir });
@@ -101,7 +101,7 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
     async (req) => {
       // Admin routes always run as a signed-in admin, so uid is set.
       // decide throws unless the user exists, so it returns their row.
-      const user = decide(db, req.params.id, req.params.decision, { by: req.uid as number }) as User;
+      const user = (await decide(db, req.params.id, req.params.decision, { by: req.uid as number })) as User;
       // The person hears about their own account (resuming needs no email).
       switch (req.params.decision) {
         case 'approve':
@@ -136,14 +136,14 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
       },
     },
     async (req) => {
-      const before = getUser(db, req.params.id);
+      const before = await getUser(db, req.params.id);
       if (!before) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
       // Putting someone on the owner's key spends the owner's money: their address must be typed to confirm who.
       const granting = req.body.source === 'owner' && before.ai_source !== 'owner';
       if (granting && String(req.body.confirmEmail ?? '').trim().toLowerCase() !== before.email) {
         throw Object.assign(new Error(`Type ${before.email} to confirm you want to pay for their AI.`), { statusCode: 400 });
       }
-      const after = setAiAccess(db, req.params.id, req.body) as NonNullable<ReturnType<typeof setAiAccess>>; // the user was found above
+      const after = (await setAiAccess(db, req.params.id, req.body)) as NonNullable<Awaited<ReturnType<typeof setAiAccess>>>; // the user was found above
       // They hear when the owner starts or stops covering them, or changes the cap.
       if (after.ai_source === 'owner' && (granting || after.ai_cap_usd !== before.ai_cap_usd)) await notices.aiCovered?.(after, after.ai_cap_usd);
       if (after.ai_source === 'own' && before.ai_source === 'owner') await notices.aiOwnKey?.(after);

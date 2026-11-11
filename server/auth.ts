@@ -158,7 +158,7 @@ export function registerAuth(
 ) {
   app.get('/api/me', { schema: { summary: 'The signed-in user and their account (google mode), or the open mode', response: { 200: { type: 'object', additionalProperties: true } } } }, async (req) => {
     // An account comes only with google mode, which always has the database.
-    const user = req.account ? getUser(db as Database, req.account.uid) : null;
+    const user = req.account ? (await getUser(db as Database, req.account.uid)) : null;
     return {
       authMode: mode,
       email: req.user ?? (mode === 'demo' ? DEMO_EMAIL : null),
@@ -202,7 +202,7 @@ export function registerAuth(
       return reply.redirect(`/auth/login?next=${encodeURIComponent(req.url)}`);
     }
     // The account is read on every request, so approving, pausing, or removing an address takes effect at once.
-    const account = accountFor(users, session.email, settings.allowed);
+    const account = await accountFor(users, session.email, settings.allowed);
     const state = account?.status ?? 'none';
     if (WAITING[state]) {
       if (path.startsWith('/api/')) return reply.code(403).send({ error: REFUSED[state], account: state });
@@ -280,16 +280,16 @@ export function registerAuth(
   const html = (reply: FastifyReply, title: string, body: string, status = 200) => reply.code(status).type('text/html').header('Cache-Control', 'no-store').send(page(title, body));
   // Each page is for one account state: { session } when the visitor is in it, else { go } (where they belong instead:
   // sign in, another of these pages, or the app). Callers redirect on go and never read the session then.
-  const statePage = (req: FastifyRequest, want: string): { session?: Session; go?: string } => {
+  const statePage = async (req: FastifyRequest, want: string): Promise<{ session?: Session; go?: string }> => {
     const session = sessionOf(req);
     if (!session?.email) return { go: '/auth/login' };
-    const state = accountFor(users, session.email, settings.allowed)?.status ?? 'none';
+    const state = (await accountFor(users, session.email, settings.allowed))?.status ?? 'none';
     if (state !== want) return { go: WAITING[state] ?? '/' };
     return { session };
   };
 
   app.get('/auth/register', { schema: { hide: true } }, async (req, reply) => {
-    const { session, go } = statePage(req, 'none');
+    const { session, go } = await statePage(req, 'none');
     if (go) return reply.redirect(go);
     const email = (session as Session).email; // no go, so there is a session
     const closed = (users.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING;
@@ -310,7 +310,7 @@ export function registerAuth(
 
   app.post('/auth/register', { schema: { hide: true } }, async (req, reply) => {
     if (!sameSite(req)) return reply.code(403).send({ error: 'Requests that change data must come from this site.' });
-    const { session, go } = statePage(req, 'none');
+    const { session, go } = await statePage(req, 'none');
     if (go) return reply.code(303).redirect(go);
     const email = (session as Session).email; // no go, so there is a session
     const body: { age?: string; terms?: string; name?: string; note?: string } = req.body && typeof req.body === 'object' ? req.body : {};
@@ -320,24 +320,24 @@ export function registerAuth(
     if ((users.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING) return reply.redirect('/auth/register');
     let result: { id: number; created: boolean };
     try {
-      result = requestAccess(users, { email, name: body.name, note: body.note });
+      result = await requestAccess(users, { email, name: body.name, note: body.note });
     } catch (err) {
       const e = err as Error & { statusCode?: number };
       if (e.statusCode === 400) return html(reply, 'Request access', `<p>${escapeHtml(e.message)}</p><p><a href="/auth/register">Back</a></p>`, 400);
       throw err;
     }
-    if (result.created) await notices.accessRequested?.(getUser(users, result.id) as User); // the row was just made
+    if (result.created) await notices.accessRequested?.((await getUser(users, result.id)) as User); // the row was just made
     return reply.code(303).redirect('/auth/waiting');
   });
 
   app.get('/auth/waiting', { schema: { hide: true } }, async (req, reply) => {
-    const { go } = statePage(req, 'pending');
+    const { go } = await statePage(req, 'pending');
     if (go) return reply.redirect(go);
     return html(reply, 'Waiting for approval', '<p>Thanks. Your request is with the owner, and you will get an email when your account is ready.</p>' + signOut);
   });
 
   app.get('/auth/not-approved', { schema: { hide: true } }, async (req, reply) => {
-    const { go } = statePage(req, 'rejected');
+    const { go } = await statePage(req, 'rejected');
     if (go) return reply.redirect(go);
     return html(reply, 'Not approved', '<p>Your request for access to Job Hunt was not approved.</p>' + signOut);
   });

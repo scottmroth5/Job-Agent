@@ -39,13 +39,13 @@ const huntRow = (o = {}) => ({
 
 /** @import { PostingsRow } from '../db/types.ts' */
 
-const run = (/** @type {Parameters<typeof importV1>[1]} */ input) => {
+const run = async (/** @type {Parameters<typeof importV1>[1]} */ input) => {
   const store = openJobStore(':memory:');
-  const counts = importV1(store, input, { now: '2026-09-30T00:00:00.000Z' });
+  const counts = await importV1(store, input, { now: '2026-09-30T00:00:00.000Z' });
   return { store, db: store.db, counts };
 };
 
-test('mapStatus, extractFitScore and parseCoverLetterCell cover the v1 formats', () => {
+test('mapStatus, extractFitScore and parseCoverLetterCell cover the v1 formats', async () => {
   assert.deepEqual(mapStatus('Pass/Not Applying'), { status: 'passed', known: true });
   assert.deepEqual(mapStatus(''), { status: 'new', known: true });
   assert.deepEqual(mapStatus('Phone screen'), { status: 'new', known: false });
@@ -57,8 +57,8 @@ test('mapStatus, extractFitScore and parseCoverLetterCell cover the v1 formats',
   assert.equal(parseCoverLetterCell(''), null);
 });
 
-test('a discovered row becomes a posting with a quick score and parsed dates', () => {
-  const { db, counts, store } = run({ discovered: [discoveredRow()], hunt: [] });
+test('a discovered row becomes a posting with a quick score and parsed dates', async () => {
+  const { db, counts, store } = await run({ discovered: [discoveredRow()], hunt: [] });
   const p = /** @type {PostingsRow} */ (db.prepare('SELECT * FROM postings').get());
   assert.equal(p.url_key, 'jobs.example.com/acme/1');
   assert.equal(p.discovered_on, '2026-07-20');
@@ -74,16 +74,16 @@ test('a discovered row becomes a posting with a quick score and parsed dates', (
   store.close();
 });
 
-test('a full analysis in the discovered sheet is kept as an artifact', () => {
+test('a full analysis in the discovered sheet is kept as an artifact', async () => {
   const analysis = 'ROLE TYPE: Full time\n\nFIT SCORE: 8 of 10. Great.\n\nTOP TALKING POINT: x';
-  const { db, store } = run({ discovered: [discoveredRow({ 'Fit Score': '8 of 10', Analysis: analysis })], hunt: [] });
+  const { db, store } = await run({ discovered: [discoveredRow({ 'Fit Score': '8 of 10', Analysis: analysis })], hunt: [] });
   assert.equal(db.prepare('SELECT reason FROM scores').pluck().get(), null);
   assert.equal(db.prepare("SELECT content FROM artifacts WHERE kind = 'analysis'").pluck().get(), analysis);
   store.close();
 });
 
-test('hunt rows update the matching posting and add analysis, tweaks and letter references', () => {
-  const { db, counts, store } = run({
+test('hunt rows update the matching posting and add analysis, tweaks and letter references', async () => {
+  const { db, counts, store } = await run({
     discovered: [discoveredRow({ Status: 'Added to Pipeline' })],
     hunt: [{ name: 'x - Jobs.csv', current: true, rows: [huntRow({ 'Date Applied': '7/25/2026' })] }],
   });
@@ -106,8 +106,8 @@ test('hunt rows update the matching posting and add analysis, tweaks and letter 
   store.close();
 });
 
-test('the current Jobs tab wins over archives, and repeated rows do not duplicate artifacts', () => {
-  const { db, store } = run({
+test('the current Jobs tab wins over archives, and repeated rows do not duplicate artifacts', async () => {
+  const { db, store } = await run({
     discovered: [],
     hunt: [
       { name: 'x - Archive.csv', current: false, rows: [huntRow({ Status: 'Pass' })] },
@@ -121,8 +121,8 @@ test('the current Jobs tab wins over archives, and repeated rows do not duplicat
   store.close();
 });
 
-test('archive-only rows are archived; rows match by company and title when URLs differ', () => {
-  const { db, counts, store } = run({
+test('archive-only rows are archived; rows match by company and title when URLs differ', async () => {
+  const { db, counts, store } = await run({
     discovered: [discoveredRow()],
     hunt: [{ name: 'x - Archive.csv', current: false, rows: [huntRow({ 'Job URL': 'https://other.example.com/9', Status: 'Closed' })] }],
   });
@@ -131,8 +131,8 @@ test('archive-only rows are archived; rows match by company and title when URLs 
   store.close();
 });
 
-test('duplicate discovered URLs merge, rows without company are skipped, unknown statuses are reported', () => {
-  const { counts, store } = run({
+test('duplicate discovered URLs merge, rows without company are skipped, unknown statuses are reported', async () => {
+  const { counts, store } = await run({
     discovered: [
       discoveredRow(),
       discoveredRow({ 'Job URL': 'https://jobs.example.com/acme/1/' }),
@@ -149,8 +149,8 @@ test('duplicate discovered URLs merge, rows without company are skipped, unknown
   store.close();
 });
 
-test('a promoted job missing from every hunt export is archived, not left in the pipeline', () => {
-  const { db, store } = run({
+test('a promoted job missing from every hunt export is archived, not left in the pipeline', async () => {
+  const { db, store } = await run({
     discovered: [discoveredRow({ Status: 'Added to Pipeline' })],
     hunt: [{ name: 'x - Jobs.csv', current: true, rows: [] }],
   });
@@ -158,13 +158,13 @@ test('a promoted job missing from every hunt export is archived, not left in the
   store.close();
 });
 
-test('refuses to import into a database that already has postings', () => {
-  const { store } = run({ discovered: [discoveredRow()], hunt: [] });
-  assert.throws(() => importV1(store, { discovered: [discoveredRow()], hunt: [] }), /empty database/);
+test('refuses to import into a database that already has postings', async () => {
+  const { store } = await run({ discovered: [discoveredRow()], hunt: [] });
+  await assert.rejects(importV1(store, { discovered: [discoveredRow()], hunt: [] }), /empty database/);
   store.close();
 });
 
-test('classifySheetFiles puts archives first and the current Jobs tab last', () => {
+test('classifySheetFiles puts archives first and the current Jobs tab last', async () => {
   const files = classifySheetFiles(['Hunt - Jobs.csv', 'Discovered Jobs - Sheet1.csv', 'Hunt - Archived 9-28.csv', 'Hunt - Archive.csv', 'notes.txt']);
   assert.deepEqual(files.discovered, ['Discovered Jobs - Sheet1.csv']);
   assert.deepEqual(files.hunt, [

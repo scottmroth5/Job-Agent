@@ -45,12 +45,12 @@ export function createJobClaude(db: Database, { forKey, ownerClient, onCapReache
   const makeForKey = forKey ?? ((apiKey: string) => createClaude({ ...options, client: undefined, apiKey }));
   const cache = new Map<number, { stamp: string; client: Claude }>(); // uid -> { stamp, client }; the stamp changes when the user saves a new key
 
-  const clientFor = (uid: number): Claude => {
+  const clientFor = async (uid: number): Promise<Claude> => {
     if (uid === OWNER_ID) return owner;
     const user = db.prepare('SELECT status, ai_source FROM users WHERE id = ?').get(uid) as { status: string; ai_source: string | null } | undefined;
     if (!user || user.status !== 'active') throw Object.assign(new Error('This account is not active.'), { statusCode: 403 });
     if (user.ai_source === 'owner') return owner;
-    const sealed = sealedClaudeKey(db, uid);
+    const sealed = await sealedClaudeKey(db, uid);
     if (!sealed) throw new NoClaudeKeyError();
     const stamp = createHash('sha256').update(sealed).digest('hex');
     const known = cache.get(uid);
@@ -64,7 +64,7 @@ export function createJobClaude(db: Database, { forKey, ownerClient, onCapReache
     async send(opts: SendOptions) {
       assertOutsideTransaction('A Claude call');
       const uid = currentUserId() ?? OWNER_ID;
-      const client = clientFor(uid);
+      const client = await clientFor(uid);
       try {
         checkBudget(db, { uid, now: now(), env });
       } catch (err) {

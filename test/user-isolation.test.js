@@ -30,7 +30,7 @@ async function setup() {
   const dbPath = join(dir, 'job-agent.db');
   seedDemo({ dbPath, configPath: join(dir, 'config', 'job-search.json'), now: new Date('2026-10-23T15:00:00Z') });
   const store = openJobStore(dbPath, { fallbackUid: null }); // as the server opens it: no user outside a request
-  const B = addUser(store.raw, { email: 'b@example.com' });
+  const B = await addUser(store.raw, { email: 'b@example.com' });
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({
     AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'client.apps.example', GOOGLE_WEB_CLIENT_SECRET: 'secret',

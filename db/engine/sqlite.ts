@@ -101,16 +101,34 @@ export interface SqliteEngineOptions {
   strictTx?: boolean;
 }
 
+/**
+ * One connection's transaction state. Every engine over a connection shares it (engines differ only in fallbackUid),
+ * so there is one lock and one open transaction per connection however many views of it exist.
+ */
+interface ConnectionState {
+  transactions: Mutex;
+  open: object | null;
+  savepointCount: number;
+}
+const connections = new WeakMap<Sqlite, ConnectionState>();
+function stateOf(raw: Sqlite): ConnectionState {
+  let state = connections.get(raw);
+  if (!state) {
+    state = { transactions: new Mutex(), open: null, savepointCount: 0 };
+    connections.set(raw, state);
+  }
+  return state;
+}
+
 /** The async Db over a better-sqlite3 connection (the unscoped one; scoping happens here). */
 export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx = process.env.NODE_TEST_CONTEXT !== undefined }: SqliteEngineOptions = {}): Db {
   const userId = userIdOr(fallbackUid);
-  const transactions = new Mutex();
-  let open: object | null = null;
-  let savepointCount = 0;
-  const contextFor = (top: object): TxContext => ({ top, isOpen: () => open === top, savepoints: new Mutex() });
+  const state = stateOf(raw);
+  const { transactions } = state;
+  const contextFor = (top: object): TxContext => ({ top, isOpen: () => state.open === top, savepoints: new Mutex() });
 
   // A statement may run now when no transaction is open, or when it belongs to the open one.
-  const mayRun = () => !raw.inTransaction || (open !== null && context.getStore()?.top === open);
+  const mayRun = () => !raw.inTransaction || (state.open !== null && context.getStore()?.top === state.open);
   async function whenFree() {
     while (!mayRun()) await transactions.idle();
   }
@@ -146,8 +164,8 @@ export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx =
 
   async function savepoint<T>(ctx: TxContext, fn: () => Promise<T>): Promise<T> {
     const release = await ctx.savepoints.lock();
-    savepointCount += 1;
-    const name = `sp${savepointCount}`;
+    state.savepointCount += 1;
+    const name = `sp${state.savepointCount}`;
     raw.exec(`SAVEPOINT ${name}`);
     try {
       const result = await context.run(contextFor(ctx.top), fn);
@@ -164,13 +182,13 @@ export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx =
 
   async function tx<T>(fn: () => Promise<T>): Promise<T> {
     const ctx = context.getStore();
-    if (ctx && open !== null && ctx.top === open) return savepoint(ctx, fn);
+    if (ctx && state.open !== null && ctx.top === state.open) return savepoint(ctx, fn);
     const release = await transactions.lock();
     try {
       // A synchronous statement can not be mid-transaction here: better-sqlite3's transactions finish in one step.
       const top = {};
       raw.exec('BEGIN IMMEDIATE');
-      open = top;
+      state.open = top;
       const guard = strictTx ? macrotaskGuard() : null;
       try {
         const result = await context.run(contextFor(top), fn);
@@ -182,7 +200,7 @@ export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx =
         if (raw.inTransaction) raw.exec('ROLLBACK');
         throw err;
       } finally {
-        open = null;
+        state.open = null;
       }
     } finally {
       release();

@@ -12,12 +12,12 @@ import { baselineReport, renderBaseline } from '../tools/baseline.ts';
 const now = new Date('2026-10-05T12:00:00Z');
 const SECRET = 'Zebracorn Widgets';
 
-function build() {
+async function build() {
   const dir = mkdtempSync(join(tmpdir(), 'baseline-'));
   const path = join(dir, 'job-agent.db');
   const store = openJobStore(path, { snapshot: false });
   const { raw } = store;
-  addUser(raw, { email: 'second@example.com', name: 'Second' });
+  await addUser(raw, { email: 'second@example.com', name: 'Second' });
   const job = (/** @type {number} */ uid, /** @type {Record<string, string | null>} */ o = {}) =>
     Number(
       raw
@@ -44,8 +44,8 @@ function build() {
   return { dir, path, attachmentsDir: join(dir, 'attachments') };
 }
 
-test('baseline: counts, sizes, spend, and outcome data across users, read-only and without text', () => {
-  const { dir, path, attachmentsDir } = build();
+test('baseline: counts, sizes, spend, and outcome data across users, read-only and without text', async () => {
+  const { dir, path, attachmentsDir } = await build();
   try {
     const before = readFileSync(path);
     const r = baselineReport(path, { attachmentsDir, now });

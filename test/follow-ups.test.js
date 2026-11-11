@@ -111,7 +111,7 @@ test('the routes: counts, the setting, review and close the stale ones, and clos
 test("another user's stale days and applications are their own", async () => {
   const { store, db, job, app } = await appSetup();
   job({ company: 'Ghost Co', applied: daysAgo(60) });
-  const b = addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
   runAsUser(b, () => setStaleDays(db, 100));
   assert.equal(staleDays(db), 45);
   assert.deepEqual(runAsUser(b, () => closeNoResponse(db, { dryRun: true })), []);

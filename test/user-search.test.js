@@ -48,9 +48,9 @@ test('a user sets plain text only: no patterns, no site search, no private terms
   assert.equal(saveUserProfile(raw, OWNER_ID, ' Owner background. '), 'Owner background.', 'the owner can keep About you in the app too');
 });
 
-test('the server config reads as whoever the request runs as', () => {
+test('the server config reads as whoever the request runs as', async () => {
   const { raw } = openJobStore(':memory:');
-  const b = addUser(raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
   saveUserConfig(raw, b, B_SEARCH, 'Sam');
   const config = userConfigView(OWNER_CONFIG, raw);
   assert.deepEqual(config.search.terms, ['Owner Term'], 'outside a request: the owner');
@@ -66,7 +66,7 @@ async function setup() {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: 'owner@example.com', SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const b = addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
   /** @type {Array<number | undefined>} */
   const runs = [];
   const app = await buildApp({
@@ -141,12 +141,12 @@ test('the pipeline button runs the pipeline as whoever pressed it, one at a time
   await done();
 });
 
-test('the pipeline script refuses a user who has not set up a search, before any search', () => {
+test('the pipeline script refuses a user who has not set up a search, before any search', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'pipeline-user-'));
   try {
     const store = openJobStore(join(dir, 'job-agent.db'), { log: {} });
-    const b = addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
-    const paused = addUser(store.raw, { email: 'c@example.com', status: 'paused' });
+    const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+    const paused = await addUser(store.raw, { email: 'c@example.com', status: 'paused' });
     store.close();
     const run = (/** @type {string[]} */ args) => spawnSync(process.execPath, [repoPath('scripts', 'pipeline.js'), ...args, '--no-email'], { env: { ...process.env, DATA_DIR: dir }, encoding: 'utf8', timeout: 30000 });
     const notReady = run([`--user=${b}`]);

@@ -57,10 +57,10 @@ const onCapReached = async (uid: number, error: Error) => {
   const key = `allowance-notice:${uid}`;
   if (getSetting(store.raw, key) === err.status.month) return;
   setSetting(store.raw, key, err.status.month);
-  await notices.allowanceReached?.(getUser(store.raw, uid) as User, err.status); // a user on the owner's key has a row
+  await notices.allowanceReached?.((await getUser(store.raw, uid)) as User, err.status); // a user on the owner's key has a row
 };
 // The owner's account row carries their first allowed address, for the Users screen.
-if (authMode === 'google') syncOwnerEmail(store.raw, authConfig.allowed);
+if (authMode === 'google') await syncOwnerEmail(store.raw, authConfig.allowed);
 const realServices = (): AppServices => ({
   claude: createJobClaude(store.db, { onCapReached }),
   notices,

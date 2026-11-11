@@ -96,7 +96,7 @@ test('the Google Doc HTML links the header and has no emoji', () => {
   assert.ok(html.includes('Re: Vice President, Engineering at Example Co') && html.includes('First paragraph here.'));
 });
 
-test('the header setting: from the settings until saved, checked on save, and each user has their own', () => {
+test('the header setting: from the settings until saved, checked on save, and each user has their own', async () => {
   const { db, raw } = openJobStore(':memory:');
   const config = { candidate };
   assert.deepEqual(letterHeader(db, config), { ...fromCandidate(candidate), saved: false });
@@ -106,7 +106,7 @@ test('the header setting: from the settings until saved, checked on save, and ea
   const saved = saveLetterHeader(db, { name: ' Pat M. Example ', email: 'pat@example.com', phone: '555-0100', links: ['example.com', '', 'github.com/example'] });
   assert.deepEqual(saved, { name: 'Pat M. Example', signoffName: '', email: 'pat@example.com', phone: '555-0100', location: '', links: ['example.com', 'github.com/example'], saved: true });
   assert.equal(letterHeader(db, config).name, 'Pat M. Example');
-  const b = addUser(raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
   assert.equal(runAsUser(b, () => letterHeader(db, { candidate: { name: 'Sam' } }).saved), false, "another user's is their own");
 });
 

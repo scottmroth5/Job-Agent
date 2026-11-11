@@ -50,7 +50,7 @@ async function main() {
   const store = openJobStore();
   const run = await createJobTracer({ store }).startRun('import-v1', { files: files.hunt.length + 1 });
   try {
-    const counts = importV1(
+    const counts = await importV1(
       store,
       {
         discovered: readCsv(join(SHEETS_DIR, files.discovered[0])),

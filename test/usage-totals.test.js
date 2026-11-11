@@ -139,7 +139,7 @@ async function setup({ authMode = 'google' } = {}) {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: OWNER, SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const sam = addUser(store.raw, { email: 'sam@example.com', name: 'Sam' });
+  const sam = await addUser(store.raw, { email: 'sam@example.com', name: 'Sam' });
   const webDir = mkdtempSync(join(tmpdir(), 'web-'));
   writeFileSync(join(webDir, 'index.html'), '<!doctype html><title>Job Hunt</title>');
   mkdirSync(join(webDir, 'assets'));

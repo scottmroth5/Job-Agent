@@ -35,8 +35,8 @@ const anyObject = { type: 'object', additionalProperties: true };
 // Anthropic API keys: "sk-ant-" then letters, digits, dashes, and underscores.
 const KEY_PATTERN = /^sk-ant-[A-Za-z0-9_-]{20,200}$/;
 
-function account(db: Database, uid: number) {
-  const u = getUser(db, uid) as User; // the request's own account, which exists
+async function account(db: Database, uid: number) {
+  const u = (await getUser(db, uid)) as User; // the request's own account, which exists
   const budget = budgetStatus(db, { uid });
   return {
     email: u.email,
@@ -78,7 +78,7 @@ export function registerAccountRoutes(
     async (req) => {
       const uid = req.uid ?? OWNER_ID;
       if (uid === OWNER_ID) throw Object.assign(new Error("The owner's account cannot be deleted."), { statusCode: 400 });
-      const user = getUser(db, uid) as User; // the request's own account
+      const user = (await getUser(db, uid)) as User; // the request's own account
       if (req.body.confirmEmail.trim().toLowerCase() !== user.email) throw Object.assign(new Error(`Type ${user.email} to confirm.`), { statusCode: 400 });
       const counts = deleteAccount(db, uid, { attachmentsDir });
       await notices.accountDeleted?.(user, { byOwner: false });
@@ -149,7 +149,7 @@ export function registerAccountRoutes(
         throw Object.assign(new Error('Could not reach Anthropic to check the key. Try again shortly.'), { statusCode: 502 });
       }
       if (!works) throw Object.assign(new Error('Anthropic did not accept this key.'), { statusCode: 400 });
-      setClaudeKey(db, uid, seal(apiKey, uid, key));
+      await setClaudeKey(db, uid, seal(apiKey, uid, key));
       return account(db, uid);
     },
   );
@@ -158,7 +158,7 @@ export function registerAccountRoutes(
   // Google Doc, so these answer the owner with where to change them instead.
   // The demo shows the sample candidate's About you and search (demo/sample-data.ts), read-only, so visitors see what
   // scoring works from; nothing is read from or saved to the database.
-  const search = (uid: number) => {
+  const search = async (uid: number) => {
     if (demo) {
       const config = cleanConfig(DEMO_CONFIG, DEMO_CONFIG.candidate.name);
       return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE, scheduled: false };
@@ -167,7 +167,7 @@ export function registerAccountRoutes(
       // The owner's search settings stay in their settings file; their knowledge doc lives here, like everyone's.
       return { owner: true, profile: userProfile(db, uid), profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE };
     }
-    const u = getUser(db, uid) as User; // the request's own account
+    const u = (await getUser(db, uid)) as User; // the request's own account
     const config = userConfig(db, uid, u.name as string); // registration asks every account for a name
     const profile = userProfile(db, uid);
     return {
@@ -191,7 +191,7 @@ export function registerAccountRoutes(
     },
     async (req) => {
       const uid = req.uid ?? OWNER_ID;
-      saveUserConfig(db, uid, req.body, getUser(db, uid)?.name ?? '');
+      saveUserConfig(db, uid, req.body, (await getUser(db, uid))?.name ?? '');
       return search(uid);
     },
   );
@@ -240,7 +240,7 @@ export function registerAccountRoutes(
       const uid = req.uid ?? OWNER_ID;
       const text = req.query.version ? versionAt(uid, req.query.version)?.text : demo ? DEMO_ABOUT_YOU : userProfile(db, uid);
       if (!text) return reply.code(404).send({ error: 'No knowledge doc yet.' });
-      const name = demo ? DEMO_CONFIG.candidate.name : getUser(db, uid)?.name;
+      const name = demo ? DEMO_CONFIG.candidate.name : (await getUser(db, uid))?.name;
       const file = docxName(fileTitle(name, 'Knowledge Doc', (req.query.version && `v${req.query.version}`) as string | undefined));
       return reply
         .header('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document')
@@ -286,7 +286,7 @@ export function registerAccountRoutes(
 
   app.delete('/api/account/claude-key', { schema: { summary: 'Remove your saved Claude API key', response: { 200: anyObject } } }, async (req) => {
     const uid = req.uid ?? OWNER_ID;
-    setClaudeKey(db, uid, null);
+    await setClaudeKey(db, uid, null);
     return account(db, uid);
   });
 }

@@ -10,6 +10,8 @@ import { openJobStore } from '../db/index.ts';
 import { createJobClaude } from '../tools/claude.ts';
 import { createHttp } from '../tools/http.ts';
 import { fakeClaude } from './fixtures/fakes.js';
+import { asEngine } from '../db/engine/index.ts';
+import { addUser, decide, getUser, requestAccess } from '../db/users.ts';
 
 function setup(/** @type {import('../db/engine/sqlite.ts').SqliteEngineOptions} */ options = {}) {
   const raw = new Database(':memory:');
@@ -197,4 +199,48 @@ test('openJobStore gives store.engine over the same connection, scoped like stor
   await assert.rejects(server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get(), /needs a user/);
   assert.equal(await runAsUser(1, () => server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get()), 0);
   server.close();
+});
+
+test('asEngine: every view of one connection shares its transaction lock', async () => {
+  const store = openJobStore(':memory:', { fallbackUid: 1 });
+  const fromScoped = asEngine(store.db);
+  const fromRaw = asEngine(store.raw);
+  assert.equal(asEngine(store.db), fromScoped, 'one view per handle');
+  assert.equal(asEngine(store.engine), store.engine, 'an engine is its own view');
+  const hold = deferred();
+  const order = /** @type {string[]} */ ([]);
+  // The holder has the guard off, so the test can keep its transaction open across a macrotask.
+  const holder = createSqliteEngine(store.raw, { fallbackUid: 1, strictTx: false });
+  const inside = holder.tx(async () => {
+    await holder.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('a', '1', 'x')").run();
+    await hold.promise;
+    order.push('tx done');
+  });
+  await new Promise((r) => setImmediate(r));
+  const viaScoped = fromScoped.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`scoped saw ${n}`));
+  const viaRaw = fromRaw.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`raw saw ${n}`));
+  await new Promise((r) => setImmediate(r));
+  assert.deepEqual(order, [], 'both wait for the open transaction');
+  hold.resolve();
+  await Promise.all([inside, viaScoped, viaRaw]);
+  assert.deepEqual(order, ['tx done', 'scoped saw 1', 'raw saw 1']);
+  store.close();
+});
+
+test('users: two decisions at once can not both pass the status check; two requests from one address make one row', async () => {
+  const store = openJobStore(':memory:');
+  const id = await addUser(store.db, { email: 'pending@example.com', status: 'pending' });
+  const results = await Promise.allSettled([decide(store.db, id, 'reject', { by: 1 }), decide(store.db, id, 'reject', { by: 1 })]);
+  assert.deepEqual(results.map((r) => r.status).sort(), ['fulfilled', 'rejected']);
+  assert.match(String(/** @type {PromiseRejectedResult} */ (results.find((r) => r.status === 'rejected')).reason), /A rejected account cannot be reject/);
+
+  const [a, b] = await Promise.all([
+    requestAccess(store.db, { email: 'new@example.com', name: 'New' }),
+    requestAccess(store.db, { email: 'NEW@example.com', name: 'New' }),
+  ]);
+  assert.equal(a.id, b.id);
+  assert.deepEqual([a.created, b.created].sort(), [false, true]);
+  assert.equal(store.db.prepare("SELECT COUNT(*) FROM users WHERE email = 'new@example.com'").pluck().get(), 1);
+  assert.equal((await getUser(store.db, a.id))?.status, 'pending');
+  store.close();
 });

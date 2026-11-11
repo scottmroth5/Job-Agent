@@ -78,10 +78,10 @@ test('013 gives every row to the owner, keeps every link, and moves personal set
   }
 });
 
-test('keys are unique per user, and user_id is required', () => {
+test('keys are unique per user, and user_id is required', async () => {
   const store = openJobStore(':memory:');
   const raw = store.raw;
-  const second = addUser(raw, { email: 'second@example.com' });
+  const second = await addUser(raw, { email: 'second@example.com' });
   const job = (/** @type {number} */ uid, /** @type {string} */ key) => raw.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
     VALUES (?, ?, 'Example Co', 'CTO', 'k', '2026-10-01', 'x', 'x')`).run(uid, key);
   job(OWNER_ID, 'same');
@@ -96,9 +96,9 @@ test('keys are unique per user, and user_id is required', () => {
   store.close();
 });
 
-test('scopeDb binds the current user, and a user-table query with no user throws', () => {
+test('scopeDb binds the current user, and a user-table query with no user throws', async () => {
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const second = addUser(store.raw, { email: 'second@example.com' });
+  const second = await addUser(store.raw, { email: 'second@example.com' });
   const add = (/** @type {number} */ uid, /** @type {string} */ key) => store.raw.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
     VALUES (?, ?, 'Example Co', 'CTO', 'k', '2026-10-01', 'x', 'x')`).run(uid, key);
   add(OWNER_ID, 'mine');
@@ -121,17 +121,17 @@ test('scopeDb binds the current user, and a user-table query with no user throws
   });
 });
 
-test('sign-in: an owner address is the owner; any other address is its own row (with its status), or nobody yet', () => {
+test('sign-in: an owner address is the owner; any other address is its own row (with its status), or nobody yet', async () => {
   const store = openJobStore(':memory:');
-  const second = addUser(store.raw, { email: 'Second@Example.com' });
+  const second = await addUser(store.raw, { email: 'Second@Example.com' });
   const owners = ['Owner@Example.com', 'other-owner@example.com'];
-  assert.deepEqual(accountFor(store.raw, 'second@example.com', owners), { uid: second, status: 'active', role: 'user' });
-  assert.deepEqual(accountFor(store.raw, 'owner@example.com', owners), { uid: OWNER_ID, status: 'active', role: 'admin' });
-  assert.equal(accountFor(store.raw, 'other-owner@example.com', owners)?.uid, OWNER_ID);
-  assert.equal(accountFor(store.raw, 'stranger@example.com', owners), null);
+  assert.deepEqual(await accountFor(store.raw, 'second@example.com', owners), { uid: second, status: 'active', role: 'user' });
+  assert.deepEqual(await accountFor(store.raw, 'owner@example.com', owners), { uid: OWNER_ID, status: 'active', role: 'admin' });
+  assert.equal((await accountFor(store.raw, 'other-owner@example.com', owners))?.uid, OWNER_ID);
+  assert.equal(await accountFor(store.raw, 'stranger@example.com', owners), null);
   store.raw.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(second);
-  assert.equal(accountFor(store.raw, 'second@example.com', owners)?.status, 'paused');
-  syncOwnerEmail(store.raw, owners);
+  assert.equal((await accountFor(store.raw, 'second@example.com', owners))?.status, 'paused');
+  await syncOwnerEmail(store.raw, owners);
   assert.equal(store.raw.prepare('SELECT email FROM users WHERE id = ?').pluck().get(OWNER_ID), 'owner@example.com');
   store.close();
 });

@@ -37,7 +37,7 @@ export function registerFeedbackRoutes(app: App, { db, notices = {}, admin = tru
       const page = req.body.page?.replace(/[^\w#/ -]/g, '').slice(0, 100) || null;
       db.prepare('INSERT INTO feedback (user_id, id, body, page, created_at) VALUES (@uid, ?, ?, ?, ?)').run(id, body, page, new Date().toISOString());
       // The owner's own feedback is a note to self: saved, not emailed.
-      if ((req.uid ?? OWNER_ID) !== OWNER_ID) await notices.feedback?.(getUser(db, req.uid as number) as User, body, page); // a signed-in user has a row
+      if ((req.uid ?? OWNER_ID) !== OWNER_ID) await notices.feedback?.((await getUser(db, req.uid as number)) as User, body, page); // a signed-in user has a row
       return reply.code(201).send({ id, sent: true });
     },
   );

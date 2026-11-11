@@ -40,9 +40,9 @@ test('add, note, and remove; adding again updates the note; the owner keeps the 
   assert.deepEqual(excludedSites(db, OWNER_ID).map((s) => s.site), ['paywall.example']);
 });
 
-test("another user's sites from their saved search move into the list, and only theirs apply to them", () => {
+test("another user's sites from their saved search move into the list, and only theirs apply to them", async () => {
   const { raw } = openJobStore(':memory:');
-  const b = addUser(raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
   saveUserConfig(raw, b, { candidate: { name: 'Sam' }, search: { terms: ['Head of Data'], excludedSites: ['old.example'] } }, 'Sam');
   addExcludedSite(raw, OWNER_ID, { site: 'ownerskip.example' });
   const legacy = ['old.example'];
@@ -101,7 +101,7 @@ test('the routes: skip from a job link, count saved jobs, remove them (not the a
 
 test("each user's list is their own", async () => {
   const { store, app } = await setup();
-  const b = addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
   addExcludedSite(store.raw, OWNER_ID, { site: 'ownerskip.example', note: 'Mine' });
   assert.deepEqual(runAsUser(b, () => excludedSites(store.db, b)), []);
   assert.deepEqual(excludedSites(store.db, OWNER_ID).map((s) => s.site), ['ownerskip.example']);

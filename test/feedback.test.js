@@ -27,7 +27,7 @@ async function setup() {
   const notices = createNotices({ send: async (e) => sent.push(e), owner: () => OWNER, appUrl: () => SITE, log: {} });
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, notices, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
-  const pat = addUser(store.raw, { email: 'pat@example.com', name: 'Pat' });
+  const pat = await addUser(store.raw, { email: 'pat@example.com', name: 'Pat' });
   return { store, app, sent, pat, asOwner: as(OWNER), asPat: as('pat@example.com'), done: async () => { await app.close(); store.close(); } };
 }
 

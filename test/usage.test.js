@@ -23,9 +23,9 @@ const FIELDS = ['accountsSeen', 'claudeSpendUsd', 'feedbackReceived', 'jobsAdded
 const EDGE = '2026-10-25T03:00:00Z';
 
 /** @param {Database} db */
-function seed(db) {
-  const pat = addUser(db, { email: 'pat@example.com', name: 'Pat' });
-  const sam = addUser(db, { email: 'sam@example.com', name: 'Sam' });
+async function seed(db) {
+  const pat = await addUser(db, { email: 'pat@example.com', name: 'Pat' });
+  const sam = await addUser(db, { email: 'sam@example.com', name: 'Sam' });
   let n = 0;
   const job = (/** @type {number} */ uid, /** @type {string} */ at) =>
     Number(
@@ -75,9 +75,9 @@ function seed(db) {
   return { pat, sam };
 }
 
-test('weekly totals across two users, Sunday to Saturday in the app zone, newest first', () => {
+test('weekly totals across two users, Sunday to Saturday in the app zone, newest first', async () => {
   const store = openJobStore(':memory:');
-  seed(store.raw);
+  await seed(store.raw);
   const edgeLastWeek = localDay(new Date(EDGE)) === '2026-10-24';
   const weeks = usageByWeek(store.raw, { weeks: 4, now: NOW });
   const none = { accountsSeen: 0, pipelineCompleted: 0, pipelineFailed: 0, jobsAdded: 0, lettersWritten: 0, prepsWritten: 0, feedbackReceived: 0, claudeSpendUsd: 0 };
@@ -106,7 +106,7 @@ test('GET /api/admin/usage: the admin only, 4 to 52 weeks, the listed fields onl
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: OWNER, SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  seed(store.raw);
+  await seed(store.raw);
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
 

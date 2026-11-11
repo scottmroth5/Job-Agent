@@ -8,7 +8,7 @@ import type { createNotices } from './notices.ts';
 import type { accountFor } from '../db/users.ts';
 
 /** A signed-in address's account (db/users.ts accountFor). */
-export type Account = NonNullable<ReturnType<typeof accountFor>>;
+export type Account = NonNullable<Awaited<ReturnType<typeof accountFor>>>;
 
 declare module 'fastify' {
   interface FastifyRequest {

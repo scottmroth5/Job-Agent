@@ -12,7 +12,7 @@ import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
 const doc = (/** @type {number} */ n) => `## 1. Summary\nEngineering leader, version ${n}.\n\n## 2. Experience\n- Grew a platform team from 6 to 45 engineers.`;
 
-test('every save is a version, newest first; the same text again adds none; a doc saved before versions is kept', () => {
+test('every save is a version, newest first; the same text again adds none; a doc saved before versions is kept', async () => {
   const { raw } = openJobStore(':memory:');
   raw.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, 'profile.text', ?, '2026-10-01T12:00:00.000Z')").run(OWNER_ID, doc(0));
   assert.deepEqual(profileVersions(raw, OWNER_ID).map((v) => [v.source, v.savedAt]), [['earlier', '2026-10-01T12:00:00.000Z']]);
@@ -23,7 +23,7 @@ test('every save is a version, newest first; the same text again adds none; a do
   for (let i = 3; i < 30; i++) saveUserProfile(raw, OWNER_ID, doc(i));
   assert.equal(profileVersions(raw, OWNER_ID).length, MAX_PROFILE_VERSIONS);
   assert.equal(userProfile(raw, OWNER_ID), doc(29));
-  const b = addUser(raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(raw, { email: 'b@example.com', name: 'Sam' });
   assert.deepEqual(profileVersions(raw, b), [], "another user's are their own");
 });
 

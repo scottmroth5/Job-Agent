@@ -101,7 +101,7 @@ test('routes: upload, edit, download with safe headers, and another user sees no
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: 'owner@example.com', SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const b = addUser(store.raw, { email: 'b@example.com' });
+  const b = await addUser(store.raw, { email: 'b@example.com' });
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
   const owner = as('owner@example.com');

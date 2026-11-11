@@ -53,7 +53,7 @@ async function setup() {
   const claude = createJobClaude(store.db, { ownerClient: fakeClaude(async (opts) => { sent.push(opts); return { data: DRAFT, text: '' }; }), env: {} });
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, claude, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
-  const pat = addUser(store.raw, { email: 'pat@example.com', name: 'Pat', aiSource: 'owner' });
+  const pat = await addUser(store.raw, { email: 'pat@example.com', name: 'Pat', aiSource: 'owner' });
   store.raw.prepare('UPDATE users SET ai_cap_usd = 5 WHERE id = ?').run(pat);
   return { store, app, sent, pat, asPat: as('pat@example.com'), asOwner: as('owner@example.com'), done: async () => { await app.close(); store.close(); } };
 }

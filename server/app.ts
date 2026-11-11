@@ -229,7 +229,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     req.role = account.role;
     // Their own time zone for calendar days (the owner always uses the app's).
     req.timeZone = account.uid === OWNER_ID ? null : ((db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(account.uid) as string | null | undefined) ?? null);
-    if (authMode === 'google') touchLastSeen(db, account.uid);
+    if (authMode === 'google') await touchLastSeen(db, account.uid);
   });
   app.addHook('preHandler', (req, reply, done) => (req.uid ? runAsUser(req.uid, done, { timeZone: req.timeZone }) : done()));
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));

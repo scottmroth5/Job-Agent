@@ -79,7 +79,7 @@ test('the summary carries the list, and another user sees only their own', async
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   const t = (await app.inject('/api/summary')).json().today;
   assert.ok(t.some((/** @type {Item} */ x) => x.company === 'Mine Co'));
-  const other = runAsUser(addUser(store.raw, { email: 'b@example.com' }), () => today(store.db, { now }).items);
+  const other = runAsUser(await addUser(store.raw, { email: 'b@example.com' }), () => today(store.db, { now }).items);
   assert.deepEqual(other, []);
   await app.close();
   store.close();

@@ -84,24 +84,24 @@ test('who pays: the owner and users on the owner\'s key use it; others their own
     forKey: (apiKey) => { keys.push(apiKey); return fakeClient(`own:${apiKey}`, sent); },
     env: {},
   });
-  const own = addUser(db, { email: 'own@example.com' });
-  const given = addUser(db, { email: 'given@example.com' });
-  setAiAccess(db, given, { source: 'owner', capUsd: 5 });
+  const own = await addUser(db, { email: 'own@example.com' });
+  const given = await addUser(db, { email: 'given@example.com' });
+  await setAiAccess(db, given, { source: 'owner', capUsd: 5 });
 
   await assert.rejects(runAsUser(own, () => ask(claude)), NoClaudeKeyError);
-  setClaudeKey(db, own, seal('sk-ant-made-up-key-1', own, boxKey(SECRET)));
+  await setClaudeKey(db, own, seal('sk-ant-made-up-key-1', own, boxKey(SECRET)));
   assert.equal((await runAsUser(own, () => ask(claude))).text, 'own:sk-ant-made-up-key-1');
   await runAsUser(own, () => ask(claude));
   assert.deepEqual(keys, ['sk-ant-made-up-key-1'], 'the opened key is kept for the next call, not opened each time');
-  setClaudeKey(db, own, seal('sk-ant-made-up-key-2', own, boxKey(SECRET)));
+  await setClaudeKey(db, own, seal('sk-ant-made-up-key-2', own, boxKey(SECRET)));
   assert.equal((await runAsUser(own, () => ask(claude))).text, 'own:sk-ant-made-up-key-2', 'a new key takes effect at once');
 
   assert.equal((await runAsUser(given, () => ask(claude))).text, 'owner');
   assert.equal((await ask(claude)).text, 'owner', 'scripts run as the owner');
 
   // A key sealed for one user does not open for another.
-  setClaudeKey(db, given, seal('sk-ant-made-up-key-3', own, boxKey(SECRET)));
-  setAiAccess(db, given, { source: 'own' });
+  await setClaudeKey(db, given, seal('sk-ant-made-up-key-3', own, boxKey(SECRET)));
+  await setAiAccess(db, given, { source: 'own' });
   await assert.rejects(runAsUser(given, () => ask(claude)));
 
   db.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(own);
@@ -115,9 +115,9 @@ test('caps: a user on the owner\'s key stops at their allowance (told once), and
   /** @type {number[]} */
   const reached = [];
   const claude = createJobClaude(db, { ownerClient: fakeClient('owner', sent), env: { MONTHLY_CLAUDE_BUDGET_USD: '20' }, onCapReached: (uid) => reached.push(uid) });
-  const given = addUser(db, { email: 'given@example.com' });
-  const own = addUser(db, { email: 'own@example.com' });
-  setAiAccess(db, given, { source: 'owner', capUsd: 5 });
+  const given = await addUser(db, { email: 'given@example.com' });
+  const own = await addUser(db, { email: 'own@example.com' });
+  await setAiAccess(db, given, { source: 'owner', capUsd: 5 });
   seed(db, [['score', 6, new Date()]], given);
   await assert.rejects(runAsUser(given, () => ask(claude)), /allowance the owner gave you/);
   assert.deepEqual(reached, [given]);
@@ -131,14 +131,14 @@ test('caps: a user on the owner\'s key stops at their allowance (told once), and
   assert.deepEqual(spendByLabel(db, { uid: own }).map((r) => r.label), ['cover-letter']);
 
   // The owner's own cap also stops users on the owner's key.
-  setAiAccess(db, given, { source: 'owner', capUsd: 100 });
+  await setAiAccess(db, given, { source: 'owner', capUsd: 100 });
   seed(db, [['score', 15, new Date()]], OWNER_ID);
   await assert.rejects(runAsUser(given, () => ask(claude)), /owner's monthly Claude budget/);
   assert.deepEqual(sent, []);
   for (const bad of [{ source: 'owner' }, { source: 'owner', capUsd: 0 }, { source: 'owner', capUsd: 1e6 }, { source: 'friend' }]) {
-    assert.throws(() => setAiAccess(db, given, bad), /cap|key/);
+    await assert.rejects(setAiAccess(db, given, bad), /cap|key/);
   }
-  assert.throws(() => setAiAccess(db, OWNER_ID, { source: 'own' }), /always uses your key/);
+  await assert.rejects(setAiAccess(db, OWNER_ID, { source: 'own' }), /always uses your key/);
 });
 
 test('API: header summary and Admin > Spending show and change the cap', async () => {

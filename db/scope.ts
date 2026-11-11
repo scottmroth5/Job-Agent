@@ -7,8 +7,8 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Database, Statement } from 'better-sqlite3';
 
-/** The scoped database: better-sqlite3's, plus the unscoped one underneath and the current user's id. */
-export type ScopedDatabase = Database & { readonly unscoped: Database; readonly uid: number };
+/** The scoped database: better-sqlite3's, plus the unscoped one underneath, the current user's id, and its fallback user. */
+export type ScopedDatabase = Database & { readonly unscoped: Database; readonly uid: number; readonly fallbackUid: number | null };
 
 const context = new AsyncLocalStorage<{ uid: number; timeZone: string | null }>();
 
@@ -86,6 +86,7 @@ export function scopeDb(db: Database | ScopedDatabase, { fallbackUid = null }: {
       if (prop === 'prepare') return (sql: string) => scopeStatement(target.prepare(sql), userId);
       if (prop === 'unscoped') return target;
       if (prop === 'uid') return userId();
+      if (prop === 'fallbackUid') return fallbackUid;
       const value = Reflect.get(target, prop, target);
       return typeof value === 'function' ? value.bind(target) : value;
     },

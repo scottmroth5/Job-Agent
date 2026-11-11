@@ -52,8 +52,8 @@ async function setup() {
   const notices = createNotices({ send: async (e) => sent.push(e), owner: () => OWNER, appUrl: () => SITE, log: {} });
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, notices, attachmentsDir: dir, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
-  const pat = addUser(store.raw, { email: 'pat@example.com', name: 'Pat' });
-  const sam = addUser(store.raw, { email: 'sam@example.com', name: 'Sam', aiSource: 'owner' });
+  const pat = await addUser(store.raw, { email: 'pat@example.com', name: 'Pat' });
+  const sam = await addUser(store.raw, { email: 'sam@example.com', name: 'Sam', aiSource: 'owner' });
   const seeded = { owner: seedUser(store.raw, OWNER_ID, dir, 'Owner'), pat: seedUser(store.raw, pat, dir, 'Pat'), sam: seedUser(store.raw, sam, dir, 'Sam') };
   saveUserProfile(store.raw, pat, 'Pat background text. '.repeat(30));
   store.raw.prepare("UPDATE users SET claude_key_enc = 'v1.sealed.value.here' WHERE id = ?").run(pat);
