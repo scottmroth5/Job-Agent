@@ -17,6 +17,8 @@
     "check:security": "node scripts/security-check.js",
     "db:pending": "node scripts/migrations-pending.js",
     "report:baseline": "node scripts/report-baseline.js",
+    "bench": "node scripts/bench.js",
+    "bench:demo": "node scripts/bench-demo.js",
     "backup:test": "node --env-file-if-exists=.env scripts/backup-verify.js",
     "hooks:install": "git config core.hooksPath .githooks",
     "google:login": "node --env-file=.env scripts/google-login.js",
