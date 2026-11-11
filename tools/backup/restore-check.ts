@@ -11,16 +11,14 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import Database from 'better-sqlite3';
+import { openReadOnly } from '../../db/engine/files.ts';
 import { isBackupName, restoreBackup } from './run.ts';
 import type { BackupDrive } from './drive.ts';
-import { asEngine } from '../../db/engine/index.ts';
-import type { AnyDb } from '../../db/engine/index.ts';
+import type { Db } from '../../db/engine/types.ts';
 
 export const EMPTY_TABLE_MIN_ROWS = 10;
 
-async function tableCounts(db: AnyDb): Promise<Record<string, number>> {
-  const q = asEngine(db);
+async function tableCounts(q: Db): Promise<Record<string, number>> {
   const tables = (await q.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name").pluck().all()) as string[];
   const counts: Record<string, number> = {};
   for (const t of tables) counts[t] = (await q.prepare(`SELECT COUNT(*) FROM "${t.replace(/"/g, '""')}"`).pluck().get()) as number;
@@ -31,20 +29,20 @@ async function tableCounts(db: AnyDb): Promise<Record<string, number>> {
  * file is the encrypted backup; live is the live database (only counted). Throws when the backup cannot be decrypted, is
  * not a database, or fails the integrity check.
  */
-export async function restoreTest({ file, passphrase, live }: { file: Buffer; passphrase: string; live: AnyDb }) {
+export async function restoreTest({ file, passphrase, live }: { file: Buffer; passphrase: string; live: Db }) {
   const dir = mkdtempSync(join(tmpdir(), 'ja-restore-test-'));
   try {
     const { database } = restoreBackup({ file, passphrase, outPath: join(dir, 'restored.db') });
-    const restored = new Database(database, { readonly: true });
-    const lastMigration = async (db: AnyDb): Promise<string | null> => {
+    const restored = openReadOnly(database);
+    const lastMigration = async (db: Db): Promise<string | null> => {
       // This app's migrations (agent-core's share the table under their own app name).
-      try { return ((await asEngine(db).prepare("SELECT MAX(id) FROM schema_migrations WHERE app = 'job-agent'").pluck().get()) as string | null) ?? null; } catch { return null; }
+      try { return ((await db.prepare("SELECT MAX(id) FROM schema_migrations WHERE app = 'job-agent'").pluck().get()) as string | null) ?? null; } catch { return null; }
     };
     let backupCounts: Record<string, number>;
     let backupSchema: string | null;
     try {
-      backupCounts = await tableCounts(restored);
-      backupSchema = await lastMigration(restored);
+      backupCounts = await tableCounts(restored.db);
+      backupSchema = await lastMigration(restored.db);
     } finally {
       restored.close();
     }

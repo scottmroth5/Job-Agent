@@ -1,6 +1,5 @@
 // Claude spending caps and who pays for each call (agents/budget.ts, tools/claude.ts). Synthetic runs and calls only;
 // Claude is faked, and keys are made up.
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -11,20 +10,20 @@ import { addUser, OWNER_ID, setAiAccess, setClaudeKey } from '../db/users.ts';
 import { createJobClaude, NoClaudeKeyError } from '../tools/claude.ts';
 import { boxKey, seal } from '../tools/secret-box.ts';
 import { fakeClaude, fakeConfig, fakeServices } from './fixtures/fakes.js';
-/** @import { Database } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 /** @import { Claude } from '@scottmroth5/agent-core' */
 
 /** A local time; one caller gives the minutes too (0:30). */
 const local = (/** @type {number} */ y, /** @type {number} */ mo, /** @type {number} */ d, h = 12, min = 0) => new Date(y, mo - 1, d, h, min);
 
 /**
- * @param {Database} db
+ * @param {Db} db
  * @param {Array<[string, number, Date]>} calls label, cost, when
  * @param {number | null} [uid]
  */
 async function seed(db, calls, uid = null) {
-  const runId = Number((await asEngine(db).prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('score', 'ok', ?, ?)").run(new Date().toISOString(), uid)).id);
-  const insert = asEngine(db).prepare('INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, ?, ?, ?, ?)');
+  const runId = Number((await db.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('score', 'ok', ?, ?)").run(new Date().toISOString(), uid)).id);
+  const insert = db.prepare('INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, ?, ?, ?, ?)');
   for (const [label, usd, at] of calls) await insert.run(runId, label, 'claude-sonnet-5-5', usd, at.toISOString());
 }
 
@@ -105,7 +104,7 @@ test('who pays: the owner and users on the owner\'s key use it; others their own
   await setAiAccess(db, given, { source: 'own' });
   await assert.rejects(runAsUser(given, () => ask(claude)));
 
-  await asEngine(db).prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(own);
+  await db.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(own);
   await assert.rejects(runAsUser(own, () => ask(claude)), /not active/);
 });
 

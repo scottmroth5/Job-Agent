@@ -4,8 +4,6 @@
 //   source: 'user' (typed by the user), 'agent' (written by Job Agent), 'earlier' (notes from before entries existed,
 //   whose dates are unknown)
 import { randomUUID } from 'node:crypto';
-import { asEngine } from '../db/engine/index.ts';
-import type { AnyDb } from '../db/engine/index.ts';
 import type { Db } from '../db/engine/types.ts';
 import type { PostingNotesRow } from '../db/types.ts';
 
@@ -40,9 +38,9 @@ async function refresh(q: Db, postingId: number, nowIso: string | null) {
  * transaction (a savepoint inside a caller's), so two calls at once adopt a job's text once.
  * Returns how many entries were created.
  */
-export async function adoptNotesText(db: AnyDb, { postingId = null, source = 'earlier', now = new Date() }: { postingId?: number | null; source?: string; now?: Date } = {}) {
+export async function adoptNotesText(db: Db, { postingId = null, source = 'earlier', now = new Date() }: { postingId?: number | null; source?: string; now?: Date } = {}) {
   const nowIso = now.toISOString();
-  const q = asEngine(db);
+  const q = db;
   return q.tx(async () => {
     const rows = (await q
       .prepare(`SELECT id, notes FROM postings p WHERE p.user_id = @uid AND TRIM(COALESCE(p.notes, '')) <> ''
@@ -55,8 +53,8 @@ export async function adoptNotesText(db: AnyDb, { postingId = null, source = 'ea
 }
 
 /** A job's notes, newest first. */
-export async function listNotes(db: AnyDb, postingId: number) {
-  return ((await asEngine(db).prepare('SELECT * FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC, rowid DESC').all(postingId)) as PostingNotesRow[]).map(toEntry);
+export async function listNotes(db: Db, postingId: number) {
+  return ((await db.prepare('SELECT * FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC, rowid DESC').all(postingId)) as PostingNotesRow[]).map(toEntry);
 }
 
 const checkBody = (body: unknown) => {
@@ -67,12 +65,12 @@ const checkBody = (body: unknown) => {
 };
 
 /** Adds a note to a job. */
-export async function addNote(db: AnyDb, postingId: number, body: unknown, { source = 'user', now = new Date() }: { source?: string; now?: Date } = {}) {
+export async function addNote(db: Db, postingId: number, body: unknown, { source = 'user', now = new Date() }: { source?: string; now?: Date } = {}) {
   const text = checkBody(body);
   if (!NOTE_SOURCES.includes(source)) throw new Error(`Unknown note source: ${source}`);
   const nowIso = now.toISOString();
   const id = randomUUID();
-  const q = asEngine(db);
+  const q = db;
   return q.tx(async () => {
     await adoptNotesText(q, { postingId, now });
     // The note takes its owner from the job, so a job that is not this user's gets no note.
@@ -89,9 +87,9 @@ export async function addNote(db: AnyDb, postingId: number, body: unknown, { sou
  * Edits a note's text; its created date stays, its updated date moves. Null when there is no such note. The read and
  * the write are one transaction.
  */
-export async function updateNote(db: AnyDb, noteId: string, body: unknown, { now = new Date() }: { now?: Date } = {}) {
+export async function updateNote(db: Db, noteId: string, body: unknown, { now = new Date() }: { now?: Date } = {}) {
   const text = checkBody(body);
-  const q = asEngine(db);
+  const q = db;
   return q.tx(async () => {
     const row = (await q.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId)) as PostingNotesRow | undefined;
     if (!row) return null;
@@ -104,8 +102,8 @@ export async function updateNote(db: AnyDb, noteId: string, body: unknown, { now
 }
 
 /** Deletes a note. False when there is no such note. The read and the delete are one transaction. */
-export async function deleteNote(db: AnyDb, noteId: string, { now = new Date() }: { now?: Date } = {}) {
-  const q = asEngine(db);
+export async function deleteNote(db: Db, noteId: string, { now = new Date() }: { now?: Date } = {}) {
+  const q = db;
   return q.tx(async () => {
     const row = (await q.prepare('SELECT posting_id FROM posting_notes WHERE id = ? AND user_id = @uid').get(noteId)) as { posting_id: number } | undefined;
     if (!row) return false;

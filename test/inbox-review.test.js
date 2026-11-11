@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, existsSync } from 'node:fs';
@@ -21,7 +20,7 @@ async function setup() {
   const { db } = store;
   const add = async (/** @type {string} */ company, /** @type {string} */ title, /** @type {string} */ status) =>
     Number(
-      (await asEngine(db)
+      (await db
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
           VALUES (1, ?, ?, ?, ?, '2026-09-01', 'pipeline', ?, 'x', 'x')`)
         .run(`k${Math.random()}`, company, title, storedKey({ company, title }), status)).id,
@@ -64,11 +63,11 @@ test('confirm links the guess, runs the actions as the user, stores the body, an
   const id = await email();
   const r = await resolveReview(db, (await listNeedsReview(db))[0], 'confirm', { body: 'Can you talk on Oct 8?', key, now, casesPath });
   assert.deepEqual(r.statusChange, { from: 'applied', to: 'interviewing' });
-  const row = /** @type {EmailsRow} */ (await asEngine(db).prepare('SELECT * FROM emails WHERE id = ?').get(id));
+  const row = /** @type {EmailsRow} */ (await db.prepare('SELECT * FROM emails WHERE id = ?').get(id));
   assert.deepEqual([row.review_status, row.posting_id, row.match_rule], ['confirmed', ids.guess, 'user']);
   assert.equal(decrypt(/** @type {string} */ (row.body_enc), key), 'Can you talk on Oct 8?');
-  assert.equal(await asEngine(db).prepare("SELECT decided_by FROM decision_log WHERE action = 'review:confirm'").pluck().get(), 'user');
-  assert.equal(await asEngine(db).prepare("SELECT decided_by FROM decision_log WHERE action = 'status_change'").pluck().get(), 'user');
+  assert.equal(await db.prepare("SELECT decided_by FROM decision_log WHERE action = 'review:confirm'").pluck().get(), 'user');
+  assert.equal(await db.prepare("SELECT decided_by FROM decision_log WHERE action = 'status_change'").pluck().get(), 'user');
   const [c] = cases(casesPath);
   assert.deepEqual(c.label, { applicationId: ids.guess, relevant: true, type: 'interview_request', opportunity: false });
   assert.ok(!readFileSync(casesPath, 'utf8').includes('Oct 8'), 'the case file never holds the email text in the clear');
@@ -83,7 +82,7 @@ test('reassign links a different application', async () => {
   await email({ type: 'follow_up' });
   const r = await resolveReview(db, (await listNeedsReview(db))[0], 'reassign', { postingId: ids.other, now, casesPath });
   assert.equal(r.postingId, ids.other);
-  assert.equal(await asEngine(db).prepare('SELECT review_status FROM emails').pluck().get(), 'reassigned');
+  assert.equal(await db.prepare('SELECT review_status FROM emails').pluck().get(), 'reassigned');
   assert.equal(cases(casesPath)[0].label.applicationId, ids.other);
   await assert.rejects(async () => await resolveReview(db, { ...(await listNeedsReview(db))[0] ?? { id: 'x', guess: null }, gmail_message_id: 'g' }, 'reassign', { postingId: 9999, now, casesPath }), /not found/);
   store.close();
@@ -93,7 +92,7 @@ test('not job related clears the link and labels the case irrelevant', async () 
   const { store, db, email, casesPath } = await setup();
   await email();
   await resolveReview(db, (await listNeedsReview(db))[0], 'not_job', { body: 'A newsletter', key, now, casesPath });
-  const row = await asEngine(db).prepare('SELECT review_status, posting_id, body_enc FROM emails').get();
+  const row = await db.prepare('SELECT review_status, posting_id, body_enc FROM emails').get();
   assert.deepEqual(row, { review_status: 'not_job', posting_id: null, body_enc: null });
   assert.deepEqual(cases(casesPath)[0].label, { applicationId: null, relevant: false, type: 'other', opportunity: false });
   assert.equal(cases(casesPath)[0].bodyEnc, null, 'no text is kept for other mail, sealed or not');
@@ -122,8 +121,8 @@ test('opportunity creates a discovered job from the email', async () => {
   const { store, db, email, casesPath } = await setup();
   await email({ type: 'recruiter_outreach', extracted: { company: 'Other Labs', role_title: 'Head of Engineering' } });
   const r = await resolveReview(db, (await listNeedsReview(db))[0], 'opportunity', { now, casesPath });
-  assert.equal(await asEngine(db).prepare('SELECT company FROM postings WHERE id = ?').pluck().get(r.postingId), 'Other Labs');
-  assert.equal(await asEngine(db).prepare('SELECT review_status FROM emails').pluck().get(), 'new_opportunity');
+  assert.equal(await db.prepare('SELECT company FROM postings WHERE id = ?').pluck().get(r.postingId), 'Other Labs');
+  assert.equal(await db.prepare('SELECT review_status FROM emails').pluck().get(), 'new_opportunity');
   assert.equal(cases(casesPath)[0].label.opportunity, true);
   store.close();
 });
@@ -141,10 +140,10 @@ test('dismiss takes an unsure email off the list with no link, no status change,
   const id = await email();
   const r = await resolveReview(db, (await listNeedsReview(db))[0], 'dismiss', { body: 'Thanks for applying.', key, now, casesPath });
   assert.deepEqual([r.postingId, r.statusChange], [null, null]);
-  const row = /** @type {Pick<EmailsRow, 'review_status' | 'posting_id' | 'body_enc'>} */ (await asEngine(db).prepare('SELECT review_status, posting_id, body_enc FROM emails WHERE id = ?').get(id));
+  const row = /** @type {Pick<EmailsRow, 'review_status' | 'posting_id' | 'body_enc'>} */ (await db.prepare('SELECT review_status, posting_id, body_enc FROM emails WHERE id = ?').get(id));
   assert.deepEqual([row.review_status, row.posting_id, row.body_enc], ['dismissed', null, null]);
-  assert.equal(await asEngine(db).prepare('SELECT status FROM postings WHERE id = ?').pluck().get(ids.guess), 'applied');
-  assert.equal(await asEngine(db).prepare("SELECT decided_by FROM decision_log WHERE action = 'review:dismiss'").pluck().get(), 'user');
+  assert.equal(await db.prepare('SELECT status FROM postings WHERE id = ?').pluck().get(ids.guess), 'applied');
+  assert.equal(await db.prepare("SELECT decided_by FROM decision_log WHERE action = 'review:dismiss'").pluck().get(), 'user');
   assert.deepEqual(cases(casesPath), [], 'no label when the user is not sure');
   assert.equal((await listNeedsReview(db)).length, 0);
   store.close();

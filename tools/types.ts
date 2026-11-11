@@ -1,15 +1,9 @@
 // Types shared across the app (v3 Phase 2). Type-only: nothing here exists at run time.
-import type { Database } from 'better-sqlite3';
-import type { Store } from '@scottmroth5/agent-core';
 import type { Db } from '../db/engine/types.ts';
+import type { JobStore } from '../db/index.ts';
 
-export type { Database, Db };
-
-/** openJobStore's result (db/index.ts): db is scoped to the current user (db/scope.ts), raw is not; engine is async. */
-export interface JobStore extends Store {
-  raw: Database;
-  engine: Db;
-}
+// The database is the async engine (db/engine); openJobStore's store is db/index.ts JobStore.
+export type { Db, JobStore };
 
 /** The logging a module needs: console fits, and so does a task's logger (server/tasks.ts). */
 export interface Logger {

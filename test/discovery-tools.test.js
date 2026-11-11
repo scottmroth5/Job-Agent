@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHttp, RateLimitedError, HttpError } from '../tools/http.ts';
@@ -128,9 +127,9 @@ test('checkLocation classifies each case', () => {
 // ---------- migration ----------
 test('002 migration adds discovery columns and sightings', async () => {
   const store = openJobStore(':memory:');
-  const cols = /** @type {Array<{ name: string }>} */ (await asEngine(store.db).prepare('PRAGMA table_info(postings)').all()).map((c) => c.name);
+  const cols = /** @type {Array<{ name: string }>} */ (await store.db.prepare('PRAGMA table_info(postings)').all()).map((c) => c.name);
   for (const c of ['workplace', 'location_check', 'fetch_method', 'source_job_id']) assert.ok(cols.includes(c), c);
-  const tables = await asEngine(store.db).prepare("SELECT name FROM sqlite_master WHERE type = 'table'").pluck().all();
+  const tables = await store.db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").pluck().all();
   assert.ok(tables.includes('posting_sightings'));
   store.close();
 });

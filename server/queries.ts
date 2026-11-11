@@ -1,4 +1,4 @@
-// Database reads and edits behind the API. Rows come back in the shape the UI uses (camelCase).
+// Db reads and edits behind the API. Rows come back in the shape the UI uses (camelCase).
 import { annualize, parseRate, parseHours, findPayInText } from '../tools/rates.ts';
 import { checkLocation } from '../tools/location.ts';
 import { PROMOTE_AT } from '../agents/discovery/score.ts';
@@ -11,9 +11,8 @@ import { localDay } from '../tools/dates.ts';
 import { describeVersion } from '../agents/prompts.ts';
 import { budgetStatus } from '../agents/budget.ts';
 import { currentUserId } from '../db/scope.ts';
-import { asEngine } from '../db/engine/index.ts';
 import { OWNER_ID } from '../db/users.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { JobSearchConfig } from '../tools/config.ts';
 import type { Rate, RateUnit } from '../tools/rates.ts';
 import type { PostingsRow } from '../db/types.ts';
@@ -93,7 +92,7 @@ const awaitingDescription = (lk: Lookups) => `(${NO_TEXT} AND p.status IN ${sqlL
 
 // The row query; db supplies the lists (agents/lookups.ts) the status and stage conditions use. p is the current
 // user's postings only (a subquery SQLite flattens, so callers add their own WHERE and indexes still apply).
-const base = async (db: Database, lkGiven?: Lookups) => {
+const base = async (db: Db, lkGiven?: Lookups) => {
   const lk = lkGiven ?? (await lookups(db));
   return `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
     ls.model AS score_model, ls.prompt_version AS score_prompt_version, ls.created_at AS scored_at,
@@ -161,7 +160,7 @@ function toRow(r: JobRow, config: QueryConfig) {
 }
 
 /** Filtered list. filters: { track, stage, status, needsDescription, discoveredAfter, q, minScore, limit } ('all' or empty means no filter; status 'active' (Needs action) or 'progress' (In progress) means those status groups). */
-export async function listPostings(db: Database, filters: PostingFilters = {}, config: QueryConfig = {}) {
+export async function listPostings(db: Db, filters: PostingFilters = {}, config: QueryConfig = {}) {
   const lk = await lookups(db);
   const where: string[] = [];
   const params: Record<string, string | number> = {};
@@ -195,23 +194,23 @@ export async function listPostings(db: Database, filters: PostingFilters = {}, c
   const limit = Math.min(Number(filters.limit) || 500, 2000);
   const sql = `${await base(db)} ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
     ORDER BY COALESCE(ls.score, 0) DESC, p.discovered_on DESC, p.id DESC LIMIT ${limit}`;
-  return (await asEngine(db).prepare(sql).all(params) as JobRow[]).map((r) => toRow(r, config));
+  return (await db.prepare(sql).all(params) as JobRow[]).map((r) => toRow(r, config));
 }
 
 /** Full detail for one posting, or null. */
-export async function getPosting(db: Database, id: number, config: QueryConfig = {}) {
-  const r = await asEngine(db).prepare(`${await base(db)} WHERE p.id = ?`).get(id) as JobRow | undefined;
+export async function getPosting(db: Db, id: number, config: QueryConfig = {}) {
+  const r = await db.prepare(`${await base(db)} WHERE p.id = ?`).get(id) as JobRow | undefined;
   if (!r) return null;
-  const tweaks = await asEngine(db)
+  const tweaks = await db
     .prepare("SELECT content, model, created_at, resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = 'resume_tweaks' ORDER BY id DESC LIMIT 1")
     .get(id) as { content: string; model: string | null; created_at: string; resume_id: string | null } | undefined;
   const letter = r.letter_id
-    ? (await asEngine(db).prepare('SELECT content, doc_url, doc_name, flags_json, created_at, resume_id FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) as
+    ? (await db.prepare('SELECT content, doc_url, doc_name, flags_json, created_at, resume_id FROM artifacts WHERE id = ? AND user_id = @uid').get(r.letter_id) as
         | { content: string; doc_url: string | null; doc_name: string | null; flags_json: string | null; created_at: string; resume_id: string | null }
         | undefined)
     : null;
   // Which of the user's resumes a letter or tweaks were written from (null: none, or since deleted).
-  const resumeLabel = async (rid: string | null) => (rid ? (await asEngine(db).prepare('SELECT label FROM resumes WHERE id = ? AND user_id = @uid').pluck().get(rid) ?? null) : null);
+  const resumeLabel = async (rid: string | null) => (rid ? (await db.prepare('SELECT label FROM resumes WHERE id = ? AND user_id = @uid').pluck().get(rid) ?? null) : null);
   return {
     ...toRow(r, config),
     copies: await findCopies(db, r),
@@ -226,13 +225,13 @@ export async function getPosting(db: Database, id: number, config: QueryConfig =
     extra: parse(r.extra_json),
     tweaks: tweaks ? { content: tweaks.content, model: tweaks.model, createdAt: tweaks.created_at, resume: await resumeLabel(tweaks.resume_id) } : null,
     letter: letter ? { url: letter.doc_url, name: letter.doc_name, flags: parse(letter.flags_json) ?? [], content: letter.content, createdAt: letter.created_at, resume: await resumeLabel(letter.resume_id) } : null,
-    scores: await asEngine(db)
+    scores: await db
       .prepare('SELECT score, source, model, reason, created_at AS createdAt FROM scores WHERE posting_id = ? AND user_id = @uid ORDER BY id DESC')
       .all(id),
-    statusHistory: await asEngine(db)
+    statusHistory: await db
       .prepare('SELECT from_status AS fromStatus, to_status AS toStatus, changed_by AS changedBy, changed_at AS changedAt FROM status_history WHERE posting_id = ? AND user_id = @uid ORDER BY id')
       .all(id),
-    sightings: await asEngine(db).prepare('SELECT source, url, seen_on AS seenOn FROM posting_sightings WHERE posting_id = ? AND user_id = @uid ORDER BY id').all(id),
+    sightings: await db.prepare('SELECT source, url, seen_on AS seenOn FROM posting_sightings WHERE posting_id = ? AND user_id = @uid ORDER BY id').all(id),
   };
 }
 
@@ -240,7 +239,7 @@ export async function getPosting(db: Database, id: number, config: QueryConfig =
  * How the current score was made, for the job panel: when, by which model, from the posting text or the title alone
  * (capped), with which prompt (agents/prompts.ts describeVersion), and whether text has arrived since a capped score.
  */
-async function scoreDetails(db: Database, r: JobRow) {
+async function scoreDetails(db: Db, r: JobRow) {
   if (r.score == null) return null;
   const analysis = parse(r.analysis_json) ?? {};
   const capped = analysis.uncappedScore != null;
@@ -264,11 +263,11 @@ async function scoreDetails(db: Database, r: JobRow) {
  * pointing at the other.
  * Marking a job applied without a date sets today's date. Returns the updated detail, or null if not found.
  */
-export async function updatePosting(db: Database, id: number, patch: PostingPatch, config: QueryConfig = {}, now = new Date()) {
+export async function updatePosting(db: Db, id: number, patch: PostingPatch, config: QueryConfig = {}, now = new Date()) {
   // The read of the job and the writes are one transaction, so two edits at once can not record a stale status.
-  return asEngine(db).tx(async () => {
+  return db.tx(async () => {
     const lk = await lookups(db);
-    const current = await asEngine(db).prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
+    const current = await db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
     if (!current) return null;
     const set: Partial<PostingsRow> = {};
     const nowIso = now.toISOString();
@@ -293,7 +292,7 @@ export async function updatePosting(db: Database, id: number, patch: PostingPatc
       set.company_title_key = storedKey({ company: set.company ?? current.company, title: set.title ?? current.title });
     }
     if (patch.duplicateOf !== undefined) {
-      const other = await asEngine(db).prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf) as
+      const other = await db.prepare('SELECT id, company, title, stage, status FROM postings WHERE id = ? AND user_id = @uid').get(patch.duplicateOf) as
         | Pick<PostingsRow, 'id' | 'company' | 'title' | 'stage' | 'status'>
         | undefined;
       if (!other || other.id === id) throw Object.assign(new Error('The job it duplicates was not found.'), { statusCode: 400 });
@@ -321,10 +320,10 @@ export async function updatePosting(db: Database, id: number, patch: PostingPatc
     }
     const keys = Object.keys(set);
     if (keys.length || newNotes.length) {
-      await asEngine(db).tx(async () => {
-        if (keys.length) await asEngine(db).prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id AND user_id = @uid`).run({ ...set, updated_at: nowIso, id });
+      await db.tx(async () => {
+        if (keys.length) await db.prepare(`UPDATE postings SET ${keys.map((k) => `${k} = @${k}`).join(', ')}, updated_at = @updated_at WHERE id = @id AND user_id = @uid`).run({ ...set, updated_at: nowIso, id });
         if (set.status) {
-          await asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
+          await db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)").run(id, current.status, set.status, nowIso);
         }
         for (const n of newNotes) await addNote(db, id, n.body, { source: n.source, now });
       });
@@ -334,13 +333,13 @@ export async function updatePosting(db: Database, id: number, patch: PostingPatc
 }
 
 /** Counts and spend for the header. */
-export async function summary(db: Database, config: QueryConfig = {}, now = new Date()) {
+export async function summary(db: Db, config: QueryConfig = {}, now = new Date()) {
   const lk = await lookups(db);
   const uid = currentUserId() ?? OWNER_ID;
   // runs is not a user table (agent-core writes the row first): the user's runs, and for the owner the ones from before runs had a user.
   const mine = '(user_id = @me OR (@me = 1 AND user_id IS NULL))';
   const since = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
-  const counts = await asEngine(db).prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all() as Array<{
+  const counts = await db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all() as Array<{
     track: string;
     stage: string;
     status: string;
@@ -352,12 +351,12 @@ export async function summary(db: Database, config: QueryConfig = {}, now = new 
     // The Home page's counts: pipeline jobs that need action (the Jobs page's default view) and ones in progress.
     needsAction: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.needsAction().includes(c.status)).reduce((s, c) => s + c.n, 0),
     inProgress: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.inProgress().includes(c.status)).reduce((s, c) => s + c.n, 0),
-    needsDescription: await asEngine(db).prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id WHERE p.user_id = @uid AND ${awaitingDescription(lk)}`).pluck().get(),
+    needsDescription: await db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id WHERE p.user_id = @uid AND ${awaitingDescription(lk)}`).pluck().get(),
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
-    spend30Days: await asEngine(db).prepare(`SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= @since AND ${mine}`).pluck().get({ since, me: uid }),
+    spend30Days: await db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= @since AND ${mine}`).pluck().get({ since, me: uid }),
     budget: await budgetStatus(db, { now, uid }),
-    inboxNeedsReview: await asEngine(db).prepare("SELECT COUNT(*) FROM emails WHERE user_id = @uid AND review_status = 'needs_review'").pluck().get(),
-    lastRun: await asEngine(db).prepare(`SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') AND ${mine} ORDER BY id DESC LIMIT 1`).get({ me: uid }) ?? null,
+    inboxNeedsReview: await db.prepare("SELECT COUNT(*) FROM emails WHERE user_id = @uid AND review_status = 'needs_review'").pluck().get(),
+    lastRun: await db.prepare(`SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') AND ${mine} ORDER BY id DESC LIMIT 1`).get({ me: uid }) ?? null,
   };
 }

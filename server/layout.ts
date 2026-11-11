@@ -1,7 +1,7 @@
 // Screen layouts each user arranges: today the Home page's tile order. Saved on the server (user_settings
 // layout:<area>) so the order follows you to every device. The UI applies it with web/src/layout.ts arranged().
 import { deleteUserSetting, getUserSetting, setUserSetting } from '../db/settings.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { App } from './types.ts';
 
 /** Each area's items in their default order. web/src/components/HomePage.tsx draws a tile for each home key. */
@@ -10,7 +10,7 @@ export const LAYOUT_AREAS: Record<string, string[]> = { home: ['jobs', 'inbox', 
 const key = (area: string) => `layout:${area}`;
 
 /** The saved order for each area (null when never arranged), keeping only items the area still has. */
-export async function getLayout(db: Database) {
+export async function getLayout(db: Db) {
   const out: Record<string, string[] | null> = {};
   for (const [area, items] of Object.entries(LAYOUT_AREAS)) {
     let saved = null;
@@ -24,7 +24,7 @@ export async function getLayout(db: Database) {
   return out;
 }
 
-export function registerLayoutRoutes(app: App, { db }: { db: Database }) {
+export function registerLayoutRoutes(app: App, { db }: { db: Db }) {
   for (const [area, items] of Object.entries(LAYOUT_AREAS)) {
     app.put<{ Body: { order: string[] } }>(
       `/api/layout/${area}`,

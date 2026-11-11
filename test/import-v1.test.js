@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -60,13 +59,13 @@ test('mapStatus, extractFitScore and parseCoverLetterCell cover the v1 formats',
 
 test('a discovered row becomes a posting with a quick score and parsed dates', async () => {
   const { db, counts, store } = await run({ discovered: [discoveredRow()], hunt: [] });
-  const p = /** @type {PostingsRow} */ (await asEngine(db).prepare('SELECT * FROM postings').get());
+  const p = /** @type {PostingsRow} */ (await db.prepare('SELECT * FROM postings').get());
   assert.equal(p.url_key, 'jobs.example.com/acme/1');
   assert.equal(p.discovered_on, '2026-07-20');
   assert.equal(p.posted_on, '2026-07-18');
   assert.equal(p.stage, 'discovered');
   assert.equal(p.status, 'new');
-  assert.deepEqual(await asEngine(db).prepare('SELECT score, reason, source FROM scores').get(), {
+  assert.deepEqual(await db.prepare('SELECT score, reason, source FROM scores').get(), {
     score: 6,
     reason: 'Solid match on scale, lighter on the domain.',
     source: 'v1-quick',
@@ -78,8 +77,8 @@ test('a discovered row becomes a posting with a quick score and parsed dates', a
 test('a full analysis in the discovered sheet is kept as an artifact', async () => {
   const analysis = 'ROLE TYPE: Full time\n\nFIT SCORE: 8 of 10. Great.\n\nTOP TALKING POINT: x';
   const { db, store } = await run({ discovered: [discoveredRow({ 'Fit Score': '8 of 10', Analysis: analysis })], hunt: [] });
-  assert.equal(await asEngine(db).prepare('SELECT reason FROM scores').pluck().get(), null);
-  assert.equal(await asEngine(db).prepare("SELECT content FROM artifacts WHERE kind = 'analysis'").pluck().get(), analysis);
+  assert.equal(await db.prepare('SELECT reason FROM scores').pluck().get(), null);
+  assert.equal(await db.prepare("SELECT content FROM artifacts WHERE kind = 'analysis'").pluck().get(), analysis);
   store.close();
 });
 
@@ -88,20 +87,20 @@ test('hunt rows update the matching posting and add analysis, tweaks and letter 
     discovered: [discoveredRow({ Status: 'Added to Pipeline' })],
     hunt: [{ name: 'x - Jobs.csv', current: true, rows: [huntRow({ 'Date Applied': '7/25/2026' })] }],
   });
-  const p = /** @type {PostingsRow} */ (await asEngine(db).prepare('SELECT * FROM postings').get());
+  const p = /** @type {PostingsRow} */ (await db.prepare('SELECT * FROM postings').get());
   assert.equal(counts.postingsCreated, 1);
   assert.equal(p.stage, 'pipeline');
   assert.equal(p.status, 'applied');
   assert.equal(p.applied_on, '2026-07-25');
   assert.deepEqual(
-    await asEngine(db).prepare('SELECT source, score FROM scores ORDER BY source').all(),
+    await db.prepare('SELECT source, score FROM scores ORDER BY source').all(),
     [{ source: 'v1-analysis', score: 8 }, { source: 'v1-quick', score: 6 }],
   );
-  const letter = await asEngine(db).prepare("SELECT doc_name, flags_json, content FROM artifacts WHERE kind = 'cover_letter'").get();
+  const letter = await db.prepare("SELECT doc_name, flags_json, content FROM artifacts WHERE kind = 'cover_letter'").get();
   assert.deepEqual(letter, { doc_name: 'Row5_Acme_CoverLetter', flags_json: '["weak closer","\\"I am confident\\""]', content: null });
-  assert.equal(await asEngine(db).prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'resume_tweaks'").pluck().get(), 1);
+  assert.equal(await db.prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'resume_tweaks'").pluck().get(), 1);
   assert.deepEqual(
-    await asEngine(db).prepare('SELECT from_status, to_status FROM status_history ORDER BY id').all(),
+    await db.prepare('SELECT from_status, to_status FROM status_history ORDER BY id').all(),
     [{ from_status: null, to_status: 'new' }, { from_status: 'new', to_status: 'applied' }],
   );
   store.close();
@@ -115,10 +114,10 @@ test('the current Jobs tab wins over archives, and repeated rows do not duplicat
       { name: 'x - Jobs.csv', current: true, rows: [huntRow({ Status: 'Applied' })] },
     ],
   });
-  const p = await asEngine(db).prepare('SELECT stage, status, source FROM postings').get();
+  const p = await db.prepare('SELECT stage, status, source FROM postings').get();
   assert.deepEqual(p, { stage: 'pipeline', status: 'applied', source: 'v1-manual' });
-  assert.equal(await asEngine(db).prepare('SELECT COUNT(*) FROM artifacts').pluck().get(), 3);
-  assert.equal(await asEngine(db).prepare('SELECT COUNT(*) FROM scores').pluck().get(), 1);
+  assert.equal(await db.prepare('SELECT COUNT(*) FROM artifacts').pluck().get(), 3);
+  assert.equal(await db.prepare('SELECT COUNT(*) FROM scores').pluck().get(), 1);
   store.close();
 });
 
@@ -128,7 +127,7 @@ test('archive-only rows are archived; rows match by company and title when URLs 
     hunt: [{ name: 'x - Archive.csv', current: false, rows: [huntRow({ 'Job URL': 'https://other.example.com/9', Status: 'Closed' })] }],
   });
   assert.equal(counts.postingsCreated, 1);
-  assert.deepEqual(await asEngine(db).prepare('SELECT stage, status FROM postings').get(), { stage: 'archived', status: 'closed' });
+  assert.deepEqual(await db.prepare('SELECT stage, status FROM postings').get(), { stage: 'archived', status: 'closed' });
   store.close();
 });
 
@@ -155,7 +154,7 @@ test('a promoted job missing from every hunt export is archived, not left in the
     discovered: [discoveredRow({ Status: 'Added to Pipeline' })],
     hunt: [{ name: 'x - Jobs.csv', current: true, rows: [] }],
   });
-  assert.deepEqual(await asEngine(db).prepare('SELECT stage, status FROM postings').get(), { stage: 'archived', status: 'new' });
+  assert.deepEqual(await db.prepare('SELECT stage, status FROM postings').get(), { stage: 'archived', status: 'new' });
   store.close();
 });
 

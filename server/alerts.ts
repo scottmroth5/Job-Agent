@@ -3,13 +3,12 @@
 // is missing. At most one email per kind of problem per day (the day is kept in app_settings as alert:<key>, so a
 // restart never resends), and with once, none again until it has recovered. Emails go only to the owner's own address
 // (EMAIL_ADDRESS, the same as the run report) and carry job names, dates and error messages only, like the log lines.
-import { asEngine } from '../db/engine/index.ts';
 import { claimSetting } from '../db/settings.ts';
 import { localDay } from '../tools/dates.ts';
-import type { Database } from 'better-sqlite3';
+import type { Db } from '../db/engine/types.ts';
 
 type AlertOptions = {
-  db: Database;
+  db: Db;
   /** Sends one email. */
   send?: ((email: { to: string; subject: string; text: string }) => Promise<unknown>) | null;
   /** The owner's address. */
@@ -41,7 +40,7 @@ export function createAlerts({ db, send, to, appUrl = () => '', clock = () => ne
 
   /** The problem is over: the next one emails again, even the same day. */
   async function recovered(k: string) {
-    await asEngine(db).prepare('DELETE FROM app_settings WHERE key = ?').run(key(k));
+    await db.prepare('DELETE FROM app_settings WHERE key = ?').run(key(k));
   }
 
   /** The scheduler's report for one run of a job: an email when it failed, recovery when it worked. */

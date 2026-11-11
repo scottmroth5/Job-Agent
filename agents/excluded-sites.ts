@@ -3,9 +3,8 @@
 // and manual add drop them, scoring gives 1, and cleanup removes saved ones (tools/listings.ts). The list is added to
 // search.excludedSites from the settings file (the owner's) or the user's saved search, so every caller of
 // config.search.excludedSites sees both (agents/user-config.ts configFor).
-import { asEngine } from '../db/engine/index.ts';
 import { OWNER_ID } from '../db/users.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 
 /** One skipped site; addedAt is null for sites carried over from older search settings. */
 export interface ExcludedSite {
@@ -41,8 +40,8 @@ export function siteOf(input: unknown) {
   return host;
 }
 
-const read = async (db: Database, uid: number): Promise<ExcludedSite[] | null> => {
-  const raw = await asEngine(db).prepare('SELECT value FROM user_settings WHERE user_id = ? AND key = ?').pluck().get(uid, KEY) as string | null | undefined;
+const read = async (db: Db, uid: number): Promise<ExcludedSite[] | null> => {
+  const raw = await db.prepare('SELECT value FROM user_settings WHERE user_id = ? AND key = ?').pluck().get(uid, KEY) as string | null | undefined;
   if (raw == null) return null;
   try {
     const list = JSON.parse(raw);
@@ -52,8 +51,8 @@ const read = async (db: Database, uid: number): Promise<ExcludedSite[] | null> =
   }
 };
 
-async function write(db: Database, uid: number, list: ExcludedSite[]) {
-  await asEngine(db).prepare(`INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, ?, ?, ?)
+async function write(db: Db, uid: number, list: ExcludedSite[]) {
+  await db.prepare(`INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (?, ?, ?, ?)
     ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`).run(uid, KEY, JSON.stringify(list), new Date().toISOString());
 }
 
@@ -61,14 +60,14 @@ async function write(db: Database, uid: number, list: ExcludedSite[]) {
  * A user's skipped sites, oldest first: { site, note, addedAt }. Someone other than the owner who listed sites in their
  * search settings before this list existed starts with those (legacy), so nothing they skipped comes back.
  */
-export async function excludedSites(db: Database, uid: number, { legacy = [] }: { legacy?: unknown[] } = {}): Promise<ExcludedSite[]> {
+export async function excludedSites(db: Db, uid: number, { legacy = [] }: { legacy?: unknown[] } = {}): Promise<ExcludedSite[]> {
   const saved = await read(db, uid);
   if (saved) return saved;
   return uid === OWNER_ID ? [] : [...new Set(legacy.map((s) => String(s).toLowerCase()))].map((site) => ({ site, note: '', addedAt: null }));
 }
 
 /** Adds a site (a link or a domain), or updates its note when it is already listed. Returns { site, list }. */
-export async function addExcludedSite(db: Database, uid: number, { site, note = '' }: { site: unknown; note?: unknown }, opts: { legacy?: unknown[] } = {}) {
+export async function addExcludedSite(db: Db, uid: number, { site, note = '' }: { site: unknown; note?: unknown }, opts: { legacy?: unknown[] } = {}) {
   const host = siteOf(site);
   const text = String(note ?? '').trim().slice(0, MAX_NOTE);
   const list = await excludedSites(db, uid, opts);
@@ -83,7 +82,7 @@ export async function addExcludedSite(db: Database, uid: number, { site, note = 
 }
 
 /** Changes a listed site's note. */
-export async function setExcludedSiteNote(db: Database, uid: number, site: string, note: unknown, opts: { legacy?: unknown[] } = {}) {
+export async function setExcludedSiteNote(db: Db, uid: number, site: string, note: unknown, opts: { legacy?: unknown[] } = {}) {
   const list = await excludedSites(db, uid, opts);
   const at = list.findIndex((s) => s.site === site);
   if (at < 0) throw Object.assign(new Error('That site is not on your list.'), { statusCode: 404 });
@@ -93,7 +92,7 @@ export async function setExcludedSiteNote(db: Database, uid: number, site: strin
 }
 
 /** Takes a site off the list; its jobs are found again from the next run on (removed jobs stay removed). */
-export async function removeExcludedSite(db: Database, uid: number, site: string, opts: { legacy?: unknown[] } = {}) {
+export async function removeExcludedSite(db: Db, uid: number, site: string, opts: { legacy?: unknown[] } = {}) {
   const list = await excludedSites(db, uid, opts);
   const next = list.filter((s) => s.site !== site);
   if (next.length === list.length) throw Object.assign(new Error('That site is not on your list.'), { statusCode: 404 });
@@ -102,7 +101,7 @@ export async function removeExcludedSite(db: Database, uid: number, site: string
 }
 
 /** The config with the user's list added to search.excludedSites (a new object; the base is not changed). */
-export async function withExcludedSites<C extends { search?: { excludedSites?: string[] } } | null | undefined>(db: Database, uid: number, config: C): Promise<C> {
+export async function withExcludedSites<C extends { search?: { excludedSites?: string[] } } | null | undefined>(db: Db, uid: number, config: C): Promise<C> {
   if (!config?.search) return config;
   const base = config.search.excludedSites ?? [];
   // The owner's file entries stay; anyone else's saved-search entries moved into the list (see excludedSites).

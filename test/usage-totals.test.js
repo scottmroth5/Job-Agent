@@ -1,7 +1,7 @@
 // The admin's device, location, and source totals (server/usage-totals.ts, usage_totals): counted once per account per
 // day for visits, per page arrival for sources, with nothing that leads back to a person. Made-up accounts, addresses
 // (documentation ranges), and hosts; a fake location lookup; no network.
-import { asEngine } from '../db/engine/index.ts';
+import { createSqliteEngine } from '../db/engine/sqlite.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -73,20 +73,21 @@ test('browser and major version: a fixed name and a number, or Other', () => {
 });
 
 test('migration 021 adds the browser dimension and keeps the totals already counted', async () => {
-  const db = new Database(':memory:');
-  db.exec(readFileSync('db/migrations/020-usage-totals.sql', 'utf8'));
-  await asEngine(db).prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'device', 'phone', 3), ('2026-11-02', 'source', 'linkedin', 2)").run();
-  await assert.rejects(async () => await asEngine(db).prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run());
-  usageBrowser.up(db);
-  await asEngine(db).prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run();
-  assert.deepEqual(await asEngine(db).prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension').all(), [
+  const conn = new Database(':memory:');
+  conn.exec(readFileSync('db/migrations/020-usage-totals.sql', 'utf8'));
+  const db = createSqliteEngine(conn, { fallbackUid: null, strictTx: false });
+  await db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'device', 'phone', 3), ('2026-11-02', 'source', 'linkedin', 2)").run();
+  await assert.rejects(async () => await db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run());
+  usageBrowser.up(conn);
+  await db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'browser', 'Chrome 130', 1)").run();
+  assert.deepEqual(await db.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension').all(), [
     { dimension: 'browser', value: 'Chrome 130', count: 1 },
     { dimension: 'device', value: 'phone', count: 3 },
     { dimension: 'source', value: 'linkedin', count: 2 },
   ]);
-  await assert.rejects(async () => await asEngine(db).prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'user', '1', 1)").run());
+  await assert.rejects(async () => await db.prepare("INSERT INTO usage_totals VALUES ('2026-11-02', 'user', '1', 1)").run());
   assert.equal(usageBrowser.foreignKeys, false);
-  db.close();
+  conn.close();
 });
 
 test('a location is "City, State, Country", or unknown', () => {
@@ -140,7 +141,7 @@ async function setup({ authMode = 'google' } = {}) {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: OWNER, SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const sam = await addUser(store.raw, { email: 'sam@example.com', name: 'Sam' });
+  const sam = await addUser(store.admin, { email: 'sam@example.com', name: 'Sam' });
   const webDir = mkdtempSync(join(tmpdir(), 'web-'));
   writeFileSync(join(webDir, 'index.html'), '<!doctype html><title>Job Hunt</title>');
   mkdirSync(join(webDir, 'assets'));
@@ -158,7 +159,7 @@ async function setup({ authMode = 'google' } = {}) {
   /** @param {string} url @param {{ as?: string | null, ip?: string, ua?: string | null, headers?: Record<string, string> }} [o] */
   const get = (url, { as = OWNER, ip = '203.0.113.7', ua = UA.windows, headers = {} } = {}) =>
     app.inject({ url, remoteAddress: ip, headers: { ...(as ? { cookie: cookie(as) } : {}), ...(ua ? { 'user-agent': ua } : {}), origin: SITE, ...headers } });
-  const totals = async () => /** @type {Total[]} */ (await asEngine(store.raw).prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension, value').all());
+  const totals = async () => /** @type {Total[]} */ (await store.admin.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension, value').all());
   return { app, store, sam, get, totals };
 }
 
@@ -243,8 +244,8 @@ test('the table holds no address, browser string, referrer, URL, or user id, and
   const referer = 'https://www.linkedin.com/in/someone-private';
   await get('/?utm_source=linkedin&secret=1', { headers: page(referer) });
   await get('/api/me', { as: 'sam@example.com', ua: UA.ipad });
-  assert.deepEqual(await asEngine(store.raw).prepare('SELECT name FROM pragma_table_info(?) ORDER BY cid').pluck().all('usage_totals'), ['day', 'dimension', 'value', 'count']);
-  const text = JSON.stringify(await asEngine(store.raw).prepare('SELECT * FROM usage_totals').all());
+  assert.deepEqual(await store.admin.prepare('SELECT name FROM pragma_table_info(?) ORDER BY cid').pluck().all('usage_totals'), ['day', 'dimension', 'value', 'count']);
+  const text = JSON.stringify(await store.admin.prepare('SELECT * FROM usage_totals').all());
   for (const leak of ['203.0.113', 'Mozilla', 'iPad;', 'someone-private', 'secret', 'utm_source', 'sam@example.com', OWNER]) assert.ok(!text.includes(leak), leak);
   for (const row of await totals()) assert.ok(['device', 'browser', 'location', 'source'].includes(row.dimension));
   assert.ok(!text.includes('605.1.15') && !text.includes('AppleWebKit'), 'no user agent text');
@@ -262,9 +263,9 @@ test('the table holds no address, browser string, referrer, URL, or user id, and
   assert.equal((await get('/api/admin/usage', { as: 'sam@example.com' })).statusCode, 403);
 
   // Not anyone's data: an account's export leaves it out, and deleting the account leaves the totals as they were.
-  assert.ok(!JSON.stringify(await exportAccount(store.raw, sam)).includes('usage_totals'));
+  assert.ok(!JSON.stringify(await exportAccount(store.admin, sam)).includes('usage_totals'));
   const before = await totals();
-  await deleteAccount(store.raw, sam);
+  await deleteAccount(store.admin, sam);
   assert.deepEqual(await totals(), before);
   await app.close();
   store.close();

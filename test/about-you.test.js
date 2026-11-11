@@ -17,7 +17,7 @@ const LONG = (/** @type {string} */ who) => `${who} background. `.repeat(40);
 
 test('backgroundFor: the knowledge doc when long enough, else how to fix it; never the Google Doc', async () => {
   const store = openJobStore(':memory:');
-  const raw = store.raw;
+  const raw = store.admin;
   const b = await addUser(raw, { email: 'b@example.com' });
   await assert.rejects(backgroundFor(raw, OWNER_ID), /Write your knowledge doc/, 'the owner too: no Google Doc to fall back on');
   await saveUserProfile(raw, OWNER_ID, LONG('Owner'));
@@ -33,7 +33,7 @@ async function setup() {
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: 'owner@example.com', SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const b = await addUser(store.raw, { email: 'b@example.com', name: 'Sam' });
+  const b = await addUser(store.admin, { email: 'b@example.com', name: 'Sam' });
   const app = await buildApp({
     store,
     config: fakeConfig({ candidate: { name: 'O' }, search: { homeLocations: [] }, fractional: {} }),
@@ -53,7 +53,7 @@ test('the owner keeps their knowledge doc in Settings like everyone else; the Go
   const { store, app, owner, done } = await setup();
   const s = (await app.inject({ method: 'PUT', url: '/api/account/profile', headers: owner, payload: { text: LONG('Edited') } })).json();
   assert.equal(s.profile, LONG('Edited').trim());
-  assert.equal(await userProfile(store.raw, OWNER_ID), LONG('Edited').trim());
+  assert.equal(await userProfile(store.admin, OWNER_ID), LONG('Edited').trim());
   assert.equal(s.knowledgeSections.length, 7, 'Settings gets the sections for its checklist');
   assert.equal((await app.inject({ method: 'POST', url: '/api/account/profile/from-google-doc', headers: owner })).statusCode, 404);
   await done();
@@ -66,7 +66,7 @@ test('Fill from a document returns the text and saves nothing; bad files say wha
   const res = await upload(docx, 'My resume.docx');
   assert.equal(res.statusCode, 200);
   assert.deepEqual(res.json(), { kind: 'docx', text: 'Sam Example\n\nHead of Data at Example Co, 2021 to now, team of 12.' });
-  assert.equal(await userProfile(store.raw, b), '', 'nothing saved until Save');
+  assert.equal(await userProfile(store.admin, b), '', 'nothing saved until Save');
   const refused = await upload(Buffer.from('x'.repeat(100)), 'old.doc');
   assert.equal(refused.statusCode, 400);
   assert.match(refused.json().error, /\.docx or PDF/);

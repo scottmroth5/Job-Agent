@@ -1,5 +1,5 @@
 // Dated note entries. Synthetic jobs only.
-import { asEngine } from '../db/engine/index.ts';
+import { createSqliteEngine } from '../db/engine/sqlite.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
@@ -8,7 +8,7 @@ import { buildApp } from '../server/app.ts';
 import { addNote, adoptNotesText, deleteNote, listNotes, notesForPrompt, updateNote } from '../agents/notes.ts';
 import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 /** @import { Note } from '../agents/notes.ts' */
-/** @import { Database as Db } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 
 const config = fakeConfig({ candidate: { name: 'Pat Example' }, search: { homeLocations: [] }, fractional: {}, coverLetterChecks: [] });
 
@@ -18,13 +18,13 @@ const config = fakeConfig({ candidate: { name: 'Pat Example' }, search: { homeLo
  * @param {string | null} [notes]
  */
 async function job(db, notes = null) {
-  const owned = Boolean(await asEngine(db).prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
+  const owned = Boolean(await db.prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
   return Number(
-    (await asEngine(db).prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
+    (await db.prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
       VALUES (${owned ? '1, ' : ''}?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'new', ?, 'x', 'x')`).run(`k${Math.random()}`, `example|cto${Math.random()}`, notes)).id,
   );
 }
-const cache = async (/** @type {Db} */ db, /** @type {number} */ id) => await asEngine(db).prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(id);
+const cache = async (/** @type {Db} */ db, /** @type {number} */ id) => await db.prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(id);
 
 test('migration: each job with notes text gets one "earlier" note; jobs without notes get none', async () => {
   // Apply every migration before 012, add jobs, then 012, as on a real database.
@@ -32,12 +32,13 @@ test('migration: each job with notes text gets one "earlier" note; jobs without 
   const raw = new Database(':memory:');
   raw.exec('CREATE TABLE runs (id INTEGER PRIMARY KEY)');
   for (const m of all.filter((m) => m.id < '012')) (typeof m.up === 'string' ? raw.exec(m.up) : m.up(raw));
-  const withNotes = await job(raw, 'Referred by a friend\nRemoved 2026-10-01: duplicate of #3.');
-  const blank = await job(raw, '   ');
-  const none = await job(raw, null);
-  /** @type {(db: Db) => void} */ (all.find((m) => m.id === '012-posting-notes')?.up)(raw); // a code migration
+  const q = createSqliteEngine(raw, { fallbackUid: null, strictTx: false });
+  const withNotes = await job(q, 'Referred by a friend\nRemoved 2026-10-01: duplicate of #3.');
+  const blank = await job(q, '   ');
+  const none = await job(q, null);
+  /** @type {(db: import('better-sqlite3').Database) => void} */ (all.find((m) => m.id === '012-posting-notes')?.up)(raw); // a code migration
   // Read straight from the table: 012 ran before user_id existed, so today's (scoped) notes functions do not apply here.
-  const notesOf = async (/** @type {number} */ id) => await asEngine(raw).prepare('SELECT source, body FROM posting_notes WHERE posting_id = ?').all(id);
+  const notesOf = async (/** @type {number} */ id) => await q.prepare('SELECT source, body FROM posting_notes WHERE posting_id = ?').all(id);
   assert.deepEqual(await notesOf(withNotes), [{ source: 'earlier', body: 'Referred by a friend\nRemoved 2026-10-01: duplicate of #3.' }]);
   assert.equal((await notesOf(blank)).length + (await notesOf(none)).length, 0);
   raw.close();

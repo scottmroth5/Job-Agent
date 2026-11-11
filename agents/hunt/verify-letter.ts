@@ -7,7 +7,7 @@ import { fillTemplate } from '../../tools/template.ts';
 import { truncate } from '../../tools/text.ts';
 import { getPrompt } from '../prompts.ts';
 import type { Claude, Run } from '@scottmroth5/agent-core';
-import type { Database } from '../../tools/types.ts';
+import type { Db } from '../../tools/types.ts';
 import type { Prompt } from '../prompts.ts';
 import type { Claim } from '../letter-checks.ts';
 
@@ -78,7 +78,7 @@ export const flagged = <T extends { verdict: string }>(claims: T[]) => [...claim
  */
 export async function verifyLetter({ claude, db = null, background, posting, letter, config, trace = null, model = VERIFY_MODEL, prompt: promptGiven }: {
   claude: Claude;
-  db?: Database | null;
+  db?: Db | null;
   background: string;
   posting: CheckedPosting;
   letter: string;

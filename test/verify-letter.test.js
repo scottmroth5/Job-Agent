@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -30,13 +29,13 @@ async function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
   const job = Number(
-    (await asEngine(db)
+    (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, created_at, updated_at)
         VALUES (1, 'k1', 'Example Co', 'VP Engineering', 'k1', 'LinkedIn', 'fulltime', '2026-09-01', 'pipeline', 'new', 'x', 'x')`)
       .run()).id,
   );
   const artifact = async () =>
-    Number((await asEngine(db).prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'x')").run(job, letter)).id);
+    Number((await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'x')").run(job, letter)).id);
   return { store, db, job, artifact };
 }
 
@@ -108,7 +107,7 @@ test('a failed check is saved as failed, keeps the letter, and logs no claim tex
   const r = await runCheck({ db, claude: fakeClaude(new Error('budget refused')), background, posting, artifactId: a, letter, config, trace });
   assert.equal(r.check?.status, 'failed');
   assert.deepEqual(r.check?.claims, []);
-  assert.equal(await asEngine(db).prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid').pluck().get(a), letter);
+  assert.equal(await db.prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid').pluck().get(a), letter);
   assert.ok(lines.every((l) => !l.includes('PMP') && !l.includes('budget refused')), 'counts and error names only');
   store.close();
 });
@@ -116,7 +115,7 @@ test('a failed check is saved as failed, keeps the letter, and logs no claim tex
 test("another user's letter gets no check", async () => {
   const { store, db, artifact } = await setup();
   const a = await artifact();
-  await asEngine(store.raw).prepare("INSERT INTO users (id, email, name, role, status, created_at, updated_at) VALUES (2, 'second@example.org', 'Second', 'user', 'active', 'x', 'x')").run();
+  await store.admin.prepare("INSERT INTO users (id, email, name, role, status, created_at, updated_at) VALUES (2, 'second@example.org', 'Second', 'user', 'active', 'x', 'x')").run();
   const { runAsUser } = await import('../db/scope.ts');
   await runAsUser(2, async () => {
     assert.equal(await saveCheck(db, a, { status: 'checked', claims: CLAIMS }), null);

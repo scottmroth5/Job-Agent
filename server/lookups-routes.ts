@@ -1,6 +1,6 @@
 // The configurable lists (agents/lookups.ts): read them for the UI, and manage them on the Admin screen.
 import { LISTS, GROUPS, ROLES, ROLE_LABELS, SCORE_PROMPTS, lookups, addValue, updateValue, moveValue, setRole, usageCounts } from '../agents/lookups.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { App } from './types.ts';
 
 type ValueSettings = { scorePrompt?: string; terms?: boolean };
@@ -11,7 +11,7 @@ const valueParams = { type: 'object', required: ['list', 'id'], properties: { li
 const settingsSchema = { type: 'object', additionalProperties: false, properties: { scorePrompt: { type: 'string', enum: SCORE_PROMPTS }, terms: { type: 'boolean' } } };
 
 /** Everything the UI needs to show and choose values: lists (archived values included, flagged), groups, roles. */
-export async function lookupsPayload(db: Database, { counts = false }: { counts?: boolean } = {}) {
+export async function lookupsPayload(db: Db, { counts = false }: { counts?: boolean } = {}) {
   const lk = await lookups(db);
   const usage: Record<string, Record<string, number>> = {};
   if (counts) for (const list of LISTS) usage[list] = await usageCounts(db, list);
@@ -28,7 +28,7 @@ export async function lookupsPayload(db: Database, { counts = false }: { counts?
   };
 }
 
-export function registerLookupRoutes(app: App, { db }: { db: Database }) {
+export function registerLookupRoutes(app: App, { db }: { db: Db }) {
   app.get('/api/lookups', { schema: { summary: 'Status, stage, and track lists with their groups and roles', response: { 200: anyObject } } }, async () => await lookupsPayload(db));
 
   app.get('/api/admin/lookups', { schema: { summary: 'The lists with how many jobs use each value', response: { 200: anyObject } } }, async () => await lookupsPayload(db, { counts: true }));

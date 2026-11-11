@@ -1,23 +1,22 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
-/** @import { Database } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 
 const now = '2026-10-02T12:00:00.000Z';
 
-/** @param {Database} db */
+/** @param {Db} db */
 async function posting(db) {
   return Number(
-    (await asEngine(db)
+    (await db
       .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, discovered_on, status, created_at, updated_at)
         VALUES (1, 'https://jobs.example.com/1', 'jobs.example.com/1', 'Example Co', 'VP Engineering', 'example|vp', '2026-09-01', 'applied', ?, ?)`)
       .run(now, now)).id,
   );
 }
 
-/** @param {Database} db @param {Record<string, unknown>} [o] */
+/** @param {Db} db @param {Record<string, unknown>} [o] */
 async function email(db, o = {}) {
   const row = {
     id: randomUUID(),
@@ -32,17 +31,17 @@ async function email(db, o = {}) {
     review_status: 'auto',
     ...o,
   };
-  await asEngine(db).prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id, review_status, created_at, updated_at)
+  await db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id, review_status, created_at, updated_at)
     VALUES (1, @id, @gmail_message_id, @thread_id, @sender, @sender_domain, @sent_at, @subject, @type, @posting_id, @review_status, '${now}', '${now}')`).run(row);
   return row;
 }
 
 test('007 adds the inbox tables and the company domain column; 013 drops its funnel view (a view cannot be per user)', async () => {
   const store = openJobStore(':memory:');
-  const names = await asEngine(store.db).prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").pluck().all();
+  const names = await store.db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").pluck().all();
   for (const n of ['contacts', 'email_threads', 'emails', 'decision_log', 'reminders']) assert.ok(names.includes(n), n);
   assert.ok(!names.includes('application_funnel'), 'server/funnel.ts computes the funnel per user instead');
-  assert.ok(/** @type {Array<{ name: string }>} */ (await asEngine(store.db).prepare('PRAGMA table_info(postings)').all()).some((c) => c.name === 'company_domain'));
+  assert.ok(/** @type {Array<{ name: string }>} */ (await store.db.prepare('PRAGMA table_info(postings)').all()).some((c) => c.name === 'company_domain'));
   store.close();
 });
 

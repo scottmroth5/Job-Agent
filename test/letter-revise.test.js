@@ -1,7 +1,6 @@
 // Cover letters in the job panel (agents/hunt/revise-letter.ts, server/letter-routes.ts): revising with Claude saves
 // nothing, keeping a draft or your own version is a new current version, older versions can be made current again,
 // and any version downloads as Word or PDF. Synthetic data; Claude is a stand-in.
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -18,10 +17,10 @@ async function setup() {
   const store = openJobStore(':memory:');
   const { db } = store;
   const id = Number(
-    (await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+    (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
       VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team. Grow the org.', '2026-10-01', 'x', 'x')`).run()).id,
   );
-  await asEngine(db).prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, model, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'claude-sonnet-5-5', '2026-10-02T12:00:00Z')").run(id, LETTER);
+  await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, model, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'claude-sonnet-5-5', '2026-10-02T12:00:00Z')").run(id, LETTER);
   /** @type {SendOptions[]} */
   const sent = [];
   const claude = fakeClaude(async (opts) => {
@@ -56,7 +55,7 @@ test('revising returns a cleaned draft and saves nothing; keeping it makes a new
   assert.deepEqual(body.flags, ['confident'], 'the letter checks run');
   assert.match(/** @type {string} */ (sent[0].system), /Background/, 'the knowledge doc is the system prompt');
   assert.equal(sent[0].label, 'cover-letter-revise');
-  assert.equal(await asEngine(db).prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'").pluck().get(), 1, 'nothing saved');
+  assert.equal(await db.prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'").pluck().get(), 1, 'nothing saved');
 
   const kept = await app.inject({ method: 'POST', url: `/api/postings/${id}/letter`, payload: { content: body.letter, source: 'revision' } });
   assert.equal(kept.statusCode, 200);

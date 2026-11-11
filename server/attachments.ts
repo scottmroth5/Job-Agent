@@ -2,12 +2,11 @@
 // X-Filename header, so no multipart dependency is needed. Each file is stored under its random ID, never its
 // name, so a name cannot reach outside the folder. Downloads are sent with nosniff and a sandbox policy; only
 // PDFs and images open in the browser, everything else downloads.
-import { asEngine } from '../db/engine/index.ts';
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync, readFileSync, unlinkSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { dataPath } from '../tools/paths.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { AttachmentsRow } from '../db/types.ts';
 import type { App, IdParams } from './types.ts';
 
@@ -33,8 +32,8 @@ export const cleanType = (t: unknown) => (/^[a-z0-9][\w.+-]*\/[\w.+-]+$/i.test(S
 
 const toRow = (r: Pick<AttachmentsRow, 'id' | 'posting_id' | 'filename' | 'content_type' | 'size_bytes' | 'created_at'>) => ({ id: r.id, postingId: r.posting_id, filename: r.filename, contentType: r.content_type, sizeBytes: r.size_bytes, createdAt: r.created_at });
 
-export async function listAttachments(db: Database, postingId: number) {
-  return (await asEngine(db).prepare('SELECT * FROM attachments WHERE posting_id = ? AND user_id = @uid ORDER BY created_at, id').all(postingId) as AttachmentsRow[]).map(toRow);
+export async function listAttachments(db: Db, postingId: number) {
+  return (await db.prepare('SELECT * FROM attachments WHERE posting_id = ? AND user_id = @uid ORDER BY created_at, id').all(postingId) as AttachmentsRow[]).map(toRow);
 }
 
 /** Content-Disposition with an ASCII fallback and the full name in UTF-8 (RFC 6266 / 5987). */
@@ -43,7 +42,7 @@ export function disposition(kind: string, filename: string) {
   return `${kind}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
-export function registerAttachmentRoutes(app: App, { db, dir = ATTACHMENTS_DIR, maxBytes = MAX_ATTACHMENT_BYTES }: { db: Database; dir?: string; maxBytes?: number }) {
+export function registerAttachmentRoutes(app: App, { db, dir = ATTACHMENTS_DIR, maxBytes = MAX_ATTACHMENT_BYTES }: { db: Db; dir?: string; maxBytes?: number }) {
   app.addContentTypeParser('application/octet-stream', { parseAs: 'buffer', bodyLimit: maxBytes }, (req, body, done) => done(null, body));
   const fileOf = (a: Pick<AttachmentsRow, 'posting_id' | 'id'>) => join(dir, String(a.posting_id), a.id);
   const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };
@@ -65,7 +64,7 @@ export function registerAttachmentRoutes(app: App, { db, dir = ATTACHMENTS_DIR, 
     },
     async (req, reply) => {
       const postingId = req.params.id;
-      if (!await asEngine(db).prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(postingId)) return reply.code(404).send({ error: 'Job not found' });
+      if (!await db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(postingId)) return reply.code(404).send({ error: 'Job not found' });
       const body = req.body;
       if (!Buffer.isBuffer(body) || body.length === 0) return reply.code(400).send({ error: 'Send the file as the request body (application/octet-stream).' });
       let name: string;
@@ -86,7 +85,7 @@ export function registerAttachmentRoutes(app: App, { db, dir = ATTACHMENTS_DIR, 
       mkdirSync(join(dir, String(postingId)), { recursive: true });
       writeFileSync(fileOf(row), body, { mode: 0o600 });
       try {
-        await asEngine(db).prepare(`INSERT INTO attachments (user_id, id, posting_id, filename, content_type, size_bytes, sha256, created_at)
+        await db.prepare(`INSERT INTO attachments (user_id, id, posting_id, filename, content_type, size_bytes, sha256, created_at)
           VALUES (@uid, @id, @posting_id, @filename, @content_type, @size_bytes, @sha256, @created_at)`).run(row);
       } catch (err) {
         unlinkSync(fileOf(row));
@@ -97,7 +96,7 @@ export function registerAttachmentRoutes(app: App, { db, dir = ATTACHMENTS_DIR, 
   );
 
   app.get<{ Params: { id: string }; Querystring: { download?: string } }>('/api/attachments/:id/file', { schema: { summary: 'Download an attachment', params: uuidParams } }, async (req, reply) => {
-    const a = await asEngine(db).prepare('SELECT * FROM attachments WHERE id = ? AND user_id = @uid').get(req.params.id) as AttachmentsRow | undefined;
+    const a = await db.prepare('SELECT * FROM attachments WHERE id = ? AND user_id = @uid').get(req.params.id) as AttachmentsRow | undefined;
     if (!a || !existsSync(fileOf(a))) return reply.code(404).send({ error: 'Attachment not found' });
     const inline = INLINE_TYPES.test(a.content_type) && req.query?.download === undefined;
     return reply
@@ -110,9 +109,9 @@ export function registerAttachmentRoutes(app: App, { db, dir = ATTACHMENTS_DIR, 
   });
 
   app.delete<{ Params: { id: string } }>('/api/attachments/:id', { schema: { summary: 'Delete an attachment and its file', params: uuidParams } }, async (req, reply) => {
-    const a = await asEngine(db).prepare('SELECT * FROM attachments WHERE id = ? AND user_id = @uid').get(req.params.id) as AttachmentsRow | undefined;
+    const a = await db.prepare('SELECT * FROM attachments WHERE id = ? AND user_id = @uid').get(req.params.id) as AttachmentsRow | undefined;
     if (!a) return reply.code(404).send({ error: 'Attachment not found' });
-    await asEngine(db).prepare('DELETE FROM attachments WHERE id = ? AND user_id = @uid').run(a.id);
+    await db.prepare('DELETE FROM attachments WHERE id = ? AND user_id = @uid').run(a.id);
     if (existsSync(fileOf(a))) unlinkSync(fileOf(a));
     return reply.code(204).send();
   });

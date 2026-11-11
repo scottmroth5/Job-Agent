@@ -264,11 +264,19 @@ interface Db {
 11. Remove the synchronous interface.
 
 Done when:
-- [ ] No synchronous database calls remain outside `db/engine/sqlite`
-- [ ] No floating promises
-- [ ] Isolation tests pass unchanged in intent, and the mutex test passes
+- [x] No synchronous database calls remain outside `db/engine` (and the migrations, which run as the database opens); lint bans `better-sqlite3` imports elsewhere
+- [x] No floating promises
+- [x] Isolation tests pass unchanged in intent, and the mutex test passes
 - [ ] Response times in production stay close to baseline
 - [ ] A week of scheduled runs is clean
+
+Built in PRs #40 to #51: the benchmark, Agent-Core 0.3.0 and 0.4.0 (the async tracer), the engine, then `db`, `tools`,
+`agents` (two PRs), `server`, `scripts` with `demo` and `evals`, the tests, and the removal of the synchronous
+interface (`store.raw` became `store.admin`, listed in `test/admin-handle.test.js`). Atomicity fixes, each in the PR
+that converted its file: account decisions and access requests, the access-request and feedback caps, list edits,
+prompt saves, notes, job edits, follow-up closing, archiving, rekeying, account deletion, manual add, knowledge doc
+versions, fact-check dismissals, resumes, alert and allowance marks, self-resume, and a start lock for the pipeline
+and inbox. Still open: production response times after the deploy, and the clean week.
 
 ### Phase 4: PostgreSQL support
 

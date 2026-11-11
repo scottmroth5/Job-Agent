@@ -5,10 +5,9 @@
 // item for all of them, in a job's Next step box that job.
 // Each item opens its job. Built from status groups, so statuses added later count automatically.
 // With jobId it is one job's next steps (the job panel's Next step box): every open reminder, however far out.
-import { asEngine } from '../db/engine/index.ts';
 import { lookups, sqlList } from '../agents/lookups.ts';
 import { waitingApplications } from '../agents/follow-ups.ts';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 
 type ReminderRow = { id: string; kind: string; due: string | null; note: string | null; jobId: number; company: string; title: string };
 
@@ -16,12 +15,12 @@ export const REMINDER_DAYS = 14;
 const DAY = 24 * 3600 * 1000;
 
 /** The Today list for the current user, or one job's: { items: [{ kind, jobId, company, title, text, id?, due?, overdue?, days? }] }. */
-export async function today(db: Database, { now = new Date(), jobId = null }: { now?: Date; jobId?: number | string | null } = {}) {
+export async function today(db: Db, { now = new Date(), jobId = null }: { now?: Date; jobId?: number | string | null } = {}) {
   const one = jobId == null ? '' : 'AND p.id = @jobId';
   const params = jobId == null ? {} : { jobId: Number(jobId) };
   const lk = await lookups(db);
   const horizon = new Date(now.getTime() + REMINDER_DAYS * DAY).toISOString();
-  const reminders = (await asEngine(db)
+  const reminders = (await db
     .prepare(
       `SELECT r.id, r.kind, r.due_at AS due, r.note, p.id AS jobId, p.company, p.title
        FROM reminders r JOIN postings p ON p.id = r.posting_id AND p.user_id = r.user_id
@@ -41,7 +40,7 @@ export async function today(db: Database, { now = new Date(), jobId = null }: { 
     }));
   const decision = lk.ids('status', 'decision');
   const offers = decision.length
-    ? (await asEngine(db)
+    ? (await db
         .prepare(
           `SELECT p.id AS jobId, p.company, p.title, p.status FROM postings p
            WHERE p.user_id = @uid AND p.status IN ${sqlList(decision)} AND p.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} ${one}

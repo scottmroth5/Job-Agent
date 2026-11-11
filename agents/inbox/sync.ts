@@ -2,7 +2,7 @@
 import { getUserSetting, setUserSetting } from '../../db/settings.ts';
 import { HistoryExpiredError } from './gmail.ts';
 import type { Gmail } from './gmail.ts';
-import type { Database } from '../../tools/types.ts';
+import type { Db } from '../../tools/types.ts';
 
 export const CURSOR_KEY = 'inbox.historyId';
 
@@ -13,7 +13,7 @@ const windowQuery = (days: number) => `newer_than:${days}d -in:chats`;
  * rejected as too old; the last fallbackDays are read instead), or 'initial' (first run, same window).
  * The cursor is not saved here: call saveCursor(db, nextHistoryId) once the messages are processed.
  */
-export async function newMessageIds({ gmail, db, fallbackDays = 7 }: { gmail: Pick<Gmail, 'historySince' | 'profile' | 'listMessages'>; db: Database; fallbackDays?: number }) {
+export async function newMessageIds({ gmail, db, fallbackDays = 7 }: { gmail: Pick<Gmail, 'historySince' | 'profile' | 'listMessages'>; db: Db; fallbackDays?: number }) {
   const stored = await getUserSetting(db, CURSOR_KEY);
   if (stored) {
     try {
@@ -34,4 +34,4 @@ export async function backfillMessageIds({ gmail, days = 180 }: { gmail: Pick<Gm
   return { messageIds: await gmail.listMessages(windowQuery(days)), nextHistoryId: historyId, mode: 'backfill' };
 }
 
-export const saveCursor = async (db: Database, historyId: string | null | undefined) => historyId && await setUserSetting(db, CURSOR_KEY, String(historyId));
+export const saveCursor = async (db: Db, historyId: string | null | undefined) => historyId && await setUserSetting(db, CURSOR_KEY, String(historyId));

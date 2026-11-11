@@ -7,7 +7,7 @@
 // It also turns copies that npm run cleanup archived as "passed" (with a "duplicate of #N" note) into
 // 'duplicate', so the status says what they are.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '008-duplicate-status';
 

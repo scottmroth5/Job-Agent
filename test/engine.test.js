@@ -6,11 +6,11 @@ import assert from 'node:assert/strict';
 import Database from 'better-sqlite3';
 import { createSqliteEngine, insideTransaction } from '../db/engine/sqlite.ts';
 import { runAsUser } from '../db/scope.ts';
-import { openJobStore } from '../db/index.ts';
+import { loadMigrations, openJobStore } from '../db/index.ts';
+import { openStore } from '@scottmroth5/agent-core';
 import { createJobClaude } from '../tools/claude.ts';
 import { createHttp } from '../tools/http.ts';
 import { fakeClaude } from './fixtures/fakes.js';
-import { asEngine } from '../db/engine/index.ts';
 import { addUser, decide, getUser, requestAccess } from '../db/users.ts';
 import { createJobTracer } from '../tools/trace.ts';
 import { oneStartAtATime } from '../tools/runs.ts';
@@ -158,7 +158,7 @@ test('Claude and HTTP calls refuse to run inside a transaction, and run outside 
   const { db } = setup({ fallbackUid: 1, strictTx: false });
   /** @type {string[]} */
   const sent = [];
-  const claude = createJobClaude(/** @type {Database.Database} */ (/** @type {unknown} */ (null)), {
+  const claude = createJobClaude(/** @type {import('../db/engine/types.ts').Db} */ (/** @type {unknown} */ (null)), {
     ownerClient: fakeClaude(async () => {
       sent.push('claude');
       return { text: 'ok' };
@@ -187,45 +187,47 @@ test('the guard is on under node --test by default', async () => {
   );
 });
 
-test('openJobStore gives store.engine over the same connection, scoped like store.db', async () => {
+test('openJobStore: db is scoped, admin is not, both over one connection', async () => {
   const store = openJobStore(':memory:');
-  const sync = store.db.prepare('SELECT COUNT(*) FROM users').pluck().get();
-  assert.equal(await store.engine.prepare('SELECT COUNT(*) FROM users').pluck().get(), sync);
-  await store.engine.tx(async () => {
-    await store.engine.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('engine-test', '1', 'x')").run();
+  await store.db.tx(async () => {
+    await store.db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('engine-test', '1', 'x')").run();
   });
-  assert.equal(store.db.prepare("SELECT value FROM app_settings WHERE key = 'engine-test'").pluck().get(), '1');
+  assert.equal(await store.admin.prepare("SELECT value FROM app_settings WHERE key = 'engine-test'").pluck().get(), '1', 'one connection');
+  assert.equal(await store.db.prepare('SELECT @uid').pluck().get(), 1, 'db: the owner outside a request (scripts and tests)');
+  await assert.rejects(store.admin.prepare('SELECT @uid').pluck().get(), /needs a user/, 'admin has no fallback user');
   store.close();
 
   const server = openJobStore(':memory:', { fallbackUid: null });
-  await assert.rejects(server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get(), /needs a user/);
-  assert.equal(await runAsUser(1, async () => await server.engine.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get()), 0);
+  await assert.rejects(server.db.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get(), /needs a user/);
+  assert.equal(await runAsUser(1, async () => await server.db.prepare('SELECT COUNT(*) FROM postings WHERE user_id = @uid').pluck().get()), 0);
   server.close();
 });
 
-test('asEngine: every view of one connection shares its transaction lock', async () => {
-  const store = openJobStore(':memory:', { fallbackUid: 1 });
-  const fromScoped = asEngine(store.db);
-  const fromRaw = asEngine(store.raw);
-  assert.equal(asEngine(store.db), fromScoped, 'one view per handle');
-  assert.equal(asEngine(store.engine), store.engine, 'an engine is its own view');
+/** The app's tables on agent-core's connection, with engines over it as openJobStore makes them, and the connection. */
+function appConnection() {
+  const conn = openStore(':memory:', { app: 'job-agent', migrations: loadMigrations() });
+  return { db: createSqliteEngine(conn.db, { fallbackUid: 1 }), admin: createSqliteEngine(conn.db, { fallbackUid: null }), connection: conn.db, close: () => conn.close() };
+}
+
+test('every engine over one connection shares its transaction lock', async () => {
+  const store = appConnection();
   const hold = deferred();
   const order = /** @type {string[]} */ ([]);
   // The holder has the guard off, so the test can keep its transaction open across a macrotask.
-  const holder = createSqliteEngine(store.raw, { fallbackUid: 1, strictTx: false });
+  const holder = createSqliteEngine(store.connection, { fallbackUid: 1, strictTx: false });
   const inside = holder.tx(async () => {
     await holder.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('a', '1', 'x')").run();
     await hold.promise;
     order.push('tx done');
   });
   await new Promise((r) => setImmediate(r));
-  const viaScoped = fromScoped.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`scoped saw ${n}`));
-  const viaRaw = fromRaw.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`raw saw ${n}`));
+  const viaScoped = store.db.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`scoped saw ${n}`));
+  const viaAdmin = store.admin.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`admin saw ${n}`));
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(order, [], 'both wait for the open transaction');
   hold.resolve();
-  await Promise.all([inside, viaScoped, viaRaw]);
-  assert.deepEqual(order, ['tx done', 'scoped saw 1', 'raw saw 1']);
+  await Promise.all([inside, viaScoped, viaAdmin]);
+  assert.deepEqual(order, ['tx done', 'scoped saw 1', 'admin saw 1']);
   store.close();
 });
 
@@ -234,7 +236,7 @@ test('users: two decisions at once can not both pass the status check; two reque
   const id = await addUser(store.db, { email: 'pending@example.com', status: 'pending' });
   const results = await Promise.allSettled([decide(store.db, id, 'reject', { by: 1 }), decide(store.db, id, 'reject', { by: 1 })]);
   assert.deepEqual(results.map((r) => r.status).sort(), ['fulfilled', 'rejected']);
-  assert.match(String(/** @type {PromiseRejectedResult} */ (results.find((r) => r.status === 'rejected')).reason), /A rejected account cannot be rejected\./);
+  assert.match(String(/** @type {PromiseRejectedResult} */ (results.find((r) => r.status === 'rejected')).reason), /A rejected account cannot be rejected./);
 
   const [a, b] = await Promise.all([
     requestAccess(store.db, { email: 'new@example.com', name: 'New' }),
@@ -242,15 +244,15 @@ test('users: two decisions at once can not both pass the status check; two reque
   ]);
   assert.equal(a.id, b.id);
   assert.deepEqual([a.created, b.created].sort(), [false, true]);
-  assert.equal(store.db.prepare("SELECT COUNT(*) FROM users WHERE email = 'new@example.com'").pluck().get(), 1);
+  assert.equal(await store.db.prepare("SELECT COUNT(*) FROM users WHERE email = 'new@example.com'").pluck().get(), 1);
   assert.equal((await getUser(store.db, a.id))?.status, 'pending');
   store.close();
 });
 
 test('trace writes go through the engine: a run started during an open transaction waits for it', async () => {
-  const store = openJobStore(':memory:', { fallbackUid: 1 });
+  const store = appConnection();
   const hold = deferred();
-  const holder = createSqliteEngine(store.raw, { fallbackUid: 1, strictTx: false });
+  const holder = createSqliteEngine(store.connection, { fallbackUid: 1, strictTx: false });
   const inside = holder.tx(async () => {
     await holder.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('a', '1', 'x')").run();
     await hold.promise;
@@ -263,9 +265,9 @@ test('trace writes go through the engine: a run started during an open transacti
   hold.resolve();
   await inside;
   const r = await run;
-  assert.deepEqual(store.raw.prepare('SELECT name, user_id FROM runs WHERE id = ?').get(r.id), { name: 'trace-test', user_id: 1 });
+  assert.deepEqual(await store.admin.prepare('SELECT name, user_id FROM runs WHERE id = ?').get(r.id), { name: 'trace-test', user_id: 1 });
   await r.finish('ok');
-  assert.equal(store.raw.prepare('SELECT status FROM runs WHERE id = ?').pluck().get(r.id), 'ok');
+  assert.equal(await store.admin.prepare('SELECT status FROM runs WHERE id = ?').pluck().get(r.id), 'ok');
   store.close();
 });
 

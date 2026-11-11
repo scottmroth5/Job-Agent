@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
@@ -9,7 +8,7 @@ import { validateManualInput, addPosting } from '../agents/manual.ts';
 import { listPostings, summary } from '../server/queries.ts';
 import { fakeConfig, fakeHttp } from './fixtures/fakes.js';
 /** @import { ScoreInput } from '../agents/discovery/score.ts' */
-/** @import { Database } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 /** @import { PostingsRow } from '../db/types.ts' */
 
 /** A posting with only the fields a test sets (scoring reads title, url, location check, and text). */
@@ -69,11 +68,11 @@ test('manual add refuses a list page', () => {
   assert.throws(() => validateManualInput({ title: 'CTO Jobs', company: 'X', description: 'x'.repeat(300) }), /list of jobs/);
 });
 
-/** @param {Database} db @param {{ title: string, url?: string, stage?: string, status?: string }} o */
+/** @param {Db} db @param {{ title: string, url?: string, stage?: string, status?: string }} o */
 async function insert(db, o) {
   const row = { url: `https://example.com/${Math.random()}`, stage: 'pipeline', status: 'new', ...o };
   return Number(
-    (await asEngine(db)
+    (await db
       .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
         VALUES (1, @url, @url, 'See posting', @title, @url, @stage, @status, '2026-09-21', 'x', 'x')`)
       .run(row)).id,
@@ -89,16 +88,16 @@ test('archiveListings removes list pages, keeps them for dedupe, and leaves acte
   const realJob = await insert(db, { title: 'VP Engineering' });
 
   assert.deepEqual((await archiveListings(db, { dryRun: true })).archived.map((p) => p.id), [newList, rejectedList]);
-  assert.equal(await asEngine(db).prepare("SELECT COUNT(*) FROM postings WHERE stage = 'archived'").pluck().get(), 0, 'dry run changes nothing');
+  assert.equal(await db.prepare("SELECT COUNT(*) FROM postings WHERE stage = 'archived'").pluck().get(), 0, 'dry run changes nothing');
 
   await archiveListings(db, { now: new Date('2026-10-01T12:00:00Z') });
-  const row = async (/** @type {number} */ id) => /** @type {Pick<PostingsRow, 'stage' | 'status' | 'notes'>} */ (await asEngine(db).prepare('SELECT stage, status, notes FROM postings WHERE id = ?').get(id));
+  const row = async (/** @type {number} */ id) => /** @type {Pick<PostingsRow, 'stage' | 'status' | 'notes'>} */ (await db.prepare('SELECT stage, status, notes FROM postings WHERE id = ?').get(id));
   assert.deepEqual([(await row(newList)).stage, (await row(newList)).status], ['archived', 'passed']);
   assert.match(String((await row(newList)).notes), /Removed 2026-10-01: not a single job/);
   assert.deepEqual([(await row(rejectedList)).stage, (await row(rejectedList)).status], ['archived', 'rejected']);
   assert.deepEqual([(await row(appliedList)).stage, (await row(appliedList)).status], ['pipeline', 'applied']);
   assert.equal((await row(realJob)).stage, 'pipeline');
-  assert.equal(await asEngine(db).prepare('SELECT changed_by FROM status_history WHERE posting_id = ?').pluck().get(newList), 'agent');
+  assert.equal(await db.prepare('SELECT changed_by FROM status_history WHERE posting_id = ?').pluck().get(newList), 'agent');
   assert.equal((await archiveListings(db)).archived.length, 0, 'running again finds nothing');
   store.close();
 });
@@ -144,15 +143,15 @@ test('cleanup archives excluded-site jobs and moves pipeline jobs without a desc
   const noText = await insert(db, { title: 'Director of Engineering' });
   const appliedNoText = await insert(db, { title: 'Head of Engineering', status: 'applied' });
   const withText = await insert(db, { title: 'CTO' });
-  await asEngine(db).prepare("UPDATE postings SET fetched_text = 'The full posting.' WHERE id = ?").run(withText);
+  await db.prepare("UPDATE postings SET fetched_text = 'The full posting.' WHERE id = ?").run(withText);
 
   const { archived } = await archiveListings(db, { config: excluding, now: new Date('2026-10-01T12:00:00Z') });
   assert.deepEqual(archived.map((p) => p.id), [paid]);
-  assert.match(/** @type {string} */ (await asEngine(db).prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(paid)), /^Removed 2026-10-01: excluded site \(payjobs\.example\)\.$/);
+  assert.match(/** @type {string} */ (await db.prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(paid)), /^Removed 2026-10-01: excluded site \(payjobs\.example\)\.$/);
 
   assert.deepEqual((await demoteWithoutText(db, { dryRun: true })).demoted.map((p) => p.id), [noText]);
   await demoteWithoutText(db);
-  const stage = async (/** @type {number} */ id) => await asEngine(db).prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
+  const stage = async (/** @type {number} */ id) => await db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
   assert.deepEqual([await stage(noText), await stage(appliedNoText), await stage(withText)], ['discovered', 'pipeline', 'pipeline']);
   store.close();
 });
@@ -164,12 +163,12 @@ test('jobs judged 7+ without a description are flagged and counted; others are n
   /** @param {string} title @param {{ status?: string, discoveredOn?: string }} [o] */
   const add = async (title, o = {}) => {
     const id = await insert(db, { title, stage: 'discovered', ...o });
-    await asEngine(db).prepare('UPDATE postings SET discovered_on = ? WHERE id = ?').run(o.discoveredOn ?? today, id);
+    await db.prepare('UPDATE postings SET discovered_on = ? WHERE id = ?').run(o.discoveredOn ?? today, id);
     return id;
   };
   /** @param {number} id @param {number} value @param {string} source @param {object} [analysis] */
   const score = async (id, value, source, analysis = {}) =>
-    await asEngine(db).prepare("INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, created_at) VALUES (1, ?, ?, 'r', ?, ?, 'x')").run(id, value, JSON.stringify(analysis), source);
+    await db.prepare("INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, created_at) VALUES (1, ?, ?, 'r', ?, ?, 'x')").run(id, value, JSON.stringify(analysis), source);
   const v1High = await add('VP Engineering');
   await score(v1High, 9, 'v1-quick');
   const capped = await add('Head of Engineering');
@@ -194,7 +193,7 @@ test('duplicates: the copy the user acted on is kept, extra new copies are archi
   /** @param {string} title @param {string} company @param {{ status?: string, stage?: string }} [o] */
   const add = async (title, company, o = {}) => {
     const id = await insert(db, { title, stage: 'discovered', ...o });
-    await asEngine(db).prepare('UPDATE postings SET company = ?, company_title_key = ? WHERE id = ?').run(company, `${company}|${title}`.toLowerCase(), id);
+    await db.prepare('UPDATE postings SET company = ?, company_title_key = ? WHERE id = ?').run(company, `${company}|${title}`.toLowerCase(), id);
     return id;
   };
   const applied = await add('Director of Engineering', 'Example Co', { status: 'applied', stage: 'pipeline' });
@@ -207,7 +206,7 @@ test('duplicates: the copy the user acted on is kept, extra new copies are archi
   const { archived } = await archiveListings(db, { now: new Date('2026-10-01T12:00:00Z') });
   assert.deepEqual(archived.map((p) => p.id), [googleCopy, plainCopy]);
   assert.match(String(archived[0].reason), new RegExp(`^duplicate of #${applied}, Director of Engineering at Example Co, pipeline/applied$`));
-  const stage = async (/** @type {number} */ id) => await asEngine(db).prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
+  const stage = async (/** @type {number} */ id) => await db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(id);
   assert.deepEqual(await Promise.all([applied, other, unknownA, unknownB].map(stage)), ['pipeline', 'discovered', 'discovered', 'discovered'], 'placeholder companies never match each other');
 
   // Two new copies, no acted-on one: the oldest stays. Running again must not flip to the removed copy.
@@ -223,11 +222,11 @@ test('rows carry pay from the job terms, the source salary, or the description, 
   const store = openJobStore(':memory:');
   const { db } = store;
   const listed = await insert(db, { title: 'VP Engineering A' });
-  await asEngine(db).prepare("UPDATE postings SET salary = '$200k - $250k', fetched_text = 'Salary $100,000 - $120,000.' WHERE id = ?").run(listed);
+  await db.prepare("UPDATE postings SET salary = '$200k - $250k', fetched_text = 'Salary $100,000 - $120,000.' WHERE id = ?").run(listed);
   const described = await insert(db, { title: 'VP Engineering B' });
-  await asEngine(db).prepare("UPDATE postings SET fetched_text = 'The range is $180,000 to $220,000 annually.' WHERE id = ?").run(described);
+  await db.prepare("UPDATE postings SET fetched_text = 'The range is $180,000 to $220,000 annually.' WHERE id = ?").run(described);
   const terms = await insert(db, { title: 'Fractional CTO' });
-  await asEngine(db).prepare("UPDATE postings SET rate_min = 150, rate_max = 200, rate_unit = 'hour', rate_text = '$150 - $200/hr', hours_min = 10, hours_max = 10 WHERE id = ?").run(terms);
+  await db.prepare("UPDATE postings SET rate_min = 150, rate_max = 200, rate_unit = 'hour', rate_text = '$150 - $200/hr', hours_min = 10, hours_max = 10 WHERE id = ?").run(terms);
   const none = await insert(db, { title: 'VP Engineering C' });
 
   const rows = Object.fromEntries((await listPostings(db, {}, fakeConfig({ fractional: { weeksPerYear: 48 } }))).map((r) => [r.id, r]));
@@ -243,7 +242,7 @@ test('editing the company finds the earlier copy, and duplicateOf archives this 
   const { rekeyPostings, findCopies } = await import('../agents/identity.ts');
   const store = openJobStore(':memory:');
   const { db } = store;
-  const set = async (/** @type {number} */ id, /** @type {string} */ company, /** @type {string} */ title) => await asEngine(db).prepare('UPDATE postings SET company = ?, title = ? WHERE id = ?').run(company, title, id);
+  const set = async (/** @type {number} */ id, /** @type {string} */ company, /** @type {string} */ title) => await db.prepare('UPDATE postings SET company = ?, title = ? WHERE id = ?').run(company, title, id);
   const applied = await insert(db, { title: 'x', status: 'applied' });
   await set(applied, 'Example Health', 'VP of Engineering');
   const copy = await insert(db, { title: 'x' });
@@ -251,7 +250,7 @@ test('editing the company finds the earlier copy, and duplicateOf archives this 
   const other = await insert(db, { title: 'x' });
   await set(other, 'See posting', 'Vice President, Engineering (Remote)');
   await rekeyPostings(db);
-  assert.deepEqual(await findCopies(db, /** @type {PostingsRow} */ (await asEngine(db).prepare('SELECT * FROM postings WHERE id = ?').get(copy))), [], 'a placeholder company matches nothing');
+  assert.deepEqual(await findCopies(db, /** @type {PostingsRow} */ (await db.prepare('SELECT * FROM postings WHERE id = ?').get(copy))), [], 'a placeholder company matches nothing');
   assert.equal((await listPostings(db, {})).find((r) => r.id === copy)?.hasCopies, false, 'two "See posting" rows are not flagged as copies');
 
   const edited = await updatePosting(db, copy, { company: 'Example Health, Inc.' });
@@ -262,7 +261,7 @@ test('editing the company finds the earlier copy, and duplicateOf archives this 
   assert.ok(archived);
   assert.equal(archived.stage, 'archived');
   assert.equal(archived.status, 'duplicate');
-  assert.equal(await asEngine(db).prepare('SELECT changed_by FROM status_history WHERE posting_id = ? ORDER BY id DESC LIMIT 1').pluck().get(copy), 'user');
+  assert.equal(await db.prepare('SELECT changed_by FROM status_history WHERE posting_id = ? ORDER BY id DESC LIMIT 1').pluck().get(copy), 'user');
   assert.ok(String(archived.notes).endsWith(`Duplicate of #${applied}, VP of Engineering at Example Health (pipeline/applied); archived 2026-10-01.`), String(archived.notes));
   await assert.rejects(async () => await updatePosting(db, copy, { duplicateOf: copy }), /not found/);
   assert.equal((await getPosting(db, other))?.copies.length, 0);
@@ -274,7 +273,7 @@ test('duplicates: a new pipeline copy is kept over an old copy archived for age 
   const { db } = store;
   const add = async (/** @type {{ stage?: string, status?: string }} */ o) => {
     const id = await insert(db, { title: 'x', ...o });
-    await asEngine(db).prepare("UPDATE postings SET company = 'Example Co', title = 'Engineering Manager', company_title_key = 'example|engineering manager' WHERE id = ?").run(id);
+    await db.prepare("UPDATE postings SET company = 'Example Co', title = 'Engineering Manager', company_title_key = 'example|engineering manager' WHERE id = ?").run(id);
     return id;
   };
   const oldArchived = await add({ stage: 'archived' });
@@ -290,8 +289,8 @@ test("discovery's first status entry does not count as removed by cleanup", asyn
   const { db } = store;
   const add = async (/** @type {string} */ stage) => {
     const id = await insert(db, { title: 'x', stage });
-    await asEngine(db).prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
-    await asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, 'new', 'agent', 'x')").run(id);
+    await db.prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
+    await db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, 'new', 'agent', 'x')").run(id);
     return id;
   };
   const older = await add('discovered');
@@ -307,7 +306,7 @@ test('copies already archived as duplicates are not pointed out again', async ()
   const { db } = store;
   const add = async (/** @type {{ stage?: string, status?: string }} */ o) => {
     const id = await insert(db, { title: 'x', ...o });
-    await asEngine(db).prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
+    await db.prepare("UPDATE postings SET company = 'Example Co', title = 'CTO', company_title_key = 'example|chief technology officer' WHERE id = ?").run(id);
     return id;
   };
   const kept = await add({ stage: 'pipeline' });
@@ -317,7 +316,7 @@ test('copies already archived as duplicates are not pointed out again', async ()
   assert.equal((await listPostings(db, {})).find((r) => r.id === kept)?.hasCopies, false);
   assert.deepEqual((await getPosting(db, kept))?.copies, []);
   const passedEarlier = await add({ stage: 'archived', status: 'passed' });
-  await asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, 'new', 'passed', 'user', 'x')").run(passedEarlier);
+  await db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, 'new', 'passed', 'user', 'x')").run(passedEarlier);
   assert.deepEqual((await getPosting(db, kept))?.copies.map((c) => c.id), [passedEarlier], 'a copy the user passed on is shown');
   store.close();
 });
@@ -327,7 +326,7 @@ test('discoveredAfter keeps jobs found on or after the date', async () => {
   const { db } = store;
   const on = async (/** @type {string} */ day) => {
     const id = await insert(db, { title: `Job ${day}` });
-    await asEngine(db).prepare('UPDATE postings SET discovered_on = ? WHERE id = ?').run(day, id);
+    await db.prepare('UPDATE postings SET discovered_on = ? WHERE id = ?').run(day, id);
     return id;
   };
   await on('2026-09-20');
