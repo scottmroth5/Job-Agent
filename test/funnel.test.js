@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -15,16 +14,16 @@ function setup() {
   const { db } = store;
   const job = async (o = {}) =>
     Number(
-      (await asEngine(db)
+      (await db
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, created_at, updated_at)
           VALUES (1, @k, @company, @title, @k, @source, @track, @found, 'pipeline', @status, @applied, 'x', 'x')`)
         .run({ k: `k${Math.random()}`, company: 'Example Co', title: 'CTO', source: 'LinkedIn', track: 'fulltime', found: '2026-09-01', status: 'applied', applied: null, ...o })).id,
     );
   /** @param {number} id @param {string} to @param {string} at @param {string} [by] */
-  const history = async (id, to, at, by = 'user') => await asEngine(db).prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, ?, ?, ?)').run(id, to, by, `${at}T10:00:00Z`);
+  const history = async (id, to, at, by = 'user') => await db.prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (1, ?, NULL, ?, ?, ?)').run(id, to, by, `${at}T10:00:00Z`);
   /** @param {number} id @param {string} type @param {string} at @param {string} [review] */
   const email = async (id, type, at, review = 'auto') =>
-    await asEngine(db).prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, type, posting_id, review_status, created_at, updated_at)
+    await db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, type, posting_id, review_status, created_at, updated_at)
       VALUES (1, ?, ?, 't', 'x@example.com', 'example.com', ?, ?, ?, ?, 'x', 'x')`).run(randomUUID(), randomUUID(), `${at}T09:00:00Z`, type, id, review);
   return { store, db, job, history, email };
 }

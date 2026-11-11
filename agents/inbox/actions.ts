@@ -5,10 +5,9 @@ import { logDecision, linkThread, upsertContact, addReminder } from './store.ts'
 import { builtInLookups, lookups } from '../lookups.ts';
 import { adoptNotesText } from '../notes.ts';
 import { localDay } from '../../tools/dates.ts';
-import type { Database } from '../../tools/types.ts';
+import type { Db } from '../../tools/types.ts';
 import type { Lookups } from '../lookups.ts';
 import type { Classification } from './classify.ts';
-import { asEngine } from '../../db/engine/index.ts';
 
 /** decideLink's answer: the link to make (or not), and whether a person must look. */
 export interface LinkDecision {
@@ -84,10 +83,10 @@ export function parseDeadline(text: string | null | undefined) {
  * Returns { statusChange, review, notices[], reminderId }.
  */
 export async function applyActions(
-  db: Database,
+  db: Db,
   { email, postingId, c, decidedBy, promptVersion, now = new Date() }: { email: ActionEmail; postingId: number; c: ActionClassification; decidedBy: string; promptVersion?: string | null; now?: Date },
 ) {
-  const posting = await asEngine(db).prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as
+  const posting = await db.prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as
     | { id: number; company: string; title: string; status: string; stage: string; applied_on: string | null }
     | undefined;
   if (!posting) return { statusChange: null, review: 'the application no longer exists', notices: [], reminderId: null };
@@ -109,11 +108,11 @@ export async function applyActions(
   let statusChange: { from: string; to: string } | null = null;
   if (plan.change) {
     const { from, to } = plan.change;
-    await asEngine(db).tx(async () => {
+    await db.tx(async () => {
       const appliedOn = lk.groupOf('status', to) === 'waiting' && !posting.applied_on ? dateOnly(email.sentAt) : posting.applied_on;
       const stage = lk.isClosed(to) ? lk.role('stage', 'archive') : posting.stage;
-      await asEngine(db).prepare('UPDATE postings SET status = ?, applied_on = ?, stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(to, appliedOn, stage, nowIso, postingId);
-      await asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)").run(postingId, from, to, nowIso);
+      await db.prepare('UPDATE postings SET status = ?, applied_on = ?, stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(to, appliedOn, stage, nowIso, postingId);
+      await db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)").run(postingId, from, to, nowIso);
       await logDecision(db, { ...base, action: 'status_change', fromStatus: from, toStatus: to, detail: { emailDate: email.sentAt, type: c.type } }, now);
     });
     statusChange = plan.change;
@@ -138,7 +137,7 @@ export async function applyActions(
 
 /** A new opportunity from recruiter outreach that matches no application. The email body is not copied. */
 export async function createOpportunity(
-  db: Database,
+  db: Db,
   { email, c, decidedBy, promptVersion, now = new Date() }: { email: ActionEmail; c: ActionClassification; decidedBy: string; promptVersion?: string | null; now?: Date },
 ) {
   const lk = await lookups(db);
@@ -147,12 +146,12 @@ export async function createOpportunity(
   const title = c.extracted.role_title ?? 'Recruiter outreach';
   const notes = `From a recruiter email on ${dateOnly(email.sentAt)}: ${c.summary}\nGmail thread: https://mail.google.com/mail/u/0/#all/${email.threadId}`;
   const id = Number(
-    (await asEngine(db)
+    (await db
       .prepare(`INSERT INTO postings (user_id, company, title, company_title_key, source, discovered_on, stage, status, notes, created_at, updated_at)
         VALUES (@uid, ?, ?, ?, 'email', ?, ?, ?, ?, ?, ?)`)
       .run(company, title, storedKey({ company, title }), localDay(now), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso)).id,
   );
-  await asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
+  await db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
   await adoptNotesText(db, { postingId: id, source: 'agent', now });
   await linkThread(db, email.threadId, id, 'outreach', now);
   await upsertContact(db, { email: c.extracted.contact_email ?? email.senderEmail, name: c.extracted.contact_name, company, postingId: id }, now);

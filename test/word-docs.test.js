@@ -1,6 +1,5 @@
 // Word downloads of cover letters and meeting preps (server/word-docs.ts, server/document-routes.ts). Made-up jobs and
 // text; the .docx files are opened and their text checked.
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -44,10 +43,10 @@ test('downloads: your own letter and prep; nobody else\'s', async () => {
   const store = openJobStore(':memory:', { fallbackUid: null });
   const app = await buildApp({ store, config: fakeConfig({ candidate: { name: 'Owner Example', signoffName: 'Owner' }, search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}` });
-  await addUser(store.raw, { email: 'b@example.com' });
-  const job = Number((await asEngine(store.raw).prepare("INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at) VALUES (?, 'k', 'Example Co', 'VP Engineering', 'k', '2026-10-01', 'x', 'x')").run(OWNER_ID)).id);
-  await asEngine(store.raw).prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (?, ?, 'cover_letter', 'The letter body.', 'v2', '2026-10-26T15:00:00Z')").run(OWNER_ID, job);
-  await asEngine(store.raw).prepare("INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, content, model, created_at) VALUES (?, 'p1', ?, '[{\"name\":\"Sam\"}]', '# Prep', 'm', 'x')").run(OWNER_ID, job);
+  await addUser(store.admin, { email: 'b@example.com' });
+  const job = Number((await store.admin.prepare("INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at) VALUES (?, 'k', 'Example Co', 'VP Engineering', 'k', '2026-10-01', 'x', 'x')").run(OWNER_ID)).id);
+  await store.admin.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (?, ?, 'cover_letter', 'The letter body.', 'v2', '2026-10-26T15:00:00Z')").run(OWNER_ID, job);
+  await store.admin.prepare("INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, content, model, created_at) VALUES (?, 'p1', ?, '[{\"name\":\"Sam\"}]', '# Prep', 'm', 'x')").run(OWNER_ID, job);
 
   const letter = await app.inject({ url: `/api/postings/${job}/letter.docx`, headers: as('owner@example.com') });
   assert.equal(letter.statusCode, 200);

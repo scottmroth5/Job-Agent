@@ -56,11 +56,11 @@ const onCapReached = async (uid: number, error: Error) => {
   if (uid === OWNER_ID || err.scope !== 'user') return;
   const key = `allowance-notice:${uid}`;
   // The check and the mark are one transaction, so two refusals at once send one notice.
-  if (!(await claimSetting(store.raw, key, err.status.month, (last) => last !== err.status.month))) return;
-  await notices.allowanceReached?.((await getUser(store.raw, uid)) as User, err.status); // a user on the owner's key has a row
+  if (!(await claimSetting(store.admin, key, err.status.month, (last) => last !== err.status.month))) return;
+  await notices.allowanceReached?.((await getUser(store.admin, uid)) as User, err.status); // a user on the owner's key has a row
 };
 // The owner's account row carries their first allowed address, for the Users screen.
-if (authMode === 'google') await syncOwnerEmail(store.raw, authConfig.allowed);
+if (authMode === 'google') await syncOwnerEmail(store.admin, authConfig.allowed);
 const realServices = (): AppServices => ({
   claude: createJobClaude(store.db, { onCapReached }),
   notices,

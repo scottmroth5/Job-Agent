@@ -5,7 +5,7 @@
 // user_id so run history and Claude spend are per user; it stays nullable because agent-core writes the row first and
 // tools/trace.ts stamps the user right after.
 
-import type { Database } from '../../tools/types.ts';
+import type { Database } from 'better-sqlite3'; // migrations run on the connection, synchronously, before the engine exists
 
 export const id = '014-accounts';
 export const foreignKeys = false;

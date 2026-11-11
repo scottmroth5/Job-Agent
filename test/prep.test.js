@@ -1,5 +1,4 @@
 // Meeting prep. Synthetic people, jobs, and knowledge only; Claude and Google Drive are faked.
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
@@ -128,7 +127,7 @@ function fakeServices({ docFails = false } = {}) {
 async function setup(opts) {
   const store = openJobStore(':memory:');
   const id = Number(
-    (await asEngine(store.db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, fetched_text, notes, location, discovered_on, created_at, updated_at)
+    (await store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, fetched_text, notes, location, discovered_on, created_at, updated_at)
       VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'example|vp engineering', 'LinkedIn', 'pipeline', 'applied', 'fulltime', ?, ?, 'Remote', '2026-10-01', 'x', 'x')`)
       .run(posting.fetched_text, posting.notes)).id,
   );
@@ -201,7 +200,7 @@ test('API: with no AI here, a prep is refused with 503 before any task starts', 
   assert.equal(res.statusCode, 503);
   assert.match(res.json().error, /AI is not available here/);
   assert.deepEqual((await noAi.inject('/api/tasks')).json(), [], 'no task was started');
-  assert.equal(await asEngine(store.db).prepare('SELECT COUNT(*) FROM meeting_preps').pluck().get(), 0);
+  assert.equal(await store.db.prepare('SELECT COUNT(*) FROM meeting_preps').pluck().get(), 0);
   await noAi.close();
   await app.close();
   store.close();

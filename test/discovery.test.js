@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as himalayas from '../agents/discovery/sources/himalayas.ts';
@@ -12,7 +11,7 @@ import { RateLimitedError, HttpError } from '../tools/http.ts';
 import { fakeConfig, fakeHttp as asHttp, fakeItem } from './fixtures/fakes.js';
 /** @import { JobItem, PageRenderer } from '../agents/discovery/types.ts' */
 /** @import { Source } from '../agents/discovery/discover.ts' */
-/** @import { Database } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 
 // All data below is made up; only the response shapes mirror the real sources.
 const LONG = 'Lead a platform engineering organization of forty engineers. '.repeat(10);
@@ -207,12 +206,12 @@ test('a Google redirect is stored as the site it lands on, and dropped when that
   const skipping = { ...config, search: { ...config.search, excludedSites: ['board.example.net'] } };
   const summary = await runDiscovery({ store, config: skipping, http, sources, now: new Date('2026-09-30T12:00:00Z'), options: { pauseMs: 0 } });
   assert.equal(summary.inserted, 1);
-  assert.deepEqual(/** @type {Array<{ url: string, title: string }>} */ (await asEngine(store.db).prepare('SELECT url, title FROM postings').all()).map((r) => [r.url, r.title]), [['https://jobs.example.com/cto', 'CTO']]);
+  assert.deepEqual(/** @type {Array<{ url: string, title: string }>} */ (await store.db.prepare('SELECT url, title FROM postings').all()).map((r) => [r.url, r.title]), [['https://jobs.example.com/cto', 'CTO']]);
 });
 
-/** @param {Database} db @param {{ url: string, company: string, title: string, source?: string, stage?: string }} p */
+/** @param {Db} db @param {{ url: string, company: string, title: string, source?: string, stage?: string }} p */
 async function seedPosting(db, { url, company, title, source = 'LinkedIn', stage = 'discovered' }) {
-  await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage, created_at, updated_at)
+  await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage, created_at, updated_at)
     VALUES (1, ?, ?, ?, ?, ?, ?, '2026-09-01', ?, 'x', 'x')`).run(url, url.replace('https://', ''), company, title, `${company.toLowerCase()}|${title.toLowerCase()}`, source, stage);
 }
 
@@ -249,7 +248,7 @@ test('runDiscovery filters, dedupes by priority, checks location, and stores new
   assert.equal(summary.bySource.LinkedIn.fresh, 3);
   assert.equal(summary.bySource.Himalayas.duplicates, 1);
 
-  const rows = /** @type {Array<{ source: string, title: string, location_check: string, stage: string, status: string, fetch_method: string }>} */ (await asEngine(store.db).prepare("SELECT source, title, location_check, stage, status, fetch_method FROM postings WHERE discovered_on = '2026-09-30' ORDER BY id").all());
+  const rows = /** @type {Array<{ source: string, title: string, location_check: string, stage: string, status: string, fetch_method: string }>} */ (await store.db.prepare("SELECT source, title, location_check, stage, status, fetch_method FROM postings WHERE discovered_on = '2026-09-30' ORDER BY id").all());
   assert.deepEqual(rows.map((r) => [r.source, r.title, r.location_check]), [
     ['Himalayas', 'VP Engineering', 'remote'],
     ['LinkedIn', 'Head of Engineering', 'home'],
@@ -257,9 +256,9 @@ test('runDiscovery filters, dedupes by priority, checks location, and stores new
   ]);
   assert.ok(rows.every((r) => r.stage === 'discovered' && r.status === 'new' && r.fetch_method === 'source'));
   // The existing posting got a sighting from Himalayas and was upgraded to it.
-  const old = /** @type {{ source: string }} */ (await asEngine(store.db).prepare("SELECT source FROM postings WHERE company = 'Old Co'").get());
+  const old = /** @type {{ source: string }} */ (await store.db.prepare("SELECT source FROM postings WHERE company = 'Old Co'").get());
   assert.equal(old.source, 'Himalayas');
-  assert.equal(await asEngine(store.db).prepare('SELECT COUNT(*) FROM posting_sightings').pluck().get(), 4);
+  assert.equal(await store.db.prepare('SELECT COUNT(*) FROM posting_sightings').pluck().get(), 4);
 
   // A second identical run inserts nothing.
   const again = await runDiscovery({ store, config, http: asHttp({ sleep: async () => {} }), sources, now: new Date('2026-09-30T13:00:00Z'), options: { pauseMs: 0 } });
@@ -290,7 +289,7 @@ test('runDiscovery retries recent postings whose text failed earlier, then stops
   const store = openJobStore(':memory:');
   /** @param {string} url @param {number} attempts @param {string} [discoveredOn] */
   const insertPending = async (url, attempts, discoveredOn = '2026-09-29') =>
-    await asEngine(store.db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage,
+    await store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, discovered_on, stage,
       fetch_status, fetch_attempts, location, location_check, created_at, updated_at)
       VALUES (1, ?, ?, '(unknown)', 'CTO', ?, 'Google Jobs', ?, 'discovered', 'rate_limited', ?, NULL, 'unknown', 'x', 'x')`)
       .run(url, url, `(unknown)|cto|${url}`, discoveredOn, attempts);
@@ -302,7 +301,7 @@ test('runDiscovery retries recent postings whose text failed earlier, then stops
 
   const summary = await runDiscovery({ store, config, http, sources: {}, now: new Date('2026-09-30T12:00:00Z'), options: { pauseMs: 0 } });
   assert.deepEqual(summary.retried, { attempted: 1, fixed: 1 });
-  const row = await asEngine(store.db).prepare("SELECT company, location, location_check, fetch_status, fetch_attempts FROM postings WHERE url = 'https://jobs.example.com/a'").get();
+  const row = await store.db.prepare("SELECT company, location, location_check, fetch_status, fetch_attempts FROM postings WHERE url = 'https://jobs.example.com/a'").get();
   assert.deepEqual(row, { company: 'Found Co', location: 'Beaverton, OR', location_check: 'home', fetch_status: 'ok', fetch_attempts: 2 });
   assert.deepEqual(http.calls, ['https://jobs.example.com/a']);
   store.close();
@@ -318,6 +317,6 @@ test('runDiscovery dry run writes nothing and a failing source does not stop the
   assert.equal(summary.wouldInsert, 1);
   assert.equal(summary.inserted, 0);
   assert.deepEqual(summary.bySource.Himalayas.errors, ['boom']);
-  assert.equal(await asEngine(store.db).prepare('SELECT COUNT(*) FROM postings').pluck().get(), 0);
+  assert.equal(await store.db.prepare('SELECT COUNT(*) FROM postings').pluck().get(), 0);
   store.close();
 });

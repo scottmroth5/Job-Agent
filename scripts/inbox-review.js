@@ -13,7 +13,7 @@ import { listOpenApplications } from '../agents/inbox/match.ts';
 import { listNeedsReview, resolveReview } from '../agents/inbox/review.ts';
 /**
  * @import { Interface } from 'node:readline/promises'
- * @import { Database } from '../tools/types.ts'
+ * @import { Db } from '../tools/types.ts'
  */
 
 /** @type {Record<string, string | undefined>} */
@@ -21,7 +21,7 @@ const TYPE_LABEL = { confirmation: 'Confirmation', rejection: 'Rejection', recru
 
 /**
  * @param {Interface} rl
- * @param {Database} db
+ * @param {Db} db
  */
 async function pickApplication(rl, db) {
   const open = await listOpenApplications(db);

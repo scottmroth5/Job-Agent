@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
@@ -16,7 +15,7 @@ import {
 import { fakeConfig } from './fixtures/fakes.js';
 /** @import { Claude } from '@scottmroth5/agent-core' */
 /** @import { ScoreInput } from '../agents/discovery/score.ts' */
-/** @import { Database } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 /** @typedef {{ model: string, messages: Array<{ content: string }> }} Params */
 
 /** A posting with only the fields a test sets. */
@@ -68,7 +67,7 @@ function fakeClaude(replies) {
   return { requests, claude: createClaude({ client }) };
 }
 
-/** @param {Database} db @param {Record<string, string | number | null>} [o] */
+/** @param {Db} db @param {Record<string, string | number | null>} [o] */
 async function addPosting(db, o = {}) {
   const row = {
     url: `https://jobs.example.com/${Math.random()}`,
@@ -83,7 +82,7 @@ async function addPosting(db, o = {}) {
     ...o,
   };
   return Number(
-    (await asEngine(db)
+    (await db
       .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, location, location_check, fetch_status,
         fetched_text, stage, status, discovered_on, created_at, updated_at)
         VALUES (1, @url, @url, @company, @title, @url, @location, @location_check, @fetch_status, @fetched_text, @stage, @status,
@@ -150,13 +149,13 @@ test('scorePostings stores scores, applies the rule, promotes 8+, and skips scor
   assert.equal(requests.length, 2, 'the conflict posting made no Claude call');
   assert.deepEqual(summary.promoted, [high]);
 
-  const rows = /** @type {Array<Record<string, string | number | null>>} */ (await asEngine(store.db).prepare('SELECT posting_id, score, source, model, prompt_version FROM scores ORDER BY posting_id').all());
+  const rows = /** @type {Array<Record<string, string | number | null>>} */ (await store.db.prepare('SELECT posting_id, score, source, model, prompt_version FROM scores ORDER BY posting_id').all());
   assert.deepEqual(rows.map((r) => [r.posting_id, r.score, r.source]), [[high, 9, 'v2'], [low, 5, 'v2'], [conflict, 2, 'v2-rule']]);
   assert.equal(rows[0].model, 'claude-haiku-4-5');
   assert.equal(rows[0].prompt_version, prompt.version);
-  assert.equal(await asEngine(store.db).prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(high), 'pipeline');
-  assert.equal(await asEngine(store.db).prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(low), 'discovered');
-  assert.equal(JSON.parse(/** @type {string} */ (await asEngine(store.db).prepare('SELECT analysis_json FROM scores WHERE posting_id = ?').pluck().get(high))).topTalkingPoint, 'Platform growth');
+  assert.equal(await store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(high), 'pipeline');
+  assert.equal(await store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(low), 'discovered');
+  assert.equal(JSON.parse(/** @type {string} */ (await store.db.prepare('SELECT analysis_json FROM scores WHERE posting_id = ?').pluck().get(high))).topTalkingPoint, 'Platform growth');
 
   assert.equal((await selectPostings(store.db)).length, 0, 'a second run scores nothing');
   assert.equal((await selectPostings(store.db, { allUnscored: true })).length, 1, '--all-unscored includes v1 history');
@@ -175,7 +174,7 @@ test('scorePostings leaves failures unscored and stops after repeated failures',
   assert.equal(summary.failures.length, 2);
   assert.equal(summary.aborted, true);
   assert.match(summary.failures[0].error, /AuthenticationError/);
-  assert.equal(await asEngine(store.db).prepare('SELECT COUNT(*) FROM scores').pluck().get(), 0);
+  assert.equal(await store.db.prepare('SELECT COUNT(*) FROM scores').pluck().get(), 0);
   store.close();
 });
 
@@ -203,7 +202,7 @@ test('fractional postings use the fractional prompt with stacking target and pos
 test('scoring a fractional posting stores pay and hours only where the source left them empty', async () => {
   const store = openJobStore(':memory:');
   const id = await addPosting(store.db);
-  await asEngine(store.db).prepare("UPDATE postings SET track = 'fractional', hours_min = 10, hours_max = 20 WHERE id = ?").run(id);
+  await store.db.prepare("UPDATE postings SET track = 'fractional', hours_min = 10, hours_max = 20 WHERE id = ?").run(id);
   const fractionalResult = result({
     score: 8,
     fit: 'High',
@@ -215,9 +214,9 @@ test('scoring a fractional posting stores pay and hours only where the source le
   const { claude, requests } = fakeClaude([fractionalResult]);
   await scorePostings({ store, config: fakeConfig({ ...config, fractional: { targetAnnual: [200000, 250000] } }), claude, knowledge: KNOWLEDGE, model: 'claude-haiku-4-5' });
   assert.match(requests[0].messages[0].content, /fractional engagement/);
-  const row = await asEngine(store.db).prepare('SELECT rate_min, rate_max, rate_unit, hours_min, hours_max, stage FROM postings WHERE id = ?').get(id);
+  const row = await store.db.prepare('SELECT rate_min, rate_max, rate_unit, hours_min, hours_max, stage FROM postings WHERE id = ?').get(id);
   assert.deepEqual(row, { rate_min: 175, rate_max: 225, rate_unit: 'hour', hours_min: 10, hours_max: 20, stage: 'pipeline' });
-  assert.equal(JSON.parse(/** @type {string} */ (await asEngine(store.db).prepare('SELECT analysis_json FROM scores').pluck().get())).fit, 'High');
+  assert.equal(JSON.parse(/** @type {string} */ (await store.db.prepare('SELECT analysis_json FROM scores').pluck().get())).fit, 'High');
   store.close();
 });
 

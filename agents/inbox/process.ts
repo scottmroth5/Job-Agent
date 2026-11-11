@@ -6,14 +6,13 @@ import { trimBody } from './atsParse.ts';
 import { classifyEmail, looksLikeInjection } from './classify.ts';
 import { decideLink, applyActions, createOpportunity } from './actions.ts';
 import { insertEmail, updateEmail, emailSeen, logDecision, isContact, isCompanyDomain, learnDomain } from './store.ts';
-import { asEngine } from '../../db/engine/index.ts';
 import { encrypt } from './crypto.ts';
 import { makeEvent, createEmitter } from './events.ts';
 import { labelName } from './gmail.ts';
 import { newMessageIds, backfillMessageIds, saveCursor } from './sync.ts';
 import { getPrompt } from '../prompts.ts';
 import type { Claude, Run } from '@scottmroth5/agent-core';
-import type { Database, JobStore } from '../../tools/types.ts';
+import type { Db, JobStore } from '../../tools/types.ts';
 import type { Classification } from './classify.ts';
 import type { InboxConfig } from './config.ts';
 import type { Gmail } from './gmail.ts';
@@ -59,7 +58,7 @@ const IGNORED_LABELS = ['SPAM', 'TRASH', 'CHAT', 'DRAFT'];
  * because its type still comes from the model). Shared by the inbox run and the inbox eval.
  */
 export async function decideEmail(
-  db: Database,
+  db: Db,
   email: Parameters<typeof matchEmail>[1],
   c: Pick<Classification, 'applicationId' | 'confidence' | 'type'>,
   { cfg, open }: { cfg: Pick<InboxConfig, 'atsDomains' | 'autoLinkAt'>; open: OpenApplication[] },
@@ -74,7 +73,7 @@ export async function decideEmail(
  * One run: gmail is createGmail(), cfg loadInboxConfig(), key loadKey() (not needed for a dry run).
  */
 export async function runInbox({ store, gmail, claude, cfg, key, run, log = () => {}, now = () => new Date(), options = {} }: {
-  store: Pick<JobStore, 'db' | 'tx'>;
+  store: Pick<JobStore, 'db'>;
   gmail: Gmail;
   claude: Claude;
   cfg: InboxConfig;
@@ -143,7 +142,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
     const at = now();
 
     let company: string | null = null;
-    await asEngine(db).tx(async () => {
+    await db.tx(async () => {
       const emailId = await insertEmail(
         db,
         {
@@ -168,7 +167,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
       if (link.postingId) {
         const r = await applyActions(db, { email: row, postingId: link.postingId, c, decidedBy, promptVersion: c.promptVersion, now: at });
         await learnDomain(db, link.postingId, email.senderDomain, cfg);
-        company = await asEngine(db).prepare('SELECT company FROM postings WHERE id = ? AND user_id = @uid').pluck().get(link.postingId) as string;
+        company = await db.prepare('SELECT company FROM postings WHERE id = ? AND user_id = @uid').pluck().get(link.postingId) as string;
         summary.matched += 1;
         if (r.statusChange) summary.statusChanges.push({ postingId: link.postingId, ...r.statusChange });
         summary.notices.push(...r.notices);

@@ -28,7 +28,7 @@ function parseArgs(argv) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const store = openJobStore();
-  const config = await configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
+  const config = await configFor(store.admin, OWNER_ID, loadConfig()); // with the skipped sites from Settings
   try {
     if (args.dryRun) {
       const postings = await selectForHunt(store.db, { ids: args.ids });

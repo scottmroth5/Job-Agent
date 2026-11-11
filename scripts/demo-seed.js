@@ -6,7 +6,6 @@
 //
 // It refuses to run without DATA_DIR, and refuses to touch a database it did not make, so it can never overwrite
 // a real job search. The demo container runs it on every start, so the demo resets to fresh sample data.
-import { asEngine } from '../db/engine/index.ts';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
@@ -14,7 +13,7 @@ import { pathToFileURL } from 'node:url';
 import { dataPath, DATA_DIR } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.ts';
 import { localDay } from '../tools/dates.ts';
-import Database from 'better-sqlite3';
+import { openReadOnly } from '../db/engine/files.ts';
 import { setSetting } from '../db/settings.ts';
 import { addNote } from '../agents/notes.ts';
 import { companyTitleKey } from '../tools/urls.ts';
@@ -24,7 +23,7 @@ import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_
 import { saveCheck } from '../agents/letter-checks.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.ts';
-/** @import { Database as Db } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 
 /** @typedef {typeof JOBS[number]} Job one sample job (demo/sample-data.ts) */
 
@@ -62,13 +61,13 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
   const { db } = store;
   await setSetting(db, MARKER, 'true');
 
-  const insertPosting = asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, location, salary, posted_on,
+  const insertPosting = db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, location, salary, posted_on,
       discovered_on, stage, status, applied_on, fetched_text, fetched_at, fetch_status, fetch_method, workplace, location_check, track,
       rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, created_at, updated_at)
     VALUES (@uid, @url, @url, @company, @title, @key, @source, @location, @salary, @postedOn, @discoveredOn, @stage, @status, @appliedOn,
       @text, @fetchedAt, @fetchStatus, @fetchMethod, @workplace, @locationCheck, @track, @rateText, @rateMin, @rateMax, @rateUnit,
       @hoursMin, @hoursMax, @createdAt, @updatedAt)`);
-  const insertScore = asEngine(db).prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
+  const insertScore = db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?)`);
   // Each sample score records the version of the scoring prompt in effect (the sample edit where there is one), as a
   // real score does, so the job panel's score details show it.
@@ -76,18 +75,18 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
     const name = job.track === 'fractional' ? 'score-fractional' : 'score';
     return versionOf(name, prompts.find((p) => p.name === name)?.template ?? defaultPrompt(name).template);
   };
-  const insertArtifact = asEngine(db).prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, doc_name, flags_json, source, model, prompt_version, run_id, created_at)
+  const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, doc_name, flags_json, source, model, prompt_version, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, ?, 'v2', ?, 'default', ?, ?)`);
-  const insertHistory = asEngine(db).prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, ?, ?)');
-  const insertSighting = asEngine(db).prepare('INSERT INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?)');
-  const insertEmail = asEngine(db).prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id,
+  const insertHistory = db.prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, ?, ?)');
+  const insertSighting = db.prepare('INSERT INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?)');
+  const insertEmail = db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id,
       match_rule, confidence, review_status, review_reason, summary, prompt_version, model, created_at, updated_at)
     VALUES (@uid, @id, @gmailId, @threadId, @sender, @domain, @sentAt, @subject, @type, @postingId, @rule, @confidence, @review, @reason,
       @summary, 'default', 'claude-haiku-4-5', @sentAt, @sentAt)`);
-  const insertReminder = asEngine(db).prepare('INSERT INTO reminders (user_id, id, posting_id, email_id, kind, due_at, note, status, created_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?)');
-  const insertRun = asEngine(db).prepare(`INSERT INTO runs (name, meta, status, started_at, finished_at, duration_ms, calls, input_tokens, output_tokens,
+  const insertReminder = db.prepare('INSERT INTO reminders (user_id, id, posting_id, email_id, kind, due_at, note, status, created_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?)');
+  const insertRun = db.prepare(`INSERT INTO runs (name, meta, status, started_at, finished_at, duration_ms, calls, input_tokens, output_tokens,
       cache_read_tokens, cost_usd, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-  const insertCall = asEngine(db).prepare(`INSERT INTO run_calls (run_id, label, model, stop_reason, input_tokens, output_tokens, cache_read_tokens, cost_usd,
+  const insertCall = db.prepare(`INSERT INTO run_calls (run_id, label, model, stop_reason, input_tokens, output_tokens, cache_read_tokens, cost_usd,
       duration_ms, created_at) VALUES (?, ?, ?, 'end_turn', ?, ?, ?, ?, ?, ?)`);
 
   // Pipeline history: Monday and Thursday mornings over the last nine weeks, plus the inbox checks after each.
@@ -208,7 +207,7 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
     // An open reminder (an interview or a take home exercise coming up), tied to the job's latest email.
     if (job.reminder) {
       const [kind, dueIn, note] = /** @type {[string, number, string]} */ (job.reminder);
-      const lastEmail = await asEngine(db).prepare('SELECT id FROM emails WHERE posting_id = ? AND user_id = @uid ORDER BY sent_at DESC LIMIT 1').pluck().get(id) ?? null;
+      const lastEmail = await db.prepare('SELECT id FROM emails WHERE posting_id = ? AND user_id = @uid ORDER BY sent_at DESC LIMIT 1').pluck().get(id) ?? null;
       await insertReminder.run(randomUUID(), id, lastEmail, kind, at(dueIn, 13, 0).toISOString(), note, 'open', iso(1, 9, 0));
     }
     if (job.prep) await insertPrep(db, id, job, at(2, 19, 0).toISOString(), run);
@@ -234,11 +233,11 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
   emails += 1;
 
   // Prompt edits shown on the Admin screen, each a saved version on top of the repo default.
-  const savePrompt = asEngine(db).prepare('INSERT INTO prompt_versions (user_id, name, template, note, active, created_at) VALUES (@uid, ?, ?, ?, 1, ?)');
+  const savePrompt = db.prepare('INSERT INTO prompt_versions (user_id, name, template, note, active, created_at) VALUES (@uid, ?, ?, ?, 1, ?)');
   for (const [i, p] of prompts.entries()) await savePrompt.run(p.name, p.template, p.note ?? 'Tuned for this search', iso(20 - i, 16, 0));
 
   // Sample resumes (Settings > Resumes), the first the default, and which one each sample letter and tweak came from.
-  const insertResume = asEngine(db).prepare(`INSERT INTO resumes (id, user_id, label, titles, is_default, filename, kind, size_bytes, file, text, created_at, updated_at)
+  const insertResume = db.prepare(`INSERT INTO resumes (id, user_id, label, titles, is_default, filename, kind, size_bytes, file, text, created_at, updated_at)
     VALUES (?, @uid, ?, ?, ?, ?, 'text', ?, ?, ?, ?, ?)`);
   for (const [i, r] of DEMO_RESUMES.entries()) {
     const bytes = Buffer.from(r.text);
@@ -246,10 +245,10 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
   }
   // Job sites to skip (Settings), with notes.
   const skipped = DEMO_SKIPPED_SITES.map(({ site, note, daysAgo }) => ({ site, note, addedAt: iso(daysAgo, 9, 0) }));
-  await asEngine(db).prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (@uid, 'search.excludedSites', ?, ?)").run(JSON.stringify(skipped), iso(12, 9, 0));
+  await db.prepare("INSERT INTO user_settings (user_id, key, value, updated_at) VALUES (@uid, 'search.excludedSites', ?, ?)").run(JSON.stringify(skipped), iso(12, 9, 0));
 
-  const setResume = asEngine(db).prepare('UPDATE artifacts SET resume_id = ? WHERE id = ? AND user_id = @uid');
-  for (const a of /** @type {Array<{ id: number, title: string }>} */ (await asEngine(db).prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all())) {
+  const setResume = db.prepare('UPDATE artifacts SET resume_id = ? WHERE id = ? AND user_id = @uid');
+  for (const a of /** @type {Array<{ id: number, title: string }>} */ (await db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all())) {
     await setResume.run((await pickResume(db, a.title))?.id ?? null, a.id);
   }
 
@@ -263,12 +262,12 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
  */
 export async function isDemoDatabase(path) {
   if (!existsSync(path)) return true;
-  const db = new Database(path, { readonly: true, fileMustExist: true });
+  const { db, close } = openReadOnly(path);
   try {
-    const hasSettings = await asEngine(db).prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_settings'").get();
-    return Boolean(hasSettings && await asEngine(db).prepare('SELECT value FROM app_settings WHERE key = ?').pluck().get(MARKER) === 'true');
+    const hasSettings = await db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'app_settings'").get();
+    return Boolean(hasSettings && (await db.prepare('SELECT value FROM app_settings WHERE key = ?').pluck().get(MARKER)) === 'true');
   } finally {
-    db.close();
+    close();
   }
 }
 
@@ -418,7 +417,7 @@ A 60 minute video session with Avery Brooks (CEO) to walk through your 90 day pl
 ## Not known yet
 - The size of the current engineering team and its split between product and site support; ask before committing to dates.
 - Whether the plan should assume the current vendor contracts stay in place.`;
-  await asEngine(db).prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
+  await db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
       doc_name, model, prompt_version, cost_usd, web_searches, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, 'Executive, owner, or investor', 'video', ?, 1, ?, ?, 'claude-opus-5-5', 'default', 1.18, 7, ?, ?)`).run(
     randomUUID(), postingId, JSON.stringify(attendees), null, 'Walk through the take home case: a 90 day plan for the site platform.', content,
@@ -462,7 +461,7 @@ A 45 minute video interview with Morgan Lee (CTO) and Riley Chen (VP Product). E
 ## Watch outs
 - They may probe depth in their exact market; connect it to the regulated platform work you have done.
 - Ask early about the reporting line and the team's current managers.`;
-  await asEngine(db).prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
+  await db.prepare(`INSERT INTO meeting_preps (user_id, id, posting_id, attendees_json, meeting_at, meeting_kind, meeting_format, context, research, content,
       doc_name, model, prompt_version, cost_usd, web_searches, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, 'interview', 'video', ?, 1, ?, ?, 'claude-opus-5-5', 'default', 1.42, 9, ?, ?)`).run(
     randomUUID(), postingId, JSON.stringify(attendees), null, 'Second round; they asked for a 90 day plan conversation.', content,

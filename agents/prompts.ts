@@ -4,8 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { repoPath } from '../tools/paths.ts';
-import { asEngine } from '../db/engine/index.ts';
-import type { AnyDb } from '../db/engine/index.ts';
+import type { Db } from '../db/engine/types.ts';
 
 /** One editable prompt: where its default lives and which placeholders it may and must use. */
 export interface PromptDefinition {
@@ -123,11 +122,11 @@ export function defaultPrompt(name: string) {
  * version is a short hash of template + schema, stored with every score and artifact.
  * db may be null (tests, scripts without a database), which always gives the default.
  */
-export async function getPrompt(db: AnyDb | null | undefined, name: string): Promise<Prompt> {
+export async function getPrompt(db: Db | null | undefined, name: string): Promise<Prompt> {
   const def = definition(name);
   const base = defaultPrompt(name);
   const row = db
-    ? ((await asEngine(db).prepare('SELECT id, template, note, created_at FROM prompt_versions WHERE name = ? AND user_id = @uid AND active = 1').get(name)) as
+    ? ((await db.prepare('SELECT id, template, note, created_at FROM prompt_versions WHERE name = ? AND user_id = @uid AND active = 1').get(name)) as
         | { id: number; template: string; note: string | null; created_at: string }
         | undefined)
     : null;
@@ -172,10 +171,10 @@ export function validateTemplate(name: string, template: unknown) {
  * Saves a new version and makes it active. Throws (statusCode 400) with the problems when invalid. The comparison with
  * the active version and the save are one transaction.
  */
-export async function savePrompt(db: AnyDb, name: string, { template, note }: { template: string; note?: string | null }, now = new Date()) {
+export async function savePrompt(db: Db, name: string, { template, note }: { template: string; note?: string | null }, now = new Date()) {
   const problems = validateTemplate(name, template);
   if (problems.length) throw Object.assign(new Error(problems.join(' ')), { statusCode: 400, problems });
-  const q = asEngine(db);
+  const q = db;
   return q.tx(async () => {
     const current = await getPrompt(q, name);
     if (current.template === template) return current;
@@ -186,9 +185,9 @@ export async function savePrompt(db: AnyDb, name: string, { template, note }: { 
 }
 
 /** Makes an earlier version active again, or returns to the repo default when versionId is null. */
-export async function restorePrompt(db: AnyDb, name: string, versionId: number | null) {
+export async function restorePrompt(db: Db, name: string, versionId: number | null) {
   definition(name);
-  const q = asEngine(db);
+  const q = db;
   return q.tx(async () => {
     if (versionId != null) {
       const row = await q.prepare('SELECT id FROM prompt_versions WHERE id = ? AND name = ? AND user_id = @uid').get(versionId, name);
@@ -208,7 +207,7 @@ export const versionOf = (name: string, template: string) => hash(template, defa
  * edits (with its note and date), or one no longer known (the default text has changed since); and whether it is the
  * prompt in use now. null when nothing was recorded ('default' rows from before versions were hashed).
  */
-export async function describeVersion(db: AnyDb, name: string, version: string | null | undefined) {
+export async function describeVersion(db: Db, name: string, version: string | null | undefined) {
   if (!version || version === 'default') return null;
   const saved = (await listVersions(db, name)).find((v) => v.version === version);
   const kind = version === versionOf(name, defaultPrompt(name).template) ? 'default' : saved ? 'edit' : 'earlier';
@@ -216,9 +215,9 @@ export async function describeVersion(db: AnyDb, name: string, version: string |
 }
 
 /** Saved versions, newest first, with a hash matching what scores and artifacts record. */
-export async function listVersions(db: AnyDb, name: string) {
+export async function listVersions(db: Db, name: string) {
   const base = defaultPrompt(name);
-  return ((await asEngine(db)
+  return ((await db
     .prepare('SELECT id, template, note, active, created_at FROM prompt_versions WHERE name = ? AND user_id = @uid ORDER BY id DESC')
     .all(name)) as Array<{ id: number; template: string; note: string | null; active: number; created_at: string }>)
     .map((r) => ({ id: r.id, note: r.note, active: Boolean(r.active), createdAt: r.created_at, version: hash(r.template, base.schemaText), template: r.template }));

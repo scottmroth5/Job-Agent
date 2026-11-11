@@ -1,5 +1,4 @@
 // Home's Today list (server/today.ts): reminders due, offers, and follow-ups, in order, for the current user only.
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
@@ -22,14 +21,14 @@ function setup() {
   const { db } = store;
   const job = async (/** @type {Record<string, string | null>} */ o = {}) =>
     Number(
-      (await asEngine(db)
+      (await db
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, created_at, updated_at)
           VALUES (@uid, @k, @company, @title, @k, 'LinkedIn', 'fulltime', '2026-09-01', @stage, @status, @applied, 'x', 'x')`)
         .run({ uid: 1, k: `k${Math.random()}`, company: 'Example Co', title: 'CTO', stage: 'pipeline', status: 'applied', applied: null, ...o })).id,
     );
   /** @param {number} postingId @param {string} kind @param {string} due @param {Record<string, string | null>} [o] */
   const reminder = async (postingId, kind, due, o = {}) =>
-    await asEngine(db).prepare(`INSERT INTO reminders (user_id, id, posting_id, kind, due_at, note, status, created_at) VALUES (@uid, @id, @postingId, @kind, @due, @note, @status, 'x')`)
+    await db.prepare(`INSERT INTO reminders (user_id, id, posting_id, kind, due_at, note, status, created_at) VALUES (@uid, @id, @postingId, @kind, @due, @note, @status, 'x')`)
       .run({ uid: 1, id: randomUUID(), postingId, kind, due, note: null, status: 'open', ...o });
   return { store, db, job, reminder };
 }
@@ -80,7 +79,7 @@ test('the summary carries the list, and another user sees only their own', async
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });
   const t = (await app.inject('/api/summary')).json().today;
   assert.ok(t.some((/** @type {Item} */ x) => x.company === 'Mine Co'));
-  const other = await runAsUser(await addUser(store.raw, { email: 'b@example.com' }), async () => (await today(store.db, { now })).items);
+  const other = await runAsUser(await addUser(store.admin, { email: 'b@example.com' }), async () => (await today(store.db, { now })).items);
   assert.deepEqual(other, []);
   await app.close();
   store.close();

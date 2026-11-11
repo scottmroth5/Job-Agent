@@ -5,7 +5,6 @@
 //   npm run pipeline -- --no-email   skip the email (prints its subject instead)
 //   node scripts/pipeline.js --user=5  as user 5: their search settings, background, and Claude key. Google results
 //                                    (the owner's paid search), Google Docs, and the report email are the owner's only.
-import { asEngine } from '../db/engine/index.ts';
 import { createJobTracer } from '../tools/trace.ts';
 import { createJobClaude } from '../tools/claude.ts';
 import { loadConfig } from '../tools/config.ts';
@@ -67,9 +66,9 @@ async function main() {
   const started = new Date().toISOString();
   if (!Number.isInteger(uid) || uid < 1) throw new Error(`--user must be a user id, not "${userArg}"`);
   const store = openJobStore(undefined, { fallbackUid: uid });
-  const config = await configFor(store.raw, uid, owner ? loadConfig() : /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null))); // either way with the skipped sites from Settings; the file config is read for the owner only
+  const config = await configFor(store.admin, uid, owner ? loadConfig() : /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null))); // either way with the skipped sites from Settings; the file config is read for the owner only
   if (!owner) {
-    const user = /** @type {Pick<UsersRow, 'status'> | undefined} */ (await asEngine(store.raw).prepare('SELECT status FROM users WHERE id = ?').get(uid));
+    const user = /** @type {Pick<UsersRow, 'status'> | undefined} */ (await store.admin.prepare('SELECT status FROM users WHERE id = ?').get(uid));
     if (user?.status !== 'active') throw new Error(`User ${uid} is not an active account.`);
     if (!config.ready) throw new Error('Set up your search (terms, title keywords, and locations) under Settings first.');
   }
@@ -96,7 +95,7 @@ async function main() {
     /** @type {string | null} */
     let knowledge = null;
     try {
-      knowledge = owner ? await ownerBackground(store) : await profileForAI(store.raw, uid);
+      knowledge = owner ? await ownerBackground(store) : await profileForAI(store.admin, uid);
     } catch (err) {
       pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${/** @type {Error} */ (err).message}`);
     }
@@ -144,7 +143,7 @@ async function timeZoneOf(id) {
   if (id === OWNER_ID || !Number.isInteger(id)) return null;
   const store = openJobStore(undefined, { fallbackUid: id, snapshot: false });
   try {
-    return /** @type {string | null | undefined} */ (await asEngine(store.raw).prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(id)) ?? null;
+    return /** @type {string | null | undefined} */ (await store.admin.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(id)) ?? null;
   } finally {
     store.close();
   }

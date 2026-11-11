@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
@@ -7,7 +6,7 @@ import { getUserSetting as getSetting } from '../db/settings.ts';
 import { ensureLetterFolder } from '../tools/google/drive.ts';
 import { generateForPostings, selectForHunt, buildLetterRequest, loadHuntPrompts, finishLetter, estimateHuntCost } from '../agents/hunt/generate.ts';
 import { fakeConfig } from './fixtures/fakes.js';
-/** @import { Database } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 /** @typedef {{ model: string, messages: Array<{ content: string }> }} Params */
 
 // Synthetic config, knowledge and postings only.
@@ -53,15 +52,15 @@ function fakeDrive({ failDocs = false } = {}) {
   };
 }
 
-/** @param {Database} db @param {{ stage?: string, status?: string, score?: number | null, title?: string }} [o] */
+/** @param {Db} db @param {{ stage?: string, status?: string, score?: number | null, title?: string }} [o] */
 async function addPosting(db, { stage = 'pipeline', status = 'new', score = 8, title = 'VP Engineering' } = {}) {
   const url = `https://jobs.example.com/${Math.random()}`;
   const id = Number(
-    (await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+    (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
       VALUES (1, ?, ?, 'Example Co', ?, ?, ?, ?, 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url, stage, status)).id,
   );
   if (score != null) {
-    await asEngine(db).prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, ?, ?, 'v2', 'x')").run(id, score, JSON.stringify({ ...analysis, score }));
+    await db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, ?, ?, 'v2', 'x')").run(id, score, JSON.stringify({ ...analysis, score }));
   }
   return id;
 }
@@ -111,7 +110,7 @@ test('generateForPostings writes tweaks and a letter Doc for promoted jobs only,
   assert.match(drive.calls.docs[0].html, /September 30, 2026/);
   assert.equal(drive.calls.docs[0].folderId, 'folder-1');
 
-  const arts = /** @type {Array<Record<string, string | null>>} */ (await asEngine(store.db).prepare('SELECT kind, content, doc_id, doc_url, flags_json, model FROM artifacts ORDER BY id').all());
+  const arts = /** @type {Array<Record<string, string | null>>} */ (await store.db.prepare('SELECT kind, content, doc_id, doc_url, flags_json, model FROM artifacts ORDER BY id').all());
   assert.equal(arts[0].kind, 'resume_tweaks');
   assert.equal(arts[0].content, 'HEADLINE TWEAK: Platform leader, scaled teams');
   assert.deepEqual([arts[1].kind, arts[1].doc_id, arts[1].flags_json, arts[1].model], ['cover_letter', 'doc-1', '["confident"]', 'claude-sonnet-5-5']);
@@ -132,7 +131,7 @@ test('a failed Doc save keeps the letter and the next run retries only the Doc',
   const s2 = await generateForPostings({ store, config, claude: second.claude, knowledge: KNOWLEDGE, drive: fakeDrive() });
   assert.deepEqual([s2.tweaks, s2.letters, s2.docs], [0, 0, 1]);
   assert.equal(second.requests.length, 0, 'no new Claude calls');
-  assert.equal(await asEngine(store.db).prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'").pluck().get(), 1);
+  assert.equal(await store.db.prepare("SELECT COUNT(*) FROM artifacts WHERE kind = 'cover_letter'").pluck().get(), 1);
   store.close();
 });
 

@@ -10,7 +10,6 @@
 //   AUTH_MODE=demo    A public, read-only showcase over a sample database (npm run demo:seed): no login, every
 //                     request that would change data is refused, and the server starts without Claude, Gmail,
 //                     or Drive (server/main.ts), so nothing a visitor does can spend money or reach an account.
-import { asEngine } from '../db/engine/index.ts';
 import { createHash, randomBytes } from 'node:crypto';
 import { OAuth2Client } from 'google-auth-library';
 import { escapeHtml } from '../tools/html.ts';
@@ -21,7 +20,7 @@ import { SESSION_COOKIE, LOGIN_COOKIE, sessionKey, sign, verify, parseCookies, c
 import { DEMO_CONFIG, DEMO_EMAIL } from '../demo/sample-data.ts';
 import { demoAnalytics } from './demo-analytics.ts';
 import type { TokenPayload } from 'google-auth-library';
-import type { Database } from '../tools/types.ts';
+import type { Db } from '../tools/types.ts';
 import type { App, FastifyReply, FastifyRequest, Notices } from './types.ts';
 
 export type AuthSettings = ReturnType<typeof authSettings>;
@@ -155,11 +154,11 @@ export function registerAuth(
     now = () => Date.now(),
     db = null,
     notices = {},
-  }: { mode?: string; settings?: Partial<AuthSettings>; exchange?: Exchange; now?: () => number; db?: Database | null; notices?: Notices } = {},
+  }: { mode?: string; settings?: Partial<AuthSettings>; exchange?: Exchange; now?: () => number; db?: Db | null; notices?: Notices } = {},
 ) {
   app.get('/api/me', { schema: { summary: 'The signed-in user and their account (google mode), or the open mode', response: { 200: { type: 'object', additionalProperties: true } } } }, async (req) => {
     // An account comes only with google mode, which always has the database.
-    const user = req.account ? (await getUser(db as Database, req.account.uid)) : null;
+    const user = req.account ? (await getUser(db as Db, req.account.uid)) : null;
     return {
       authMode: mode,
       email: req.user ?? (mode === 'demo' ? DEMO_EMAIL : null),
@@ -180,7 +179,7 @@ export function registerAuth(
   }
   if (mode !== 'google') throw new Error(`AUTH_MODE "${mode}" is not supported.`);
   // Google mode always has these (assertSafeBinding and server/app.ts).
-  const users = db as Database;
+  const users = db as Db;
   const publicUrl = settings.publicUrl as string;
 
   const key = sessionKey(settings.secret);
@@ -293,7 +292,7 @@ export function registerAuth(
     const { session, go } = await statePage(req, 'none');
     if (go) return reply.redirect(go);
     const email = (session as Session).email; // no go, so there is a session
-    const closed = (await asEngine(users).prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING;
+    const closed = (await users.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get() as number) >= MAX_PENDING;
     if (closed) return html(reply, 'Requests are closed', '<p>Job Hunt is not taking new requests for access right now. Please try again later.</p>' + signOut);
     return html(
       reply,
@@ -321,8 +320,8 @@ export function registerAuth(
     let result: { id: number; created: boolean } | null;
     try {
       // The open-requests count and the request are one transaction, so requests at once can not pass MAX_PENDING.
-      result = await asEngine(users).tx(async () => {
-        if (((await asEngine(users).prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get()) as number) >= MAX_PENDING) return null;
+      result = await users.tx(async () => {
+        if (((await users.prepare("SELECT COUNT(*) FROM users WHERE status = 'pending'").pluck().get()) as number) >= MAX_PENDING) return null;
         return requestAccess(users, { email, name: body.name, note: body.note });
       });
     } catch (err) {

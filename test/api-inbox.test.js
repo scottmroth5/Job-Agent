@@ -1,4 +1,3 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
@@ -29,7 +28,7 @@ async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messa
   const store = openJobStore(':memory:');
   const { db } = store;
   const posting = Number(
-    (await asEngine(db)
+    (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
         VALUES (1, 'k1', 'Example Co', 'VP of Engineering', ?, '2026-09-01', 'pipeline', 'applied', 'x', 'x')`)
       .run(storedKey({ company: 'Example Co', title: 'VP of Engineering' }))).id,
@@ -45,7 +44,7 @@ async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messa
     runPipeline: async (/** @type {{ onLine: (line: string) => void }} */ { onLine }) => {
       for (const l of pipelineLines) onLine(l);
       await gate;
-      await asEngine(db).prepare("INSERT INTO runs (name, status, started_at, finished_at) VALUES ('pipeline', ?, '2026-10-05T13:00:00Z', '2026-10-05T13:12:00Z')").run(pipelineCode ? 'failed' : 'ok');
+      await db.prepare("INSERT INTO runs (name, status, started_at, finished_at) VALUES ('pipeline', ?, '2026-10-05T13:00:00Z', '2026-10-05T13:12:00Z')").run(pipelineCode ? 'failed' : 'ok');
       return { code: pipelineCode, lastError: pipelineCode ? 'EMAIL_ADDRESS is not set in .env; the report was not sent.' : null };
     },
     inbox: { ready: () => ready, gmail: () => createGmail({ api: asGmailApi(api) }), key: () => key, cfg: loadInboxConfig() },
@@ -98,7 +97,7 @@ test('a failed pipeline reports why, and the button is refused while a CLI run i
   assert.ok(task);
   assert.equal(task.status, 'failed');
   assert.match(task.error ?? '', /EMAIL_ADDRESS is not set/);
-  await asEngine(db).prepare("INSERT INTO runs (name, status, started_at) VALUES ('inbox', 'running', ?)").run(new Date().toISOString());
+  await db.prepare("INSERT INTO runs (name, status, started_at) VALUES ('inbox', 'running', ?)").run(new Date().toISOString());
   const res = await app.inject({ method: 'POST', url: '/api/pipeline/run' });
   assert.equal(res.statusCode, 409);
   assert.match(res.json().error, /inbox run/);

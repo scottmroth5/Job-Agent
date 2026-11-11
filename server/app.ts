@@ -1,6 +1,5 @@
 // The Job Hunt API. Every route has a JSON schema; the OpenAPI spec at /api/openapi.json is the
 // contract the UI (and any future backend rewrite) follows.
-import { asEngine } from '../db/engine/index.ts';
 import { existsSync } from 'node:fs';
 import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
@@ -145,12 +144,12 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   // Each user's own settings, background, and documents (agents/user-config.ts): routes keep using config and services,
   // which answer for whoever the request runs as. The owner's are the settings file, the Google Doc, and their Drive.
   const ownerConfig = config;
-  if (config) config = userConfigView(config, store.raw ?? store.db);
+  if (config) config = userConfigView(config, store.admin);
   const asOwner = () => (currentUserId() ?? OWNER_ID) === OWNER_ID;
   const setupOf = async (uid: number) => {
-    const raw = store.raw ?? db;
+    const raw = store.admin;
     // A signed-in user has a row; a null name goes to userConfig as it always has.
-    const u = await asEngine(raw).prepare('SELECT name, ai_source, claude_key_enc IS NOT NULL AS has_key FROM users WHERE id = ?').get(uid) as { name: string; ai_source: string; has_key: number };
+    const u = await raw.prepare('SELECT name, ai_source, claude_key_enc IS NOT NULL AS has_key FROM users WHERE id = ?').get(uid) as { name: string; ai_source: string; has_key: number };
     return { ai: u.ai_source === 'owner' || Boolean(u.has_key), aboutYou: (await userProfile(raw, uid)).length >= MIN_PROFILE_CHARS, search: (await userConfig(raw, uid, u.name)).ready };
   };
   const ownerDrive = given.drive;
@@ -162,7 +161,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     },
     // The knowledge doc from Settings, the current user's.
     // Not the owner means there is a current user.
-    knowledge: async () => backgroundFor(store.raw ?? store.db, asOwner() ? OWNER_ID : (currentUserId() as number), { fallback: testKnowledge ?? null }),
+    knowledge: async () => backgroundFor(store.admin, asOwner() ? OWNER_ID : (currentUserId() as number), { fallback: testKnowledge ?? null }),
   };
   app.addHook('onRequest', async (req, reply) => {
     if (blocked(req)) return reply.code(403).type('text/html').header('Cache-Control', 'no-store').send(BLOCKED_PAGE);
@@ -207,7 +206,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   // The admin's usage totals (server/usage-totals.ts): the signed-in app only, never the demo or a local run. Google
   // mode always has its settings (assertSafeBinding).
   if (authMode === 'google') {
-    registerUsageTotals(app, { db: store.raw ?? store.db, location: usage.location, ownOrigin: new URL((auth.settings as AuthSettings).publicUrl).origin, siteHost: usage.siteHost, demoHost: usage.demoHost, now: usage.now });
+    registerUsageTotals(app, { db: store.admin, location: usage.location, ownOrigin: new URL((auth.settings as AuthSettings).publicUrl).origin, siteHost: usage.siteHost, demoHost: usage.demoHost, now: usage.now });
   }
   // Multi-user (db/scope.ts): each route handler, and every task it starts, runs as the signed-in user; with no sign-in
   // (AUTH_MODE none, and the demo) that is the owner. The user is decided, and refused if inactive or not allowed this
@@ -229,7 +228,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     req.uid = account.uid;
     req.role = account.role;
     // Their own time zone for calendar days (the owner always uses the app's).
-    req.timeZone = account.uid === OWNER_ID ? null : ((await asEngine(db).prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(account.uid) as string | null | undefined) ?? null);
+    req.timeZone = account.uid === OWNER_ID ? null : ((await db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(account.uid) as string | null | undefined) ?? null);
     if (authMode === 'google') await touchLastSeen(db, account.uid);
   });
   // The route runs as its user, with their settings loaded first, so `config` answers from them at once.
@@ -240,7 +239,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
       uid,
       () => {
         if (!ownerConfig) return done();
-        void withUserConfig(store.raw ?? store.db, uid, ownerConfig, () => done()).catch((err: Error) => done(err));
+        void withUserConfig(store.admin, uid, ownerConfig, () => done()).catch((err: Error) => done(err));
       },
       { timeZone: req.timeZone },
     );
@@ -430,7 +429,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     },
     async (req, reply) => {
       const { id, action } = req.params;
-      const posting = await asEngine(db).prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
+      const posting = await db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
       if (!posting) return notFound(reply);
       if (action !== 'refetch' && !services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
       // Checked above for the actions that use it.
@@ -445,8 +444,8 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         }
         if (action === 'write-materials' || action === 'regenerate') {
           const lk = await lookups(db);
-          if (lk.groupOf('stage', posting.stage) === 'found') await asEngine(db).prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), new Date().toISOString(), id);
-          const hasScore = await asEngine(db).prepare("SELECT 1 FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule')").get(id);
+          if (lk.groupOf('stage', posting.stage) === 'found') await db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), new Date().toISOString(), id);
+          const hasScore = await db.prepare("SELECT 1 FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule')").get(id);
           const knowledge = await services.knowledge();
           if (!hasScore) {
             step('Scoring first');
@@ -465,7 +464,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         if (isOnSite(posting.url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, posting.url as string); // on the site, so it has a url
         await resolveDetails(item, { http: services.http as Http, browser });
         const ok = item.fetchStatus === 'ok';
-        await asEngine(db).prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN @text IS NULL THEN fetched_at ELSE @now END,
+        await db.prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN @text IS NULL THEN fetched_at ELSE @now END,
             fetch_status = @status, fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
             location_check = @check, updated_at = @now WHERE id = @id AND user_id = @uid`).run({
           id,
@@ -540,8 +539,8 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         if (inboxChecks && (services.inbox as InboxServices).ready()) await finish(await inboxChecks.startCheck({ by: 'schedule' }), 1);
         // Then each user who asked to be on the schedule, one at a time, each as themselves; one user's failure never
         // stops the next or marks the owner's run failed.
-        for (const uid of await scheduledUsers(store.raw ?? db)) {
-          const timeZone = (await asEngine(db).prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) as string | null | undefined) ?? null;
+        for (const uid of await scheduledUsers(store.admin)) {
+          const timeZone = (await db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) as string | null | undefined) ?? null;
           await runAsUser(uid, async () => finish(await pipeline.start({ by: 'schedule' }), 4), { timeZone }).catch((err: Error) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
         }
       }),
@@ -551,11 +550,11 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     };
     // The owner's runs: the schedule is theirs (users' scheduled runs follow it).
     const lastRanAt = (name: string) => async () =>
-      (await asEngine(db).prepare('SELECT started_at FROM runs WHERE name = ? AND (user_id IS NULL OR user_id = 1) ORDER BY id DESC LIMIT 1').pluck().get(name) as string | null | undefined) ?? null;
+      (await db.prepare('SELECT started_at FROM runs WHERE name = ? AND (user_id IS NULL OR user_id = 1) ORDER BY id DESC LIMIT 1').pluck().get(name) as string | null | undefined) ?? null;
     const jobsScheduler = createScheduler({
       // Scheduled jobs are the owner's (phase 1); each user's own schedule comes with per-user feeds.
       // Each runner is kept by the filter.
-      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: async () => await runAsUser(OWNER_ID, async () => (ownerConfig ? await withUserConfig(store.raw ?? store.db, OWNER_ID, ownerConfig, runners[j.name] as () => Promise<unknown>) : (runners[j.name] as () => Promise<unknown>)())), lastRanAt: lastRanAt(j.name) })),
+      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: async () => await runAsUser(OWNER_ID, async () => (ownerConfig ? await withUserConfig(store.admin, OWNER_ID, ownerConfig, runners[j.name] as () => Promise<unknown>) : (runners[j.name] as () => Promise<unknown>)())), lastRanAt: lastRanAt(j.name) })),
       log: services.log ?? console,
       // A failed scheduled job emails the owner (server/alerts.ts); the next success clears it.
       onResult: services.alerts ? (name, ok, error) => (services.alerts as ReturnType<typeof createAlerts>).jobResult(name, ok, error) : null,

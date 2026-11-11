@@ -1,6 +1,5 @@
 // Internet hardening: every route needs sign-in, security headers, rate limits, and safe server errors.
 // Synthetic accounts, a fake Google exchange, and no network.
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -94,7 +93,7 @@ test('security headers on every response; HTTPS adds HSTS; a route with its own 
   assert.equal(res.headers['strict-transport-security'], undefined, 'no HSTS without HTTPS');
   assert.ok(!res.headers['x-powered-by']);
 
-  const job = Number((await asEngine(store.db).prepare("INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at) VALUES (1, 'k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')").run()).id);
+  const job = Number((await store.db.prepare("INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at) VALUES (1, 'k', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'new', 'x', 'x')").run()).id);
   const up = (await app.inject({ method: 'POST', url: `/api/postings/${job}/attachments`, headers: { 'content-type': 'application/octet-stream', 'x-filename': 'a.pdf', 'x-file-type': 'application/pdf' }, payload: Buffer.from('%PDF') })).json();
   const file = await app.inject(`/api/attachments/${up.id}/file`);
   assert.match(/** @type {string} */ (file.headers['content-security-policy']), /^sandbox/, 'attachments keep their sandbox policy');

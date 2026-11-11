@@ -1,20 +1,19 @@
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { storedKey } from '../agents/identity.ts';
 import { matchEmail, listOpenApplications } from '../agents/inbox/match.ts';
 import { loadInboxConfig } from '../agents/inbox/config.ts';
-/** @import { Database } from '../tools/types.ts' */
+/** @import { Db } from '../tools/types.ts' */
 
 const atsDomains = loadInboxConfig().atsDomains;
 const now = '2026-10-02T00:00:00Z';
 
-/** @param {Database} db @param {string} company @param {string} title @param {{ status?: string, stage?: string, company_domain?: string | null }} [o] */
+/** @param {Db} db @param {string} company @param {string} title @param {{ status?: string, stage?: string, company_domain?: string | null }} [o] */
 async function app(db, company, title, o = {}) {
   const row = { status: 'applied', stage: 'pipeline', company_domain: null, ...o };
   return Number(
-    (await asEngine(db)
+    (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
         VALUES (1, ?, ?, ?, ?, '2026-09-01', ?, ?, ?, ?, ?)`)
       .run(`k${Math.random()}`, company, title, storedKey({ company, title }), row.stage, row.status, row.company_domain, now, now)).id,
@@ -47,14 +46,14 @@ test('open applications include archived applied jobs but not passed ones', asyn
 
 test('rule 1: a known thread', async () => {
   const { store, db, ids } = await setup();
-  await asEngine(db).prepare("INSERT INTO email_threads (user_id, thread_id, posting_id, kind, created_at) VALUES (1, 't-1', ?, 'application', ?)").run(ids.sample, now);
+  await db.prepare("INSERT INTO email_threads (user_id, thread_id, posting_id, kind, created_at) VALUES (1, 't-1', ?, 'application', ?)").run(ids.sample, now);
   assert.deepEqual(await matchEmail(db, email({ threadId: 't-1' }), { atsDomains }), { postingId: ids.sample, rule: 'thread' });
   store.close();
 });
 
 test('rule 2: a known contact (case-insensitive)', async () => {
   const { store, db, ids } = await setup();
-  await asEngine(db).prepare("INSERT INTO contacts (user_id, id, email, posting_id, source, created_at, updated_at) VALUES (1, 'c1', 'recruiter@agency.example', ?, 'email', ?, ?)").run(ids.sample2, now, now);
+  await db.prepare("INSERT INTO contacts (user_id, id, email, posting_id, source, created_at, updated_at) VALUES (1, 'c1', 'recruiter@agency.example', ?, 'email', ?, ?)").run(ids.sample2, now, now);
   assert.deepEqual(await matchEmail(db, email({ senderEmail: 'Recruiter@Agency.example' }), { atsDomains }), { postingId: ids.sample2, rule: 'contact' });
   store.close();
 });
@@ -64,7 +63,7 @@ test('rule 3: the company domain of exactly one open application, never an ATS d
   assert.deepEqual(await matchEmail(db, email({ senderDomain: 'talent.example.com' }), { atsDomains }), { postingId: ids.acme, rule: 'domain' });
   await app(db, 'Example Co', 'Director of Data', { company_domain: 'example.com' });
   assert.equal(await matchEmail(db, email({ senderDomain: 'example.com' }), { atsDomains }), null, 'two open applications at that domain');
-  await asEngine(db).prepare("UPDATE postings SET company_domain = 'greenhouse.io' WHERE id = ?").run(ids.sample);
+  await db.prepare("UPDATE postings SET company_domain = 'greenhouse.io' WHERE id = ?").run(ids.sample);
   assert.equal(await matchEmail(db, email({ senderDomain: 'greenhouse.io' }), { atsDomains }), null);
   store.close();
 });
@@ -82,7 +81,7 @@ test('rule 4: ATS subject parsing, by company and title or by company alone', as
 
 test('the cascade stops at the first rule that matches, and returns null for the model to try', async () => {
   const { store, db, ids } = await setup();
-  await asEngine(db).prepare("INSERT INTO email_threads (user_id, thread_id, posting_id, kind, created_at) VALUES (1, 't-2', ?, 'application', ?)").run(ids.sample, now);
+  await db.prepare("INSERT INTO email_threads (user_id, thread_id, posting_id, kind, created_at) VALUES (1, 't-2', ?, 'application', ?)").run(ids.sample, now);
   const both = email({ threadId: 't-2', senderDomain: 'example.com', subject: 'Thank you for applying to Example Co' });
   assert.deepEqual(await matchEmail(db, both, { atsDomains }), { postingId: ids.sample, rule: 'thread' });
   assert.equal(await matchEmail(db, email({ subject: 'Quick question about your background' }), { atsDomains }), null);

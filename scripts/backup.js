@@ -31,7 +31,7 @@ async function main() {
   const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('backup', { to: toDir ? 'folder' : 'google-drive' });
   try {
     const r = await runBackup({
-      db: store.db,
+      backup: store.backup,
       passphrase,
       extras: [{ name: 'config/job-search.json', path: dataPath('config', 'job-search.json') }],
       folders: [{ name: 'attachments', dir: ATTACHMENTS_DIR }],

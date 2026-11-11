@@ -16,7 +16,7 @@ import { rekeyPostings } from '../agents/identity.ts';
 
 const dryRun = process.argv.includes('--dry-run');
 const store = openJobStore();
-const config = await configFor(store.raw, OWNER_ID, loadConfig()); // with the skipped sites from Settings
+const config = await configFor(store.admin, OWNER_ID, loadConfig()); // with the skipped sites from Settings
 try {
   const run = dryRun ? null : await createJobTracer({ store }).startRun('cleanup');
   // Keys are derived data, so they are recomputed even in a dry run; the preview then reflects the current rules.

@@ -1,6 +1,5 @@
 // Resumes (agents/resumes.ts, server/resume-routes.ts): upload, label and match titles, default, replace, delete,
 // download your own only, and the right one reaching each job's letter and tweaks. Synthetic files and data only.
-import { asEngine } from '../db/engine/index.ts';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -82,10 +81,10 @@ test("each job's letter and tweaks are written from its resume, and the artifact
   const job = async (/** @type {string} */ title) => {
     const url = `https://jobs.example.com/${Math.random()}`;
     const id = Number(
-      (await asEngine(db).prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
+      (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
         VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', 'new', 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url)).id,
     );
-    await asEngine(db).prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, 8, ?, 'v2', 'x')").run(id, JSON.stringify({ score: 8, reason: 'r', strengths: [], watchOuts: [] }));
+    await db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, 8, ?, 'v2', 'x')").run(id, JSON.stringify({ score: 8, reason: 'r', strengths: [], watchOuts: [] }));
     return id;
   };
   const vp = await job('VP Engineering');
@@ -93,7 +92,7 @@ test("each job's letter and tweaks are written from its resume, and the artifact
   await generateForPostings({ store, config: fakeConfig({ candidate: { name: 'Pat Example' }, coverLetterChecks: [] }), claude, knowledge: 'Background text.', drive: null, options: { ids: [vp] } });
   assert.equal(systems.length, 3, 'tweaks, a letter, and its fact check, all from the resume');
   for (const s of systems) assert.ok(s.includes('EXEC-MARKER') && !s.includes('IC-MARKER') && s.includes('Background text.'));
-  const used = await asEngine(db).prepare('SELECT DISTINCT resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid').pluck().all(vp);
+  const used = await db.prepare('SELECT DISTINCT resume_id FROM artifacts WHERE posting_id = ? AND user_id = @uid').pluck().all(vp);
   assert.deepEqual(used, [exec.id]);
   store.close();
 });
@@ -102,7 +101,7 @@ test('routes: upload, edit, download with safe headers, and another user sees no
   const secret = randomBytes(48).toString('base64');
   const settings = authSettings({ AUTH_MODE: 'google', PUBLIC_URL: SITE, GOOGLE_WEB_CLIENT_ID: 'c', GOOGLE_WEB_CLIENT_SECRET: 's', AUTH_ALLOWED_EMAILS: 'owner@example.com', SESSION_SECRET: secret });
   const store = openJobStore(':memory:', { fallbackUid: null });
-  const b = await addUser(store.raw, { email: 'b@example.com' });
+  const b = await addUser(store.admin, { email: 'b@example.com' });
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: {} }), authMode: 'google', auth: { settings }, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
   const owner = as('owner@example.com');
@@ -124,7 +123,7 @@ test('routes: upload, edit, download with safe headers, and another user sees no
   for (const [method, url] of /** @type {Array<[InjectOptions['method'], string]>} */ ([['GET', `/api/resumes/${id}/file`], ['PATCH', `/api/resumes/${id}`], ['DELETE', `/api/resumes/${id}`]])) {
     assert.equal((await app.inject({ method, url, headers: other, ...(method === 'PATCH' ? { payload: { label: 'x' } } : {}) })).statusCode, 404, `${method} as another user`);
   }
-  const exported = /** @type {{ tables?: Record<string, Array<Record<string, unknown>>>, resumes?: Array<Record<string, unknown>> }} */ (await runAsUser(1, async () => await exportAccount(store.raw, 1)));
+  const exported = /** @type {{ tables?: Record<string, Array<Record<string, unknown>>>, resumes?: Array<Record<string, unknown>> }} */ (await runAsUser(1, async () => await exportAccount(store.admin, 1)));
   const row = exported.tables?.resumes?.[0] ?? exported.resumes?.[0];
   assert.ok(row && row.text && row.file === undefined, 'export: the text, never the file blob');
   assert.equal((await runAsUser(b, async () => await listResumes(store.db))).length, 0);

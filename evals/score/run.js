@@ -4,7 +4,7 @@ import { scoreOne, estimateCost, loadScorePrompt, PROMOTE_AT } from '../../agent
 import { summarize } from './metrics.js';
 /**
  * @import { Claude, Run } from '@scottmroth5/agent-core'
- * @import { Database } from '../../tools/types.ts'
+ * @import { Db } from '../../tools/types.ts'
  * @import { JobSearchConfig } from '../../tools/config.ts'
  * @import { ScoreCase } from './build-cases.js'
  */
@@ -33,7 +33,7 @@ async function mapLimit(items, limit, fn) {
  * @param {string[]} models
  * @param {number} knowledgeChars
  * @param {Pick<JobSearchConfig, 'search'>} config the search settings runEval scores with, so excluded-site cases count as rule scored (free)
- * @param {Database | null} [db]
+ * @param {Db | null} [db]
  */
 export async function estimateEval(cases, models, knowledgeChars, config, db = null) {
   const templateChars = (await loadScorePrompt('fulltime', db)).template.length;
@@ -42,7 +42,7 @@ export async function estimateEval(cases, models, knowledgeChars, config, db = n
 
 /**
  * Uses the full-time scoring prompt in effect (an admin-screen edit if active), so evals test current edits.
- * @param {{ cases: ScoreCase[], models: string[], claude: Claude, config: Pick<JobSearchConfig, 'candidate' | 'search' | 'fractional'>, knowledge: string, run?: Run | null, db?: Database | null, concurrency?: number, promoteAt?: number, log?: (line: string) => void }} opts
+ * @param {{ cases: ScoreCase[], models: string[], claude: Claude, config: Pick<JobSearchConfig, 'candidate' | 'search' | 'fractional'>, knowledge: string, run?: Run | null, db?: Db | null, concurrency?: number, promoteAt?: number, log?: (line: string) => void }} opts
  * @returns {Promise<{ perModel: Record<string, {results: ScoreResult[], summary: ReturnType<typeof summarize>, costUsd: number, avgMs: number}>, v1: ReturnType<typeof summarize>, promptVersion: string }>}
  */
 export async function runEval({ cases, models, claude, config, knowledge, run, db = null, concurrency = 3, promoteAt = PROMOTE_AT, log = () => {} }) {
