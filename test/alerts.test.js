@@ -44,7 +44,7 @@ test('once: an ongoing problem emails a single time until it recovers', async ()
   now = local(2026, 10, 28);
   await alerts.alert('geo-db', 'US-only blocking is off', 'missing', { once: true });
   assert.equal(sent.length, 1);
-  alerts.recovered('geo-db');
+  await alerts.recovered('geo-db');
   await alerts.alert('geo-db', 'US-only blocking is off', 'missing', { once: true });
   assert.equal(sent.length, 2);
 });
@@ -61,7 +61,7 @@ test('the scheduler reports each run to the alerts, and a reporting problem neve
   /** @type {Array<[string, boolean, string | null]>} */
   const reports = [];
   let clock = local(2026, 10, 25, 5, 59);
-  const scheduler = createScheduler({
+  const scheduler = await createScheduler({
     jobs: [
       { name: 'backup', schedule: parseSchedule('daily 06:00'), run: async () => { throw new Error('Drive refused'); }, lastRanAt: () => local(2026, 10, 24, 6).toISOString() },
       { name: 'inbox', schedule: parseSchedule('daily 06:00'), run: async () => {}, lastRanAt: () => local(2026, 10, 24, 6).toISOString() },

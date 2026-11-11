@@ -65,7 +65,7 @@ test('scheduler: runs a due job once, catches up a recently missed run, and skip
     { name: 'backup', schedule: parseSchedule('daily 23:00'), run: async () => ran.push('backup'), lastRanAt: () => local(2026, 10, 18, 23, 0, 5).toISOString() },
   ];
   const scheduler = createScheduler({ jobs, now: () => clock, log: {}, every: noTimer });
-  scheduler.start();
+  await scheduler.start();
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(ran, [], 'nothing missed: last night\'s backup ran, and the pipeline ran Thursday');
 
@@ -81,7 +81,7 @@ test('scheduler: runs a due job once, catches up a recently missed run, and skip
   assert.ok(CATCH_UP_HOURS >= 8);
   /** @type {string[]} */
   const late = [];
-  const back = createScheduler({
+  const back = await createScheduler({
     jobs: [{ name: 'backup', schedule: parseSchedule('daily 23:00'), run: async () => late.push('backup'), lastRanAt: () => local(2026, 10, 17, 23).toISOString() }],
     now: () => local(2026, 10, 19, 7),
     log: {},
@@ -96,7 +96,7 @@ test('scheduler: a failing job is logged and does not stop the next one', async 
   /** @type {string[]} */
   const warnings = [];
   let clock = local(2026, 10, 19, 5);
-  const scheduler = createScheduler({
+  const scheduler = await createScheduler({
     jobs: [{ name: 'backup', schedule: parseSchedule('daily 06:00'), run: async () => { throw new Error('Drive is down'); }, lastRanAt: () => local(2026, 10, 18, 6).toISOString() }],
     now: () => clock,
     log: { warn: (m) => warnings.push(m), info: () => {} },

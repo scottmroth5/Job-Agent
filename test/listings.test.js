@@ -249,7 +249,7 @@ test('editing the company finds the earlier copy, and duplicateOf archives this 
   set(copy, 'See posting', 'Vice President, Engineering (Remote)');
   const other = insert(db, { title: 'x' });
   set(other, 'See posting', 'Vice President, Engineering (Remote)');
-  rekeyPostings(db);
+  await rekeyPostings(db);
   assert.deepEqual(await findCopies(db, /** @type {PostingsRow} */ (db.prepare('SELECT * FROM postings WHERE id = ?').get(copy))), [], 'a placeholder company matches nothing');
   assert.equal((await listPostings(db, {})).find((r) => r.id === copy)?.hasCopies, false, 'two "See posting" rows are not flagged as copies');
 

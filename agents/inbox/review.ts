@@ -40,16 +40,19 @@ const parse = (s: string | null) => {
 };
 
 /** Emails waiting for review, oldest first, with the best-guess application when there is one. */
-export function listNeedsReview(db: Database): ReviewEmail[] {
-  return (db
+export async function listNeedsReview(db: Database): Promise<ReviewEmail[]> {
+  const rows = (await asEngine(db)
     .prepare("SELECT * FROM emails WHERE user_id = @uid AND review_status = 'needs_review' ORDER BY sent_at, id")
-    .all() as EmailsRow[])
-    .map((e) => {
-      const extracted = parse(e.extracted_json);
-      const guessId = e.posting_id ?? extracted.best_guess_application_id ?? null;
-      const guess = guessId ? ((db.prepare('SELECT id, company, title, status FROM postings WHERE id = ? AND user_id = @uid').get(guessId) as ReviewEmail['guess'] | undefined) ?? null) : null;
-      return { ...e, extracted, guess };
-    });
+    .all()) as EmailsRow[];
+  const guessOf = asEngine(db).prepare('SELECT id, company, title, status FROM postings WHERE id = ? AND user_id = @uid');
+  const out: ReviewEmail[] = [];
+  for (const e of rows) {
+    const extracted = parse(e.extracted_json);
+    const guessId = e.posting_id ?? extracted.best_guess_application_id ?? null;
+    const guess = guessId ? (((await guessOf.get(guessId)) as ReviewEmail['guess'] | undefined) ?? null) : null;
+    out.push({ ...e, extracted, guess });
+  }
+  return out;
 }
 
 /** The stored classification, in the shape actions expect. */
@@ -79,18 +82,18 @@ export async function resolveReview(
   await asEngine(db).tx(async () => {
     if (choice === 'confirm' || choice === 'reassign') {
       const target = choice === 'confirm' ? e.guess?.id : postingId;
-      if (!target || !db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(target)) throw new Error(choice === 'confirm' ? 'There is no best guess to confirm; reassign instead.' : `Job #${postingId} was not found.`);
+      if (!target || !await asEngine(db).prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(target)) throw new Error(choice === 'confirm' ? 'There is no best guess to confirm; reassign instead.' : `Job #${postingId} was not found.`);
       const r = await applyActions(db, { email, postingId: target, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
-      updateEmail(db, e.id, { postingId: target, matchRule: 'user', confidence: 1, reviewStatus: choice === 'confirm' ? 'confirmed' : 'reassigned', reviewReason: null, ...(body && key && !e.body_enc ? { bodyEnc: encrypt(body, key) } : {}) }, now);
+      await updateEmail(db, e.id, { postingId: target, matchRule: 'user', confidence: 1, reviewStatus: choice === 'confirm' ? 'confirmed' : 'reassigned', reviewReason: null, ...(body && key && !e.body_enc ? { bodyEnc: encrypt(body, key) } : {}) }, now);
       out = { postingId: target, ...r };
     } else if (choice === 'not_job' || choice === 'dismiss') {
-      updateEmail(db, e.id, { postingId: null, matchRule: null, reviewStatus: choice === 'dismiss' ? 'dismissed' : 'not_job', reviewReason: null, bodyEnc: null }, now);
+      await updateEmail(db, e.id, { postingId: null, matchRule: null, reviewStatus: choice === 'dismiss' ? 'dismissed' : 'not_job', reviewReason: null, bodyEnc: null }, now);
     } else {
       const id = await createOpportunity(db, { email, c, decidedBy: 'user', promptVersion: e.prompt_version, now });
-      updateEmail(db, e.id, { postingId: id, matchRule: 'user', reviewStatus: 'new_opportunity', reviewReason: null, ...(body && key ? { bodyEnc: encrypt(body, key) } : {}) }, now);
+      await updateEmail(db, e.id, { postingId: id, matchRule: 'user', reviewStatus: 'new_opportunity', reviewReason: null, ...(body && key ? { bodyEnc: encrypt(body, key) } : {}) }, now);
       out = { ...out, postingId: id };
     }
-    logDecision(db, { postingId: out.postingId, emailId: e.id, gmailMessageId: e.gmail_message_id, action: `review:${choice}`, decidedBy: 'user', promptVersion: e.prompt_version, detail: { previousGuess: e.guess?.id ?? null } }, now);
+    await logDecision(db, { postingId: out.postingId, emailId: e.id, gmailMessageId: e.gmail_message_id, action: `review:${choice}`, decidedBy: 'user', promptVersion: e.prompt_version, detail: { previousGuess: e.guess?.id ?? null } }, now);
   });
 
   if (choice === 'dismiss') return out;

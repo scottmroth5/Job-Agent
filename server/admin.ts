@@ -1,5 +1,6 @@
 // Admin routes: view and edit the prompts (stored in the database with history), and preview
 // a prompt filled with a real job. Output schemas are shown read-only.
+import { asEngine } from '../db/engine/index.ts';
 import { PROMPTS, getPrompt, defaultPrompt, savePrompt, restorePrompt, listVersions, validateTemplate } from '../agents/prompts.ts';
 import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.ts';
@@ -61,13 +62,13 @@ async function detail(db: Database, name: string) {
 }
 
 /** A job to preview with: the one asked for, else a recent one with text (and an analysis for hunt prompts). */
-function samplePosting(db: Database, name: string, postingId: number | undefined): SamplePosting | null {
+async function samplePosting(db: Database, name: string, postingId: number | undefined): Promise<SamplePosting | null> {
   const needsAnalysis = name === 'resume-tweaks' || name === 'cover-letter';
   const track = name === 'score-fractional' ? 'fractional' : name === 'score' ? 'fulltime' : null;
   const analysisSql = `(SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1)`;
-  if (postingId) return (db.prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) as SamplePosting | undefined) ?? null;
+  if (postingId) return (await asEngine(db).prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p WHERE p.id = ? AND p.user_id = @uid`).get(postingId) as SamplePosting | undefined) ?? null;
   return (
-    (db
+    (await asEngine(db)
       .prepare(`SELECT p.*, ${analysisSql} AS analysis_json FROM postings p
         WHERE p.user_id = @uid AND (p.fetched_text IS NOT NULL OR p.jd_text IS NOT NULL) ${track ? 'AND p.track = @track' : ''}
         ${needsAnalysis ? `AND ${analysisSql} IS NOT NULL` : ''}
@@ -78,7 +79,7 @@ function samplePosting(db: Database, name: string, postingId: number | undefined
 
 export function registerAdminRoutes(app: App, { db, config }: { db: Database; config: UserConfig }) {
   // The signed-in user's spend: the owner sees everything on their key; anyone else, their own.
-  const spending = async (uid = OWNER_ID) => ({ ...await budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: spendByLabel(db, { uid }) });
+  const spending = async (uid = OWNER_ID) => ({ ...await budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: await spendByLabel(db, { uid }) });
 
   // Your own spend (everyone: Settings, and Admin > Spending for the owner, where it is everything on their key). Setting
   // the cap below stays the owner's.
@@ -163,7 +164,7 @@ export function registerAdminRoutes(app: App, { db, config }: { db: Database; co
         const text = buildClassifyRequest(SAMPLE_EMAIL, { open: (await listOpenApplications(db)).slice(0, 25), model: 'preview', prompt: draft }).prompt;
         return { problems: [], text, posting: null, message: 'Previewed with a made-up sample email and your open applications.' };
       }
-      const posting = samplePosting(db, name, req.body.postingId);
+      const posting = await samplePosting(db, name, req.body.postingId);
       if (!posting) return { problems: [], text: null, posting: null, message: 'No job with posting text (and, for resume tweaks and letters, a v2 analysis) to preview with yet.' };
       const draft = { template: req.body.template, schema: defaultPrompt(name).schema, version: 'draft', track: posting.track };
       let text: string | undefined;
