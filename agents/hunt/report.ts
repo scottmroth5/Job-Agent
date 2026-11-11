@@ -1,5 +1,6 @@
 // The one report email per run (replaces v1's discovery report and daily summary).
 // collectReport() reads the database; renderReport() is pure. Every value is HTML-escaped.
+import { asEngine } from '../../db/engine/index.ts';
 import { escapeHtml as e } from '../../tools/html.ts';
 import { sendEmail } from '../../tools/google/gmail.ts';
 import { PROMOTE_AT } from '../discovery/score.ts';
@@ -49,7 +50,7 @@ const parse = (s: string | null) => {
 
 /** Gathers everything the report shows for runs started at or after `since` (ISO timestamp). */
 export async function collectReport(db: Database, { since, promoteAt = PROMOTE_AT }: { since: string; promoteAt?: number }): Promise<ReportData> {
-  const runs = (db
+  const runs = (await asEngine(db)
     .prepare('SELECT id, name, status, cost_usd, calls, summary, started_at FROM runs WHERE started_at >= ? ORDER BY id')
     .all(since) as Array<Pick<RunsRow, 'id' | 'name' | 'status' | 'cost_usd' | 'calls' | 'summary' | 'started_at'>>)
     .map((r) => ({ ...r, summary: parse(r.summary) }));
@@ -67,20 +68,20 @@ export async function collectReport(db: Database, { since, promoteAt = PROMOTE_A
       ${letter.replace('%s', 'id')} AS letter_id,
       EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks') AS has_tweaks`;
 
-  const promoted = (db
+  const promoted = (await asEngine(db)
     .prepare(`SELECT ${cols} FROM postings p WHERE p.user_id = @uid AND p.stage IN ${active}
       AND EXISTS (SELECT 1 FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source = 'v2' AND s.score >= ? AND s.created_at >= ?)
       ORDER BY score DESC, p.id`)
     .all(promoteAt, since) as Array<ReportJob & { score: number }>)
     .map((p) => ({ ...p, analysis: parse(p.analysis_json), flags: parse(p.letter_flags) ?? [] }));
 
-  const pipeline = (db
+  const pipeline = (await asEngine(db)
     .prepare(`SELECT ${cols} FROM postings p WHERE p.user_id = @uid AND p.stage IN ${active} ORDER BY ${orderCase}, score DESC, p.id`)
     .all() as ReportJob[])
     .map((p) => ({ ...p, flags: parse(p.letter_flags) ?? [] }));
 
   const statusCounts = Object.fromEntries(
-    (db.prepare(`SELECT status, COUNT(*) AS n FROM postings WHERE user_id = @uid AND stage IN ${active} GROUP BY status`).all() as Array<{ status: string; n: number }>).map((r) => [r.status, r.n]),
+    (await asEngine(db).prepare(`SELECT status, COUNT(*) AS n FROM postings WHERE user_id = @uid AND stage IN ${active} GROUP BY status`).all() as Array<{ status: string; n: number }>).map((r) => [r.status, r.n]),
   );
   // Status labels and display order for the counts line (closed statuses are left out, as before).
   const statusOrder = REPORT_ORDER.flatMap((g) => lk.ids('status', g)).map((id) => ({ id, label: lk.label('status', id) }));

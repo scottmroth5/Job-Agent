@@ -17,11 +17,11 @@ const siteParams = { type: 'object', required: ['site'], properties: { site: { t
 export function registerExcludedSiteRoutes(app: App, { db, ownerConfig = null }: { db: Database; ownerConfig?: JobSearchConfig | null }) {
   const uidOf = (req: FastifyRequest) => req.uid ?? OWNER_ID;
   // Sites someone other than the owner listed in their saved search before this list existed (moved in on first change).
-  const legacyFor = (uid: number) => (uid === OWNER_ID ? [] : userConfig(db, uid).search.excludedSites ?? []);
-  const opts = (uid: number) => ({ legacy: legacyFor(uid) });
+  const legacyFor = async (uid: number) => (uid === OWNER_ID ? [] : (await userConfig(db, uid)).search.excludedSites ?? []);
+  const opts = async (uid: number) => ({ legacy: await legacyFor(uid) });
   const view = async (uid: number) => {
     const fromFile = uid === OWNER_ID ? ownerConfig?.search?.excludedSites ?? [] : [];
-    const sites = excludedSites(db, uid, opts(uid));
+    const sites = await excludedSites(db, uid, await opts(uid));
     // One pass over the saved jobs: how many cleanup would still remove for each site.
     const counts = new Map<string, number>();
     for (const p of await findListings(db, { search: { excludedSites: [...sites.map((s) => s.site), ...fromFile] } })) {
@@ -34,7 +34,7 @@ export function registerExcludedSiteRoutes(app: App, { db, ownerConfig = null }:
     };
   };
   const changed = async (uid: number) => {
-    clearConfigViews();
+    await clearConfigViews();
     return await view(uid);
   };
 
@@ -51,7 +51,7 @@ export function registerExcludedSiteRoutes(app: App, { db, ownerConfig = null }:
     },
     async (req, reply) => {
       const uid = uidOf(req);
-      const { site } = addExcludedSite(db, uid, req.body, opts(uid));
+      const { site } = await addExcludedSite(db, uid, req.body, await opts(uid));
       return reply.code(201).send({ site, ...await changed(uid) });
     },
   );
@@ -61,14 +61,14 @@ export function registerExcludedSiteRoutes(app: App, { db, ownerConfig = null }:
     { schema: { summary: "Change a skipped site's note", params: siteParams, body: { type: 'object', required: ['note'], additionalProperties: false, properties: { note: { type: 'string', maxLength: MAX_NOTE } } }, response: { 200: anyObject } } },
     async (req) => {
       const uid = uidOf(req);
-      setExcludedSiteNote(db, uid, req.params.site, req.body.note, opts(uid));
+      await setExcludedSiteNote(db, uid, req.params.site, req.body.note, await opts(uid));
       return await changed(uid);
     },
   );
 
   app.delete<{ Params: { site: string } }>('/api/excluded-sites/:site', { schema: { summary: 'Stop skipping a job site (its jobs are found again from the next run)', params: siteParams, response: { 200: anyObject } } }, async (req) => {
     const uid = uidOf(req);
-    removeExcludedSite(db, uid, req.params.site, opts(uid));
+    await removeExcludedSite(db, uid, req.params.site, await opts(uid));
     return await changed(uid);
   });
 
@@ -78,7 +78,7 @@ export function registerExcludedSiteRoutes(app: App, { db, ownerConfig = null }:
     async (req, reply) => {
       const uid = uidOf(req);
       const fromFile = uid === OWNER_ID ? ownerConfig?.search?.excludedSites ?? [] : [];
-      const listed = excludedSites(db, uid, opts(uid)).some((s) => s.site === req.params.site) || fromFile.includes(req.params.site);
+      const listed = (await excludedSites(db, uid, await opts(uid))).some((s) => s.site === req.params.site) || fromFile.includes(req.params.site);
       if (!listed) return reply.code(404).send({ error: 'Skip the site first.' });
       const { archived } = await archiveSiteJobs(db, req.params.site);
       return { removed: archived.length, ...await view(uid) };

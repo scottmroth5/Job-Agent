@@ -3,6 +3,7 @@
 //   2 contact      the sender is a contact linked to an application
 //   3 domain       the sender's domain is the company domain of exactly one open application
 //   4 ats_subject  company (and title) parsed from an ATS email identify exactly one open application
+import { asEngine } from '../../db/engine/index.ts';
 import { companyTitleKey } from '../../tools/urls.ts';
 import { identityKey } from '../identity.ts';
 import { domainIn } from './prefilter.ts';
@@ -30,7 +31,7 @@ export async function openSql(db: Database) {
 }
 
 export async function listOpenApplications(db: Database): Promise<OpenApplication[]> {
-  return db.prepare(`SELECT p.id, p.company, p.title, p.status, p.stage, p.company_domain FROM postings p WHERE p.user_id = @uid AND ${await openSql(db)} ORDER BY p.id`).all() as OpenApplication[];
+  return await asEngine(db).prepare(`SELECT p.id, p.company, p.title, p.status, p.stage, p.company_domain FROM postings p WHERE p.user_id = @uid AND ${await openSql(db)} ORDER BY p.id`).all() as OpenApplication[];
 }
 
 const companyPart = (key: string | null) => (key ? (key.split('|')[0] as string) : null);
@@ -45,10 +46,10 @@ export async function matchEmail(
   { atsDomains, open: openGiven }: { atsDomains: string[]; open?: OpenApplication[] },
 ): Promise<{ postingId: number; rule: string } | null> {
   const open = openGiven ?? (await listOpenApplications(db));
-  const thread = db.prepare('SELECT posting_id FROM email_threads WHERE thread_id = ? AND user_id = @uid').pluck().get(email.threadId) as number | undefined;
+  const thread = await asEngine(db).prepare('SELECT posting_id FROM email_threads WHERE thread_id = ? AND user_id = @uid').pluck().get(email.threadId) as number | undefined;
   if (thread) return { postingId: thread, rule: 'thread' };
 
-  const contact = db.prepare('SELECT posting_id FROM contacts WHERE email = ? AND user_id = @uid AND posting_id IS NOT NULL').pluck().get(String(email.senderEmail).toLowerCase()) as number | undefined;
+  const contact = await asEngine(db).prepare('SELECT posting_id FROM contacts WHERE email = ? AND user_id = @uid AND posting_id IS NOT NULL').pluck().get(String(email.senderEmail).toLowerCase()) as number | undefined;
   if (contact) return { postingId: contact, rule: 'contact' };
 
   const domain = String(email.senderDomain ?? '').toLowerCase();

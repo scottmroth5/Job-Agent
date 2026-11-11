@@ -81,20 +81,20 @@ test('verifyLetter returns the cleaned claims, the model, and the prompt version
 test('checks are saved per version, dismissed one by one, and copied to a restored version', async () => {
   const { store, db, artifact } = setup();
   const a = artifact();
-  assert.equal(checkFor(db, a), null, 'not checked yet');
+  assert.equal(await checkFor(db, a), null, 'not checked yet');
   const { check, flagged: n } = await runCheck({ db, claude: fakeClaude({ claims: CLAIMS }), background, posting, artifactId: a, letter, config });
   assert.ok(check);
   assert.equal(check.status, 'checked');
   assert.equal(n, 2);
   assert.ok(check.claims.every((c) => c.dismissed === false));
 
-  assert.equal(dismissClaim(db, a, 1)?.claims[1].dismissed, true);
-  assert.equal(dismissClaim(db, a, 9), null, 'no such claim');
+  assert.equal((await dismissClaim(db, a, 1))?.claims[1].dismissed, true);
+  assert.equal(await dismissClaim(db, a, 9), null, 'no such claim');
 
   const b = artifact();
-  copyCheck(db, a, b);
-  assert.deepEqual(checkFor(db, b)?.claims, checkFor(db, a)?.claims);
-  assert.deepEqual([...checksFor(db, [a, b]).keys()].sort(), [a, b].sort());
+  await copyCheck(db, a, b);
+  assert.deepEqual((await checkFor(db, b))?.claims, (await checkFor(db, a))?.claims);
+  assert.deepEqual([...(await checksFor(db, [a, b])).keys()].sort(), [a, b].sort());
   store.close();
 });
 
@@ -117,10 +117,10 @@ test("another user's letter gets no check", async () => {
   const a = artifact();
   store.raw.prepare("INSERT INTO users (id, email, name, role, status, created_at, updated_at) VALUES (2, 'second@example.org', 'Second', 'user', 'active', 'x', 'x')").run();
   const { runAsUser } = await import('../db/scope.ts');
-  runAsUser(2, () => {
-    assert.equal(saveCheck(db, a, { status: 'checked', claims: CLAIMS }), null);
-    assert.equal(dismissClaim(db, a, 0), null);
+  await runAsUser(2, async () => {
+    assert.equal(await saveCheck(db, a, { status: 'checked', claims: CLAIMS }), null);
+    assert.equal(await dismissClaim(db, a, 0), null);
   });
-  assert.equal(checkFor(db, a), null);
+  assert.equal(await checkFor(db, a), null);
   store.close();
 });

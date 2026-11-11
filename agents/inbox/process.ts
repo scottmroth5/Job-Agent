@@ -102,7 +102,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
 
   for (const [i, id] of batch.messageIds.entries()) {
     if (i && i % 250 === 0) log('info', `Checked ${i} of ${batch.messageIds.length} messages`);
-    if (emailSeen(db, id)) {
+    if (await emailSeen(db, id)) {
       summary.alreadySeen += 1;
       continue;
     }
@@ -117,7 +117,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
       summary.skipped += 1;
       continue;
     }
-    const pass = prefilter(msg, { isContact: isContact(db), isCompanyDomain: isCompanyDomain(db), atsDomains: cfg.atsDomains, threadStartedByMe: sentThreads.has(msg.threadId) });
+    const pass = prefilter(msg, { isContact: await isContact(db), isCompanyDomain: await isCompanyDomain(db), atsDomains: cfg.atsDomains, threadStartedByMe: sentThreads.has(msg.threadId) });
     if (!pass.pass) {
       summary.skipped += 1;
       continue;
@@ -144,7 +144,7 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
 
     let company: string | null = null;
     await asEngine(db).tx(async () => {
-      const emailId = insertEmail(
+      const emailId = await insertEmail(
         db,
         {
           ...email,
@@ -167,26 +167,26 @@ export async function runInbox({ store, gmail, claude, cfg, key, run, log = () =
 
       if (link.postingId) {
         const r = await applyActions(db, { email: row, postingId: link.postingId, c, decidedBy, promptVersion: c.promptVersion, now: at });
-        learnDomain(db, link.postingId, email.senderDomain, cfg);
-        company = db.prepare('SELECT company FROM postings WHERE id = ? AND user_id = @uid').pluck().get(link.postingId) as string;
+        await learnDomain(db, link.postingId, email.senderDomain, cfg);
+        company = await asEngine(db).prepare('SELECT company FROM postings WHERE id = ? AND user_id = @uid').pluck().get(link.postingId) as string;
         summary.matched += 1;
         if (r.statusChange) summary.statusChanges.push({ postingId: link.postingId, ...r.statusChange });
         summary.notices.push(...r.notices);
         emitter.emit(makeEvent('email.matched', { emailId, postingId: link.postingId, rule: link.rule }, at));
         if (r.review) {
-          updateEmail(db, emailId, { reviewStatus: 'needs_review', reviewReason: r.review }, at);
+          await updateEmail(db, emailId, { reviewStatus: 'needs_review', reviewReason: r.review }, at);
           summary.needsReview += 1;
           emitter.emit(makeEvent('email.needs_review', { emailId, postingId: link.postingId }, at));
         }
       } else if (link.opportunity) {
         const postingId = await createOpportunity(db, { email: row, c, decidedBy, promptVersion: c.promptVersion, now: at });
-        updateEmail(db, emailId, { postingId, matchRule: 'model', bodyEnc: encrypt(email.body, key) }, at);
+        await updateEmail(db, emailId, { postingId, matchRule: 'model', bodyEnc: encrypt(email.body, key) }, at);
         company = c.extracted.company;
         summary.opportunities += 1;
         summary.notices.push(`New opportunity from a recruiter: ${c.extracted.role_title ?? 'a role'} at ${c.extracted.company ?? 'an unnamed company'}`);
         emitter.emit(makeEvent('email.matched', { emailId, postingId, rule: 'model' }, at));
       } else if (link.reviewStatus === 'needs_review') {
-        logDecision(db, { emailId, gmailMessageId: email.gmailMessageId, action: 'needs_review', decidedBy, promptVersion: c.promptVersion, detail: { reason: link.reason, bestGuess: link.bestGuess, type: c.type } }, at);
+        await logDecision(db, { emailId, gmailMessageId: email.gmailMessageId, action: 'needs_review', decidedBy, promptVersion: c.promptVersion, detail: { reason: link.reason, bestGuess: link.bestGuess, type: c.type } }, at);
         summary.needsReview += 1;
         emitter.emit(makeEvent('email.needs_review', { emailId }, at));
       }

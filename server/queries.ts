@@ -216,7 +216,7 @@ export async function getPosting(db: Database, id: number, config: QueryConfig =
     ...toRow(r, config),
     copies: await findCopies(db, r),
     attachments: listAttachments(db, r.id),
-    meetingPreps: listPreps(db, r.id),
+    meetingPreps: await listPreps(db, r.id),
     noteEntries: await listNotes(db, r.id),
     analysis: parse(r.analysis_json),
     scoreDetails: await scoreDetails(db, r),

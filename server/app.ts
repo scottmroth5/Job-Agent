@@ -99,7 +99,7 @@ export type BuildAppOptions = {
 const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback', '/api/admin/usage'];
 // What a paused account may still change: resume itself (when it paused itself) or delete itself.
 const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
-import { backgroundFor, scheduledUsers, userConfigView } from '../agents/user-config.ts';
+import { backgroundFor, scheduledUsers, userConfigView, withUserConfig } from '../agents/user-config.ts';
 
 // Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
 // of the restricted Gmail scopes), and the lists and the spending cap are shared by everyone. Everything else runs
@@ -146,11 +146,11 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   const ownerConfig = config;
   if (config) config = userConfigView(config, store.raw ?? store.db);
   const asOwner = () => (currentUserId() ?? OWNER_ID) === OWNER_ID;
-  const setupOf = (uid: number) => {
+  const setupOf = async (uid: number) => {
     const raw = store.raw ?? db;
     // A signed-in user has a row; a null name goes to userConfig as it always has.
     const u = raw.prepare('SELECT name, ai_source, claude_key_enc IS NOT NULL AS has_key FROM users WHERE id = ?').get(uid) as { name: string; ai_source: string; has_key: number };
-    return { ai: u.ai_source === 'owner' || Boolean(u.has_key), aboutYou: userProfile(raw, uid).length >= MIN_PROFILE_CHARS, search: userConfig(raw, uid, u.name).ready };
+    return { ai: u.ai_source === 'owner' || Boolean(u.has_key), aboutYou: (await userProfile(raw, uid)).length >= MIN_PROFILE_CHARS, search: (await userConfig(raw, uid, u.name)).ready };
   };
   const ownerDrive = given.drive;
   const testKnowledge = given.knowledge; // tests only: a stand-in for the owner's knowledge doc
@@ -231,7 +231,19 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     req.timeZone = account.uid === OWNER_ID ? null : ((db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(account.uid) as string | null | undefined) ?? null);
     if (authMode === 'google') await touchLastSeen(db, account.uid);
   });
-  app.addHook('preHandler', (req, reply, done) => (req.uid ? runAsUser(req.uid, done, { timeZone: req.timeZone }) : done()));
+  // The route runs as its user, with their settings loaded first, so `config` answers from them at once.
+  app.addHook('preHandler', (req, reply, done) => {
+    const uid = req.uid;
+    if (!uid) return done();
+    runAsUser(
+      uid,
+      () => {
+        if (!ownerConfig) return done();
+        void withUserConfig(store.raw ?? store.db, uid, ownerConfig, () => done()).catch((err: Error) => done(err));
+      },
+      { timeZone: req.timeZone },
+    );
+  });
   app.get('/healthz', { schema: { hide: true } }, async () => ({ ok: true }));
 
   app.setErrorHandler((err, req, reply) => {
@@ -287,7 +299,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     today: (await today(db)).items,
     layout: await getLayout(db),
     // A new user's setup (the Home checklist): AI paid for, About you long enough, search complete.
-    ...(req.uid && req.uid !== OWNER_ID ? { setup: setupOf(req.uid) } : {}),
+    ...(req.uid && req.uid !== OWNER_ID ? { setup: await setupOf(req.uid) } : {}),
     // What waits for an admin (the Admin tile's count): requests for access and open feedback.
     ...(req.role === 'admin' && authMode !== 'demo' ? { adminWaiting: adminWaiting(db) } : {}),
   }));
@@ -527,7 +539,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         if (inboxChecks && (services.inbox as InboxServices).ready()) await finish(await inboxChecks.startCheck({ by: 'schedule' }), 1);
         // Then each user who asked to be on the schedule, one at a time, each as themselves; one user's failure never
         // stops the next or marks the owner's run failed.
-        for (const uid of scheduledUsers(store.raw ?? db)) {
+        for (const uid of await scheduledUsers(store.raw ?? db)) {
           const timeZone = (db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) as string | null | undefined) ?? null;
           await runAsUser(uid, async () => finish(await pipeline.start({ by: 'schedule' }), 4), { timeZone }).catch((err: Error) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
         }
@@ -542,7 +554,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     const jobsScheduler = createScheduler({
       // Scheduled jobs are the owner's (phase 1); each user's own schedule comes with per-user feeds.
       // Each runner is kept by the filter.
-      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: () => runAsUser(OWNER_ID, runners[j.name] as () => Promise<unknown>), lastRanAt: lastRanAt(j.name) })),
+      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: async () => await runAsUser(OWNER_ID, async () => (ownerConfig ? await withUserConfig(store.raw ?? store.db, OWNER_ID, ownerConfig, runners[j.name] as () => Promise<unknown>) : (runners[j.name] as () => Promise<unknown>)())), lastRanAt: lastRanAt(j.name) })),
       log: services.log ?? console,
       // A failed scheduled job emails the owner (server/alerts.ts); the next success clears it.
       onResult: services.alerts ? (name, ok, error) => (services.alerts as ReturnType<typeof createAlerts>).jobResult(name, ok, error) : null,

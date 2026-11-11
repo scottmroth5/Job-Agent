@@ -261,9 +261,9 @@ test('the table holds no address, browser string, referrer, URL, or user id, and
   assert.equal((await get('/api/admin/usage', { as: 'sam@example.com' })).statusCode, 403);
 
   // Not anyone's data: an account's export leaves it out, and deleting the account leaves the totals as they were.
-  assert.ok(!JSON.stringify(exportAccount(store.raw, sam)).includes('usage_totals'));
+  assert.ok(!JSON.stringify(await exportAccount(store.raw, sam)).includes('usage_totals'));
   const before = totals();
-  deleteAccount(store.raw, sam);
+  await deleteAccount(store.raw, sam);
   assert.deepEqual(totals(), before);
   await app.close();
   store.close();

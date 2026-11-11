@@ -64,7 +64,7 @@ export function registerAccountRoutes(
     reply
       .header('Content-Disposition', `attachment; filename="job-hunt-export-${localDay()}.json"`)
       .header('Cache-Control', 'no-store')
-      .send(exportAccount(db, req.uid ?? OWNER_ID)),
+      .send(await exportAccount(db, req.uid ?? OWNER_ID)),
   );
   app.post<{ Body: { confirmEmail: string } }>(
     '/api/account/delete',
@@ -80,7 +80,7 @@ export function registerAccountRoutes(
       if (uid === OWNER_ID) throw Object.assign(new Error("The owner's account cannot be deleted."), { statusCode: 400 });
       const user = (await getUser(db, uid)) as User; // the request's own account
       if (req.body.confirmEmail.trim().toLowerCase() !== user.email) throw Object.assign(new Error(`Type ${user.email} to confirm.`), { statusCode: 400 });
-      const counts = deleteAccount(db, uid, { attachmentsDir });
+      const counts = await deleteAccount(db, uid, { attachmentsDir });
       await notices.accountDeleted?.(user, { byOwner: false });
       return { deleted: true, jobs: counts.postings ?? 0 };
     },
@@ -165,18 +165,18 @@ export function registerAccountRoutes(
     }
     if (uid === OWNER_ID) {
       // The owner's search settings stay in their settings file; their knowledge doc lives here, like everyone's.
-      return { owner: true, profile: userProfile(db, uid), profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE };
+      return { owner: true, profile: await userProfile(db, uid), profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE };
     }
     const u = (await getUser(db, uid)) as User; // the request's own account
-    const config = userConfig(db, uid, u.name as string); // registration asks every account for a name
-    const profile = userProfile(db, uid);
+    const config = await userConfig(db, uid, u.name as string); // registration asks every account for a name
+    const profile = await userProfile(db, uid);
     return {
       owner: false,
       config,
       problems: validateConfig(config),
       profile,
       profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE,
-      scheduled: scheduledForUser(db, uid),
+      scheduled: await scheduledForUser(db, uid),
     };
   };
   app.get('/api/account/search', { schema: { summary: 'Your search settings, background, and schedule choice', response: { 200: anyObject } } }, async (req) => search(req.uid ?? OWNER_ID));
@@ -191,7 +191,7 @@ export function registerAccountRoutes(
     },
     async (req) => {
       const uid = req.uid ?? OWNER_ID;
-      saveUserConfig(db, uid, req.body, (await getUser(db, uid))?.name ?? '');
+      await saveUserConfig(db, uid, req.body, (await getUser(db, uid))?.name ?? '');
       return search(uid);
     },
   );
@@ -206,31 +206,31 @@ export function registerAccountRoutes(
     },
     async (req) => {
       const uid = req.uid ?? OWNER_ID;
-      saveUserProfile(db, uid, req.body.text, { source: req.body.source });
+      await saveUserProfile(db, uid, req.body.text, { source: req.body.source });
       return search(uid);
     },
   );
 
   // Knowledge doc versions (every save keeps the one before) and Word downloads of the current one or any version.
   // The demo has no saved versions; its download is the sample candidate's knowledge doc.
-  const versionsOf = (uid: number) => (demo ? [{ text: DEMO_ABOUT_YOU, savedAt: null, source: 'sample' }] : profileVersions(db, uid));
+  const versionsOf = async (uid: number) => (demo ? [{ text: DEMO_ABOUT_YOU, savedAt: null, source: 'sample' }] : await profileVersions(db, uid));
   const versionParams = { type: 'object', required: ['n'], properties: { n: { type: 'integer', minimum: 1 } } };
   app.get('/api/account/profile/versions', { schema: { summary: 'Your knowledge doc versions, newest (current) first, without their text', response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
-    versionsOf(req.uid ?? OWNER_ID).map((v, i, all) => ({ n: all.length - i, current: i === 0, savedAt: v.savedAt, source: v.source, chars: v.text.length })),
+    (await versionsOf(req.uid ?? OWNER_ID)).map((v, i, all) => ({ n: all.length - i, current: i === 0, savedAt: v.savedAt, source: v.source, chars: v.text.length })),
   );
-  const versionAt = (uid: number, n: number) => {
-    const all = versionsOf(uid);
+  const versionAt = async (uid: number, n: number) => {
+    const all = await versionsOf(uid);
     return all.at(all.length - n) ?? null;
   };
   app.get<{ Params: { n: number } }>('/api/account/profile/versions/:n', { schema: { summary: 'One knowledge doc version with its text', params: versionParams, response: { 200: anyObject } } }, async (req, reply) => {
-    const v = versionAt(req.uid ?? OWNER_ID, req.params.n);
+    const v = await versionAt(req.uid ?? OWNER_ID, req.params.n);
     return v ? { n: req.params.n, ...v } : reply.code(404).send({ error: 'Version not found' });
   });
   app.post<{ Params: { n: number } }>('/api/account/profile/versions/:n/restore', { schema: { summary: 'Make an earlier knowledge doc version current again (saved as a new version)', params: versionParams, response: { 200: anyObject } } }, async (req, reply) => {
     const uid = req.uid ?? OWNER_ID;
-    const v = versionAt(uid, req.params.n);
+    const v = await versionAt(uid, req.params.n);
     if (!v) return reply.code(404).send({ error: 'Version not found' });
-    saveUserProfile(db, uid, v.text, { source: 'restore' });
+    await saveUserProfile(db, uid, v.text, { source: 'restore' });
     return search(uid);
   });
   app.get<{ Querystring: { version?: number } }>(
@@ -238,7 +238,7 @@ export function registerAccountRoutes(
     { schema: { summary: 'Your knowledge doc (current, or ?version=) as a Word document', querystring: { type: 'object', properties: { version: { type: 'integer', minimum: 1 } } } } },
     async (req, reply) => {
       const uid = req.uid ?? OWNER_ID;
-      const text = req.query.version ? versionAt(uid, req.query.version)?.text : demo ? DEMO_ABOUT_YOU : userProfile(db, uid);
+      const text = req.query.version ? (await versionAt(uid, req.query.version))?.text : demo ? DEMO_ABOUT_YOU : await userProfile(db, uid);
       if (!text) return reply.code(404).send({ error: 'No knowledge doc yet.' });
       const name = demo ? DEMO_CONFIG.candidate.name : (await getUser(db, uid))?.name;
       const file = docxName(fileTitle(name, 'Knowledge Doc', (req.query.version && `v${req.query.version}`) as string | undefined));
@@ -279,7 +279,7 @@ export function registerAccountRoutes(
     async (req) => {
       const uid = req.uid ?? OWNER_ID;
       if (uid === OWNER_ID) throw Object.assign(new Error('Your schedule is set in the server settings (SCHEDULE_PIPELINE).'), { statusCode: 400 });
-      setScheduledForUser(db, uid, req.body.on);
+      await setScheduledForUser(db, uid, req.body.on);
       return search(uid);
     },
   );

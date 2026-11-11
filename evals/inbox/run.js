@@ -71,7 +71,7 @@ export async function runInboxEval({ cases, applications, claude, cfg, model = c
       const { db } = store;
       seed(db, applications);
       const email = toEmail(c, cfg.bodyChars);
-      const pass = prefilter(email, { threadStartedByMe: Boolean(c.email.threadStartedByMe), isContact: isContact(db), isCompanyDomain: isCompanyDomain(db), atsDomains: cfg.atsDomains });
+      const pass = prefilter(email, { threadStartedByMe: Boolean(c.email.threadStartedByMe), isContact: await isContact(db), isCompanyDomain: await isCompanyDomain(db), atsDomains: cfg.atsDomains });
       if (!pass.pass) {
         results.push({ id: c.id, expected: c.expected, passed: false, predicted: null, rule: null });
         continue;

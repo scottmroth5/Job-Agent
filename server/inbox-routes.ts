@@ -28,7 +28,7 @@ export async function inboxOverview(db: Database, { ready }: { ready: boolean })
   return {
     signedIn: ready,
     lastCheck: db.prepare("SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name IN ('inbox', 'inbox-backfill') ORDER BY id DESC LIMIT 1").get() ?? null,
-    needsReview: listNeedsReview(db).map((e) => ({
+    needsReview: (await listNeedsReview(db)).map((e) => ({
       id: e.id,
       sentAt: e.sent_at,
       sender: e.sender,
@@ -116,7 +116,7 @@ export function registerInboxRoutes(app: App, { store, tasks, claude, inbox }: {
       },
     },
     async (req, reply) => {
-      const e = listNeedsReview(db).find((x) => x.id === req.params.id);
+      const e = (await listNeedsReview(db)).find((x) => x.id === req.params.id);
       if (!e) return reply.code(404).send({ error: 'That email is not waiting for review.' });
       const { choice, postingId } = req.body;
       if (choice === 'reassign' && !postingId) return reply.code(400).send({ error: 'Choose the job to link it to.' });

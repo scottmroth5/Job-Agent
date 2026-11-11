@@ -12,6 +12,7 @@ import type { Claude, Run } from '@scottmroth5/agent-core';
 import type { JobSearchConfig } from '../../tools/config.ts';
 import type { Database, JobStore } from '../../tools/types.ts';
 import type { PostingsRow } from '../../db/types.ts';
+import { asEngine } from '../../db/engine/index.ts';
 
 /** What scoring reads from a posting: a stored row, or an eval case shaped like one. */
 export type ScoreInput = Pick<PostingsRow, 'company' | 'title'> &
@@ -256,7 +257,7 @@ export async function selectPostings(
     where.push('p.fetch_status IS NOT NULL');
   }
   const sql = `SELECT p.* FROM postings p WHERE p.user_id = @uid ${where.length ? `AND ${where.join(' AND ')}` : ''} ORDER BY p.id${limit ? ' LIMIT ?' : ''}`;
-  return db.prepare(sql).all(...params, ...(limit ? [limit] : [])) as PostingsRow[];
+  return await asEngine(db).prepare(sql).all(...params, ...(limit ? [limit] : [])) as PostingsRow[];
 }
 
 async function mapLimit<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
@@ -291,13 +292,13 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
   const lk = await lookups(db);
   const postings = (await selectPostings(db, { ids, allUnscored, limit, rescore })).map((p) => ({ ...p, scorePrompt: lk.scorePrompt(p.track) }));
 
-  const insertScore = db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
+  const insertScore = asEngine(db).prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
   // A job without a description stays in Discovered (the UI flags it) until text is pasted and it is re-scored.
-  const promote = db.prepare(`UPDATE postings SET stage = '${lk.role('stage', 'promote')}', updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${sqlList(lk.ids('stage', 'found'))}
+  const promote = asEngine(db).prepare(`UPDATE postings SET stage = '${lk.role('stage', 'promote')}', updated_at = ? WHERE id = ? AND user_id = @uid AND stage IN ${sqlList(lk.ids('stage', 'found'))}
     AND TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != ''`);
   // Fractional scoring reports pay and hours from the posting text; keep what the source already gave.
-  const fillTerms = db.prepare(`UPDATE postings SET rate_min = COALESCE(rate_min, @rateMin), rate_max = COALESCE(rate_max, @rateMax),
+  const fillTerms = asEngine(db).prepare(`UPDATE postings SET rate_min = COALESCE(rate_min, @rateMin), rate_max = COALESCE(rate_max, @rateMax),
       rate_unit = COALESCE(rate_unit, @rateUnit), hours_min = COALESCE(hours_min, @hoursMin), hours_max = COALESCE(hours_max, @hoursMax)
     WHERE id = @id AND user_id = @uid`);
 
@@ -321,10 +322,10 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
       const nowIso = new Date().toISOString();
       const version = promptFor(p, { prompts }).version;
       const { rate, hoursPerWeek } = result.analysis;
-      store.tx(() => {
-        insertScore.run(p.id, result.score, result.reason, JSON.stringify(result.analysis), result.source, result.model, version, run?.id ?? null, nowIso);
+      await asEngine(store.db).tx(async () => {
+        await insertScore.run(p.id, result.score, result.reason, JSON.stringify(result.analysis), result.source, result.model, version, run?.id ?? null, nowIso);
         if (rate || hoursPerWeek) {
-          fillTerms.run({
+          await fillTerms.run({
             id: p.id,
             rateMin: rate?.min ?? null,
             rateMax: rate?.max ?? rate?.min ?? null,
@@ -333,7 +334,7 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
             hoursMax: hoursPerWeek?.max ?? hoursPerWeek?.min ?? null,
           });
         }
-        if (result.score >= promoteAt && promote.run(nowIso, p.id).changes) summary.promoted.push(p.id);
+        if (result.score >= promoteAt && (await promote.run(nowIso, p.id)).changes) summary.promoted.push(p.id);
       });
       summary.scored += 1;
       if (result.source === 'v2-rule') summary.ruleScored += 1;

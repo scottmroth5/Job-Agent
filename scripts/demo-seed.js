@@ -163,7 +163,7 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
     if (job.letter) {
       const flags = i % 5 === 2 ? ['over the word limit'] : [];
       const letterId = Number(insertArtifact.run(id, 'cover_letter', letter(job), `Cover letter: ${job.company}, ${job.title}`, JSON.stringify(flags), LETTER_MODEL, run, discoveredAt).lastInsertRowid);
-      saveCheck(db, letterId, { status: 'checked', claims: SAMPLE_CHECK_CLAIMS, model: VERIFY_MODEL, promptVersion: versionOf('verify-letter', defaultPrompt('verify-letter').template), runId: run }, new Date(discoveredAt));
+      await saveCheck(db, letterId, { status: 'checked', claims: SAMPLE_CHECK_CLAIMS, model: VERIFY_MODEL, promptVersion: versionOf('verify-letter', defaultPrompt('verify-letter').template), runId: run }, new Date(discoveredAt));
     }
     if (job.tweaks) insertArtifact.run(id, 'resume_tweaks', tweaks(job, i), null, null, LETTER_MODEL, run, discoveredAt);
 
@@ -249,7 +249,7 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
 
   const setResume = db.prepare('UPDATE artifacts SET resume_id = ? WHERE id = ? AND user_id = @uid');
   for (const a of /** @type {Array<{ id: number, title: string }>} */ (db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all())) {
-    setResume.run(pickResume(db, a.title)?.id ?? null, a.id);
+    setResume.run((await pickResume(db, a.title))?.id ?? null, a.id);
   }
 
   store.close();

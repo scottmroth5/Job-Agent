@@ -6,6 +6,7 @@ import { companyTitleKey } from '../tools/urls.ts';
 import { parseResultTitle } from './discovery/sources/serper.ts';
 import { lookups, sqlList } from './lookups.ts';
 import type { Database } from '../tools/types.ts';
+import { asEngine } from '../db/engine/index.ts';
 
 /** What identifies a posting: its company and title. */
 interface Named {
@@ -35,20 +36,23 @@ export function identityKey(p: Named) {
 export const storedKey = (p: Named) => identityKey(p) ?? companyTitleKey(p.company, p.title);
 
 /** Recomputes company_title_key for every posting (after the key rules change). Returns how many changed. */
-export function rekeyPostings(db: Database) {
-  const rows = db.prepare('SELECT id, company, title, company_title_key FROM postings WHERE user_id = @uid').all() as Array<{ id: number; company: string; title: string; company_title_key: string | null }>;
-  const update = db.prepare('UPDATE postings SET company_title_key = ? WHERE id = ? AND user_id = @uid');
-  let changed = 0;
-  db.transaction(() => {
-    for (const p of rows) {
-      const key = storedKey(p);
-      if (key !== p.company_title_key) {
-        update.run(key, p.id);
-        changed += 1;
+export async function rekeyPostings(db: Database) {
+  // Read and rekeyed in one transaction.
+  return asEngine(db).tx(async () => {
+    const rows = await asEngine(db).prepare('SELECT id, company, title, company_title_key FROM postings WHERE user_id = @uid').all() as Array<{ id: number; company: string; title: string; company_title_key: string | null }>;
+    const update = asEngine(db).prepare('UPDATE postings SET company_title_key = ? WHERE id = ? AND user_id = @uid');
+    let changed = 0;
+    await asEngine(db).tx(async () => {
+      for (const p of rows) {
+        const key = storedKey(p);
+        if (key !== p.company_title_key) {
+          await update.run(key, p.id);
+          changed += 1;
+        }
       }
-    }
-  })();
-  return changed;
+    });
+    return changed;
+  });
 }
 
 /**
@@ -66,7 +70,7 @@ export async function liveCopySql(db: Database) {
 export async function findCopies(db: Database, posting: Named & { id: number }) {
   const key = identityKey(posting);
   if (!key) return [];
-  return db
+  return await asEngine(db)
     .prepare(`SELECT id, company, title, stage, status, applied_on AS appliedOn, discovered_on AS discoveredOn FROM postings q
       WHERE user_id = @uid AND company_title_key = ? AND id != ? AND ${await liveCopySql(db)} ORDER BY id`)
     .all(key, posting.id) as Array<{ id: number; company: string; title: string; stage: string; status: string; appliedOn: string | null; discoveredOn: string }>;

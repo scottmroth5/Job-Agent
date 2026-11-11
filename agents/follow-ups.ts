@@ -54,23 +54,26 @@ export async function waitingApplications(db: Database, { now = new Date(), stal
  * applications still waiting (no reply, not closed) are changed. Returns the ones closed: [{ id, company, title, days }].
  */
 export async function closeNoResponse(db: Database, { ids = null, now = new Date(), dryRun = false }: { ids?: Array<number | string> | null; now?: Date; dryRun?: boolean } = {}) {
-  const lk = await lookups(db);
-  const status = lk.role('status', 'noResponse') ?? lk.ids('status', 'closed')[0];
-  const { stale } = await waitingApplications(db, { now });
-  const pick = ids ? new Set(ids.map(Number)) : null;
-  const targets = pick ? (await applications(db, { now })).filter((a) => pick.has(a.id) && !a.responded.reached && !a.closed) : stale;
-  if (!dryRun && targets.length) {
-    const nowIso = now.toISOString();
-    const update = db.prepare('UPDATE postings SET status = ?, updated_at = ? WHERE id = ? AND user_id = @uid');
-    const history = db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)");
-    // The job writes are still synchronous statements; they run inside this transaction, in its own context.
-    await asEngine(db).tx(async () => {
-      for (const a of targets) {
-        update.run(status, nowIso, a.id);
-        history.run(a.id, a.status, status, nowIso);
-        await addNote(db, a.id, `Closed ${localDay(now)}: no reply ${a.waitingDays} days after applying (${lk.label('status', status)}).`, { source: 'agent', now });
-      }
-    });
-  }
-  return targets.map((a) => ({ id: a.id, company: a.company, title: a.title, days: a.waitingDays }));
+  // The stale jobs are read and closed in one transaction, so a reply recorded meanwhile is not closed.
+  return asEngine(db).tx(async () => {
+    const lk = await lookups(db);
+    const status = lk.role('status', 'noResponse') ?? lk.ids('status', 'closed')[0];
+    const { stale } = await waitingApplications(db, { now });
+    const pick = ids ? new Set(ids.map(Number)) : null;
+    const targets = pick ? (await applications(db, { now })).filter((a) => pick.has(a.id) && !a.responded.reached && !a.closed) : stale;
+    if (!dryRun && targets.length) {
+      const nowIso = now.toISOString();
+      const update = asEngine(db).prepare('UPDATE postings SET status = ?, updated_at = ? WHERE id = ? AND user_id = @uid');
+      const history = asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'user', ?)");
+      // The job writes are still synchronous statements; they run inside this transaction, in its own context.
+      await asEngine(db).tx(async () => {
+        for (const a of targets) {
+          await update.run(status, nowIso, a.id);
+          await history.run(a.id, a.status, status, nowIso);
+          await addNote(db, a.id, `Closed ${localDay(now)}: no reply ${a.waitingDays} days after applying (${lk.label('status', status)}).`, { source: 'agent', now });
+        }
+      });
+    }
+    return targets.map((a) => ({ id: a.id, company: a.company, title: a.title, days: a.waitingDays }));
+  });
 }

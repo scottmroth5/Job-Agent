@@ -8,6 +8,7 @@ import { localDay } from '../../tools/dates.ts';
 import type { Database } from '../../tools/types.ts';
 import type { Lookups } from '../lookups.ts';
 import type { Classification } from './classify.ts';
+import { asEngine } from '../../db/engine/index.ts';
 
 /** decideLink's answer: the link to make (or not), and whether a person must look. */
 export interface LinkDecision {
@@ -86,7 +87,7 @@ export async function applyActions(
   db: Database,
   { email, postingId, c, decidedBy, promptVersion, now = new Date() }: { email: ActionEmail; postingId: number; c: ActionClassification; decidedBy: string; promptVersion?: string | null; now?: Date },
 ) {
-  const posting = db.prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as
+  const posting = await asEngine(db).prepare('SELECT id, company, title, status, stage, applied_on FROM postings WHERE id = ? AND user_id = @uid').get(postingId) as
     | { id: number; company: string; title: string; status: string; stage: string; applied_on: string | null }
     | undefined;
   if (!posting) return { statusChange: null, review: 'the application no longer exists', notices: [], reminderId: null };
@@ -96,11 +97,11 @@ export async function applyActions(
   const notices: string[] = [];
   let reminderId: string | null = null;
 
-  linkThread(db, email.threadId, postingId, 'application', now);
-  logDecision(db, { ...base, action: 'link', detail: { type: c.type } }, now);
+  await linkThread(db, email.threadId, postingId, 'application', now);
+  await logDecision(db, { ...base, action: 'link', detail: { type: c.type } }, now);
   if (c.extracted.contact_email || email.senderEmail) {
     const personal = c.extracted.contact_email ?? (/no-?reply|notifications?@/i.test(email.senderEmail) ? null : email.senderEmail);
-    if (personal) upsertContact(db, { email: personal, name: c.extracted.contact_name, company: posting.company, postingId }, now);
+    if (personal) await upsertContact(db, { email: personal, name: c.extracted.contact_name, company: posting.company, postingId }, now);
   }
 
   const lk = await lookups(db);
@@ -108,26 +109,26 @@ export async function applyActions(
   let statusChange: { from: string; to: string } | null = null;
   if (plan.change) {
     const { from, to } = plan.change;
-    db.transaction(() => {
+    await asEngine(db).tx(async () => {
       const appliedOn = lk.groupOf('status', to) === 'waiting' && !posting.applied_on ? dateOnly(email.sentAt) : posting.applied_on;
       const stage = lk.isClosed(to) ? lk.role('stage', 'archive') : posting.stage;
-      db.prepare('UPDATE postings SET status = ?, applied_on = ?, stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(to, appliedOn, stage, nowIso, postingId);
-      db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)").run(postingId, from, to, nowIso);
-      logDecision(db, { ...base, action: 'status_change', fromStatus: from, toStatus: to, detail: { emailDate: email.sentAt, type: c.type } }, now);
-    })();
+      await asEngine(db).prepare('UPDATE postings SET status = ?, applied_on = ?, stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(to, appliedOn, stage, nowIso, postingId);
+      await asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, 'agent', ?)").run(postingId, from, to, nowIso);
+      await logDecision(db, { ...base, action: 'status_change', fromStatus: from, toStatus: to, detail: { emailDate: email.sentAt, type: c.type } }, now);
+    });
     statusChange = plan.change;
   } else if (plan.review) {
-    logDecision(db, { ...base, action: 'needs_review', detail: { reason: plan.review, type: c.type } }, now);
+    await logDecision(db, { ...base, action: 'needs_review', detail: { reason: plan.review, type: c.type } }, now);
   }
 
   if (c.type === 'interview_request') {
     const times = c.extracted.interview_times;
-    reminderId = addReminder(db, { postingId, emailId: email.id, kind: 'interview', dueAt: parseDeadline(times[0]), note: times.length ? `Proposed: ${times.join('; ')}` : 'Reply to schedule' }, now);
+    reminderId = await addReminder(db, { postingId, emailId: email.id, kind: 'interview', dueAt: parseDeadline(times[0]), note: times.length ? `Proposed: ${times.join('; ')}` : 'Reply to schedule' }, now);
     notices.push(`INTERVIEW REQUEST: ${label}${times.length ? ` (proposed: ${times.join('; ')})` : ''}${c.extracted.contact_name ? `, from ${c.extracted.contact_name}` : ''}`);
   }
   if (c.type === 'assessment') {
-    reminderId = addReminder(db, { postingId, emailId: email.id, kind: 'assessment', dueAt: parseDeadline(c.extracted.deadline), note: c.extracted.deadline ? `Due: ${c.extracted.deadline}` : 'No deadline stated' }, now);
-    logDecision(db, { ...base, action: 'reminder', detail: { deadline: c.extracted.deadline } }, now);
+    reminderId = await addReminder(db, { postingId, emailId: email.id, kind: 'assessment', dueAt: parseDeadline(c.extracted.deadline), note: c.extracted.deadline ? `Due: ${c.extracted.deadline}` : 'No deadline stated' }, now);
+    await logDecision(db, { ...base, action: 'reminder', detail: { deadline: c.extracted.deadline } }, now);
     notices.push(`ASSESSMENT: ${label}${c.extracted.deadline ? `, due ${c.extracted.deadline}` : ''}`);
   }
   if (c.type === 'offer' && statusChange) notices.push(`OFFER: ${label}`);
@@ -146,15 +147,15 @@ export async function createOpportunity(
   const title = c.extracted.role_title ?? 'Recruiter outreach';
   const notes = `From a recruiter email on ${dateOnly(email.sentAt)}: ${c.summary}\nGmail thread: https://mail.google.com/mail/u/0/#all/${email.threadId}`;
   const id = Number(
-    db
+    (await asEngine(db)
       .prepare(`INSERT INTO postings (user_id, company, title, company_title_key, source, discovered_on, stage, status, notes, created_at, updated_at)
         VALUES (@uid, ?, ?, ?, 'email', ?, ?, ?, ?, ?, ?)`)
-      .run(company, title, storedKey({ company, title }), localDay(now), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso).lastInsertRowid,
+      .run(company, title, storedKey({ company, title }), localDay(now), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso)).id,
   );
-  db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
+  await asEngine(db).prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);
   await adoptNotesText(db, { postingId: id, source: 'agent', now });
-  linkThread(db, email.threadId, id, 'outreach', now);
-  upsertContact(db, { email: c.extracted.contact_email ?? email.senderEmail, name: c.extracted.contact_name, company, postingId: id }, now);
-  logDecision(db, { postingId: id, emailId: email.id, gmailMessageId: email.gmailMessageId, action: 'opportunity', decidedBy, promptVersion, detail: { company, title } }, now);
+  await linkThread(db, email.threadId, id, 'outreach', now);
+  await upsertContact(db, { email: c.extracted.contact_email ?? email.senderEmail, name: c.extracted.contact_name, company, postingId: id }, now);
+  await logDecision(db, { postingId: id, emailId: email.id, gmailMessageId: email.gmailMessageId, action: 'opportunity', decidedBy, promptVersion, detail: { company, title } }, now);
   return id;
 }

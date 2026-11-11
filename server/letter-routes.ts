@@ -61,7 +61,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
   const revisions = new Map<number, number[]>(); // uid -> timestamps in the last day
   const checks = new Map<number, number[]>(); // uid -> fact check timestamps in the last day
   const job = (id: number) => db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
-  const versions = (postingId: number) => withChecks(
+  const versions = async (postingId: number) => await withChecks(
     (
     db
       .prepare(`SELECT a.id, a.content, a.source, a.flags_json, a.doc_url, a.created_at, r.label AS resume FROM artifacts a
@@ -81,8 +81,8 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
         content: v.content,
       })),
   );
-  const withChecks = <T extends { id: number }>(list: T[]) => {
-    const found = checksFor(db, list.map((v) => v.id));
+  const withChecks = async <T extends { id: number }>(list: T[]) => {
+    const found = await checksFor(db, list.map((v) => v.id));
     return list.map((v) => ({ ...v, check: publicCheck(found.get(v.id) ?? null) }));
   };
   const version = (postingId: number, versionId: number) =>
@@ -140,7 +140,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
   app.put<{ Body: Record<string, unknown> }>('/api/letter-header', { schema: { summary: 'Save your cover letter header', body: headerBody, response: { 200: anyObject } } }, async (req) => await saveLetterHeader(db, req.body));
 
   app.get<{ Params: IdParams }>('/api/postings/:id/letters', { schema: { summary: "A job's cover letter versions, newest (current) first", params: idParams, response: { 200: { type: 'array', items: anyObject } } } }, async (req, reply) =>
-    job(req.params.id) ? versions(req.params.id) : reply.code(404).send({ error: 'Job not found' }),
+    job(req.params.id) ? await versions(req.params.id) : reply.code(404).send({ error: 'Job not found' }),
   );
 
   app.post<{ Params: IdParams; Body: { letter: string; feedback: string; history?: RevisionTurn[] } }>(
@@ -175,7 +175,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       const recent = (revisions.get(uid) ?? []).filter((t) => t > day);
       if (recent.length >= REVISIONS_PER_DAY) return reply.code(429).send({ error: 'That is a lot of revisions for one day. Save the version you like, or try again tomorrow.' });
       revisions.set(uid, [...recent, Date.now()]);
-      const resume = pickResume(db, posting.title);
+      const resume = await pickResume(db, posting.title);
       const background = withResume(await services.knowledge(), resume);
       const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-revise', { posting: posting.id });
       try {
@@ -208,9 +208,9 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       const content = (req.body.source === 'user' ? userLetterBody(req.body.content, names) : req.body.content).trim();
       if (content.length < 100) return reply.code(400).send({ error: 'That is too short for a cover letter.' });
       const flags = finishLetter(content, config).flags;
-      const resume = pickResume(db, posting.title);
+      const resume = await pickResume(db, posting.title);
       const saved = await saveVersion(posting, { content, flags, source: req.body.source === 'revision' ? 'v2-revision' : 'user', model: req.body.source === 'revision' ? HUNT_MODEL : null, resumeId: resume?.id ?? null });
-      return { versions: versions(posting.id), docError: saved.docError };
+      return { versions: await versions(posting.id), docError: saved.docError };
     },
   );
 
@@ -228,7 +228,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       const recent = (checks.get(uid) ?? []).filter((t) => t > day);
       if (recent.length >= CHECKS_PER_DAY) return reply.code(429).send({ error: 'That is a lot of fact checks for one day. Try again tomorrow.' });
       checks.set(uid, [...recent, Date.now()]);
-      const background = withResume(await services.knowledge(), pickResume(db, posting.title));
+      const background = withResume(await services.knowledge(), await pickResume(db, posting.title));
       const run = await createJobTracer({ store, logger: { info() {}, warn() {}, error() {}, log() {} } }).startRun('letter-check', { posting: posting.id });
       const r = await runCheck({ db, claude: services.claude, background, posting, artifactId: v.id, letter: v.content, config, trace: run });
       await run.finish(r.check?.status === 'checked' ? 'ok' : 'failed', { flagged: r.flagged, ...(r.error ? { error: (r.error as Error).name } : {}) });
@@ -248,7 +248,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     async (req, reply) => {
       const posting = job(req.params.id);
       const v = posting && version(posting.id, req.params.versionId);
-      const check = v && dismissClaim(db, v.id, req.params.index);
+      const check = v && await dismissClaim(db, v.id, req.params.index);
       if (!check) return reply.code(404).send({ error: 'Claim not found' });
       return publicCheck(check);
     },
@@ -264,8 +264,8 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
       const old = posting && db.prepare("SELECT content, source, flags_json, resume_id FROM artifacts WHERE id = ? AND posting_id = ? AND user_id = @uid AND kind = 'cover_letter'").get(req.body.versionId, posting.id) as { content: string; source: string; flags_json: string | null; resume_id: string | null } | undefined;
       if (!old) return reply.code(404).send({ error: 'Version not found' });
       const saved = await saveVersion(posting, { content: old.content, source: old.source, flags: old.flags_json ? JSON.parse(old.flags_json) : [], resumeId: old.resume_id });
-      copyCheck(db, req.body.versionId, saved.id); // the same text, so the same check
-      return { versions: versions(posting.id), docError: saved.docError };
+      await copyCheck(db, req.body.versionId, saved.id); // the same text, so the same check
+      return { versions: await versions(posting.id), docError: saved.docError };
     },
   );
 

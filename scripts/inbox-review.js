@@ -44,7 +44,7 @@ async function main() {
   const store = openJobStore();
   const rl = createInterface({ input: stdin, output: stdout });
   try {
-    const queue = listNeedsReview(store.db);
+    const queue = await listNeedsReview(store.db);
     if (!queue.length) {
       console.log('Nothing to review.');
       return;

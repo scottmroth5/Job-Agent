@@ -83,7 +83,7 @@ export function registerPrepRoutes(app: App, { store, config, services, startTas
   );
 
   app.get<{ Params: IdParams }>('/api/postings/:id/meeting-preps', { schema: { summary: "A job's meeting preps, newest first (without their text)", params: { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } }, response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
-    listPreps(db, req.params.id),
+    await listPreps(db, req.params.id),
   );
 
   app.get<{ Params: { id: string } }>('/api/meeting-preps/:id', { schema: { summary: 'One meeting prep with its text (Markdown) and what was asked', params: uuidParams, response: { 200: anyObject } } }, async (req, reply) => {

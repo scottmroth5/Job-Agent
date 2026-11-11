@@ -42,9 +42,9 @@ type Count = Exclude<keyof WeekTotals, 'weekEnding' | 'seen'>;
  * Every account with this month's Claude spend, how many jobs it has, when it was last here, its last pipeline run, and
  * how far its setup has got (search ready, About you long enough, key saved, on the schedule).
  */
-export function listUsers(db: Database, now = new Date()) {
+export async function listUsers(db: Database, now = new Date()) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-  return (db
+  const rows = (db
     .prepare(`SELECT u.id, u.email, u.name, u.role, u.status, u.request_note AS requestNote, u.created_at AS createdAt,
         u.decided_at AS decidedAt, u.ai_source AS aiSource, u.ai_cap_usd AS aiCapUsd, u.claude_key_enc IS NOT NULL AS hasKey,
         (SELECT COUNT(*) FROM postings p WHERE p.user_id = u.id) AS jobs,
@@ -54,8 +54,9 @@ export function listUsers(db: Database, now = new Date()) {
         (SELECT r.status || '|' || r.started_at FROM runs r WHERE r.user_id = u.id AND r.name = 'pipeline' ORDER BY r.id DESC LIMIT 1) AS lastRun
       FROM users u
       ORDER BY CASE u.status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END, u.created_at`)
-    .all(monthStart) as UserListRow[])
-    .map((u) => {
+    .all(monthStart) as UserListRow[]);
+  return Promise.all(
+    rows.map(async (u) => {
       const [runStatus, runAt] = u.lastRun ? u.lastRun.split('|') : [null, null];
       const owner = u.id === 1;
       return {
@@ -67,9 +68,10 @@ export function listUsers(db: Database, now = new Date()) {
         // u.name may be null, which userConfig takes as it always has (the cast only names the parameter's type).
         setup: owner
           ? null
-          : { searchReady: userConfig(db, u.id, u.name as string).ready, profileReady: userProfile(db, u.id).length >= MIN_PROFILE_CHARS, scheduled: scheduledForUser(db, u.id) },
+          : { searchReady: (await userConfig(db, u.id, u.name as string)).ready, profileReady: (await userProfile(db, u.id)).length >= MIN_PROFILE_CHARS, scheduled: await scheduledForUser(db, u.id) },
       };
-    });
+    }),
+  );
 }
 
 /** Feedback from every user, open first, with who sent it. */

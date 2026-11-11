@@ -78,7 +78,7 @@ function samplePosting(db: Database, name: string, postingId: number | undefined
 
 export function registerAdminRoutes(app: App, { db, config }: { db: Database; config: UserConfig }) {
   // The signed-in user's spend: the owner sees everything on their key; anyone else, their own.
-  const spending = async (uid = OWNER_ID) => ({ ...await budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: spendByLabel(db, { uid }) });
+  const spending = async (uid = OWNER_ID) => ({ ...await budgetStatus(db, { uid }), defaultUsd: DEFAULT_MONTHLY_BUDGET_USD, byLabel: await spendByLabel(db, { uid }) });
 
   // Your own spend (everyone: Settings, and Admin > Spending for the owner, where it is everything on their key). Setting
   // the cap below stays the owner's.

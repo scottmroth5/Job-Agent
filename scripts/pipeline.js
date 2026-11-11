@@ -66,7 +66,7 @@ async function main() {
   const started = new Date().toISOString();
   if (!Number.isInteger(uid) || uid < 1) throw new Error(`--user must be a user id, not "${userArg}"`);
   const store = openJobStore(undefined, { fallbackUid: uid });
-  const config = configFor(store.raw, uid, owner ? loadConfig() : /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null))); // either way with the skipped sites from Settings; the file config is read for the owner only
+  const config = await configFor(store.raw, uid, owner ? loadConfig() : /** @type {JobSearchConfig} */ (/** @type {unknown} */ (null))); // either way with the skipped sites from Settings; the file config is read for the owner only
   if (!owner) {
     const user = /** @type {Pick<UsersRow, 'status'> | undefined} */ (store.raw.prepare('SELECT status FROM users WHERE id = ?').get(uid));
     if (user?.status !== 'active') throw new Error(`User ${uid} is not an active account.`);
@@ -95,7 +95,7 @@ async function main() {
     /** @type {string | null} */
     let knowledge = null;
     try {
-      knowledge = owner ? await ownerBackground(store) : profileForAI(store.raw, uid);
+      knowledge = owner ? await ownerBackground(store) : await profileForAI(store.raw, uid);
     } catch (err) {
       pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${/** @type {Error} */ (err).message}`);
     }
