@@ -13,7 +13,7 @@ import { funnel } from './funnel.ts';
 import { registerAttachmentRoutes } from './attachments.ts';
 import { registerPrepRoutes } from './prep-routes.ts';
 import { registerNoteRoutes } from './notes-routes.ts';
-import { createScheduler } from './scheduler.ts';
+import { createScheduler, parseSchedule } from './scheduler.ts';
 import { BLOCKED_PAGE, geoBlocker } from './geo.ts';
 import { registerUsageTotals } from './usage-totals.ts';
 import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.ts';
@@ -39,7 +39,8 @@ import type { PostingsRow } from '../db/types.ts';
 import type { JobItem, PageRenderer } from '../agents/discovery/types.ts';
 import type { ManualInput } from '../agents/manual.ts';
 import type { PostingFilters, PostingPatch } from './queries.ts';
-import type { Schedule } from './scheduler.ts';
+import type { Schedule, ScheduledJob } from './scheduler.ts';
+import type { AutomationHooks } from './account-routes.ts';
 import type { CountryOf } from './geo.ts';
 import type { Place } from './usage-totals.ts';
 import type { AuthSettings, Exchange } from './auth.ts';
@@ -65,7 +66,11 @@ export type AppServices = Omit<RouteServices, 'knowledge'> & {
   createBrowser?: (() => Promise<Browser | null>) | null;
   runScript?: RunScript;
   runPipeline?: RunPipeline;
+  /** The .env schedules: backup and restore-test run as they are; pipeline and inbox are the owner's defaults (agents/automation.ts). */
   schedules?: Array<{ name: string; schedule: Schedule }>;
+  /** Tests only: how long a due run waits before trying again while another holds the lock, and how often automatic runs resync. */
+  scheduleRetryMs?: number;
+  automationSyncMs?: number;
   inbox?: InboxServices;
   notices?: Notices;
   alerts?: ReturnType<typeof createAlerts>;
@@ -99,7 +104,9 @@ export type BuildAppOptions = {
 const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback', '/api/admin/usage'];
 // What a paused account may still change: resume itself (when it paused itself) or delete itself.
 const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
-import { backgroundFor, scheduledUsers, userConfigView, withUserConfig } from '../agents/user-config.ts';
+import { backgroundFor, userConfigView, withUserConfig } from '../agents/user-config.ts';
+import { automatedUsers, automationFor, skipArgs } from '../agents/automation.ts';
+import type { AutomationDefaults } from '../agents/automation.ts';
 
 // Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
 // of the restricted Gmail scopes), and the lists and the spending cap are shared by everyone. Everything else runs
@@ -484,7 +491,15 @@ export async function buildApp({ store, config, services: given, webDir, authMod
 
   registerAdminRoutes(app, { db, config });
   registerLayoutRoutes(app, { db });
-  registerAccountRoutes(app, { db, demo: authMode === 'demo', checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
+  // Each user's automatic runs (agents/automation.ts): the defaults are the .env schedules; the scheduler below fills in
+  // sync (after a save) and next (a user's next runs, for Settings).
+  const envSpec = (name: string) => services.schedules?.find((j) => j.name === name)?.schedule.spec ?? null;
+  const automationHooks: AutomationHooks & { defaults: AutomationDefaults } = {
+    defaults: { pipeline: envSpec('pipeline'), inbox: envSpec('inbox') },
+    sync: async () => {},
+    next: () => ({ pipeline: null, inbox: null }),
+  };
+  registerAccountRoutes(app, { db, automation: automationHooks, demo: authMode === 'demo', checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   // The Users screen never exists in the demo.
   if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });
@@ -501,8 +516,23 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   registerExcludedSiteRoutes(app, { db, ownerConfig });
   registerFollowUpRoutes(app, { store, config, services, startTask, demo: authMode === 'demo' });
   let scheduler: ReturnType<typeof createScheduler> | null = null;
-  const scheduled = (name: string) => scheduler?.status().find((j) => j.name === name) ?? null;
-  const pipeline = services.runPipeline ? registerPipelineRoutes(app, { db, tasks, runPipeline: services.runPipeline, schedule: () => scheduled('pipeline') }) : null;
+  // Each user's automatic runs (agents/automation.ts) by job name: the owner's are "pipeline" and "inbox" (the names
+  // the alerts and the runs table know), anyone else's "pipeline:<id>". automaticOn is who has them on.
+  const automaticOn = new Set<number>();
+  const jobOf = (uid: number, kind: 'pipeline' | 'inbox') => (uid === OWNER_ID ? kind : `${kind}:${uid}`);
+  const statusOf = (name: string) => scheduler?.status().find((j) => j.name === name) ?? null;
+  const pipeline = services.runPipeline
+    ? registerPipelineRoutes(app, {
+        db,
+        tasks,
+        runPipeline: services.runPipeline,
+        schedule: (uid) => {
+          const job = statusOf(jobOf(uid, 'pipeline'));
+          // The demo shows its sample candidate's automatic runs as on (account-routes.ts DEMO_AUTOMATION).
+          return { automatic: authMode === 'demo' || automaticOn.has(uid), next: job?.next ?? null, schedule: job?.schedule ?? null };
+        },
+      })
+    : null;
   const inboxChecks = services.inbox ? registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox }) : null;
   registerReminderRoutes(app, { db });
 
@@ -525,51 +555,131 @@ export async function buildApp({ store, config, services: given, webDir, authMod
       step('Restore test passed');
     });
 
-  // The in-app scheduler (server/scheduler.ts): each job starts the same task as its button, and waits for it.
-  if (services.schedules?.length) {
+  // The in-app scheduler (server/scheduler.ts): each job starts the same task as its button, and waits for it. The
+  // backup and the restore test come from .env; pipelines and inbox checks are each user's automatic runs, synced
+  // from their settings at start, after each save, and every few minutes (so a pause or a deleted account drops out).
+  if (authMode !== 'demo' && (pipeline || inboxChecks || services.schedules?.length)) {
     const HOURS = 3600 * 1000;
+    const log = services.log ?? console;
+    const retryMs = services.scheduleRetryMs ?? 60 * 1000;
     const finish = async (taskId: string, hours: number) => {
       const t = await tasks.wait(taskId, hours * HOURS);
       if (t?.status === 'failed') throw new Error(t.error ?? 'failed');
     };
-    const runners: Record<string, (() => Promise<unknown>) | null | undefined> = {
-      pipeline: pipeline && (async () => {
-        await finish(await pipeline.start({ by: 'schedule' }), 4);
-        // Then the inbox, as the Windows scheduled run did; a pipeline failure above skips it.
-        if (inboxChecks && (services.inbox as InboxServices).ready()) await finish(await inboxChecks.startCheck({ by: 'schedule' }), 1);
-        // Then each user who asked to be on the schedule, one at a time, each as themselves; one user's failure never
-        // stops the next or marks the owner's run failed.
-        for (const uid of await scheduledUsers(store.admin)) {
-          const timeZone = (await db.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid) as string | null | undefined) ?? null;
-          await runAsUser(uid, async () => finish(await pipeline.start({ by: 'schedule' }), 4), { timeZone }).catch((err: Error) => (services.log ?? console).warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
+    // One scheduled pipeline or inbox check at a time, in the order they came due: each waits for the one before it.
+    let queue: Promise<unknown> = Promise.resolve();
+    const inQueue = <T>(fn: () => Promise<T>): Promise<T> => {
+      const result = queue.then(fn);
+      queue = result.catch(() => {});
+      return result;
+    };
+    // A start refused because another pipeline or inbox check is running (a button press) waits and tries again,
+    // for up to 4 hours, instead of being lost.
+    const whenFree = async (start: () => Promise<string>) => {
+      const until = Date.now() + 4 * HOURS;
+      for (;;) {
+        try {
+          return await start();
+        } catch (err) {
+          if ((err as { statusCode?: number }).statusCode !== 409 || Date.now() + retryMs > until) throw err;
+          await new Promise((r) => setTimeout(r, retryMs));
         }
-      }),
-      inbox: inboxChecks && (async () => finish(await inboxChecks.startCheck({ by: 'schedule' }), 1)),
+      }
+    };
+    const asUser = async (uid: number, fn: () => Promise<unknown>) => {
+      if (uid === OWNER_ID) return await runAsUser(OWNER_ID, async () => (ownerConfig ? await withUserConfig(store.admin, OWNER_ID, ownerConfig, fn) : await fn()));
+      const timeZone = ((await store.admin.prepare('SELECT time_zone FROM users WHERE id = ?').pluck().get(uid)) as string | null | undefined) ?? null;
+      return await runAsUser(uid, fn, { timeZone });
+    };
+    // The user's settings when a run comes due, so a pause or a save since the last sync wins; null: run nothing.
+    const current = async (uid: number) => {
+      if ((await store.admin.prepare('SELECT status FROM users WHERE id = ?').pluck().get(uid)) !== 'active') return null;
+      const a = await automationFor(store.admin, uid, automationHooks.defaults);
+      return a.on ? a : null;
+    };
+    const pipelineRun = (uid: number) => async () => {
+      if (!pipeline) return;
+      const run = inQueue(async () => {
+        // Read when its turn comes, so turning automatic runs off while it waits in the queue still stops it.
+        const a = await current(uid);
+        if (!a) return;
+        await asUser(uid, async () => {
+          await finish(await whenFree(() => pipeline.start({ by: 'schedule', args: skipArgs(a.steps) })), 4);
+          // Then the owner's inbox, as the Windows scheduled run did; a pipeline failure above skips it.
+          if (uid === OWNER_ID && a.inbox?.afterPipeline && inboxChecks && (services.inbox as InboxServices).ready()) await finish(await whenFree(() => inboxChecks.startCheck({ by: 'schedule' })), 1);
+        });
+      });
+      // Another user's failure is logged, never emailed to the owner (server/alerts.ts hears only the owner's jobs).
+      if (uid === OWNER_ID) await run;
+      else await run.catch((err: Error) => log.warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
+    };
+    const inboxRun = async () => {
+      if (!inboxChecks) return;
+      await inQueue(async () => {
+        const a = await current(OWNER_ID);
+        if (!a?.inbox?.schedule) return;
+        await asUser(OWNER_ID, async () => finish(await whenFree(() => inboxChecks.startCheck({ by: 'schedule' })), 1));
+      });
+    };
+    // When a job last started, from the runs table; the owner's include runs from before runs had a user.
+    const lastRanAt = (name: string, uid = OWNER_ID) => async () =>
+      ((await store.admin
+        .prepare(`SELECT started_at FROM runs WHERE name = ? AND (user_id = ? OR (? = ${OWNER_ID} AND user_id IS NULL)) ORDER BY id DESC LIMIT 1`)
+        .pluck()
+        .get(name, uid, uid)) as string | null | undefined) ?? null;
+    const appRunners: Record<string, (() => Promise<unknown>) | null | undefined> = {
       backup: services.runScript && (() => finish(startBackup(), 1)),
       'restore-test': services.runScript && (() => finish(startRestoreTest(), 1)),
     };
-    // The owner's runs: the schedule is theirs (users' scheduled runs follow it).
-    const lastRanAt = (name: string) => async () =>
-      (await db.prepare('SELECT started_at FROM runs WHERE name = ? AND (user_id IS NULL OR user_id = 1) ORDER BY id DESC LIMIT 1').pluck().get(name) as string | null | undefined) ?? null;
     const jobsScheduler = createScheduler({
-      // Scheduled jobs are the owner's (phase 1); each user's own schedule comes with per-user feeds.
-      // Each runner is kept by the filter.
-      jobs: services.schedules.filter((j) => runners[j.name]).map((j) => ({ ...j, run: async () => await runAsUser(OWNER_ID, async () => (ownerConfig ? await withUserConfig(store.admin, OWNER_ID, ownerConfig, runners[j.name] as () => Promise<unknown>) : (runners[j.name] as () => Promise<unknown>)())), lastRanAt: lastRanAt(j.name) })),
-      log: services.log ?? console,
-      // A failed scheduled job emails the owner (server/alerts.ts); the next success clears it.
-      onResult: services.alerts ? (name, ok, error) => (services.alerts as ReturnType<typeof createAlerts>).jobResult(name, ok, error) : null,
+      // The backup and the restore test are the app's, run as the owner (their runs are the owner's).
+      jobs: (services.schedules ?? [])
+        .filter((j) => appRunners[j.name])
+        .map((j) => ({ ...j, run: async () => await asUser(OWNER_ID, appRunners[j.name] as () => Promise<unknown>), lastRanAt: lastRanAt(j.name) })),
+      log,
+      // A failed scheduled job of the owner's emails the owner (server/alerts.ts); the next success clears it. Another
+      // user's jobs ("pipeline:<id>") never reach the alerts: job data goes to nobody but its own user.
+      onResult: services.alerts ? (name, ok, error) => (name.includes(':') ? undefined : (services.alerts as ReturnType<typeof createAlerts>).jobResult(name, ok, error)) : null,
     });
     scheduler = jobsScheduler;
+
+    let synced = new Set<string>();
+    const sync = async () => {
+      const on = await automatedUsers(store.admin, automationHooks.defaults);
+      const want = new Map<string, ScheduledJob>();
+      for (const { uid, automation: a } of on) {
+        if (pipeline && a.pipeline) want.set(jobOf(uid, 'pipeline'), { name: jobOf(uid, 'pipeline'), schedule: parseSchedule(a.pipeline), run: pipelineRun(uid), lastRanAt: lastRanAt('pipeline', uid) });
+        if (uid === OWNER_ID && inboxChecks && a.inbox?.schedule) want.set('inbox', { name: 'inbox', schedule: parseSchedule(a.inbox.schedule), run: inboxRun, lastRanAt: lastRanAt('inbox') });
+      }
+      automaticOn.clear();
+      for (const { uid } of on) automaticOn.add(uid);
+      for (const name of synced) if (!want.has(name)) jobsScheduler.set(name, null);
+      for (const [name, job] of want) jobsScheduler.set(name, job);
+      synced = new Set(want.keys());
+    };
+    automationHooks.sync = async () => {
+      await sync().catch((err: Error) => log.warn?.(`[schedule] automatic runs: ${err.message}`));
+    };
+    automationHooks.next = (uid) => ({ pipeline: statusOf(jobOf(uid, 'pipeline'))?.next ?? null, inbox: uid === OWNER_ID ? (statusOf('inbox')?.next ?? null) : null });
+    let syncTimer: ReturnType<typeof setInterval> | null = null;
     app.addHook('onReady', async () => {
+      await automationHooks.sync();
       await jobsScheduler.start();
+      syncTimer = setInterval(() => void automationHooks.sync(), services.automationSyncMs ?? 5 * 60 * 1000); // sync catches its own errors
+      syncTimer.unref();
     });
-    app.addHook('onClose', async () => jobsScheduler.stop());
+    app.addHook('onClose', async () => {
+      jobsScheduler.stop();
+      if (syncTimer) clearInterval(syncTimer);
+    });
   }
 
-  app.get('/api/schedule', { schema: { summary: 'The scheduled jobs, their schedules, and when each runs next (empty when none are set)', response: { 200: anyObject } } }, async () => ({
-    timeZone: timeZone(),
-    jobs: scheduler?.status() ?? [],
-  }));
+  // The jobs a user may see: the app's (backup, restore test) and their own automatic runs, never another user's.
+  app.get('/api/schedule', { schema: { summary: "The app's scheduled jobs and your automatic runs, and when each runs next (empty when none are set)", response: { 200: anyObject } } }, async (req) => {
+    const uid = req.uid ?? OWNER_ID;
+    const mine = (name: string) => !/^(pipeline|inbox)(:\d+)?$/.test(name) || name === jobOf(uid, 'pipeline') || name === jobOf(uid, 'inbox');
+    return { timeZone: timeZone(), jobs: (scheduler?.status() ?? []).filter((j) => mine(j.name)) };
+  });
 
   app.get('/api/tasks', { schema: { summary: 'Recent background tasks, newest first (without output)', response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
     tasks.list({ uid: req.uid ?? 0 }),

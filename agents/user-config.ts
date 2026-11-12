@@ -19,7 +19,6 @@ type Loose = Record<string, unknown>;
 
 const CONFIG_KEY = 'search.config';
 const PROFILE_KEY = 'profile.text';
-const SCHEDULE_KEY = 'schedule.pipeline';
 export const MIN_PROFILE_CHARS = 500;
 export const MAX_PROFILE_CHARS = 50000;
 const MAX_ITEMS = 40;
@@ -176,18 +175,7 @@ export async function backgroundFor(db: Db, uid: number, { fallback = null }: { 
   return await profileForAI(db, uid);
 }
 
-/** Whether a user's pipeline runs on the owner's schedule too. */
-export const scheduledForUser = async (db: Db, uid: number) => await readSetting(db, uid, SCHEDULE_KEY) === 'on';
-export const setScheduledForUser = async (db: Db, uid: number, on: unknown) => await writeSetting(db, uid, SCHEDULE_KEY, on ? 'on' : 'off');
-
-/** Active users (not the owner) who asked for their pipeline to run on the schedule. */
-export async function scheduledUsers(db: Db): Promise<number[]> {
-  return await db
-    .prepare(`SELECT s.user_id FROM user_settings s JOIN users u ON u.id = s.user_id
-      WHERE s.key = ? AND s.value = 'on' AND u.status = 'active' AND u.id != ? ORDER BY u.id`)
-    .pluck()
-    .all(SCHEDULE_KEY, OWNER_ID) as number[];
-}
+// Each user's automatic runs (when their pipeline and inbox run, or manual only) are in agents/automation.ts.
 
 const views = new Map<number, { base: JobSearchConfig | null; db: Db; config: UserConfig }>(); // uid -> { base, db, config }, cleared when anyone saves settings or skipped sites
 /**

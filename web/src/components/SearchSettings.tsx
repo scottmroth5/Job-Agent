@@ -74,7 +74,8 @@ function SectionChecklist({ sections, text, template, readOnly = false, onChange
 }
 
 /**
- * Settings: the knowledge doc (everyone's, the owner's too) and, for everyone but the owner, the search and schedule.
+ * Settings: the knowledge doc (everyone's, the owner's too) and, for everyone but the owner, the search (when it runs
+ * is under Automatic runs, AutomationSettings.tsx).
  * The owner's search settings live in their settings file.
  */
 export default function SearchSettings() {
@@ -258,11 +259,7 @@ export default function SearchSettings() {
           </button>
           </fieldset>
         </form>
-        <label className="switch check-row demo-hide">
-          <input type="checkbox" checked={data.scheduled} onChange={(e) => run(() => api.setAccountSchedule(e.target.checked), e.target.checked ? 'Your pipeline will run on the schedule.' : 'Off the schedule.')} />
-          Run my pipeline on the app's schedule too (it uses your Claude key)
-        </label>
-        <p className="muted small demo-hide">Your pipeline searches the free job sources; Google results and Google Docs are the owner's only for now. Letters and meeting preps are kept here in the app.</p>
+        <p className="muted small demo-hide">When your pipeline runs on its own (it uses your Claude key) is under Automatic runs, below. Your pipeline searches the free job sources; Google results and Google Docs are the owner's only for now. Letters and meeting preps are kept here in the app.</p>
       </section>
       )}
       {note && <p className="muted small">{note}</p>}

@@ -7,8 +7,10 @@ import { OWNER_ID } from '../db/users.ts';
 import type { Db } from '../tools/types.ts';
 import type { App, Tasks } from './types.ts';
 
-/** Runs scripts/pipeline.js for a user: onLine gets each stdout line, onError each stderr line. */
-export type RunPipeline = (opts: { user: number; onLine: (line: string) => void; onError: (line: string) => void }) => Promise<{ code: number; lastError: string | null }>;
+/** Runs scripts/pipeline.js for a user (args: --no-score, --no-letters): onLine gets each stdout line, onError each stderr line. */
+export type RunPipeline = (opts: { user: number; args?: string[]; onLine: (line: string) => void; onError: (line: string) => void }) => Promise<{ code: number; lastError: string | null }>;
+/** A user's automatic pipeline runs for the UI: whether they are on, and the next one (ISO) and its schedule. */
+export type PipelineSchedule = (uid: number) => { automatic: boolean; next: string | null; schedule: string | null };
 
 const anyObject = { type: 'object', additionalProperties: true };
 const LOCKS = ['pipeline', 'inbox', 'discover', 'score', 'hunt'];
@@ -36,22 +38,25 @@ export async function pipelineState(db: Db, uid: number = OWNER_ID) {
 
 /** Turns the pipeline's console lines into short progress messages. */
 export function progressLine(line: string) {
-  const step = /^\[pipeline\] (Step \d+\/\d+: \w+)/.exec(line);
+  const step = /^\[pipeline\] (Step \d+\/\d+: \w+(?: skipped)?)/.exec(line); // skipped: left out by the automatic runs setting
   if (step) return step[1];
   if (/^Sent "/.test(line)) return 'Report emailed';
   if (/^\[pipeline\] Inbox skipped/.test(line)) return 'Inbox skipped';
   return null;
 }
 
-/** schedule() is the scheduler's pipeline job (its next run), or null when none is scheduled. */
+/** schedule(uid) is that user's automatic runs (server/app.ts), or none when there is no scheduler. */
 export function registerPipelineRoutes(
   app: App,
-  { db, tasks, runPipeline, schedule = () => null }: { db: Db; tasks: Tasks; runPipeline: RunPipeline; schedule?: () => { next?: string | null; schedule?: unknown } | null },
+  { db, tasks, runPipeline, schedule = () => ({ automatic: false, next: null, schedule: null }) }: { db: Db; tasks: Tasks; runPipeline: RunPipeline; schedule?: PipelineSchedule },
 ) {
   let taskId: string | null = null;
 
-  /** Starts the current user's pipeline as a task (the button and the scheduler); throws 409 when one is already running. */
-  const start = ({ by = 'button' }: { by?: string } = {}) => oneStartAtATime(async () => {
+  /**
+   * Starts the current user's pipeline as a task (the button and the scheduler); throws 409 when one is already running.
+   * args leaves out steps (a scheduled run's automatic runs setting); the button runs every step.
+   */
+  const start = ({ by = 'button', args = [] }: { by?: string; args?: string[] } = {}) => oneStartAtATime(async () => {
     const uid = currentUserId() ?? OWNER_ID;
     if (taskId && tasks.get(taskId)?.status === 'running') throw Object.assign(new Error('The pipeline is already running.'), { statusCode: 409 });
     for (const name of LOCKS) {
@@ -65,6 +70,7 @@ export function registerPipelineRoutes(
       step(by === 'schedule' ? 'Starting (scheduled)' : 'Starting');
       const { code, lastError } = await runPipeline({
         user: uid,
+        args,
         onLine: (line: string) => {
           logger.info(line);
           const p = progressLine(line);
@@ -82,7 +88,8 @@ export function registerPipelineRoutes(
     const uid = req.uid ?? OWNER_ID;
     // The running task is shown only to its own user; others just see that one is running.
     const task = taskId ? tasks.get(taskId, { uid }) : null;
-    return { ...(await pipelineState(db, uid)), taskId: task?.status === 'running' ? taskId : null, nextScheduled: schedule()?.next ?? null, schedule: schedule()?.schedule ?? null };
+    const mine = schedule(uid);
+    return { ...(await pipelineState(db, uid)), taskId: task?.status === 'running' ? taskId : null, automatic: mine.automatic, nextScheduled: mine.next, schedule: mine.schedule };
   });
 
   app.post(

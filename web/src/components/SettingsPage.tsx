@@ -6,6 +6,7 @@ import type { ApiResponse } from '../api.ts';
 type Account = ApiResponse<'GET /api/account'>;
 import { useDemo } from '../demo.tsx';
 import SearchSettings from './SearchSettings.tsx';
+import AutomationSettings from './AutomationSettings.tsx';
 import FeedbackForm from './FeedbackForm.tsx';
 import AccountControls from './AccountControls.tsx';
 import ResumesSettings from './ResumesSettings.tsx';
@@ -186,6 +187,7 @@ function AccountSettings({ tabs }: { tabs: ReactNode }) {
       </section>
 
       <SearchSettings />
+      <AutomationSettings />
       <LetterHeaderSettings />
       <ExcludedSitesSettings />
       <FollowUpSettings />

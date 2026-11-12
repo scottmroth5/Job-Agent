@@ -13,7 +13,8 @@ import { addUser, OWNER_ID } from '../db/users.ts';
 import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
-import { cleanConfig, configFor, saveUserConfig, saveUserProfile, scheduledUsers, setScheduledForUser, userConfigView, withUserConfig } from '../agents/user-config.ts';
+import { cleanConfig, configFor, saveUserConfig, saveUserProfile, userConfigView, withUserConfig } from '../agents/user-config.ts';
+import { automatedUsers } from '../agents/automation.ts';
 import { repoPath } from '../tools/paths.ts';
 import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 
@@ -115,9 +116,10 @@ test('Settings: a user saves their search, background, and schedule; the owner i
   const about = 'Fifteen years leading data teams. '.repeat(20);
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/profile', headers: asB, payload: { text: about } })).json().profile, about.trim());
   assert.equal((await app.inject({ method: 'PUT', url: '/api/account/profile', headers: asB, payload: { text: 'x'.repeat(60000) } })).statusCode, 400);
-  assert.equal((await app.inject({ method: 'PUT', url: '/api/account/schedule', headers: asB, payload: { on: true } })).json().scheduled, true);
-  assert.deepEqual(await scheduledUsers(store.admin), [b]);
-  assert.equal((await app.inject({ method: 'PUT', url: '/api/account/schedule', headers: asA, payload: { on: true } })).statusCode, 400);
+  const NONE = { pipeline: null, inbox: null };
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/account/automation', headers: asB, payload: { on: true, pipeline: 'Mon 06:00' } })).json().on, true);
+  assert.deepEqual((await automatedUsers(store.admin, NONE)).map((u) => u.uid), [b]);
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/account/automation', headers: asB, payload: { on: true, inbox: { afterPipeline: true } } })).statusCode, 400, 'only the owner has an inbox');
 
   // What the server shows each of them follows their own settings.
   assert.deepEqual((await app.inject({ url: '/api/summary', headers: asA })).json().fractionalTarget, [100000, 200000]);
@@ -129,8 +131,7 @@ test('Settings: a user saves their search, background, and schedule; the owner i
   }
   // A paused user's pipeline is off the schedule.
   await store.admin.prepare("UPDATE users SET status = 'paused' WHERE id = ?").run(b);
-  assert.deepEqual(await scheduledUsers(store.admin), []);
-  await setScheduledForUser(store.admin, b, false);
+  assert.deepEqual(await automatedUsers(store.admin, NONE), []);
   await done();
 });
 

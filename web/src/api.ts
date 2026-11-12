@@ -173,7 +173,9 @@ export const api = {
   replaceResume: (id: Id, file: File) => uploadFile('POST /api/resumes/:id/file', `/api/resumes/${id}/file`, file, '5 MB'),
   updateResume: (id: Id, patch: ApiBody<'PATCH /api/resumes/:id'>) => request('PATCH /api/resumes/:id', `/api/resumes/${id}`, patch),
   deleteResume: (id: Id) => request('DELETE /api/resumes/:id', `/api/resumes/${id}`),
-  setAccountSchedule: (on: boolean) => request('PUT /api/account/schedule', '/api/account/schedule', { on }),
+  // Settings > Automatic runs (agents/automation.ts): on or off (manual only), the times, and the Claude steps.
+  automation: () => request('GET /api/account/automation', '/api/account/automation'),
+  saveAutomation: (body: ApiBody<'PUT /api/account/automation'>) => request('PUT /api/account/automation', '/api/account/automation', body),
   users: () => request('GET /api/admin/users', '/api/admin/users'),
   decideUser: (id: Id, decision: string) => request('POST /api/admin/users/:id/:decision', `/api/admin/users/${id}/${decision}`),
   setUserAi: (id: Id, source: ApiBody<'PUT /api/admin/users/:id/ai'>['source'], capUsd: number | null = null, confirmEmail: string | undefined = undefined) =>

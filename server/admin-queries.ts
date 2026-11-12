@@ -1,7 +1,8 @@
 // The admin's cross-user reads (multi-user). The only place, with the migrations, that may query user tables across
 // users (test/user-scope.test.js exempts this file): it reads the unscoped database, and its routes need the admin role.
 // It returns account facts and counts only, never a user's jobs, notes, emails, background, or key.
-import { MIN_PROFILE_CHARS, scheduledForUser, userConfig, userProfile } from '../agents/user-config.ts';
+import { MIN_PROFILE_CHARS, userConfig, userProfile } from '../agents/user-config.ts';
+import { automationFor } from '../agents/automation.ts';
 import { currentTimeZone, currentUserId, runAsUser } from '../db/scope.ts';
 import { appDay, dayOf, localDay } from '../tools/dates.ts';
 import type { Db } from '../tools/types.ts';
@@ -40,7 +41,7 @@ type Count = Exclude<keyof WeekTotals, 'weekEnding' | 'seen'>;
 
 /**
  * Every account with this month's Claude spend, how many jobs it has, when it was last here, its last pipeline run, and
- * how far its setup has got (search ready, About you long enough, key saved, on the schedule).
+ * how far its setup has got (search ready, About you long enough, key saved, automatic runs on).
  */
 export async function listUsers(db: Db, now = new Date()) {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
@@ -68,7 +69,8 @@ export async function listUsers(db: Db, now = new Date()) {
         // u.name may be null, which userConfig takes as it always has (the cast only names the parameter's type).
         setup: owner
           ? null
-          : { searchReady: (await userConfig(db, u.id, u.name as string)).ready, profileReady: (await userProfile(db, u.id)).length >= MIN_PROFILE_CHARS, scheduled: await scheduledForUser(db, u.id) },
+          : { searchReady: (await userConfig(db, u.id, u.name as string)).ready, profileReady: (await userProfile(db, u.id)).length >= MIN_PROFILE_CHARS, // Whether automatic runs are on (agents/automation.ts); for anyone but the owner that never depends on the .env defaults.
+            scheduled: (await automationFor(db, u.id, { pipeline: null, inbox: null })).on },
       };
     }),
   );

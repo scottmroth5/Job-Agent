@@ -11,6 +11,67 @@ export interface ApiOperations {
       [key: string]: unknown;
     };
   };
+  /** Your automatic runs: on or off (manual only), when, and which Claude steps they do */
+  "GET /api/account/automation": {
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: never;
+    response: {
+      on: boolean;
+      pipeline: string | null;
+      steps: {
+        score: boolean;
+        letters: boolean;
+      };
+      inbox: {
+        afterPipeline: boolean;
+        schedule: string | null;
+      } | null;
+      saved: boolean;
+      owner: boolean;
+      timeZone: string;
+      next: {
+        pipeline: string | null;
+        inbox: string | null;
+      };
+    };
+  };
+  /** Save your automatic runs (off is manual runs only); only the owner sets the inbox */
+  "PUT /api/account/automation": {
+    params: Record<string, never>;
+    query: Record<string, never>;
+    body: {
+      on: boolean;
+      pipeline?: string | null;
+      steps?: {
+        score?: boolean;
+        letters?: boolean;
+      };
+      inbox?: {
+        afterPipeline?: boolean;
+        schedule?: string | null;
+      } | null;
+    };
+    response: {
+      on: boolean;
+      pipeline: string | null;
+      steps: {
+        score: boolean;
+        letters: boolean;
+      };
+      inbox: {
+        afterPipeline: boolean;
+        schedule: string | null;
+      } | null;
+      saved: boolean;
+      owner: boolean;
+      timeZone: string;
+      next: {
+        pipeline: string | null;
+        inbox: string | null;
+      };
+    };
+  };
   /** Save your own Claude API key (checked with Anthropic, then stored encrypted) */
   "PUT /api/account/claude-key": {
     params: Record<string, never>;
@@ -150,18 +211,7 @@ export interface ApiOperations {
       [key: string]: unknown;
     };
   };
-  /** Run your pipeline on the app's schedule too */
-  "PUT /api/account/schedule": {
-    params: Record<string, never>;
-    query: Record<string, never>;
-    body: {
-      on: boolean;
-    };
-    response: {
-      [key: string]: unknown;
-    };
-  };
-  /** Your search settings, background, and schedule choice */
+  /** Your search settings and background */
   "GET /api/account/search": {
     params: Record<string, never>;
     query: Record<string, never>;
@@ -1173,7 +1223,7 @@ export interface ApiOperations {
       [key: string]: unknown;
     };
   };
-  /** The scheduled jobs, their schedules, and when each runs next (empty when none are set) */
+  /** The app's scheduled jobs and your automatic runs, and when each runs next (empty when none are set) */
   "GET /api/schedule": {
     params: Record<string, never>;
     query: Record<string, never>;

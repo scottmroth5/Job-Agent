@@ -137,8 +137,16 @@ stay the owner's) and their background text on Settings (user_settings). The ser
 services.knowledge and services.drive answer for the current user (others: their background; no Drive, so letters and preps
 stay in the app). scripts/pipeline.js --user=<id> runs as that user: free sources only (Serper is the owner's paid key), no Docs,
 no report email (job data goes to nobody but the owner); it refuses an account that is not active or has no complete search.
-The Run pipeline button runs the presser's pipeline; one pipeline at a time across the app. Users who turn on "Run my pipeline on
-the schedule" run after the owner's scheduled pipeline (and inbox), one by one, each as themselves. Other child scripts run as
+The Run pipeline button runs the presser's pipeline; one pipeline at a time across the app.
+Automatic runs (agents/automation.ts, Settings > Automatic runs, user_settings automation, GET/PUT /api/account/automation):
+everyone, the owner too, sets on or off (off is manual runs only: the scheduler starts nothing; Home and the Inbox show
+Manual runs only), their pipeline times, and whether a scheduled run scores and writes letters (--no-score, --no-letters;
+the button always runs every step); the owner also sets the inbox (after each pipeline, its own times). Until saved, the
+owner's come from SCHEDULE_PIPELINE and SCHEDULE_INBOX, and anyone else's old schedule.pipeline checkbox maps to on at
+SCHEDULE_PIPELINE. server/app.ts syncs them into the scheduler (set(); jobs "pipeline" and "inbox" for the owner,
+"pipeline:<id>" for others) at start, after each save, and every 5 minutes, and rechecks the account when a run is due;
+due runs queue one at a time, and one refused by a running pipeline waits (up to 4 hours). Only the owner's failures
+alert. test/automation.test.js. Other child scripts run as
 the owner; tasks keep their user and the task routes show only that user's.
 Per-user settings live in user_settings (getUserSetting: inbox cursor, Drive folders, layouts); app_settings is app-wide
 (alerts, the owner's cap, allowance-notice months, demo marker). runs.user_id (014) is stamped by tools/trace.ts
@@ -229,9 +237,9 @@ while a pipeline step is running. web/dist is build output (gitignored).
 A failed scheduled job emails the owner (server/alerts.ts: EMAIL_ADDRESS only, once per kind a day, cleared by the next success).
 deploy.sh: when the new image has pending migrations, it backs up to Drive with the current image first and, if the deploy
 fails, restores the pre-migration copy before restarting the old image (--no-backup, --skip-db-check for old tags).
-The in-app scheduler (server/scheduler.ts) runs SCHEDULE_PIPELINE (then the inbox), SCHEDULE_INBOX, and SCHEDULE_BACKUP from .env
+The in-app scheduler (server/scheduler.ts) runs each user's automatic runs (see Users) and SCHEDULE_BACKUP from .env
 while the server runs, through the same task starters as the buttons (pipeline-routes start, inbox-routes startCheck); it
-catches up a run missed in the last 12 hours. GET /api/schedule lists the jobs. It replaces the Windows tasks in the cloud;
+catches up a run missed in the last 12 hours. GET /api/schedule lists the app's jobs and the caller's own. It replaces the Windows tasks in the cloud;
 never enable both. Child scripts run through services.runScript.
 Keyboard and screen readers: job titles and column headers in the Jobs table are real buttons (aria-sort on the header);
 the job panel is a dialog that takes focus, keeps Tab inside, and returns focus to its opener; charts carry a table
