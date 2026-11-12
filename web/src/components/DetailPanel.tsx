@@ -22,6 +22,8 @@ import LetterSection from './LetterSection.tsx';
 import { useDemo } from '../demo.tsx';
 import { isOwner, useMe } from '../me.tsx';
 import { DashIcon } from './DashIcon.tsx';
+import ScamWarning from './ScamWarning.tsx';
+import type { Scam } from './ScamWarning.tsx';
 
 
 function List({ items }: { items: ReactNode[] | null | undefined }) {
@@ -442,6 +444,7 @@ export default function DetailPanel({ id, onClose, onChanged, onOpen }: { id: Jo
             {task?.kind === 'find-contact' && <TaskProgress task={task} />}
             {task?.kind === 'find-contact' && task.status === 'done' && !task.result?.sample && <p className="muted small">Saved under Notes below. Check each person on LinkedIn before you write.</p>}
 
+            <ScamWarning jobId={job.id} scam={job.scam as Scam | null} onChange={(scam) => setJob((j: Job | null) => (j ? { ...j, scam } : j))} />
             <div className="links">
               {job.url && !demo && <a className="button primary" href={job.url} target="_blank" rel="noreferrer">Open posting / apply ↗</a>}
               {job.letter?.url && <a className="button" href={job.letter.url} target="_blank" rel="noreferrer">Cover letter (Google Doc) ↗</a>}

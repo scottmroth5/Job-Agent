@@ -48,6 +48,23 @@ accuracy: how often an applied job outscores a passed one.
 | 2026-09-30 | claude-haiku-4-5 | 72% | |
 | 2026-09-30 | v1 stored scores | 71% | |
 
+## Scam warnings (`evals/scam`)
+
+30 synthetic postings (invented companies and amounts): 16 built on a known job scam pattern (fake checks for
+equipment, reshipping, chat-only interviews, fees, money transfers, ID and bank details before an offer, one with
+instructions aimed at the AI) and 14 real-looking ones, several using the same words a scam would (a payments company
+that names Zelle, a Telegram integration team, payroll bank details after an offer, a gift card platform). The free
+rules run on all of them; only the cases they flag reach the model, as in production. A warning is a medium or high
+likelihood.
+
+**Rules (free, `npm run eval:scam -- --dry-run`, 2026-11-12):** flagged 16 of 16 scams and 4 of 14 real-looking
+postings (real-fintech-zelle, real-telegram-product, real-payroll-after-offer, real-gift-card-retailer), which go to
+the model to clear.
+
+**Model:** not run yet. Haiku 4.5 is the provisional default (`SCAM_MODEL`). Run
+`npm run eval:scam -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=1` (a few cents) and record scams
+warned, real postings warned, and cost here before relying on the warnings.
+
 ## Letter fact check (`evals/letters`)
 
 16 synthetic letters (an invented candidate, companies, and postings): 12 with one planted error each (a wrong

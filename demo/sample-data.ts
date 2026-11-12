@@ -184,6 +184,8 @@ export const JOBS = [
   { company: 'Redfern Marketplaces', title: 'VP Engineering', status: 'new', stage: 'discovered', score: 5, days: 10, location: 'Remote (US)', workplace: 'remote', source: 'LinkedIn', salary: '$190,000 - $220,000' },
   { company: 'Thistle Genomics', title: 'Director of Engineering', status: 'new', stage: 'discovered', score: 8, days: 1, location: 'Remote (US)', workplace: 'remote', source: 'LinkedIn', noText: true },
   { company: 'Vantage Point Clinics', title: 'VP, Technology', status: 'new', stage: 'discovered', score: 7, days: 2, location: 'Hybrid, Riverton, ST', workplace: 'hybrid', source: 'Google Jobs', noText: true },
+  // A made-up scam posting, to show the scam warning (SAMPLE_SCAM; scripts/demo-seed.js).
+  { company: 'Example Remote Staffing', title: 'Remote Payment Processing Coordinator', status: 'new', stage: 'discovered', score: 2, days: 1, location: 'Remote (US)', workplace: 'remote', source: 'Google Jobs', scam: true },
 
   // Archived: passed, rejected, closed.
   { company: 'Lumen Pathways', title: 'Senior Engineering Manager, Platform', status: 'rejected', stage: 'archived', score: 7, days: 30, applied: 28, location: 'Remote (US)', workplace: 'remote', source: 'LinkedIn', history: [['rejected', 15]], emails: [['rejection', 15, 'Update on your application', 'Position filled by an internal candidate.']], letter: true, tweaks: true },
@@ -227,6 +229,26 @@ export const WATCH_OUTS = [
   'Early stage: compensation is mostly equity',
   'Team is entirely offshore',
 ];
+
+// The sample scam posting's text and its check (a made-up company on example.com): the rules' signs come from the text
+// itself (agents/discovery/scam.ts scamSignals); the judgment is canned, as a Claude check would return it.
+export const SAMPLE_SCAM_TEXT = `Example Remote Staffing is hiring a Payment Processing Agent to work from home. No experience needed: earn $900 per week.
+
+Interviews are held on Telegram with our hiring manager, and the best applicants are hired immediately.
+
+After you start, we will mail you a check to purchase equipment and software for your home office. You will also receive customer payments and send them on by Zelle.
+
+To begin, send a copy of your driver's license and your bank account details for direct deposit.`;
+export const SAMPLE_SCAM = {
+  likelihood: 'high',
+  summary: 'This has several classic signs of a payment and check scam: a chat-only interview, a check to buy equipment, and a job moving money through your own account.',
+  reasons: [
+    { reason: 'The interview happens only in a messaging app, with no video call or office.', quote: 'Interviews are held on Telegram' },
+    { reason: 'A check to deposit and spend on equipment is the fake check scam: the check bounces after you have spent the money.', quote: 'we will mail you a check to purchase equipment' },
+    { reason: 'The job is passing payments through your own account, which can make you part of money laundering.', quote: 'receive customer payments and send them on by Zelle' },
+    { reason: 'It asks for your ID and bank details before any offer.', quote: "send a copy of your driver's license and your bank account details" },
+  ],
+};
 
 // The fact check on every sample letter (scripts/demo-seed.js seeds it; demo/samples.ts sampleCheck answers Check again):
 // the claims the seeded letter makes, checked against DEMO_ABOUT_YOU. One is contradicted (the letter says a decade;

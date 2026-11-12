@@ -4,4 +4,4 @@
 // leads back to a person, so account export and deletion have nothing of anyone's to take from it.
 import { USER_TABLES as REBUILT_IN_013 } from './migrations/013-users.ts';
 
-export const USER_TABLES = [...REBUILT_IN_013, 'feedback', 'resumes', 'letter_checks'];
+export const USER_TABLES = [...REBUILT_IN_013, 'feedback', 'resumes', 'letter_checks', 'scam_checks'];

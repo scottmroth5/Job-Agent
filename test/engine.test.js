@@ -221,8 +221,8 @@ test('every engine over one connection shares its transaction lock', async () =>
     order.push('tx done');
   });
   await new Promise((r) => setImmediate(r));
-  const viaScoped = store.db.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`scoped saw ${n}`));
-  const viaAdmin = store.admin.prepare('SELECT COUNT(*) FROM app_settings').pluck().get().then((n) => order.push(`admin saw ${n}`));
+  const viaScoped = store.db.prepare("SELECT COUNT(*) FROM app_settings WHERE key = 'a'").pluck().get().then((n) => order.push(`scoped saw ${n}`));
+  const viaAdmin = store.admin.prepare("SELECT COUNT(*) FROM app_settings WHERE key = 'a'").pluck().get().then((n) => order.push(`admin saw ${n}`));
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(order, [], 'both wait for the open transaction');
   hold.resolve();

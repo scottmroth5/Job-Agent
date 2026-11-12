@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["likelihood", "reasons", "summary"],
+  "properties": {
+    "likelihood": { "type": "string", "enum": ["low", "medium", "high"], "description": "How likely the posting is a scam aimed at job seekers" },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reason", "quote"],
+        "properties": {
+          "reason": { "type": "string", "description": "One reason, in a short plain sentence" },
+          "quote": { "type": "string", "description": "The shortest passage from the posting that shows it, quoted exactly; empty when it is about something missing" }
+        }
+      }
+    },
+    "summary": { "type": "string", "description": "One or two plain sentences for the job seeker" }
+  }
+}

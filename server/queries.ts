@@ -12,6 +12,7 @@ import { describeVersion } from '../agents/prompts.ts';
 import { budgetStatus } from '../agents/budget.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
+import { riskOf, scamFor } from '../agents/discovery/scam.ts';
 import type { Db } from '../tools/types.ts';
 import type { JobSearchConfig } from '../tools/config.ts';
 import type { Rate, RateUnit } from '../tools/rates.ts';
@@ -22,6 +23,10 @@ type Lookups = Awaited<ReturnType<typeof lookups>>;
 type QueryConfig = Partial<Pick<JobSearchConfig, 'fractional' | 'search'>>;
 /** A posting row from base(): the job with its latest score and letter, and counts. */
 type JobRow = PostingsRow & {
+  scam_status: string | null;
+  scam_likelihood: string | null;
+  scam_signals: string | null;
+  scam_dismissed: string | null;
   score: number | null;
   score_source: string | null;
   score_reason: string | null;
@@ -101,10 +106,12 @@ const base = async (db: Db, lkGiven?: Lookups) => {
     p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.user_id = p.user_id AND q.company_title_key = p.company_title_key AND q.id != p.id AND ${await liveCopySql(db)}) AS shares_key,
     ll.doc_url AS letter_url, ll.doc_name AS letter_name, ll.flags_json AS letter_flags, ll.id AS letter_id,
     EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks') AS has_tweaks,
-    (SELECT COUNT(*) FROM attachments f WHERE f.posting_id = p.id AND f.user_id = p.user_id) AS attachment_count
+    (SELECT COUNT(*) FROM attachments f WHERE f.posting_id = p.id AND f.user_id = p.user_id) AS attachment_count,
+    sc.status AS scam_status, sc.likelihood AS scam_likelihood, sc.signals_json AS scam_signals, sc.dismissed_at AS scam_dismissed
   FROM (SELECT * FROM postings WHERE user_id = @uid) p
   LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id
-  LEFT JOIN artifacts ll ON ll.id = ${LATEST_LETTER} AND ll.user_id = p.user_id`;
+  LEFT JOIN artifacts ll ON ll.id = ${LATEST_LETTER} AND ll.user_id = p.user_id
+  LEFT JOIN scam_checks sc ON sc.posting_id = p.id AND sc.user_id = p.user_id`;
 };
 
 /**
@@ -156,6 +163,8 @@ function toRow(r: JobRow, config: QueryConfig) {
     // Placeholder companies ("See posting") share keys without being the same job, so they need a real identity.
     hasCopies: Boolean(r.shares_key) && identityKey(r) !== null,
     fetchStatus: r.fetch_status,
+    // A scam warning (agents/discovery/scam.ts): medium or high, or null (none, low, dismissed, or not checked).
+    scamRisk: r.scam_status ? riskOf({ status: r.scam_status, likelihood: r.scam_likelihood ?? 'none', signals_json: r.scam_signals ?? '[]', dismissed_at: r.scam_dismissed }) : null,
   };
 }
 
@@ -219,6 +228,7 @@ export async function getPosting(db: Db, id: number, config: QueryConfig = {}) {
     noteEntries: await listNotes(db, r.id),
     analysis: parse(r.analysis_json),
     scoreDetails: await scoreDetails(db, r),
+    scam: await scamFor(db, r.id),
     notes: r.notes,
     text: r.jd_text ?? r.fetched_text ?? null,
     textSource: r.jd_text ? 'pasted' : r.fetched_text ? 'fetched' : null,

@@ -72,6 +72,8 @@ npx playwright install chromium   optional: without it, pages that need JavaScri
 npm run score                     score unscored postings (-- --dry-run for count and cost estimate; --model, --limit, --ids)
 npm run eval:score -- --build     build scoring eval cases in data/evals/score (applied vs passed postings)
 npm run eval:score -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=2   compare models; costs real money
+npm run eval:scam -- --dry-run      scam warning eval (evals/scam): the free rules' recall and false flags; without --dry-run
+                                  Haiku on the flagged cases (--models=..., --max-usd=1); that costs real money
 npm run eval:letters -- --dry-run   letter fact check eval on synthetic cases (evals/letters): recall on planted errors, false
                                   flags on clean letters; --models=..., --max-usd=1; without --dry-run it costs real money
 npm run hunt                      resume tweaks + cover letters (Google Docs) for promoted jobs (-- --dry-run, --ids, --regenerate, --no-docs)
@@ -289,6 +291,19 @@ streamed, with server-side refusal fallbacks; with research on it uses web_searc
 Input is the people (name, role, firm, link, what the user knows), meeting kind, format, time, and free context, plus the
 knowledge doc, posting, analysis, latest letter, and notes. The document is the Markdown after the last tool block, saved
 in meeting_preps (UUID keys) and as a Google Doc in "Job Agent Meeting Prep". About $1 to $2 each; logs hold counts only.
+
+## Scam warnings
+agents/discovery/scam.ts: scamSignals (free rules on the title and text: messaging-app interviews, the applicant paying,
+bank or ID details, money or package handling, and instructions aimed at an AI (which also keep the result at medium or
+above) as strong signs; a personal email address, no-interview pressure, and
+easy-money wording as weak) and, for a job they flag (a strong sign or two weak), checkScam (SCAM_MODEL Haiku 4.5, prompt
+scam-check with agents/discovery/schemas/scam-check.json, the fixed SCAM_SYSTEM that treats the posting as untrusted data).
+scorePostings runs scanPosting once per job after its score is saved, outside the transaction: only jobs created since
+024's scam_checks_since setting (new jobs only), with text, and no scam_checks row (a user table); a failed call is saved
+as failed with the signals and never stops scoring. A warning only: scores, promotion, and letters never read it. The list
+row's scamRisk (riskOf: medium or high, null when dismissed) and the panel's scam (web/src/components/ScamWarning.tsx);
+POST /api/postings/:id/scam/dismiss is Not a scam. The demo seeds SAMPLE_SCAM on one invented job. npm run eval:scam
+(evals/scam/cases.json, synthetic; --dry-run is the rules only and free). test/scam.test.js.
 
 ## Scoring
 Default model and promotion threshold live in agents/discovery/score.ts with the eval evidence behind them.

@@ -72,6 +72,14 @@ export const PROMPTS: Record<string, PromptDefinition> = {
     allowed: ['candidateName', 'company', 'roleTitle', 'letterBlock', 'jobContentBlock'],
     required: ['letterBlock'],
   },
+  'scam-check': {
+    label: 'Scam warning check',
+    usedBy: 'Judging whether a new job the scam rules flagged is likely a scam (while scoring; the untrusted-posting rules are fixed in code)',
+    file: ['agents', 'discovery', 'prompts', 'scam-check.md'],
+    schemaFile: ['agents', 'discovery', 'schemas', 'scam-check.json'],
+    allowed: ['company', 'roleTitle', 'jobUrl', 'signalsBlock', 'jobContentBlock'],
+    required: ['jobContentBlock'],
+  },
   'meeting-prep': {
     label: 'Meeting prep',
     usedBy: 'Writing meeting prep documents from a job (Prepare for a meeting in the job panel)',

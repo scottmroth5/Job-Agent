@@ -293,6 +293,22 @@ export interface RunsRow {
   user_id: number | null;
 }
 
+export interface ScamChecksRow {
+  posting_id: number;
+  user_id: number;
+  status: string;
+  likelihood: string;
+  signals_json: string;
+  reasons_json: string | null;
+  summary: string | null;
+  model: string | null;
+  prompt_version: string | null;
+  run_id: number | null;
+  dismissed_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface SchemaMigrationsRow {
   app: string;
   id: string;
