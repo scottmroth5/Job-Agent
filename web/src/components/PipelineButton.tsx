@@ -66,7 +66,12 @@ export default function PipelineButton({ onFinished }: { onFinished?: () => void
       </button>
       <div className="muted small pipeline-status" aria-live="polite">
         {busy ? (step ?? (task ? 'Starting' : 'Started from the command line or schedule')) : last ? `Last run ${dateTime(last.finishedAt ?? last.startedAt)}, ${STATUS[last.status] ?? last.status}` : 'Not run yet'}
-        {!busy && state?.nextScheduled && <span title={`Scheduled: ${state.schedule}`}> · next {dateTime(state.nextScheduled)}</span>}
+        {!busy && state && !state.automatic && (
+          <a href="#/settings" className="badge warn manual-badge" title="Automatic runs are off: nothing runs unless you press a button. Turn them on under Settings > Automatic runs.">
+            Manual runs only
+          </a>
+        )}
+        {!busy && state?.automatic && state.nextScheduled && <span title={`Scheduled: ${state.schedule}`}> · next {dateTime(state.nextScheduled)}</span>}
         {lastTaskId && (
           <a href={`#/activity/${lastTaskId}`} target="_blank" rel="noreferrer" className="output-link">
             View output ↗

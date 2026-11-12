@@ -14,7 +14,7 @@ Open **Settings** from the Home page:
 ## Find jobs
 
 - **Run pipeline** on the Home page searches the job sources, scores what it finds, writes materials for the strongest matches, and archives stale ones. It takes a few minutes; you can watch it on the Activity tab.
-- Turn on **Run my pipeline on the app's schedule** in Settings to have it run by itself.
+- Turn on **Settings > Automatic runs** and pick the days and times to have it run by itself; see *Automatic runs*. Off means manual runs only.
 - **Add a job** adds one you found yourself, from its link or by pasting the description.
 
 ## Work through them

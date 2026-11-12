@@ -146,7 +146,7 @@ test('API: /api/schedule lists the jobs, and a missed backup runs as a task when
   });
   await app.ready();
   const s = (await app.inject('/api/schedule')).json();
-  assert.deepEqual(s.jobs.map((/** @type {{ name: string, next: string | null }} */ j) => [j.name, Boolean(j.next)]), [['pipeline', true], ['backup', true]]);
+  assert.deepEqual(s.jobs.map((/** @type {{ name: string, next: string | null }} */ j) => [j.name, Boolean(j.next)]), [['backup', true], ['pipeline', true]], 'the backup, then the owner pipeline from SCHEDULE_PIPELINE');
   assert.ok(s.timeZone);
   assert.equal((await app.inject('/api/pipeline')).json().schedule, 'Mon,Thu 06:00');
   for (let i = 0; i < 50 && !scripts.length; i += 1) await new Promise((r) => setTimeout(r, 10));

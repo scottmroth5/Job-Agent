@@ -112,6 +112,11 @@ export default function InboxPage({ onOpenJob, onChanged }: { onOpenJob: (id: Jo
   const [error, setError] = useState<string | null>(null);
   const [task, setTask] = useState<Task | null>(null);
   const [messages, setMessages] = useState<string[]>([]);
+  // Whether the inbox is checked on its own (Settings > Automatic runs); off shows Manual runs only.
+  const [automatic, setAutomatic] = useState<boolean | null>(null);
+  useEffect(() => {
+    api.automation().then((a) => setAutomatic(a.on && Boolean(a.inbox && (a.inbox.schedule || (a.inbox.afterPipeline && a.pipeline)))), () => setAutomatic(null));
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -183,6 +188,11 @@ export default function InboxPage({ onOpenJob, onChanged }: { onOpenJob: (id: Jo
               : 'Not checked yet; the first check reads the last 7 days.'
             : 'Gmail is not signed in. Run "npm run inbox:auth" in the Job-Agent folder, then restart the web page server.'}
         </span>
+        {automatic === false && (
+          <a href="#/settings" className="badge warn manual-badge" title="The inbox is not checked on its own. Change it under Settings > Automatic runs.">
+            Manual runs only
+          </a>
+        )}
       </div>
       {task && <TaskProgress task={task} />}
       {error && <div className="error">{error}</div>}

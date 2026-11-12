@@ -4,17 +4,19 @@
 import { budgetStatus } from '../agents/budget.ts';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.ts';
 import { boxKey, seal } from '../tools/secret-box.ts';
-import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, PROFILE_SOURCES, profileVersions, saveUserConfig, saveUserProfile, scheduledForUser, setScheduledForUser, userConfig, userProfile } from '../agents/user-config.ts';
+import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, PROFILE_SOURCES, profileVersions, saveUserConfig, saveUserProfile, userConfig, userProfile } from '../agents/user-config.ts';
+import { automationFor, saveAutomation } from '../agents/automation.ts';
 import { docxName, prepDocx } from './word-docs.ts';
 import { fileTitle } from '../tools/text.ts';
 import { validateConfig } from '../tools/config.ts';
 import { deleteAccount, exportAccount } from '../agents/account-data.ts';
 import { ATTACHMENTS_DIR } from './attachments.ts';
-import { isTimeZone, localDay } from '../tools/dates.ts';
+import { isTimeZone, localDay, timeZone } from '../tools/dates.ts';
 import { DEMO_ABOUT_YOU, DEMO_CONFIG } from '../demo/sample-data.ts';
 import { documentText, MAX_DOC_BYTES } from '../tools/doc-text.ts';
 import { KNOWLEDGE_SECTIONS, knowledgeTemplate } from '../agents/knowledge-sections.ts';
 import type { Db } from '../tools/types.ts';
+import type { Automation, AutomationDefaults } from '../agents/automation.ts';
 import type { User } from '../db/users.ts';
 import type { App, FastifyRequest, Notices } from './types.ts';
 
@@ -54,10 +56,56 @@ async function account(db: Db, uid: number) {
   };
 }
 
-/** checkKey is tools/claude.ts claudeKeyWorks (tests pass a fake). */
+/**
+ * The scheduler's side of Settings > Automatic runs (server/app.ts fills it in): the .env defaults, sync after a save,
+ * and a user's next runs (ISO, or null).
+ */
+export type AutomationHooks = { defaults: AutomationDefaults; sync: () => Promise<void>; next: (uid: number) => { pipeline: string | null; inbox: string | null } };
+const NO_AUTOMATION: AutomationHooks = { defaults: { pipeline: null, inbox: null }, sync: async () => {}, next: () => ({ pipeline: null, inbox: null }) };
+
+// The automatic runs the demo shows: on, twice a week, every step (nothing is read or saved).
+const DEMO_AUTOMATION: Automation = { on: true, pipeline: 'Mon,Thu 06:00', steps: { score: true, letters: true }, inbox: null, saved: true };
+
+const scheduleSpec = { type: ['string', 'null'] };
+const automationBody = {
+  type: 'object',
+  required: ['on'],
+  additionalProperties: false,
+  properties: {
+    on: { type: 'boolean' },
+    pipeline: scheduleSpec,
+    steps: { type: 'object', additionalProperties: false, properties: { score: { type: 'boolean' }, letters: { type: 'boolean' } } },
+    inbox: { type: ['object', 'null'], additionalProperties: false, properties: { afterPipeline: { type: 'boolean' }, schedule: scheduleSpec } },
+  },
+};
+const automationReply = {
+  type: 'object',
+  required: ['on', 'pipeline', 'steps', 'inbox', 'saved', 'owner', 'timeZone', 'next'],
+  additionalProperties: false,
+  properties: {
+    on: { type: 'boolean' },
+    pipeline: scheduleSpec,
+    steps: { type: 'object', required: ['score', 'letters'], additionalProperties: false, properties: { score: { type: 'boolean' }, letters: { type: 'boolean' } } },
+    inbox: { type: ['object', 'null'], required: ['afterPipeline', 'schedule'], additionalProperties: false, properties: { afterPipeline: { type: 'boolean' }, schedule: scheduleSpec } },
+    saved: { type: 'boolean' },
+    owner: { type: 'boolean' },
+    /** The time zone schedules run in (the app's). */
+    timeZone: { type: 'string' },
+    next: { type: 'object', required: ['pipeline', 'inbox'], additionalProperties: false, properties: { pipeline: scheduleSpec, inbox: scheduleSpec } },
+  },
+};
+
+/** checkKey is tools/claude.ts claudeKeyWorks (tests pass a fake). automation is the scheduler's side of automatic runs. */
 export function registerAccountRoutes(
   app: App,
-  { db, checkKey, notices = {}, attachmentsDir = ATTACHMENTS_DIR, demo = false }: { db: Db; checkKey: (apiKey: string) => Promise<boolean>; notices?: Notices; attachmentsDir?: string; demo?: boolean },
+  {
+    db,
+    checkKey,
+    notices = {},
+    attachmentsDir = ATTACHMENTS_DIR,
+    demo = false,
+    automation = NO_AUTOMATION,
+  }: { db: Db; checkKey: (apiKey: string) => Promise<boolean>; notices?: Notices; attachmentsDir?: string; demo?: boolean; automation?: AutomationHooks },
 ) {
   // Phase 6: take your data with you, pause yourself, or delete your account. Deleting needs your address typed.
   app.get('/api/account/export', { schema: { summary: 'Download everything that is yours, as JSON', response: { 200: anyObject } } }, async (req, reply) =>
@@ -157,14 +205,14 @@ export function registerAccountRoutes(
     },
   );
 
-  // Phase 3: each user's own search settings, background, and schedule. The owner's live in their settings file and
+  // Phase 3: each user's own search settings and background. The owner's live in their settings file and
   // Google Doc, so these answer the owner with where to change them instead.
   // The demo shows the sample candidate's About you and search (demo/sample-data.ts), read-only, so visitors see what
   // scoring works from; nothing is read from or saved to the database.
   const search = async (uid: number) => {
     if (demo) {
       const config = cleanConfig(DEMO_CONFIG, DEMO_CONFIG.candidate.name);
-      return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE, scheduled: false };
+      return { owner: false, demo: true, config, problems: validateConfig(config), profile: DEMO_ABOUT_YOU, profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE };
     }
     if (uid === OWNER_ID) {
       // The owner's search settings stay in their settings file; their knowledge doc lives here, like everyone's.
@@ -179,10 +227,9 @@ export function registerAccountRoutes(
       problems: validateConfig(config),
       profile,
       profileChars: { min: MIN_PROFILE_CHARS, max: MAX_PROFILE_CHARS }, ...KNOWLEDGE_GUIDE,
-      scheduled: await scheduledForUser(db, uid),
     };
   };
-  app.get('/api/account/search', { schema: { summary: 'Your search settings, background, and schedule choice', response: { 200: anyObject } } }, async (req) => search(req.uid ?? OWNER_ID));
+  app.get('/api/account/search', { schema: { summary: 'Your search settings and background', response: { 200: anyObject } } }, async (req) => search(req.uid ?? OWNER_ID));
   app.put<{ Body: Record<string, unknown> }>(
     '/api/account/search',
     {
@@ -270,20 +317,24 @@ export function registerAccountRoutes(
     },
   );
 
-  app.put<{ Body: { on: boolean } }>(
-    '/api/account/schedule',
-    {
-      schema: {
-        summary: "Run your pipeline on the app's schedule too",
-        body: { type: 'object', required: ['on'], additionalProperties: false, properties: { on: { type: 'boolean' } } },
-        response: { 200: anyObject },
-      },
-    },
+  // Settings > Automatic runs (agents/automation.ts): whether anything runs on its own, when, and which Claude steps a
+  // scheduled pipeline does; the owner also sets the inbox checks. Off is manual runs only.
+  const automationOf = async (uid: number) => {
+    const a = demo ? DEMO_AUTOMATION : await automationFor(db, uid, automation.defaults);
+    const next = demo ? { pipeline: null, inbox: null } : a.on ? automation.next(uid) : { pipeline: null, inbox: null };
+    return { ...a, owner: !demo && uid === OWNER_ID, timeZone: timeZone(), next };
+  };
+  app.get('/api/account/automation', { schema: { summary: 'Your automatic runs: on or off (manual only), when, and which Claude steps they do', response: { 200: automationReply } } }, async (req) =>
+    automationOf(req.uid ?? OWNER_ID),
+  );
+  app.put<{ Body: { on: boolean; pipeline?: string | null; steps?: { score?: boolean; letters?: boolean }; inbox?: { afterPipeline?: boolean; schedule?: string | null } | null } }>(
+    '/api/account/automation',
+    { schema: { summary: 'Save your automatic runs (off is manual runs only); only the owner sets the inbox', body: automationBody, response: { 200: automationReply } } },
     async (req) => {
       const uid = req.uid ?? OWNER_ID;
-      if (uid === OWNER_ID) throw Object.assign(new Error('Your schedule is set in the server settings (SCHEDULE_PIPELINE).'), { statusCode: 400 });
-      await setScheduledForUser(db, uid, req.body.on);
-      return search(uid);
+      await saveAutomation(db, uid, req.body);
+      await automation.sync();
+      return automationOf(uid);
     },
   );
 

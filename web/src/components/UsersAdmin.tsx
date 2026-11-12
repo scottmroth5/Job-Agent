@@ -29,7 +29,7 @@ function Setup({ u }: { u: User }) {
     [u.setup.searchReady, 'search'],
     [u.setup.profileReady, 'Knowledge doc'],
     [u.aiSource === 'owner' || u.hasKey, u.aiSource === 'owner' ? 'on your key' : 'own key'],
-    [u.setup.scheduled, 'on the schedule'],
+    [u.setup.scheduled, u.setup.scheduled ? 'automatic runs' : 'manual only'],
   ];
   return (
     <p className="setup-chips">

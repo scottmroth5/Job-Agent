@@ -82,7 +82,9 @@ const realServices = (): AppServices => ({
       child.on('close', (code) => resolve({ code: code ?? 1, lastError }));
     }),
   // Each user's own pipeline: the script runs as them (--user), with their settings, background, and Claude key.
-  runPipeline: ({ user, ...opts }) => (services.runScript as RunScript)({ ...opts, script: 'scripts/pipeline.js', args: user ? [`--user=${Number(user)}`] : [] }),
+  // args are only the step flags (agents/automation.ts skipArgs); nothing else reaches the command line.
+  runPipeline: ({ user, args = [], ...opts }) =>
+    (services.runScript as RunScript)({ ...opts, script: 'scripts/pipeline.js', args: [...(user ? [`--user=${Number(user)}`] : []), ...args.filter((a) => a === '--no-score' || a === '--no-letters')] }),
   schedules: schedulesFromEnv(process.env),
   inbox: {
     ready: () => Boolean(process.env.GMAIL_REFRESH_TOKEN && process.env.EMAIL_ENC_KEY),
@@ -159,8 +161,8 @@ console.log(`Time zone: ${timeZone()}${process.env.TZ ? '' : ' (the computer\'s;
 const schedules = services.schedules ?? [];
 console.log(
   schedules.length
-    ? `Scheduled: ${schedules.map((j) => `${j.name} ${j.schedule.spec}`).join('; ')}`
-    : 'Scheduled: nothing (set SCHEDULE_PIPELINE, SCHEDULE_INBOX, or SCHEDULE_BACKUP in .env to run jobs from the server)',
+    ? `Scheduled (pipeline and inbox are the owner's defaults until saved under Settings > Automatic runs): ${schedules.map((j) => `${j.name} ${j.schedule.spec}`).join('; ')}`
+    : 'Scheduled: nothing from .env (SCHEDULE_BACKUP runs backups; pipelines and inbox checks are set under Settings > Automatic runs)',
 );
 
 const shutdown = async () => {

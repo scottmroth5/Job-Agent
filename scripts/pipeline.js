@@ -5,6 +5,8 @@
 //   npm run pipeline -- --no-email   skip the email (prints its subject instead)
 //   node scripts/pipeline.js --user=5  as user 5: their search settings, background, and Claude key. Google results
 //                                    (the owner's paid search), Google Docs, and the report email are the owner's only.
+//   --no-score, --no-letters         leave out the scoring or the letters step (a scheduled run, when the user turned
+//                                    that Claude step off under Settings > Automatic runs; agents/automation.ts)
 import { createJobTracer } from '../tools/trace.ts';
 import { createJobClaude } from '../tools/claude.ts';
 import { loadConfig } from '../tools/config.ts';
@@ -32,6 +34,8 @@ import { collectReport, renderReport, sendReport } from '../agents/hunt/report.t
  */
 
 const noEmail = process.argv.includes('--no-email');
+const noScore = process.argv.includes('--no-score');
+const noLetters = process.argv.includes('--no-letters');
 const userArg = process.argv.find((a) => a.startsWith('--user='));
 const uid = userArg ? Number(userArg.slice('--user='.length)) : OWNER_ID;
 const owner = uid === OWNER_ID;
@@ -100,13 +104,22 @@ async function main() {
       pipelineRun.log('error', `Candidate Knowledge could not be loaded; scoring and letters skipped: ${/** @type {Error} */ (err).message}`);
     }
     const claude = createJobClaude(store.db);
+    /** A step left out by the user's automatic runs setting: said in the output and on the pipeline's run. */
+    const skipped = (/** @type {string} */ name) => {
+      console.log(`[pipeline] Step ${STEPS.indexOf(name) + 1}/${STEPS.length}: ${name} skipped (automatic runs setting)`);
+      pipelineRun.log('info', `${name} skipped by the automatic runs setting`);
+    };
     if (knowledge) {
-      await step(tracer, 'score', (run) => scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run }), (s) =>
-        s.aborted ? 'aborted' : s.failures.length ? 'partial' : 'ok',
-      );
-      await step(tracer, 'hunt', (run) => generateForPostings({ store, config, claude, knowledge, drive: owner ? createDriveClient(ownerAuth) : null, run }), (s) =>
-        s.aborted ? 'aborted' : s.failures.length || s.docFailures.length ? 'partial' : 'ok',
-      );
+      if (noScore) skipped('score');
+      else
+        await step(tracer, 'score', (run) => scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run }), (s) =>
+          s.aborted ? 'aborted' : s.failures.length ? 'partial' : 'ok',
+        );
+      if (noLetters) skipped('hunt');
+      else
+        await step(tracer, 'hunt', (run) => generateForPostings({ store, config, claude, knowledge, drive: owner ? createDriveClient(ownerAuth) : null, run }), (s) =>
+          s.aborted ? 'aborted' : s.failures.length || s.docFailures.length ? 'partial' : 'ok',
+        );
     }
     await step(tracer, 'archive', async () => {
       const r = await archivePostings(store.db);

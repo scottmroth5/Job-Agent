@@ -1,8 +1,12 @@
 // The in-app scheduler: runs the pipeline, inbox check, and backup at set times while the server runs, so the
 // same schedule works on Windows and in the cloud (no Task Scheduler, no cron). Times are in the app's time zone
-// (TZ in .env). Each job is set by an environment variable and is off when it is unset:
-//   SCHEDULE_PIPELINE="Mon,Thu 06:00"   the pipeline, then an inbox check when Gmail is set up
+// (TZ in .env). Pipelines and inbox checks are each user's automatic runs (Settings > Automatic runs,
+// agents/automation.ts; server/app.ts adds and removes them with set()); these two variables are only the owner's
+// defaults until the owner saves there:
+//   SCHEDULE_PIPELINE="Mon,Thu 06:00"   the pipeline, then an inbox check when Gmail is set up (also the default
+//                                       times for anyone who had "Run my pipeline on the app's schedule" on)
 //   SCHEDULE_INBOX="daily 12:00"        an extra inbox check
+// The backup and the restore test are the app's, set only here:
 //   SCHEDULE_BACKUP="daily 23:00"       the encrypted backup
 //   SCHEDULE_RESTORE_TEST="monthly 1 05:00"  restores the newest backup into a scratch copy and checks it; on by default
 //                                       (monthly 1 05:00) whenever SCHEDULE_BACKUP is set; "off" turns it off
@@ -116,7 +120,7 @@ export function createScheduler({
   onResult?: ((name: string, ok: boolean, error: string | null) => unknown) | null;
 }) {
   type JobState = ScheduledJob & { next: Date | null; running: boolean; lastResult: 'ok' | 'failed' | null };
-  const state: JobState[] = jobs.map((j) => ({ ...j, next: nextRun(j.schedule, now()), running: false, lastResult: null }));
+  let state: JobState[] = jobs.map((j) => ({ ...j, next: nextRun(j.schedule, now()), running: false, lastResult: null }));
   let timer: Timer | null = null;
 
   const fire = async (job: JobState, why: string) => {
@@ -166,6 +170,24 @@ export function createScheduler({
       timer = null;
     },
     tick,
+    /**
+     * Adds, replaces, or (job null) removes the job with this name while the scheduler runs (each user's automatic
+     * runs). A job whose schedule is unchanged keeps its next time, so a refresh just after a time is due never skips
+     * it. A replaced job is updated in place, so a run in progress still clears its own running flag. Nothing missed
+     * is caught up here, only at start.
+     */
+    set(name: string, job: ScheduledJob | null) {
+      const old = state.find((j) => j.name === name);
+      if (!job) {
+        state = state.filter((j) => j.name !== name);
+        return;
+      }
+      const next = old && old.schedule.spec === job.schedule.spec ? old.next : nextRun(job.schedule, now());
+      if (old) Object.assign(old, { schedule: job.schedule, run: job.run, lastRanAt: job.lastRanAt, next });
+      else state.push({ ...job, name, next, running: false, lastResult: null });
+    },
+    /** The names of the jobs it has. */
+    names: () => state.map((j) => j.name),
     /** For the UI: each job, its schedule, and when it runs next. */
     status: () => state.map((j) => ({ name: j.name, schedule: j.schedule.spec, next: j.next?.toISOString() ?? null, running: j.running, lastResult: j.lastResult })),
   };
