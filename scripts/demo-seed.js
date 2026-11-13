@@ -19,9 +19,10 @@ import { addNote } from '../agents/notes.ts';
 import { companyTitleKey } from '../tools/urls.ts';
 import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { pickResume } from '../agents/resumes.ts';
-import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.ts';
+import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, SAMPLE_SCAM, SAMPLE_SCAM_TEXT, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.ts';
 import { saveCheck } from '../agents/letter-checks.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
+import { SCAM_MODEL, scamSignals } from '../agents/discovery/scam.ts';
 import { defaultPrompt, validateTemplate, versionOf } from '../agents/prompts.ts';
 /** @import { Db } from '../tools/types.ts' */
 
@@ -120,7 +121,7 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
   for (const [i, job] of JOBS.entries()) {
     const track = job.track ?? 'fulltime';
     const url = `https://jobs.example.com/${slug(job.company)}/${slug(job.title)}`;
-    const text = job.noText ? null : description(job);
+    const text = job.noText ? null : job.scam ? SAMPLE_SCAM_TEXT : description(job);
     const discoveredAt = iso(job.days, 6, 5 + (i % 40));
     const id = Number(
       (await insertPosting.run({
@@ -166,6 +167,13 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
       await saveCheck(db, letterId, { status: 'checked', claims: SAMPLE_CHECK_CLAIMS, model: VERIFY_MODEL, promptVersion: versionOf('verify-letter', defaultPrompt('verify-letter').template), runId: run }, new Date(discoveredAt));
     }
     if (job.tweaks) await insertArtifact.run(id, 'resume_tweaks', tweaks(job, i), null, null, LETTER_MODEL, run, discoveredAt);
+    // The sample scam warning: the signs the rules find in its text, and the canned judgment.
+    if (job.scam && text) {
+      await db
+        .prepare(`INSERT INTO scam_checks (posting_id, user_id, status, likelihood, signals_json, reasons_json, summary, model, prompt_version, run_id, created_at, updated_at)
+          VALUES (?, @uid, 'checked', ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .run(id, SAMPLE_SCAM.likelihood, JSON.stringify(scamSignals({ company: job.company, title: job.title, jd_text: text })), JSON.stringify(SAMPLE_SCAM.reasons), SAMPLE_SCAM.summary, SCAM_MODEL, versionOf('scam-check', defaultPrompt('scam-check').template), run, discoveredAt, discoveredAt);
+    }
 
     // Status history: promotion by the agent, then the candidate's own moves.
     await insertHistory.run(id, null, 'new', 'agent', discoveredAt);

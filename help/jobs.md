@@ -25,6 +25,16 @@ Most applications go through a careers site or a job board, with nobody to write
 - **Stale:** after **Settings > Follow-ups** days with no reply (45 unless you change it), an application is stale. After that long the answer is almost always no. Home shows one item for all of them: **Review** lists them, and **Close all as no response** closes them with a note on each. **Close: no response** in a job's Next step closes just that one.
 - **No response** is a closed status; closed applications still count in the Funnel.
 
+## Scam warnings
+
+Some postings are scams: a "job" that sends you a check to buy equipment, moves money or packages through you, interviews you only on Telegram or WhatsApp, or asks for your bank details or ID before any offer.
+
+- **How it checks:** every new job with a description goes through simple checks for these signs, which cost nothing. Only a job that shows a strong sign, or two weaker ones, gets a short AI check (well under a cent) that reads the whole posting and judges how likely it is a scam.
+- **What you see:** a **scam risk** badge in the Jobs list, and a **Possible scam** box at the top of the job with the reasons and the words that raised them. A job the AI judged low risk shows a short note instead.
+- **It is a warning only.** The job keeps its score and is handled like any other. The check can be wrong both ways, so before you share personal or bank details, or pay for anything, look the company up on its own website.
+- **Not a scam** in the box takes the warning away; **Show the warning again** brings it back.
+- Jobs found before scam warnings were added are not checked. A scheduled run with **Score new jobs** turned off (Settings > Automatic runs) skips the check too, until the job is scored.
+
 ## Tracks
 
 Jobs are **full-time** or **fractional** (part-time leadership roles). Fractional jobs also show fit, pay, and hours, and an annual estimate when the pay is known.

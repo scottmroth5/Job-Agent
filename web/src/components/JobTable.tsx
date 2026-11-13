@@ -99,6 +99,11 @@ export default function JobTable({ jobs, loading, onOpen, selectedId, stackable,
                       </button>
                       {j.track !== lk.roles.track.default && <span className="badge frac">{lk.label('track', j.track).toLowerCase()}</span>}
                       {j.attachmentCount > 0 && <span className="badge" title={`${j.attachmentCount} attachment${j.attachmentCount === 1 ? '' : 's'}`}>📎 {j.attachmentCount}</span>}
+                      {j.scamRisk && (
+                        <span className="badge scam" title={`Possible scam (${j.scamRisk} risk): open the job for the reasons`}>
+                          scam risk
+                        </span>
+                      )}
                       {j.hasCopies && <span className="badge warn" title="Another saved job has the same company and title; open it to compare">possible duplicate</span>}
                       {j.awaitingDescription ? (
                         <span className="badge warn" title="Scored from the title alone, so capped at 5; paste the description, then Re-score">needs description</span>

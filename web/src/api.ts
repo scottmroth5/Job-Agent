@@ -165,6 +165,8 @@ export const api = {
     const [{ sampleCheck }] = await Promise.all([demoSamples(), pause(1200)]);
     return sampleCheck();
   },
+  // Not a scam (agents/discovery/scam.ts); dismissed false shows the warning again.
+  dismissScam: (id: Id, dismissed = true) => request('POST /api/postings/:id/scam/dismiss', `/api/postings/${id}/scam/dismiss`, { dismissed }),
   dismissClaim: (id: Id, versionId: Id, index: number) => request('POST /api/postings/:id/letters/:versionId/claims/:index/dismiss', `/api/postings/${id}/letters/${versionId}/claims/${index}/dismiss`),
   letterFromFile: (id: Id, file: File) => uploadFile('POST /api/postings/:id/letter/from-file', `/api/postings/${id}/letter/from-file`, file, '5 MB'),
   // Settings > Resumes (server/resume-routes.ts).

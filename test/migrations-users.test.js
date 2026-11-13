@@ -62,7 +62,7 @@ test('013 gives every row to the owner, keeps every link, and moves personal set
     assert.equal(await raw.prepare('SELECT integrity_check FROM pragma_integrity_check').pluck().get(), 'ok');
     assert.equal(await raw.prepare('SELECT foreign_keys FROM pragma_foreign_keys').pluck().get(), 1);
     assert.deepEqual(await raw.prepare('SELECT key FROM user_settings ORDER BY key').pluck().all(), ['drive.coverLetterFolderId', 'inbox.historyId', 'layout:home']);
-    assert.deepEqual(await raw.prepare('SELECT key FROM app_settings').pluck().all(), ['claude.monthlyBudgetUsd'], 'app-wide settings stay');
+    assert.deepEqual(await raw.prepare("SELECT key FROM app_settings WHERE key != 'scam_checks_since'").pluck().all(), ['claude.monthlyBudgetUsd'], 'app-wide settings stay (024 adds its own start time)');
     assert.equal(await raw.prepare("SELECT COUNT(*) FROM sqlite_master WHERE name = 'application_funnel'").pluck().get(), 0);
     assert.equal(await raw.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'trigger' AND tbl_name = 'postings'").pluck().get(), 2, 'the list checks are back');
     await assert.rejects(async () => await raw.prepare("UPDATE postings SET status = 'maybe' WHERE id = ?").run(a), /status is not in the status list/);

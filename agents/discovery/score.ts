@@ -8,6 +8,7 @@ import { sanitizeDashes, truncate } from '../../tools/text.ts';
 import { skipReason } from '../../tools/listings.ts';
 import { getPrompt } from '../prompts.ts';
 import { lookups, sqlList } from '../lookups.ts';
+import { scamSince, scanPosting } from './scam.ts';
 import type { Claude, Run } from '@scottmroth5/agent-core';
 import type { JobSearchConfig } from '../../tools/config.ts';
 import type { Db, JobStore } from '../../tools/types.ts';
@@ -309,7 +310,10 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
     promoted: [] as number[],
     failures: [] as Array<{ id: number; error: string }>,
     aborted: false,
+    // Scam warnings (./scam.ts): new jobs the rules flagged and Claude checked, and checks that could not run.
+    scam: { checked: 0, failed: 0 },
   };
+  const since = await scamSince(db);
   let consecutive = 0;
   run?.log?.('info', postings.length ? `Scoring ${postings.length} postings with ${model}` : 'Nothing to score');
 
@@ -340,6 +344,10 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
       summary.distribution[result.score] = (summary.distribution[result.score] ?? 0) + 1;
       if (summary.promoted.includes(p.id)) run?.log?.('info', `#${p.id} scored ${result.score}, promoted to pipeline`);
       else if (summary.scored % 10 === 0 && summary.scored < postings.length) run?.log?.('info', `Scored ${summary.scored}/${postings.length}`);
+      // A new job's scam warning, once, after its score is saved (outside the transaction: it may call Claude). It
+      // never changes the score or the promotion, and never throws.
+      const scam = await scanPosting({ db, claude, posting: p, run, since });
+      if (scam === 'checked' || scam === 'failed') summary.scam[scam] += 1;
     } catch (err) {
       consecutive += 1;
       const e = err as Error;
@@ -351,5 +359,6 @@ export async function scorePostings({ store, config, claude, knowledge, model, r
       }
     }
   });
+  if (summary.scam.checked || summary.scam.failed) run?.log?.('info', `Scam check: ${summary.scam.checked} flagged jobs checked, ${summary.scam.failed} could not be checked`);
   return { ...summary, promptVersion: prompts.fulltime.version, fractionalPromptVersion: prompts.fractional.version, model, now: now.toISOString() };
 }

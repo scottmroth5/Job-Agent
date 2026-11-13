@@ -48,6 +48,33 @@ accuracy: how often an applied job outscores a passed one.
 | 2026-09-30 | claude-haiku-4-5 | 72% | |
 | 2026-09-30 | v1 stored scores | 71% | |
 
+## Scam warnings (`evals/scam`)
+
+30 synthetic postings (invented companies and amounts): 16 built on a known job scam pattern (fake checks for
+equipment, reshipping, chat-only interviews, fees, money transfers, ID and bank details before an offer, one with
+instructions aimed at the AI) and 14 real-looking ones, several using the same words a scam would (a payments company
+that names Zelle, a Telegram integration team, payroll bank details after an offer, a gift card platform). The free
+rules run on all of them; only the cases they flag reach the model, as in production. A warning is a medium or high
+likelihood.
+
+**Rules (free, `npm run eval:scam -- --dry-run`, 2026-11-12):** flagged 16 of 16 scams and 4 of 14 real-looking
+postings (real-fintech-zelle, real-telegram-product, real-payroll-after-offer, real-gift-card-retailer), which go to
+the model to clear.
+
+**Model (2026-11-12, prompt 58d967d132, 20 flagged cases per model):**
+
+| Model | Scams warned (medium or high) | Real postings warned | Failed calls | Estimated cost |
+|---|---|---|---|---|
+| claude-haiku-4-5 (chosen) | 16 of 16 | 0 of 14 | 0 | $0.062 |
+| claude-sonnet-5-5 | 16 of 16 | 0 of 14 | 0 | $0.324 |
+
+The whole run (40 calls) cost $0.1224. The run reports one total, so the per-model costs above are the eval's
+estimates.
+
+**Model choice:** Haiku 4.5 (`SCAM_MODEL`). It warned on every scam and cleared all four real postings the rules sent
+it, as Sonnet did, at about a fifth of the estimated cost. The cases are few and synthetic, so treat this as "no known
+misses", not as a guarantee. A prompt change needs a new run.
+
 ## Letter fact check (`evals/letters`)
 
 16 synthetic letters (an invented candidate, companies, and postings): 12 with one planted error each (a wrong

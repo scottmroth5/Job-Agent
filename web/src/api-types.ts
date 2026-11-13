@@ -1098,6 +1098,19 @@ export interface ApiOperations {
       [key: string]: unknown;
     };
   };
+  /** Mark a job "Not a scam" (dismissed false shows its warning again) */
+  "POST /api/postings/:id/scam/dismiss": {
+    params: {
+      id: number;
+    };
+    query: Record<string, never>;
+    body: {
+      dismissed?: boolean;
+    } | null;
+    response: {
+      [key: string]: unknown;
+    };
+  };
   /** The editable prompts */
   "GET /api/prompts": {
     params: Record<string, never>;
@@ -1110,7 +1123,7 @@ export interface ApiOperations {
   /** A prompt with its default, placeholders, schema and history */
   "GET /api/prompts/:name": {
     params: {
-      name: "score" | "score-fractional" | "resume-tweaks" | "cover-letter" | "verify-letter" | "meeting-prep" | "find-contact" | "inbox-classify";
+      name: "score" | "score-fractional" | "resume-tweaks" | "cover-letter" | "verify-letter" | "scam-check" | "meeting-prep" | "find-contact" | "inbox-classify";
     };
     query: Record<string, never>;
     body: never;
@@ -1121,7 +1134,7 @@ export interface ApiOperations {
   /** Save a new version of a prompt (validated; becomes active) */
   "PUT /api/prompts/:name": {
     params: {
-      name: "score" | "score-fractional" | "resume-tweaks" | "cover-letter" | "verify-letter" | "meeting-prep" | "find-contact" | "inbox-classify";
+      name: "score" | "score-fractional" | "resume-tweaks" | "cover-letter" | "verify-letter" | "scam-check" | "meeting-prep" | "find-contact" | "inbox-classify";
     };
     query: Record<string, never>;
     body: {
@@ -1135,7 +1148,7 @@ export interface ApiOperations {
   /** Fill a draft prompt with a real job (no Claude call) */
   "POST /api/prompts/:name/preview": {
     params: {
-      name: "score" | "score-fractional" | "resume-tweaks" | "cover-letter" | "verify-letter" | "meeting-prep" | "find-contact" | "inbox-classify";
+      name: "score" | "score-fractional" | "resume-tweaks" | "cover-letter" | "verify-letter" | "scam-check" | "meeting-prep" | "find-contact" | "inbox-classify";
     };
     query: Record<string, never>;
     body: {
@@ -1149,7 +1162,7 @@ export interface ApiOperations {
   /** Make an earlier version active, or return to the repo default (versionId null) */
   "POST /api/prompts/:name/restore": {
     params: {
-      name: "score" | "score-fractional" | "resume-tweaks" | "cover-letter" | "verify-letter" | "meeting-prep" | "find-contact" | "inbox-classify";
+      name: "score" | "score-fractional" | "resume-tweaks" | "cover-letter" | "verify-letter" | "scam-check" | "meeting-prep" | "find-contact" | "inbox-classify";
     };
     query: Record<string, never>;
     body: {

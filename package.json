@@ -29,6 +29,7 @@
     "eval:score": "node --env-file=.env scripts/eval-score.js",
     "eval:inbox": "node --env-file=.env scripts/eval-inbox.js",
     "eval:letters": "node --env-file=.env scripts/eval-letters.js",
+    "eval:scam": "node --env-file-if-exists=.env scripts/eval-scam.js",
     "evals": "node scripts/evals.js",
     "hunt": "node --env-file=.env scripts/hunt.js",
     "archive": "node scripts/archive.js",

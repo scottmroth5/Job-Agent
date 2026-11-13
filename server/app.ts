@@ -106,6 +106,7 @@ const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback', '/api/admin/usage
 const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
 import { backgroundFor, userConfigView, withUserConfig } from '../agents/user-config.ts';
 import { automatedUsers, automationFor, skipArgs } from '../agents/automation.ts';
+import { dismissScam, scamFor } from '../agents/discovery/scam.ts';
 import type { AutomationDefaults } from '../agents/automation.ts';
 
 // Routes only the owner may call: the inbox reads the owner's own Gmail (another person's would need Google's review
@@ -513,6 +514,22 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   registerResumeRoutes(app, { db }); // after attachments, which registers the raw-file body parser
   registerPrepRoutes(app, { store, config, services, startTask });
   registerNoteRoutes(app, { db });
+  // Not a scam (or undo): the job's scam warning stops showing (agents/discovery/scam.ts). The job is the user's own.
+  app.post<{ Params: IdParams; Body: { dismissed?: boolean } }>(
+    '/api/postings/:id/scam/dismiss',
+    {
+      schema: {
+        summary: 'Mark a job "Not a scam" (dismissed false shows its warning again)',
+        params: idParams,
+        body: { type: ['object', 'null'], additionalProperties: false, properties: { dismissed: { type: 'boolean' } } },
+        response: { 200: anyObject },
+      },
+    },
+    async (req, reply) => {
+      if (!(await dismissScam(db, req.params.id, req.body?.dismissed !== false))) return reply.code(404).send({ error: 'This job has no scam check.' });
+      return { scam: await scamFor(db, req.params.id) };
+    },
+  );
   registerExcludedSiteRoutes(app, { db, ownerConfig });
   registerFollowUpRoutes(app, { store, config, services, startTask, demo: authMode === 'demo' });
   let scheduler: ReturnType<typeof createScheduler> | null = null;
