@@ -21,6 +21,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Database as Sqlite, Statement as SqliteStatement } from 'better-sqlite3';
 import { bindUid, userIdOr } from '../scope.ts';
+import { insidePgTransaction } from './context.ts';
 import { returnsId } from './sql.ts';
 import type { Db, RunResult, Statement } from './types.ts';
 
@@ -56,7 +57,7 @@ const context = new AsyncLocalStorage<TxContext>();
 
 /** True while the calling code runs inside an open transaction. */
 export function insideTransaction(): boolean {
-  return context.getStore()?.isOpen() ?? false;
+  return (context.getStore()?.isOpen() ?? false) || insidePgTransaction();
 }
 
 /**

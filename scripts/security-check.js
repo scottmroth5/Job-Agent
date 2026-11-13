@@ -48,6 +48,7 @@ const CHILD_PROCESS_ALLOWED = {
   'server/main.ts': 'runs scripts/pipeline.js and scripts/backup.js as their own processes',
   'scripts/check-personal.js': 'reads staged files from git in the pre-commit hook',
   'scripts/evals.js': 'runs the eval scripts',
+  'scripts/run-pg-tests.js': 'runs node --test on PostgreSQL (npm run test:pg; development and CI only)',
   'tools/google/oauth-flow.ts': 'opens the browser for the one-time Google sign-in on the owner computer',
 };
 

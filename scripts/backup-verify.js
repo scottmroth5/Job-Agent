@@ -7,13 +7,14 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { createJobTracer } from '../tools/trace.ts';
-import { openJobStore } from '../db/index.ts';
+import { exitUnlessSqlite, openJobStore } from '../db/index.ts';
 import { checkPassphrase } from '../tools/backup/crypto.ts';
 import { createBackupDrive } from '../tools/backup/drive.ts';
 import { DRIVE_FOLDER } from '../tools/backup/run.ts';
 import { newestBackup, restoreTest } from '../tools/backup/restore-check.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
 import { exitWhenDone } from '../tools/exit.ts';
+
 /**
  * @import { JobStore } from '../tools/types.ts'
  * @import { BackupDrive } from '../tools/backup/drive.ts'
@@ -56,6 +57,7 @@ export async function restoreTestJob({ store, passphrase, drive, fromFile }) {
 }
 
 async function main() {
+  exitUnlessSqlite('npm run backup:test'); // when run, not when the tests import restoreTestJob
   const passphrase = process.env.JOB_BACKUP_PASSPHRASE;
   checkPassphrase(passphrase);
   const store = openJobStore();

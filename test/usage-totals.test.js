@@ -15,12 +15,13 @@ import { deleteAccount, exportAccount } from '../agents/account-data.ts';
 import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
-import { GOOGLE_SIGNIN_RETURN, SOURCES, browserOf, deviceOf, locationValue, sourceOf } from '../server/usage-totals.ts';
+import { GOOGLE_SIGNIN_RETURN, SOURCES, browserOf, deviceOf, locationValue, sourceOf, usageTotalsIdle } from '../server/usage-totals.ts';
 import * as usageBrowser from '../db/migrations/021-usage-browser.ts';
 import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
 import { DEMO_CONFIG } from '../demo/sample-data.ts';
 import { fakeServices } from './fixtures/fakes.js';
+import { columnsOf } from './fixtures/engine.js';
 /** @typedef {{ dimension: string, value: string, count: number }} Total */
 
 const SITE = 'https://jobs.example.com';
@@ -159,7 +160,10 @@ async function setup({ authMode = 'google' } = {}) {
   /** @param {string} url @param {{ as?: string | null, ip?: string, ua?: string | null, headers?: Record<string, string> }} [o] */
   const get = (url, { as = OWNER, ip = '203.0.113.7', ua = UA.windows, headers = {} } = {}) =>
     app.inject({ url, remoteAddress: ip, headers: { ...(as ? { cookie: cookie(as) } : {}), ...(ua ? { 'user-agent': ua } : {}), origin: SITE, ...headers } });
-  const totals = async () => /** @type {Total[]} */ (await store.admin.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension, value').all());
+  const totals = async () => {
+    await usageTotalsIdle(); // counting runs after each response
+    return /** @type {Total[]} */ (await store.admin.prepare('SELECT dimension, value, count FROM usage_totals ORDER BY dimension, value').all());
+  };
   return { app, store, sam, get, totals };
 }
 
@@ -244,7 +248,8 @@ test('the table holds no address, browser string, referrer, URL, or user id, and
   const referer = 'https://www.linkedin.com/in/someone-private';
   await get('/?utm_source=linkedin&secret=1', { headers: page(referer) });
   await get('/api/me', { as: 'sam@example.com', ua: UA.ipad });
-  assert.deepEqual(await store.admin.prepare('SELECT name FROM pragma_table_info(?) ORDER BY cid').pluck().all('usage_totals'), ['day', 'dimension', 'value', 'count']);
+  assert.deepEqual(await columnsOf(store.admin, 'usage_totals'), ['day', 'dimension', 'value', 'count']);
+  await usageTotalsIdle();
   const text = JSON.stringify(await store.admin.prepare('SELECT * FROM usage_totals').all());
   for (const leak of ['203.0.113', 'Mozilla', 'iPad;', 'someone-private', 'secret', 'utm_source', 'sam@example.com', OWNER]) assert.ok(!text.includes(leak), leak);
   for (const row of await totals()) assert.ok(['device', 'browser', 'location', 'source'].includes(row.dimension));

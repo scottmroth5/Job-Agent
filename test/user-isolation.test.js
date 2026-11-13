@@ -17,6 +17,7 @@ import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { seedDemo } from '../scripts/demo-seed.js';
 import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.ts';
 import { fakeServices } from './fixtures/fakes.js';
+import { KEY_ORDER } from '../agents/account-data.ts';
 /** @import { AppServices } from '../server/app.ts' */
 /** @import { Db } from '../tools/types.ts' */
 /** @import { InjectOptions } from 'fastify' */
@@ -67,7 +68,7 @@ const PARAMS = { action: 'score', list: 'status', name: 'score', area: 'home' };
 const fill = (/** @type {string} */ url) => url.replace(/:(\w+)/g, (_, /** @type {string} */ k) => PARAMS[k] ?? '1').replaceAll('*', 'index.html');
 // Task routes take a task id; A's sample tasks are 1 to N.
 const urlsFor = (/** @type {string} */ url) => (url.startsWith('/api/tasks/:id') ? SAMPLE_TASKS.map((_, i) => url.replace(':id', String(i + 1))) : [fill(url)]);
-const snapshot = async (/** @type {Db} */ db, /** @type {number} */ uid) => JSON.stringify(await Promise.all(USER_TABLES.map((t) => db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid))));
+const snapshot = async (/** @type {Db} */ db, /** @type {number} */ uid) => JSON.stringify(await Promise.all(USER_TABLES.map((t) => db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY ${KEY_ORDER[t] ?? 'id'}`).all(uid))));
 
 test('isolation: B sees none of A\'s jobs on any GET route; A sees them', async () => {
   const { store, app, asA, asB } = await setup();

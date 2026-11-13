@@ -196,8 +196,8 @@ test('openJobStore: db is scoped, admin is not, both over one connection', async
     await store.db.prepare("INSERT INTO app_settings (key, value, updated_at) VALUES ('engine-test', '1', 'x')").run();
   });
   assert.equal(await store.admin.prepare("SELECT value FROM app_settings WHERE key = 'engine-test'").pluck().get(), '1', 'one connection');
-  assert.equal(await store.db.prepare('SELECT @uid').pluck().get(), 1, 'db: the owner outside a request (scripts and tests)');
-  await assert.rejects(store.admin.prepare('SELECT @uid').pluck().get(), /needs a user/, 'admin has no fallback user');
+  assert.equal(await store.db.prepare('SELECT CAST(@uid AS INTEGER)').pluck().get(), 1, 'db: the owner outside a request (scripts and tests)');
+  await assert.rejects(store.admin.prepare('SELECT CAST(@uid AS INTEGER)').pluck().get(), /needs a user/, 'admin has no fallback user');
   store.close();
 
   const server = openJobStore(':memory:', { fallbackUid: null });

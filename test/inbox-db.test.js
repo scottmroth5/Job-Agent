@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
+import { CHECK_FAILED, columnsOf, tablesOf, UNIQUE_FAILED } from './fixtures/engine.js';
 /** @import { Db } from '../tools/types.ts' */
 
 const now = '2026-10-02T12:00:00.000Z';
@@ -38,10 +39,10 @@ async function email(db, o = {}) {
 
 test('007 adds the inbox tables and the company domain column; 013 drops its funnel view (a view cannot be per user)', async () => {
   const store = openJobStore(':memory:');
-  const names = await store.db.prepare("SELECT name FROM sqlite_master WHERE type IN ('table', 'view')").pluck().all();
+  const names = await tablesOf(store.db);
   for (const n of ['contacts', 'email_threads', 'emails', 'decision_log', 'reminders']) assert.ok(names.includes(n), n);
   assert.ok(!names.includes('application_funnel'), 'server/funnel.ts computes the funnel per user instead');
-  assert.ok(/** @type {Array<{ name: string }>} */ (await store.db.prepare('PRAGMA table_info(postings)').all()).some((c) => c.name === 'company_domain'));
+  assert.ok((await columnsOf(store.db, 'postings')).includes('company_domain'));
   store.close();
 });
 
@@ -49,9 +50,9 @@ test('emails are unique by Gmail message ID and only allow known types and revie
   const store = openJobStore(':memory:');
   const { db } = store;
   const first = await email(db);
-  await assert.rejects(async () => await email(db, { gmail_message_id: first.gmail_message_id }), /UNIQUE/);
-  await assert.rejects(async () => await email(db, { type: 'spam' }), /CHECK/);
-  await assert.rejects(async () => await email(db, { review_status: 'maybe' }), /CHECK/);
+  await assert.rejects(async () => await email(db, { gmail_message_id: first.gmail_message_id }), UNIQUE_FAILED);
+  await assert.rejects(async () => await email(db, { type: 'spam' }), CHECK_FAILED);
+  await assert.rejects(async () => await email(db, { review_status: 'maybe' }), CHECK_FAILED);
   store.close();
 });
 

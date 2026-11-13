@@ -13,6 +13,7 @@ import { seedDemo, isDemoDatabase } from '../scripts/demo-seed.js';
 import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.ts';
 import Fastify from 'fastify';
 import { fakeServices } from './fixtures/fakes.js';
+import { sqliteOnly } from './fixtures/engine.js';
 /** @import { InjectOptions } from 'fastify' */
 /** @import { JsonRow } from './fixtures/fakes.js' */
 
@@ -81,7 +82,7 @@ test('the seed builds a full sample search: jobs in every stage, scores, letters
   assert.deepEqual(JSON.parse(readFileSync(configPath, 'utf8')), DEMO_CONFIG);
 });
 
-test('the seed only ever replaces a database it made', async () => {
+test('the seed only ever replaces a database it made', { skip: sqliteOnly('the demo seed checks its SQLite file until the demo moves to PGlite (Phase 4, PR 5)') }, async () => {
   const { dbPath } = await seeded();
   assert.equal(await isDemoDatabase(dbPath), true);
   const real = join(mkdtempSync(join(tmpdir(), 'real-')), 'job-agent.db');

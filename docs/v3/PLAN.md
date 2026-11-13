@@ -309,11 +309,22 @@ computer can choose SQLite or PostgreSQL. Both engines stay in CI after the cuto
 10. Write `scripts/migrate-sqlite-to-postgres`: repeatable, in foreign key order, with identity sequences reset. It verifies row counts and content checksums per table and per user, and logs counts only.
 
 Done when:
-- [ ] The full suite passes on PostgreSQL in CI
+- [x] The full suite passes on PostgreSQL in CI
 - [ ] Row level security tests pass
 - [ ] Migration script runs repeatedly against a synthetic database and a local copy of real data, with all checks matching
 - [ ] Evals show unchanged decisions on the new engine, or differences are explained
 - [ ] `Health-Review` tests pass against any new `Agent-Core` release
+
+Progress (decision 0006):
+- PR 1 (#57): portable SQL on SQLite. Quoted aliases, `RETURNING id` as the only way to get a new id, the SQLite-only
+  syntax replaced, `test/portable-sql.test.js`, and migration 025 (note order).
+- PR 2: the PostgreSQL engine (`db/engine/postgres.ts`), the baseline schema and its runner (`db/postgres`), `DATABASE_URL`
+  to choose it, `compose.dev.yml` and `npm run test:pg`, the schema parity test, and the CI job "Tests (PostgreSQL)".
+  The suite passes on PostgreSQL with 9 reviewed skips (`test/engine-skips.test.js`).
+- Response times, `npm run bench` on the same PC (medians, ms): SQLite summary 1.6, postings 1.6, a job 2.2, funnel 1.1;
+  PostgreSQL 17 in Docker Desktop 18.8, 7.3, 26.8, 10.8. Each PostgreSQL query is a network round trip, and the job panel
+  runs about 20 in a row. Before the Phase 5 cutover: run independent queries together, and measure against RDS from
+  the server, where round trips are shorter than through Docker Desktop on Windows.
 
 ### Phase 5: RDS and cutover
 

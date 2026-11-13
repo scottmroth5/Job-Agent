@@ -3,6 +3,7 @@ import { createSqliteEngine } from '../db/engine/sqlite.ts';
 import assert from 'node:assert/strict';
 import { openStore } from '@scottmroth5/agent-core';
 import { openJobStore, loadMigrations } from '../db/index.ts';
+import { CHECK_FAILED, columnsOf } from './fixtures/engine.js';
 /** @import { Db } from '../tools/types.ts' */
 
 /** A code migration's up function (these migrations are code, not SQL). */
@@ -10,7 +11,7 @@ const upOf = (/** @type {string} */ id) => /** @type {(db: import('better-sqlite
 
 // Synthetic data only.
 // Used before 013 (no user_id yet) and after it (the owner's job).
-const hasUser = async (/** @type {Db} */ db) => Boolean(await db.prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
+const hasUser = async (/** @type {Db} */ db) => (await columnsOf(db, 'postings')).includes('user_id');
 const insert = async (/** @type {Db} */ db, /** @type {Record<string, string>} */ o = {}) =>
   await db
     .prepare(`INSERT INTO postings (${await hasUser(db) ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, track, created_at, updated_at)
@@ -63,7 +64,7 @@ test('jobs accept any value in the lists, including new and archived ones, and n
   await assert.rejects(async () => await db.prepare("UPDATE postings SET track = 'parttime' WHERE id = ?").run(id), /track is not in the track list/);
   await assert.rejects(async () => await db.prepare("DELETE FROM lookup_values WHERE id = 'phone_screen'").run(), /never deleted/);
   await assert.rejects(async () => await db.prepare("UPDATE lookup_values SET id = 'screen' WHERE id = 'phone_screen'").run(), /never changes/);
-  assert.match(/** @type {string} */ (await db.prepare("SELECT sql FROM sqlite_master WHERE name = 'postings'").pluck().get()), /CHECK \(workplace IN/, 'other CHECK constraints stay');
+  await assert.rejects(async () => await db.prepare("UPDATE postings SET workplace = 'moon' WHERE id = ?").run(id), CHECK_FAILED, 'other CHECK constraints stay');
   store.close();
 });
 

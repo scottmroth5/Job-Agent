@@ -112,8 +112,8 @@ export async function upsertContact(
   const addr = String(email ?? '').trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(addr)) return null;
   await db.prepare(`INSERT INTO contacts (user_id, id, email, name, company, posting_id, source, created_at, updated_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?)
-    ON CONFLICT (user_id, email) DO UPDATE SET name = COALESCE(excluded.name, name), company = COALESCE(excluded.company, company),
-      posting_id = COALESCE(excluded.posting_id, posting_id), updated_at = excluded.updated_at`).run(randomUUID(), addr, name, company, postingId, source, iso(now), iso(now));
+    ON CONFLICT (user_id, email) DO UPDATE SET name = COALESCE(excluded.name, contacts.name), company = COALESCE(excluded.company, contacts.company),
+      posting_id = COALESCE(excluded.posting_id, contacts.posting_id), updated_at = excluded.updated_at`).run(randomUUID(), addr, name, company, postingId, source, iso(now), iso(now));
   return addr;
 }
 

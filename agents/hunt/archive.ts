@@ -88,7 +88,7 @@ export async function findDuplicates(db: Db) {
     .prepare(`SELECT id, company, title, url, stage, status, company_title_key,
         TRIM(COALESCE(jd_text, '') || COALESCE(fetched_text, '')) != '' AS has_text,
         -- removed by cleanup: the agent changed an existing status (discovery's first status, from nothing, does not count)
-        COALESCE((SELECT h.changed_by = 'agent' AND h.from_status IS NOT NULL FROM status_history h WHERE h.posting_id = p.id AND h.user_id = p.user_id ORDER BY h.id DESC LIMIT 1), 0) AS agent_removed
+        COALESCE((SELECT CASE WHEN h.changed_by = 'agent' AND h.from_status IS NOT NULL THEN 1 ELSE 0 END FROM status_history h WHERE h.posting_id = p.id AND h.user_id = p.user_id ORDER BY h.id DESC LIMIT 1), 0) AS agent_removed
       FROM postings p WHERE p.user_id = @uid`)
     .all() as Copy[]);
   const groups = new Map<string, Copy[]>();

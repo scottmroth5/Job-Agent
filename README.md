@@ -49,6 +49,10 @@ npm run ui                    # open http://localhost:5178
 
 Your settings go in `data/config/job-search.json`; start from [`config/job-search.example.json`](config/job-search.example.json).
 
+### Database: SQLite or PostgreSQL
+
+By default your data lives in one SQLite file, `data/job-agent.db`, with nothing else to install. To use PostgreSQL instead, set `DATABASE_URL` in `.env` to a `postgres://` address; the app creates its tables on first start. For a local PostgreSQL in Docker, add a `PG_DEV_PASSWORD` to `.env`, run `npm run pg:up` (PostgreSQL 17 on 127.0.0.1:5433, [`compose.dev.yml`](compose.dev.yml)), and point `DATABASE_URL` at its `job_agent` database. Backups (`npm run backup`) work on the SQLite file for now.
+
 ## Commands
 
 | Command | What it does |
@@ -215,9 +219,9 @@ These ideas are under consideration and may change as the application evolves.
 | `agents/inbox` | Gmail inbox: pre-filter, matching, classification, status actions, review |
 | `server/` | Local API (OpenAPI spec at `/api/openapi.json`) |
 | `web/` | React web page |
-| `db/` | SQLite schema and migrations |
+| `db/` | Database engines (SQLite and PostgreSQL), schema, and migrations |
 | `evals/` | Scoring evaluation |
 | `tools/` | Shared helpers: config, HTTP, Google, location, rates |
 | `docs/` | Setup and user guide |
 
-Built with Node.js, SQLite, Fastify, React, and Claude via [agent-core](https://github.com/scottmroth5/Agent-Core), a small shared library for the Claude client, run tracing, and storage.
+Built with Node.js, SQLite or PostgreSQL, Fastify, React, and Claude via [agent-core](https://github.com/scottmroth5/Agent-Core), a small shared library for the Claude client, run tracing, and storage.
