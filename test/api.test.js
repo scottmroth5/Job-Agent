@@ -101,7 +101,7 @@ test('adding a job runs as a task with progress steps; actions score and write m
   assert.equal(res.statusCode, 202);
   const task = await app.tasks.wait(res.json().taskId);
   assert.ok(task);
-  assert.equal(task.status, 'done', task.error ?? undefined);
+  assert.equal(task.status, 'done', `the task failed: ${task.error}`);
   assert.equal(/** @type {{ created: boolean }} */ (task.result).created, true);
   assert.ok(task.steps.some((s) => /Scored 8 of 10/.test(s.message)));
   assert.equal((await app.inject(`/api/tasks/${res.json().taskId}`)).json().status, 'done');
@@ -114,10 +114,10 @@ test('adding a job runs as a task with progress steps; actions score and write m
 
   const scoreTask = await app.tasks.wait((await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/score` })).json().taskId);
   assert.ok(scoreTask);
-  assert.equal(scoreTask.status, 'done', scoreTask.error ?? undefined);
+  assert.equal(scoreTask.status, 'done', `the task failed: ${scoreTask.error}`);
   const writeTask = await app.tasks.wait((await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/write-materials` })).json().taskId);
   assert.ok(writeTask);
-  assert.equal(writeTask.status, 'done', writeTask.error ?? undefined);
+  assert.equal(writeTask.status, 'done', `the task failed: ${writeTask.error}`);
   assert.equal(/** @type {{ docs: number }} */ (writeTask.result).docs, 1);
   assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/explode` })).statusCode, 400);
 
@@ -132,7 +132,7 @@ test('writing materials for a Discovered job moves it to the promote stage first
   await store.db.prepare('UPDATE postings SET fetched_text = ? WHERE id = ?').run(DESCRIPTION, ids.found);
   const task = await app.tasks.wait((await app.inject({ method: 'POST', url: `/api/postings/${ids.found}/actions/write-materials` })).json().taskId);
   assert.ok(task);
-  assert.equal(task.status, 'done', task.error ?? undefined);
+  assert.equal(task.status, 'done', `the task failed: ${task.error}`);
   assert.equal(await store.db.prepare('SELECT stage FROM postings WHERE id = ?').pluck().get(ids.found), 'pipeline');
   await app.close();
   store.close();

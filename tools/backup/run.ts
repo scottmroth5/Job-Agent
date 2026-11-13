@@ -55,7 +55,7 @@ function filesUnder(dir: string, prefix: string) {
   return readdirSync(dir, { recursive: true, withFileTypes: true })
     .filter((e) => e.isFile())
     .map((e) => {
-      const path = join(e.parentPath ?? e.path, e.name);
+      const path = join(e.parentPath, e.name);
       return { name: `${prefix}/${relative(dir, path).split(sep).join('/')}`, path };
     })
     .sort((a, b) => a.name.localeCompare(b.name));

@@ -1,4 +1,4 @@
-# Job Agent server image: Node 22 (22.18 or newer), the built web page, and Playwright's Chromium.
+# Job Agent server image: Node 26, the built web page, and Playwright's Chromium.
 # Holds code only. Personal data (.env, data/) never enters the image: .dockerignore keeps it out, and the
 # server mounts the data folder at /data and reads its settings from an env file at run time.
 #
@@ -10,7 +10,7 @@
 
 # Tools for installing dependencies. git: agent-core is a GitHub dependency. python3, make, g++: the fallback
 # if better-sqlite3 has no prebuilt binary for this platform.
-FROM node:22-bookworm-slim AS base
+FROM node:26-bookworm-slim AS base
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates python3 make g++ \
  && rm -rf /var/lib/apt/lists/*
@@ -50,15 +50,15 @@ RUN echo "relay list for build $GEO_STAMP" \
     then echo "relay list $(wc -l < /geo/relay.csv) lines"; else rm -f /geo/relay.csv; fi; true
 
 # Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
-FROM node:22-bookworm-slim
+FROM node:26-bookworm-slim
 ENV NODE_ENV=production \
     DATA_DIR=/data \
     HOST=0.0.0.0 \
     PORT=5178 \
     PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 WORKDIR /app
-# Node runs the .ts source by stripping its types, which needs 22.18 or newer (package.json engines).
-RUN node -e "const [a, b] = process.versions.node.split('.').map(Number); if (a < 22 || (a === 22 && b < 18)) { console.error('Node ' + process.version + ' is older than 22.18'); process.exit(1); }"
+# Node runs the .ts source by stripping its types; the app requires Node 26 or newer (package.json engines).
+RUN node -e "const a = Number(process.versions.node.split('.')[0]); if (a < 26) { console.error('Node ' + process.version + ' is older than 26'); process.exit(1); }"
 COPY --from=deps /app/node_modules ./node_modules
 # Chromium and its system libraries, matching the installed Playwright version; tzdata for the TZ setting.
 # Then npm, npx, yarn, and corepack are removed: only node runs here, and their bundled dependencies would fail the
