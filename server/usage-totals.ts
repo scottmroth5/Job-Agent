@@ -150,7 +150,7 @@ const isVisit = (req: CountedRequest, statusCode: number) => {
 
 /** Adds one to a day's total. */
 export const addToTotal = async (db: Db, day: string, dimension: string, value: string) =>
-  await db.prepare('INSERT INTO usage_totals (day, dimension, value, count) VALUES (?, ?, ?, 1) ON CONFLICT (day, dimension, value) DO UPDATE SET count = count + 1').run(day, dimension, value);
+  await db.prepare('INSERT INTO usage_totals (day, dimension, value, count) VALUES (?, ?, ?, 1) ON CONFLICT (day, dimension, value) DO UPDATE SET count = usage_totals.count + 1').run(day, dimension, value);
 
 /**
  * Counts visits and arrivals after each response. db: the unscoped database (an app-wide table); location: ip ->
@@ -179,6 +179,16 @@ export function registerUsageTotals(
   let counted: { day: string | null; ids: Set<number> } = { day: null, ids: new Set() };
 
   app.addHook('onResponse', async (req, reply) => {
+    const counting = count(req, reply);
+    inFlight.add(counting);
+    try {
+      await counting;
+    } finally {
+      inFlight.delete(counting);
+    }
+  });
+
+  async function count(req: CountedRequest, reply: { statusCode: number }) {
     try {
       const day = appDay(now());
       if (isVisit(req, reply.statusCode)) {
@@ -204,5 +214,12 @@ export function registerUsageTotals(
     } catch {
       // Counting never affects a request.
     }
-  });
+  }
 }
+
+// Counting runs after the response is sent, so a caller can read the totals before the last count lands (on
+// PostgreSQL every write is a round trip). Tests wait for usageTotalsIdle() before reading.
+const inFlight = new Set<Promise<void>>();
+export const usageTotalsIdle = async () => {
+  await Promise.all([...inFlight]);
+};

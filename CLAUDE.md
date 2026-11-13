@@ -19,9 +19,11 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
 /agents/notes.js    a job's notes are separate entries (posting_notes: body, source user/agent/earlier, created_at, updated_at, and seq, 025: the order written, since notes often share a time).
                     Change notes only through this module: it keeps postings.notes as every entry's text, oldest first, for
                     code that reads notes as one text. Code that inserts a job with notes text calls adoptNotesText
-/db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.ts, applied in id order), openJobStore, v1 import.
+/db                 schema: SQLite (migrations/*.sql plus code migrations listed in db/index.ts, applied in id order) and
+                    PostgreSQL (db/postgres: 000-baseline.sql, then a file per later migration; store.ts), openJobStore, v1 import.
                     db/engine is the async data layer every call goes through (see Database below): types.ts (Db), sqlite.ts
-                    (the SQLite engine), files.ts (read-only opens, copies, online backups, integrity checks).
+                    (the SQLite engine), postgres.ts (the PostgreSQL engine), sql.ts (placeholders and dialect helpers),
+                    files.ts (SQLite file work: read-only opens, copies, online backups, integrity checks).
                     db/types.ts is generated (npm run db:types after a new migration): a row type per table, for query results.
                     Rebuild a table only in a migration that exports foreignKeys = false (agent-core runs it with foreign keys off,
                     then foreign_key_check and integrity_check must pass before it commits); in any other migration a drop cascades.
@@ -56,6 +58,9 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
 ## Commands
 npm test                          run all unit tests (no network, no real data)
 node --test test/db.test.js       run one suite
+npm run pg:up                     start the local PostgreSQL 17 (compose.dev.yml, 127.0.0.1:5433, password PG_DEV_PASSWORD in .env); pg:down stops it
+npm run test:pg                   the same suite on PostgreSQL (scripts/run-pg-tests.js recreates job_agent_test; -- test/x.test.js for one
+                                  suite); CI runs it on a postgres:17 service. Tests of SQLite-only things skip there (test/engine-skips.test.js)
 npm run typecheck                 tsc --noEmit, strict (tsconfig.json for the server side, web/tsconfig.json for the page)
 npm run lint                      the promise rules (no-floating-promises, await-thenable, no-misused-promises) and import type
 npm run db:types                  regenerate db/types.ts (a row type per table) from the migrations; CI runs -- --check
@@ -337,7 +342,7 @@ typed with JSDoc (@param, @typedef, /** @import { X } from '...' */, casts as /*
 root tsconfig.json (checkJs: true), so a new .js file there is checked too. Tests build stand-ins through test/fixtures/fakes.js.
 The any count and each reason are in docs/v3/PLAN.md (Phase 2); a new any updates that table.
 
-## Database (v3 Phase 3, async on SQLite)
+## Database (v3 Phase 3 async; Phase 4 SQLite and PostgreSQL, decision 0006)
 Every database call is async through db/engine's Db: prepare(sql).get/all/run return promises (run gives { changes, id }),
 pluck(), and tx(fn). better-sqlite3 is imported only in db/engine, db/migrations (they run on the connection while
 openJobStore opens it, before the engine), types/, and tests (lint no-restricted-imports); work on database files
@@ -358,6 +363,19 @@ unquoted camelCase aliases (write AS "startedAt"; PostgreSQL lowercases unquoted
 case-insensitive match is lower(x) LIKE lower(@q); a parameter tested only with IS NULL is CAST(? AS TEXT); an EXISTS
 compared in SQL is CASE WHEN EXISTS (...) THEN 1 ELSE 0 END. run() reports id only for a statement that ends in
 RETURNING id (reading it otherwise throws, on every engine), so an insert that needs its id says RETURNING id.
+In ON CONFLICT DO UPDATE, name the table's own column with the table (COALESCE(excluded.name, contacts.name)).
+PostgreSQL engine (db/engine/postgres.ts, node-postgres): DATABASE_URL=postgres://... picks it; without it the store is
+SQLite. openJobStore stays synchronous: the store connects and migrates behind store.ready (server/main.ts awaits it;
+every statement waits for it). A file path is the database's public schema, ':memory:' a throwaway schema; npm run
+test:pg sets PG_SCHEMA_PER_PATH=1 so each path is a schema of its own (db/postgres/store.ts schemaFor). Rows read as on
+SQLite: bigint and numeric as numbers, booleans as 1/0. Each transaction takes pg_advisory_xact_lock for its schema, so
+transactions run one at a time across processes as on SQLite; a nested tx is a savepoint whose body gets its own
+context (db/engine/context.ts also lets insideTransaction see PostgreSQL transactions). Schema: db/postgres/000-baseline.sql
+is SQLite's schema and seed rows after 025; every later migration has a SQLite file and a db/postgres file of the same
+name, and test/pg-schema.test.js holds the two schemas equal. The SQLite file tools (backup, backup:test, report:baseline,
+db:pending, pre-migration copies) stop on PostgreSQL (db/index.ts exitUnlessSqlite) until Phase 5. Tests read the
+database's facts through test/fixtures/engine.js (tablesOf, columnsOf, primaryKeyOf, and each engine's error wording);
+a test of something only SQLite has skips there with sqliteOnly(reason), listed in test/engine-skips.test.js.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),

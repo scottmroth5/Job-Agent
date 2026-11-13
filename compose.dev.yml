@@ -1,0 +1,28 @@
+# Local PostgreSQL for development and npm run test:pg (v3 Phase 4). Not used by the server, which stays on SQLite
+# until Phase 5. Bound to 127.0.0.1 only; the password comes from .env (PG_DEV_PASSWORD), never from this file.
+#
+#   npm run pg:up      start it (docker compose -f compose.dev.yml --env-file .env up -d)
+#   npm run pg:down    stop it (the data volume stays)
+#
+# Databases: job_agent (yours, when DATABASE_URL points at it) and job_agent_test (npm run test:pg recreates it).
+services:
+  postgres:
+    image: postgres:17
+    # The test suite runs files in parallel, each with its own pools.
+    command: ["postgres", "-c", "max_connections=400"]
+    environment:
+      POSTGRES_USER: job_agent
+      POSTGRES_PASSWORD: ${PG_DEV_PASSWORD:?set PG_DEV_PASSWORD in .env}
+      POSTGRES_DB: job_agent
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U job_agent -d job_agent"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  pgdata:

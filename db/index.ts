@@ -19,6 +19,7 @@ import { appliedIn, backupConnection, copyDatabase } from './engine/files.ts';
 import type { Db } from './engine/types.ts';
 import type { Migration } from '@scottmroth5/agent-core';
 import { OWNER_ID } from './users.ts';
+import { isPostgresUrl, openPgStore, schemaFor } from './postgres/store.ts';
 
 /** openJobStore's store: the async data layer (db/engine) over one connection. */
 export interface JobStore {
@@ -26,9 +27,27 @@ export interface JobStore {
   db: Db;
   /** Unscoped, for the admin's cross-user reads (server/admin-queries.ts), backups, and account deletion only. */
   admin: Db;
-  /** An online backup of the open database into a new file (tools/backup). */
+  /** An online backup of the open database into a new file (tools/backup). SQLite only until Phase 5. */
   backup: (to: string) => Promise<void>;
+  /** Settles once the store can be used: at once on SQLite; on PostgreSQL, when it has connected and migrated. */
+  ready: Promise<void>;
+  /** 'sqlite' or 'postgres': the few tools that work on a SQLite file check it. */
+  engine: Db['dialect'];
   close: () => void;
+}
+
+/** The PostgreSQL address in DATABASE_URL, when there is one: the store is then on PostgreSQL (db/postgres/store.ts). */
+export const postgresUrl = (): string | null => (isPostgresUrl(process.env.DATABASE_URL) ? process.env.DATABASE_URL : null);
+
+/**
+ * For the scripts that work on the SQLite file itself (backups and their check, the baseline report, db:pending): with
+ * DATABASE_URL on PostgreSQL they would read a file that is not the app's data, so they stop and say why. Phase 5 gives
+ * them PostgreSQL versions.
+ */
+export function exitUnlessSqlite(what: string) {
+  if (!postgresUrl()) return;
+  console.error(`${what} works on the SQLite database file until Phase 5; DATABASE_URL points at PostgreSQL.`);
+  process.exit(1);
 }
 
 /** Default database file. Gitignored, like everything under data/. */
@@ -70,12 +89,29 @@ export function pruneMigrationCopies(dir: string, keep = KEEP_MIGRATION_COPIES) 
  * user-table query outside a request or job throws. store.admin is unscoped, for server/admin-queries.ts, backups, and
  * account deletion only. Migrations run here, on the connection, before either exists.
  * snapshot false: no copy (a throwaway copy itself).
+ *
+ * With DATABASE_URL set to a postgres:// address the store is on PostgreSQL instead (db/postgres/store.ts): a file
+ * path is the database's public schema and ':memory:' a throwaway schema dropped on close (under npm run test:pg each
+ * path is a schema of its own; db/postgres/store.ts schemaFor). No pre-migration copy is taken there yet.
  */
 export function openJobStore(
   path = DB_PATH,
   { snapshot = true, log = console, fallbackUid = OWNER_ID }: { snapshot?: boolean; log?: { info?: (msg: string) => void }; fallbackUid?: number | null } = {},
 ): JobStore {
   const migrations = loadMigrations();
+  const url = postgresUrl();
+  if (url) {
+    const { schema, throwaway } = schemaFor(path);
+    const pgStore = openPgStore(url, { schema, throwaway, fallbackUid, sqliteIds: migrations.map((m) => m.id) });
+    return {
+      db: pgStore.db,
+      admin: pgStore.admin,
+      ready: pgStore.ready,
+      engine: 'postgres',
+      backup: () => Promise.reject(new Error('Backups work on a SQLite database until Phase 5 (pg_dump).')),
+      close: pgStore.close,
+    };
+  }
   let copy: string | null = null;
   if (snapshot && path !== ':memory:' && existsSync(path)) {
     const before = appliedIn(path);
@@ -95,6 +131,8 @@ export function openJobStore(
     db: createSqliteEngine(raw, { fallbackUid }),
     admin: createSqliteEngine(raw, { fallbackUid: null }),
     backup: (to) => backupConnection(raw, to),
+    ready: Promise.resolve(),
+    engine: 'sqlite',
     close: () => store.close(),
   };
 }

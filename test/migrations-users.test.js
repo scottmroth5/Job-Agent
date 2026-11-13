@@ -11,6 +11,7 @@ import { loadMigrations, openJobStore } from '../db/index.ts';
 import { USER_TABLES } from '../db/migrations/013-users.ts';
 import { runAsUser, userIdOr } from '../db/scope.ts';
 import { accountFor, addUser, OWNER_ID, syncOwnerEmail } from '../db/users.ts';
+import { FOREIGN_KEY_FAILED, sqliteOnly, UNIQUE_FAILED } from './fixtures/engine.js';
 
 /** @param {string} path */
 async function before013(path) {
@@ -42,7 +43,7 @@ async function before013(path) {
   return { a, b };
 }
 
-test('013 gives every row to the owner, keeps every link, and moves personal settings', async () => {
+test('013 gives every row to the owner, keeps every link, and moves personal settings', { skip: sqliteOnly('migration 013 rebuilt SQLite tables; PostgreSQL starts from the baseline') }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'm013-'));
   try {
     const path = join(dir, 'job-agent.db');
@@ -87,13 +88,13 @@ test('keys are unique per user, and user_id is required', async () => {
     VALUES (?, ?, 'Example Co', 'CTO', 'k', '2026-10-01', 'x', 'x')`).run(uid, key);
   await job(OWNER_ID, 'same');
   await job(second, 'same');
-  await assert.rejects(async () => await job(OWNER_ID, 'same'), /UNIQUE/);
-  await assert.rejects(async () => await raw.prepare("INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, created_at, updated_at) VALUES ('x', 'C', 'T', 'k', 'd', 'x', 'x')").run(), /NOT NULL constraint failed: postings.user_id/);
-  await assert.rejects(async () => await job(99, 'ghost'), /FOREIGN KEY/);
+  await assert.rejects(async () => await job(OWNER_ID, 'same'), UNIQUE_FAILED);
+  await assert.rejects(async () => await raw.prepare("INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, created_at, updated_at) VALUES ('x', 'C', 'T', 'k', 'd', 'x', 'x')").run(), /NOT NULL constraint failed: postings.user_id|null value in column "user_id" of relation "postings" violates not-null constraint/);
+  await assert.rejects(async () => await job(99, 'ghost'), FOREIGN_KEY_FAILED);
   const contact = async (/** @type {number} */ uid) => await raw.prepare("INSERT INTO contacts (user_id, id, email, source, created_at, updated_at) VALUES (?, ?, 'hr@example.com', 'email', 'x', 'x')").run(uid, `c${uid}`);
   await contact(OWNER_ID);
   await contact(second);
-  await assert.rejects(async () => await raw.prepare("INSERT INTO contacts (user_id, id, email, source, created_at, updated_at) VALUES (?, 'c9', 'hr@example.com', 'email', 'x', 'x')").run(OWNER_ID), /UNIQUE/);
+  await assert.rejects(async () => await raw.prepare("INSERT INTO contacts (user_id, id, email, source, created_at, updated_at) VALUES (?, 'c9', 'hr@example.com', 'email', 'x', 'x')").run(OWNER_ID), UNIQUE_FAILED);
   store.close();
 });
 

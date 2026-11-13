@@ -3,7 +3,9 @@
 // this data fails here, before the real file is touched. Only reads the real database.
 //   npm run db:pending        exit 0: none pending; 10: some pending (listed); 1: a migration failed on the copy
 import { tmpdir } from 'node:os';
-import { DB_PATH, pendingMigrations } from '../db/index.ts';
+import { exitUnlessSqlite, DB_PATH, pendingMigrations } from '../db/index.ts';
+
+exitUnlessSqlite('npm run db:pending');
 
 try {
   const { pending } = pendingMigrations(DB_PATH, tmpdir());

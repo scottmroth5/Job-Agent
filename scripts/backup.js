@@ -5,13 +5,15 @@
 //   npm run backup -- --to E:\JobBackups     write the encrypted file to a folder (e.g. a USB drive), no upload
 //   npm run backup -- --check-passphrase    check JOB_BACKUP_PASSPHRASE in .env, then stop
 import { createJobTracer } from '../tools/trace.ts';
-import { openJobStore } from '../db/index.ts';
+import { exitUnlessSqlite, openJobStore } from '../db/index.ts';
 import { ATTACHMENTS_DIR } from '../server/attachments.ts';
 import { checkPassphrase } from '../tools/backup/crypto.ts';
 import { createBackupDrive } from '../tools/backup/drive.ts';
 import { localDate, runBackup } from '../tools/backup/run.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
 import { dataPath } from '../tools/paths.ts';
+
+exitUnlessSqlite('npm run backup');
 
 /** @param {string} flag */
 const arg = (flag) => {

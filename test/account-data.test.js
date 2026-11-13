@@ -16,6 +16,7 @@ import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { saveUserProfile } from '../agents/user-config.ts';
 import { KEY_ORDER } from '../agents/account-data.ts';
 import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+import { primaryKeyOf } from './fixtures/engine.js';
 /** @import { Db } from '../tools/types.ts' */
 /** @import { SentEmail } from './fixtures/fakes.js' */
 /** @import { LightMyRequestResponse } from 'fastify' */
@@ -60,7 +61,7 @@ async function setup() {
   await store.admin.prepare("UPDATE users SET claude_key_enc = 'v1.sealed.value.here' WHERE id = ?").run(pat);
   return { store, app, dir, sent, pat, sam, seeded, asOwner: as(OWNER), asPat: as('pat@example.com'), asSam: as('sam@example.com'), done: async () => { await app.close(); store.close(); rmSync(dir, { recursive: true, force: true }); } };
 }
-const snapshot = async (/** @type {Db} */ raw, /** @type {number} */ uid) => JSON.stringify(await Promise.all(USER_TABLES.map((t) => raw.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid))));
+const snapshot = async (/** @type {Db} */ raw, /** @type {number} */ uid) => JSON.stringify(await Promise.all(USER_TABLES.map((t) => raw.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY ${KEY_ORDER[t] ?? 'id'}`).all(uid))));
 
 test('export: everything that is yours and nothing else; never the sealed key', async () => {
   const { app, asPat, done } = await setup();
@@ -132,7 +133,7 @@ test('pausing yourself: you can still look, export, resume, or delete; a pause b
 test('the export orders each user table by its primary key (KEY_ORDER names the ones that are not id)', async () => {
   const store = openJobStore(':memory:');
   for (const t of USER_TABLES) {
-    const pk = /** @type {string[]} */ (await store.admin.prepare('SELECT name FROM pragma_table_info(?) WHERE pk > 0 ORDER BY pk').pluck().all(t));
+    const pk = /** @type {string[]} */ (await primaryKeyOf(store.admin, t));
     const first = pk.filter((c) => c !== 'user_id');
     assert.deepEqual([KEY_ORDER[t] ?? 'id'], first, `${t}'s key`);
   }

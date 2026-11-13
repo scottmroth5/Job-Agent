@@ -1,6 +1,7 @@
 # Tests on every push and pull request. No secrets and no real data: the tests use synthetic fixtures only, and
 # the personal-data scan skips itself without the gitignored config (it runs for real in the pre-commit hook).
-# The suite runs twice, in a US time zone and in UTC, so a calendar-day bug that only shows on a UTC server fails here.
+# The suite runs twice, in a US time zone and in UTC, so a calendar-day bug that only shows on a UTC server fails here,
+# and once more on PostgreSQL (v3 Phase 4).
 # Security on every push: npm audit, the static security check (scripts/security-check.js), and CodeQL, whose open high
 # or critical alerts fail CI and so stop the deploy (deploy.yml runs only after CI passes).
 name: CI
@@ -62,6 +63,37 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+
+  # The same suite on PostgreSQL (v3 Phase 4): every store in the tests is on the service below, each in its own schema.
+  # The password is for this throwaway container only (it never holds data and is gone when the job ends).
+  postgres:
+    name: Tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: job_agent
+          POSTGRES_PASSWORD: ci-throwaway
+          POSTGRES_DB: job_agent
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U job_agent -d job_agent"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      TZ: UTC
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+      PG_TEST_URL: postgres://job_agent:ci-throwaway@localhost:5432/job_agent
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - run: npm run test:pg
 
   codeql:
     name: CodeQL (security)

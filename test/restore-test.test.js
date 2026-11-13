@@ -9,6 +9,7 @@ import { openJobStore } from '../db/index.ts';
 import { runBackup } from '../tools/backup/run.ts';
 import { restoreTest, EMPTY_TABLE_MIN_ROWS } from '../tools/backup/restore-check.ts';
 import { restoreTestJob } from '../scripts/backup-verify.js';
+import { sqliteOnly } from './fixtures/engine.js';
 /** @import { BackupDrive } from '../tools/backup/drive.ts' */
 /** @import { JobStore } from '../tools/types.ts' */
 
@@ -30,7 +31,7 @@ async function backupOf(store, dir) {
   return readFileSync(join(out, readdirSync(out)[0]));
 }
 
-test('a good backup passes: it decrypts, its database is sound, and every table is there', async () => {
+test('a good backup passes: it decrypts, its database is sound, and every table is there', { skip: sqliteOnly('backups are of the SQLite file (pg_dump in Phase 5)') }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'restore-test-'));
   const store = await liveStore(dir, 12);
   try {
@@ -53,7 +54,7 @@ test('a good backup passes: it decrypts, its database is sound, and every table 
   }
 });
 
-test('a backup missing its data fails; the newest backup comes from Drive', async () => {
+test('a backup missing its data fails; the newest backup comes from Drive', { skip: sqliteOnly('backups are of the SQLite file (pg_dump in Phase 5)') }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'restore-test-'));
   const empty = await liveStore(dir, 0);
   const full = await liveStore(mkdtempSync(join(dir, 'live-')), EMPTY_TABLE_MIN_ROWS + 2);

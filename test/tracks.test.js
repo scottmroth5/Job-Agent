@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { parseRate, parseHours, annualize } from '../tools/rates.ts';
 import { detectTrack } from '../tools/track.ts';
 import { openJobStore } from '../db/index.ts';
+import { columnsOf } from './fixtures/engine.js';
 
 test('parseRate reads the formats fractional boards use', () => {
   assert.deepEqual(parseRate('$5K - $6K / mo'), { min: 5000, max: 6000, unit: 'month' });
@@ -45,7 +46,7 @@ test('detectTrack', () => {
 
 test('005 migration adds track, rate and hours columns defaulting to full-time', async () => {
   const store = openJobStore(':memory:');
-  const cols = /** @type {Array<{ name: string }>} */ (await store.db.prepare('PRAGMA table_info(postings)').all()).map((c) => c.name);
+  const cols = await columnsOf(store.db, 'postings');
   for (const c of ['track', 'rate_text', 'rate_min', 'rate_max', 'rate_unit', 'hours_min', 'hours_max', 'extra_json']) assert.ok(cols.includes(c), c);
   store.close();
 });

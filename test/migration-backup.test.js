@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { openStore } from '@scottmroth5/agent-core';
 import { loadMigrations, openJobStore, pendingMigrations, pruneMigrationCopies } from '../db/index.ts';
+import { sqliteOnly } from './fixtures/engine.js';
 
 /** A database file with every migration but the last, holding one job. */
 async function olderDatabase() {
@@ -27,7 +28,7 @@ async function olderDatabase() {
 }
 const copiesIn = (/** @type {string} */ dir) => (existsSync(join(dir, 'backups')) ? readdirSync(join(dir, 'backups')).filter((n) => n.startsWith('pre-migration-')) : []);
 
-test('the pending check lists what would change and leaves the real file alone', async () => {
+test('the pending check lists what would change and leaves the real file alone', { skip: sqliteOnly('db:pending migrates a copy of the SQLite file (Phase 5 for PostgreSQL)') }, async () => {
   const { dir, path, last } = await olderDatabase();
   const temp = mkdtempSync(join(tmpdir(), 'ja-pending-'));
   assert.deepEqual(pendingMigrations(path, temp).pending, [`job-agent:${last}`]);
@@ -37,7 +38,7 @@ test('the pending check lists what would change and leaves the real file alone',
   assert.deepEqual(pendingMigrations(join(dir, 'missing.db'), temp).pending, [], 'no database yet: nothing to change');
 });
 
-test('opening a database that needs a migration takes a checked copy first; an up-to-date one takes none', async () => {
+test('opening a database that needs a migration takes a checked copy first; an up-to-date one takes none', { skip: sqliteOnly('the pre-migration copy is of the SQLite file (Phase 5 for PostgreSQL)') }, async () => {
   const { dir, path, last } = await olderDatabase();
   /** @type {string[]} */
   const logged = [];

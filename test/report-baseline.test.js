@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
 import { addUser } from '../db/users.ts';
 import { baselineReport, renderBaseline } from '../tools/baseline.ts';
+import { sqliteOnly } from './fixtures/engine.js';
 
 // Synthetic data only. "now" is fixed so waiting days are stable.
 const now = new Date('2026-10-05T12:00:00Z');
@@ -44,7 +45,7 @@ async function build() {
   return { dir, path, attachmentsDir: join(dir, 'attachments') };
 }
 
-test('baseline: counts, sizes, spend, and outcome data across users, read-only and without text', async () => {
+test('baseline: counts, sizes, spend, and outcome data across users, read-only and without text', { skip: sqliteOnly('report:baseline reads the SQLite file (Phase 5 for PostgreSQL)') }, async () => {
   const { dir, path, attachmentsDir } = await build();
   try {
     const before = readFileSync(path);
@@ -72,7 +73,7 @@ test('baseline: counts, sizes, spend, and outcome data across users, read-only a
   }
 });
 
-test('baseline: a missing database is an error, never a new file', async () => {
+test('baseline: a missing database is an error, never a new file', { skip: sqliteOnly('report:baseline reads the SQLite file (Phase 5 for PostgreSQL)') }, async () => {
   const dir = mkdtempSync(join(tmpdir(), 'baseline-'));
   try {
     await assert.rejects(async () => await baselineReport(join(dir, 'none.db')));

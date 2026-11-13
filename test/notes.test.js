@@ -7,6 +7,7 @@ import { openJobStore, loadMigrations } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { addNote, adoptNotesText, deleteNote, listNotes, notesForPrompt, updateNote } from '../agents/notes.ts';
 import { fakeConfig, fakeServices } from './fixtures/fakes.js';
+import { columnsOf, sqliteOnly } from './fixtures/engine.js';
 /** @import { Note } from '../agents/notes.ts' */
 /** @import { Db } from '../tools/types.ts' */
 
@@ -18,7 +19,7 @@ const config = fakeConfig({ candidate: { name: 'Pat Example' }, search: { homeLo
  * @param {string | null} [notes]
  */
 async function job(db, notes = null) {
-  const owned = Boolean(await db.prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
+  const owned = (await columnsOf(db, 'postings')).includes('user_id');
   return Number(
     (await db.prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
       VALUES (${owned ? '1, ' : ''}?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'new', ?, 'x', 'x') RETURNING id`).run(`k${Math.random()}`, `example|cto${Math.random()}`, notes)).id,
@@ -120,7 +121,7 @@ test('API: notes on the job, add, edit, delete; PATCH notes and duplicate markin
   store.close();
 });
 
-test('025 numbers existing notes in the order they were written, and new notes follow, even at the same time', async () => {
+test('025 numbers existing notes in the order they were written, and new notes follow, even at the same time', { skip: sqliteOnly('migration 025 numbers SQLite rows by rowid; PostgreSQL starts from the baseline') }, async () => {
   const { mkdtempSync, rmSync } = await import('node:fs');
   const { tmpdir } = await import('node:os');
   const { join } = await import('node:path');
