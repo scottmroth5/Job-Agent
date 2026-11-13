@@ -24,7 +24,7 @@ function folderSize(dir: string): { files: number; bytes: number } {
   for (const entry of entries) {
     if (!entry.isFile()) continue;
     files += 1;
-    bytes += statSync(join(entry.parentPath ?? entry.path, entry.name)).size;
+    bytes += statSync(join(entry.parentPath, entry.name)).size;
   }
   return { files, bytes };
 }

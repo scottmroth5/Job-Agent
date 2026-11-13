@@ -111,7 +111,7 @@ test('Check inbox runs the inbox and the overview shows linked emails and remind
   const { taskId } = (await app.inject({ method: 'POST', url: '/api/inbox/check' })).json();
   const task = await app.tasks.wait(taskId);
   assert.ok(task);
-  assert.equal(task.status, 'done', task.error ?? undefined);
+  assert.equal(task.status, 'done', `the task failed: ${task.error}`);
   const result = /** @type {{ considered: number, matched: number, statusChanges: number }} */ (task.result);
   assert.deepEqual([result.considered, result.matched, result.statusChanges], [1, 1, 1]);
   const o = (await app.inject({ method: 'GET', url: '/api/inbox' })).json();

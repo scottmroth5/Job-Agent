@@ -30,7 +30,7 @@ discover ─► score ─► promote (7+) ─► write materials ─► archive 
 
 In short, you need:
 
-- Node.js 22.18+ and Git (on Windows, use PowerShell rather than WSL)
+- Node.js 26+ and Git (on Windows, use PowerShell rather than WSL)
 - An [Anthropic API](https://console.anthropic.com) key (typically a few dollars a week)
 - A [Serper.dev](https://serper.dev) key (the free tier is enough)
 - A Google account, with a small Google Cloud app for Docs, Drive, and Gmail access

@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
       - run: npm ci
       # Known vulnerabilities in what the app ships (dev tools excluded); high or critical fails the build.
@@ -46,9 +46,9 @@ jobs:
       - run: npm run check:personal -- --all
       - run: npm run check:security
 
-  # The oldest Node the app supports (package.json engines): 22.18 runs .ts files by stripping their types.
+  # The Node the app requires (package.json engines: >=26), which runs .ts files by stripping their types.
   node-floor:
-    name: Tests (Node 22.18)
+    name: Tests (Node 26)
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with:
-          node-version: 22.18.0
+          node-version: 26
           cache: npm
       - run: npm ci
       - run: npm test

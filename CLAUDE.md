@@ -321,7 +321,7 @@ Scripts that need secrets load .env through node --env-file.
 
 ## TypeScript (v3 Phase 2, decision 0002)
 Every new file is TypeScript (.ts, .tsx on the page; web/src is all TypeScript, with Vite's module types from web/src/vite-env.d.ts).
-Node 22.18 or newer runs .ts files by stripping their types, so there is
+Node 26 (package.json engines) runs .ts files by stripping their types, so there is
 no build step for the server: only erasable syntax (no enums, parameter properties, or decorators; tsconfig erasableSyntaxOnly),
 imports name the .ts file, and type-only imports use import type. Typecheck and lint run in CI and fail it.
 `void call()` marks a deliberate fire-and-forget call whose function catches its own errors; a lint finding that is a real
@@ -357,7 +357,7 @@ Personal data paths come from tools/paths.ts dataPath(...) (DATA_DIR, default th
 CI (.github/workflows/ci.yml) runs npm audit (production, high), npm test in America/Los_Angeles and UTC, the web build, and the personal-data scan.
 
 ## Cloud
-Dockerfile: node:22-bookworm-slim, production node_modules and Playwright Chromium in early layers (cached until
+Dockerfile: node:26-bookworm-slim, production node_modules and Playwright Chromium in early layers (cached until
 package-lock.json changes), code and web/dist last; runs as node (uid 1000) with DATA_DIR=/data, HOST=0.0.0.0.
 .dockerignore keeps .env, data/, and credentials out of the image; keep it in step with .gitignore.
 deploy/ is copied to the server's /opt/job-agent: compose.yml (app, demo, and Caddy, only Caddy publishes ports; it fixes
