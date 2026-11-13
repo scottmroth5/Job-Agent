@@ -19,5 +19,5 @@ Phase 3 already put every database call behind one async interface (`db/engine/t
 ## Consequences
 - Every migration is written twice, and both suites must pass.
 - The SQLite file tools (backups and their monthly check, `report:baseline`, `db:pending`, the pre-migration copy) stay SQLite-only until Phase 5 gives them PostgreSQL versions; on PostgreSQL they stop and say so.
-- Row-level security on PostgreSQL (Phase 4, PR 3) adds a second guard behind the `user_id` scoping that both engines keep.
+- Row-level security on PostgreSQL (Phase 4, PR 3) is a second guard behind the `user_id` scoping that both engines keep. Each user table allows only the rows of the user in `app.uid`, which the engine sets for every statement; `store.admin` sets `all`. Both handles use one role, since they share a transaction. The guard is against a query that forgets its `user_id` filter; it is not a wall against SQL that can set `app.uid` itself.
 - Revisit if keeping SQLite costs more than the local-install path is worth, for example if a feature needs PostgreSQL-only SQL.
