@@ -61,9 +61,19 @@ likelihood.
 postings (real-fintech-zelle, real-telegram-product, real-payroll-after-offer, real-gift-card-retailer), which go to
 the model to clear.
 
-**Model:** not run yet. Haiku 4.5 is the provisional default (`SCAM_MODEL`). Run
-`npm run eval:scam -- --models=claude-haiku-4-5,claude-sonnet-5-5 --max-usd=1` (a few cents) and record scams
-warned, real postings warned, and cost here before relying on the warnings.
+**Model (2026-11-12, prompt 58d967d132, 20 flagged cases per model):**
+
+| Model | Scams warned (medium or high) | Real postings warned | Failed calls | Estimated cost |
+|---|---|---|---|---|
+| claude-haiku-4-5 (chosen) | 16 of 16 | 0 of 14 | 0 | $0.062 |
+| claude-sonnet-5-5 | 16 of 16 | 0 of 14 | 0 | $0.324 |
+
+The whole run (40 calls) cost $0.1224. The run reports one total, so the per-model costs above are the eval's
+estimates.
+
+**Model choice:** Haiku 4.5 (`SCAM_MODEL`). It warned on every scam and cleared all four real postings the rules sent
+it, as Sonnet did, at about a fifth of the estimated cost. The cases are few and synthetic, so treat this as "no known
+misses", not as a guarantee. A prompt change needs a new run.
 
 ## Letter fact check (`evals/letters`)
 

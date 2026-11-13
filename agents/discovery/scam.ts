@@ -22,8 +22,8 @@ export type ScamReason = { reason: string; quote: string };
 /** A saved check as the job panel shows it. */
 export type ScamCheck = { status: 'checked' | 'failed'; likelihood: Likelihood; signals: ScamSignal[]; reasons: ScamReason[]; summary: string; dismissed: boolean; model: string | null; checkedAt: string };
 
-// Haiku 4.5: cheap and quick for a short judgment on one posting. Provisional until the scam eval (npm run eval:scam,
-// EVALS.md) compares models on evals/scam/cases.json.
+// Haiku 4.5 from the scam eval (EVALS.md, 2026-11-12): 16 of 16 scams warned and 0 of 14 real postings, the same as
+// Sonnet 5.5, at about a fifth of the cost.
 export const SCAM_MODEL = 'claude-haiku-4-5';
 const SCAM_SETTINGS: Record<string, { maxTokens: number; effort?: string }> = {
   'claude-haiku-4-5': { maxTokens: 2000 },
