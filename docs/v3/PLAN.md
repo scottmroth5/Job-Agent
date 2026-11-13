@@ -282,8 +282,11 @@ and inbox. Still open: production response times after the deploy, and the clean
 
 Goal: the full app and test suite run on PostgreSQL locally and in CI. Production stays on SQLite.
 
+SQLite stays a supported engine for good (owner decision, November 13, 2026), so anyone running the app on their own
+computer can choose SQLite or PostgreSQL. Both engines stay in CI after the cutover, and every migration is written for both.
+
 1. Add a PostgreSQL implementation of `db/engine` with the `pg` driver. Translate `@name` and `?` placeholders to `$n`, and support `.pluck()`.
-2. Add `docker compose` for local PostgreSQL 16 or newer, and a PostgreSQL service in CI. Run the full suite against both engines until cutover.
+2. Add `docker compose` for local PostgreSQL 16 or newer, and a PostgreSQL service in CI. Run the full suite against both engines, before and after the cutover.
 3. Write a new baseline migration from the final SQLite schema, with a new migration runner. Do not port the history of table rebuilds. Move on the `runs` and `run_calls` tables too.
 4. **Port types conservatively.** Keep ISO text timestamps at first, because code compares them as text. Convert to `timestamptz` in a later, separate migration. `INTEGER` keys become identity columns, `BLOB` becomes `bytea`, and CHECK constraints stay.
 5. Rewrite the 4 triggers in PL/pgSQL and port the `application_funnel` view.
@@ -300,8 +303,8 @@ Goal: the full app and test suite run on PostgreSQL locally and in CI. Productio
 | Stricter `GROUP BY` and type comparisons | check | Fix the queries |
 | `INSERT OR`, `pragma`, `sqlite_master` | about 33 | Port, or keep only in SQLite tools |
 
-7. Split `Agent-Core` responsibilities: `createTracer` writes directly to `store.db`. Propose a minor release with a pluggable sink, leaving `openStore` and the SQLite behavior unchanged for `Health-Review`. This needs owner approval.
-8. Choose the demo's database. Default: PGlite in process if the suite passes on it, otherwise a small PostgreSQL container on a tmpfs volume. Either way, it holds sample data only and resets on restart.
+7. Done (approved November 13, 2026): `Agent-Core` 0.5.0's `createTracer` takes a sink, and `openStore` and the SQLite behavior stay unchanged for `Health-Review`. Job-Agent's sink (`tools/trace.ts` `jobSink`) writes `runs` and `run_calls` through `db/engine` with `RETURNING id`, so the tracer runs no SQL of its own on either engine.
+8. The demo runs on PostgreSQL like production (owner decision, November 13, 2026): PGlite in process if the suite passes on it, otherwise a small PostgreSQL container on a tmpfs volume. Either way, it holds sample data only, resets on restart, and needs no paid database.
 9. Add row level security as defense in depth on every user table, using a transaction-local setting for the current user. The app connects as a non-owner role without `BYPASSRLS`, and admin reads use a separate role. Add a test that a query with a missing `user_id` filter still returns only that user's rows.
 10. Write `scripts/migrate-sqlite-to-postgres`: repeatable, in foreign key order, with identity sequences reset. It verifies row counts and content checksums per table and per user, and logs counts only.
 
