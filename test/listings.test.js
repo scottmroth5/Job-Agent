@@ -74,7 +74,7 @@ async function insert(db, o) {
   return Number(
     (await db
       .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
-        VALUES (1, @url, @url, 'See posting', @title, @url, @stage, @status, '2026-09-21', 'x', 'x')`)
+        VALUES (1, @url, @url, 'See posting', @title, @url, @stage, @status, '2026-09-21', 'x', 'x') RETURNING id`)
       .run(row)).id,
   );
 }

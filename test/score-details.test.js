@@ -24,7 +24,7 @@ function setup() {
   const job = async (/** @type {Record<string, string | null>} */ o = {}) =>
     Number(
       (await db.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, fetched_text, created_at, updated_at)
-          VALUES (1, @k, 'Example Co', 'CTO', @k, 'LinkedIn', @track, '2026-10-01', 'pipeline', 'new', @text, 'x', 'x')`)
+          VALUES (1, @k, 'Example Co', 'CTO', @k, 'LinkedIn', @track, '2026-10-01', 'pipeline', 'new', @text, 'x', 'x') RETURNING id`)
         .run({ k: `k${Math.random()}`, track: 'fulltime', text: 'The full posting.', ...o })).id,
     );
   const score = async (/** @type {number} */ id, /** @type {Record<string, string | number | null>} */ o = {}) =>

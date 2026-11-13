@@ -20,12 +20,16 @@ export interface Note {
 export const NOTE_SOURCES = ['user', 'agent', 'earlier'];
 export const MAX_NOTE_CHARS = 20000;
 
+// A new note's place among its job's notes (025): one more than the job's last. Every insert runs in a transaction, so
+// two notes never take the same number. Bound: the job's id.
+const NEXT_SEQ = '(SELECT COALESCE(MAX(n.seq), 0) + 1 FROM posting_notes n WHERE n.posting_id = ? AND n.user_id = @uid)';
+
 const toEntry = (r: PostingNotesRow): Note => ({ id: r.id, postingId: r.posting_id, body: r.body, source: r.source, createdAt: r.created_at, updatedAt: r.updated_at });
 
 /** Rewrites postings.notes from the entries. */
 async function refresh(q: Db, postingId: number, nowIso: string | null) {
   const text = ((await q
-    .prepare('SELECT body FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at, rowid')
+    .prepare('SELECT body FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at, seq')
     .pluck()
     .all(postingId)) as string[])
     .join('\n');
@@ -46,15 +50,16 @@ export async function adoptNotesText(db: Db, { postingId = null, source = 'earli
       .prepare(`SELECT id, notes FROM postings p WHERE p.user_id = @uid AND TRIM(COALESCE(p.notes, '')) <> ''
       AND NOT EXISTS (SELECT 1 FROM posting_notes n WHERE n.posting_id = p.id AND n.user_id = p.user_id) ${postingId ? 'AND p.id = ?' : ''}`)
       .all(...(postingId ? [postingId] : []))) as Array<{ id: number; notes: string }>;
-    const insert = q.prepare('INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) VALUES (@uid, ?, ?, ?, ?, ?, ?)');
-    for (const r of rows) await insert.run(randomUUID(), r.id, r.notes.trim(), source, nowIso, nowIso);
+    const insert = q.prepare(`INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at, seq)
+      VALUES (@uid, ?, ?, ?, ?, ?, ?, ${NEXT_SEQ})`);
+    for (const r of rows) await insert.run(randomUUID(), r.id, r.notes.trim(), source, nowIso, nowIso, r.id);
     return rows.length;
   });
 }
 
 /** A job's notes, newest first. */
 export async function listNotes(db: Db, postingId: number) {
-  return ((await db.prepare('SELECT * FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC, rowid DESC').all(postingId)) as PostingNotesRow[]).map(toEntry);
+  return ((await db.prepare('SELECT * FROM posting_notes WHERE posting_id = ? AND user_id = @uid ORDER BY created_at DESC, seq DESC').all(postingId)) as PostingNotesRow[]).map(toEntry);
 }
 
 const checkBody = (body: unknown) => {
@@ -75,8 +80,9 @@ export async function addNote(db: Db, postingId: number, body: unknown, { source
     await adoptNotesText(q, { postingId, now });
     // The note takes its owner from the job, so a job that is not this user's gets no note.
     const added = await q
-      .prepare('INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) SELECT user_id, ?, id, ?, ?, ?, ? FROM postings WHERE id = ? AND user_id = @uid')
-      .run(id, text, source, nowIso, nowIso, postingId);
+      .prepare(`INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at, seq)
+        SELECT user_id, ?, id, ?, ?, ?, ?, ${NEXT_SEQ} FROM postings WHERE id = ? AND user_id = @uid`)
+      .run(id, text, source, nowIso, nowIso, postingId, postingId);
     if (!added.changes) throw Object.assign(new Error('Job not found.'), { statusCode: 404 });
     await refresh(q, postingId, nowIso);
     return toEntry((await q.prepare('SELECT * FROM posting_notes WHERE id = ? AND user_id = @uid').get(id)) as PostingNotesRow);

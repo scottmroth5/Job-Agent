@@ -148,7 +148,7 @@ export async function createOpportunity(
   const id = Number(
     (await db
       .prepare(`INSERT INTO postings (user_id, company, title, company_title_key, source, discovered_on, stage, status, notes, created_at, updated_at)
-        VALUES (@uid, ?, ?, ?, 'email', ?, ?, ?, ?, ?, ?)`)
+        VALUES (@uid, ?, ?, ?, 'email', ?, ?, ?, ?, ?, ?) RETURNING id`)
       .run(company, title, storedKey({ company, title }), localDay(now), lk.role('stage', 'default'), lk.role('status', 'default'), notes, nowIso, nowIso)).id,
   );
   await db.prepare("INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)").run(id, lk.role('status', 'default'), nowIso);

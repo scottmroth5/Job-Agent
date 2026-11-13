@@ -75,7 +75,7 @@ export async function collectReport(db: Db, { since, promoteAt = PROMOTE_AT }: {
     .map((p) => ({ ...p, analysis: parse(p.analysis_json), flags: parse(p.letter_flags) ?? [] }));
 
   const pipeline = (await db
-    .prepare(`SELECT ${cols} FROM postings p WHERE p.user_id = @uid AND p.stage IN ${active} ORDER BY ${orderCase}, score DESC, p.id`)
+    .prepare(`SELECT ${cols} FROM postings p WHERE p.user_id = @uid AND p.stage IN ${active} ORDER BY ${orderCase}, score DESC NULLS LAST, p.id`)
     .all() as ReportJob[])
     .map((p) => ({ ...p, flags: parse(p.letter_flags) ?? [] }));
 

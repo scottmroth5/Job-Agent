@@ -31,11 +31,11 @@ async function setup() {
   const job = Number(
     (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, created_at, updated_at)
-        VALUES (1, 'k1', 'Example Co', 'VP Engineering', 'k1', 'LinkedIn', 'fulltime', '2026-09-01', 'pipeline', 'new', 'x', 'x')`)
+        VALUES (1, 'k1', 'Example Co', 'VP Engineering', 'k1', 'LinkedIn', 'fulltime', '2026-09-01', 'pipeline', 'new', 'x', 'x') RETURNING id`)
       .run()).id,
   );
   const artifact = async () =>
-    Number((await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'x')").run(job, letter)).id);
+    Number((await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'x') RETURNING id").run(job, letter)).id);
   return { store, db, job, artifact };
 }
 

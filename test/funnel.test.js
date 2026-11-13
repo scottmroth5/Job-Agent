@@ -16,7 +16,7 @@ function setup() {
     Number(
       (await db
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, created_at, updated_at)
-          VALUES (1, @k, @company, @title, @k, @source, @track, @found, 'pipeline', @status, @applied, 'x', 'x')`)
+          VALUES (1, @k, @company, @title, @k, @source, @track, @found, 'pipeline', @status, @applied, 'x', 'x') RETURNING id`)
         .run({ k: `k${Math.random()}`, company: 'Example Co', title: 'CTO', source: 'LinkedIn', track: 'fulltime', found: '2026-09-01', status: 'applied', applied: null, ...o })).id,
     );
   /** @param {number} id @param {string} to @param {string} at @param {string} [by] */

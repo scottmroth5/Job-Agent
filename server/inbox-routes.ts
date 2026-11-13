@@ -27,7 +27,7 @@ const uuidParams = { type: 'object', required: ['id'], properties: { id: { type:
 export async function inboxOverview(db: Db, { ready }: { ready: boolean }) {
   return {
     signedIn: ready,
-    lastCheck: await db.prepare("SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name IN ('inbox', 'inbox-backfill') ORDER BY id DESC LIMIT 1").get() ?? null,
+    lastCheck: await db.prepare("SELECT status, started_at AS \"startedAt\", finished_at AS \"finishedAt\" FROM runs WHERE name IN ('inbox', 'inbox-backfill') ORDER BY id DESC LIMIT 1").get() ?? null,
     needsReview: (await listNeedsReview(db)).map((e) => ({
       id: e.id,
       sentAt: e.sent_at,
@@ -41,12 +41,12 @@ export async function inboxOverview(db: Db, { ready }: { ready: boolean }) {
       guess: e.guess,
     })),
     reminders: await db
-      .prepare(`SELECT r.id, r.kind, r.due_at AS dueAt, r.note, r.created_at AS createdAt, p.id AS postingId, p.company, p.title
+      .prepare(`SELECT r.id, r.kind, r.due_at AS "dueAt", r.note, r.created_at AS "createdAt", p.id AS "postingId", p.company, p.title
         FROM reminders r JOIN postings p ON p.id = r.posting_id AND p.user_id = r.user_id WHERE r.user_id = @uid AND r.status = 'open' ORDER BY COALESCE(r.due_at, r.created_at)`)
       .all(),
     recent: await db
-      .prepare(`SELECT e.id, e.sent_at AS sentAt, e.sender, e.subject, e.type, e.match_rule AS matchRule, e.review_status AS reviewStatus,
-          e.summary, p.id AS postingId, p.company, p.title, p.status
+      .prepare(`SELECT e.id, e.sent_at AS "sentAt", e.sender, e.subject, e.type, e.match_rule AS "matchRule", e.review_status AS "reviewStatus",
+          e.summary, p.id AS "postingId", p.company, p.title, p.status
         FROM emails e JOIN postings p ON p.id = e.posting_id AND p.user_id = e.user_id
         WHERE e.user_id = @uid AND e.review_status IN ('auto', 'confirmed', 'reassigned', 'new_opportunity') ORDER BY e.sent_at DESC LIMIT 40`)
       .all(),

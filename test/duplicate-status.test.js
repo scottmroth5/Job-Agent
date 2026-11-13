@@ -13,7 +13,7 @@ test('the duplicate status is allowed and closes a job like passed', async () =>
   const id = Number(
     (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-        VALUES (1, 'k', 'Example Co', 'CTO', 'k', '2026-10-01', 'pipeline', 'duplicate', 'x', 'x')`)
+        VALUES (1, 'k', 'Example Co', 'CTO', 'k', '2026-10-01', 'pipeline', 'duplicate', 'x', 'x') RETURNING id`)
       .run()).id,
   );
   await assert.rejects(async () => await db.prepare("UPDATE postings SET status = 'maybe' WHERE id = ?").run(id), /status is not in the status list/);
@@ -37,7 +37,7 @@ test('migration 008 loosens the status constraint in place without losing rows, 
     Number(
       (await db
         .prepare(`INSERT INTO postings (url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
-          VALUES (?, 'Example Co', 'CTO', 'example|cto', '2026-10-01', ?, ?, ?, 'x', 'x')`)
+          VALUES (?, 'Example Co', 'CTO', 'example|cto', '2026-10-01', ?, ?, ?, 'x', 'x') RETURNING id`)
         .run(`k${Math.random()}`, stage, status, notes)).id,
     );
   const history = async (/** @type {number} */ id, /** @type {string} */ by) => await db.prepare("INSERT INTO status_history (posting_id, from_status, to_status, changed_by, changed_at) VALUES (?, 'new', 'passed', ?, 'x')").run(id, by);

@@ -212,7 +212,7 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
             track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
           VALUES (@uid, @url, @url_key, @company, @title, @ct, 'manual', @location, @workplace, @today, @stage, @status, @notes,
             @jd_text, @fetched_text, @fetched_at, @fetch_status, @fetch_method, 1, @location_check, @track, @rate_text,
-            @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra, @now, @now)`)
+            @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra, @now, @now) RETURNING id`)
         .run({
           url,
           url_key: urlKey,

@@ -18,7 +18,7 @@ async function before013(path) {
   const db = createSqliteEngine(store.db, { fallbackUid: null, strictTx: false });
   const run = async (/** @type {string} */ sql, /** @type {unknown[]} */ ...args) => await db.prepare(sql).run(...args);
   const job = async (/** @type {string} */ key) => Number((await run(`INSERT INTO postings (url, url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
-    VALUES (?, ?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'applied', 'A note', 'x', 'x')`, `https://jobs.example.com/${key}`, key, `example|cto|${key}`)).id);
+    VALUES (?, ?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'applied', 'A note', 'x', 'x') RETURNING id`, `https://jobs.example.com/${key}`, key, `example|cto|${key}`)).id);
   const a = await job('a');
   const b = await job('b');
   await run("INSERT INTO scores (posting_id, score, source, created_at) VALUES (?, 8, 'v2', 'x')", a);

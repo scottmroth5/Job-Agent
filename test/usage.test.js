@@ -30,9 +30,9 @@ async function seed(db) {
   const job = async (/** @type {number} */ uid, /** @type {string} */ at) =>
     Number(
       (await db.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
-          VALUES (?, ?, 'Example Co', 'Secret Title', ?, ?, ?, ?)`).run(uid, `example.com/${(n += 1)}`, `example|${n}`, at.slice(0, 10), at, at)).id,
+          VALUES (?, ?, 'Example Co', 'Secret Title', ?, ?, ?, ?) RETURNING id`).run(uid, `example.com/${(n += 1)}`, `example|${n}`, at.slice(0, 10), at, at)).id,
     );
-  const run = async (/** @type {number} */ uid, /** @type {string} */ name, /** @type {string} */ status, /** @type {string} */ at) => Number((await db.prepare('INSERT INTO runs (name, status, started_at, user_id) VALUES (?, ?, ?, ?)').run(name, status, at, uid)).id);
+  const run = async (/** @type {number} */ uid, /** @type {string} */ name, /** @type {string} */ status, /** @type {string} */ at) => Number((await db.prepare('INSERT INTO runs (name, status, started_at, user_id) VALUES (?, ?, ?, ?) RETURNING id').run(name, status, at, uid)).id);
   const call = async (/** @type {number} */ runId, /** @type {number | null} */ cost, /** @type {string} */ at) => await db.prepare("INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, 'scoring', 'm', ?, ?)").run(runId, cost, at);
   /** @param {number} uid @param {number} posting @param {string} kind @param {string} source @param {string} at */
   const artifact = async (uid, posting, kind, source, at) =>

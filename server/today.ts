@@ -22,7 +22,7 @@ export async function today(db: Db, { now = new Date(), jobId = null }: { now?: 
   const horizon = new Date(now.getTime() + REMINDER_DAYS * DAY).toISOString();
   const reminders = (await db
     .prepare(
-      `SELECT r.id, r.kind, r.due_at AS due, r.note, p.id AS jobId, p.company, p.title
+      `SELECT r.id, r.kind, r.due_at AS due, r.note, p.id AS "jobId", p.company, p.title
        FROM reminders r JOIN postings p ON p.id = r.posting_id AND p.user_id = r.user_id
        WHERE r.user_id = @uid AND r.status = 'open' AND (r.due_at IS NULL OR r.due_at <= @horizon OR @all = 1) ${one}
        ORDER BY r.due_at IS NULL, r.due_at`,
@@ -42,7 +42,7 @@ export async function today(db: Db, { now = new Date(), jobId = null }: { now?: 
   const offers = decision.length
     ? (await db
         .prepare(
-          `SELECT p.id AS jobId, p.company, p.title, p.status FROM postings p
+          `SELECT p.id AS "jobId", p.company, p.title, p.status FROM postings p
            WHERE p.user_id = @uid AND p.status IN ${sqlList(decision)} AND p.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} ${one}
            ORDER BY p.id DESC`,
         )

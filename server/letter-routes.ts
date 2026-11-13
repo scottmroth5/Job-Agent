@@ -102,7 +102,7 @@ export function registerLetterRoutes(app: App, { store, config, services }: { st
     const id = Number(
       (await db
         .prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, created_at, resume_id)
-            SELECT user_id, id, 'cover_letter', ?, ?, ?, ?, NULL, ?, ? FROM postings WHERE id = ? AND user_id = @uid`)
+            SELECT user_id, id, 'cover_letter', ?, ?, ?, ?, NULL, ?, ? FROM postings WHERE id = ? AND user_id = @uid RETURNING id`)
         .run(content, flags.length ? JSON.stringify(flags) : null, source, model, now.toISOString(), resumeId, posting.id)).id,
     );
     let docError: string | null = null;

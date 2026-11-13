@@ -56,8 +56,8 @@ export async function selectForHunt(db: Db, { ids, promoteAt = PROMOTE_AT }: { i
   const base = `SELECT p.*,
       (SELECT analysis_json FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS analysis_json,
       (SELECT score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id AND s.source IN ('v2', 'v2-rule') ORDER BY s.id DESC LIMIT 1) AS v2_score,
-      EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks' AND a.source = 'v2') AS has_tweaks,
-      EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' AND a.source = 'v2') AS has_letter,
+      CASE WHEN EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'resume_tweaks' AND a.source = 'v2') THEN 1 ELSE 0 END AS has_tweaks,
+      CASE WHEN EXISTS (SELECT 1 FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' AND a.source = 'v2') THEN 1 ELSE 0 END AS has_letter,
       (SELECT a.id FROM artifacts a WHERE a.posting_id = p.id AND a.user_id = p.user_id AND a.kind = 'cover_letter' AND a.source = 'v2'
          AND a.doc_id IS NULL ORDER BY a.id DESC LIMIT 1) AS letter_missing_doc
     FROM (SELECT * FROM postings WHERE user_id = @uid) p`;
@@ -125,7 +125,7 @@ export async function generateForPostings({ store, config, claude, knowledge, dr
   const postings = await selectForHunt(db, { ids, promoteAt });
 
   const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, flags_json, source, model, prompt_version, run_id, created_at, resume_id)
-    VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?, ?)`);
+    VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?, ?) RETURNING id`);
   const setDoc = db.prepare('UPDATE artifacts SET doc_id = ?, doc_url = ?, doc_name = ? WHERE id = ? AND user_id = @uid');
   const letterById = db.prepare('SELECT content FROM artifacts WHERE id = ? AND user_id = @uid');
 

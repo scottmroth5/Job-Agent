@@ -18,7 +18,7 @@ async function addJob(s, notes = null) {
   return Number(
     (await s.db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
-        VALUES (1, 'k1', 'Example Co', 'Head of Data', 'example co|head of data', '2026-11-01', 'pipeline', 'new', ?, 'x', 'x')`)
+        VALUES (1, 'k1', 'Example Co', 'Head of Data', 'example co|head of data', '2026-11-01', 'pipeline', 'new', ?, 'x', 'x') RETURNING id`)
       .run(notes)).id,
   );
 }

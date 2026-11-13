@@ -124,8 +124,8 @@ export async function checkBudget(db: Db, { uid = OWNER_ID, now = new Date(), en
 /** This month's spend by what it was for (call labels: score, cover-letter, meeting-prep, inbox, ...), for a user. */
 export async function spendByLabel(db: Db, { uid = OWNER_ID, now = new Date() }: { uid?: number; now?: Date } = {}) {
   return await db
-    .prepare(`SELECT COALESCE(c.label, 'other') AS label, COUNT(*) AS calls, COALESCE(SUM(c.cost_usd), 0) AS costUsd
+    .prepare(`SELECT COALESCE(c.label, 'other') AS label, COUNT(*) AS calls, COALESCE(SUM(c.cost_usd), 0) AS "costUsd"
       FROM run_calls c JOIN runs r ON r.id = c.run_id WHERE c.created_at >= ? AND ${scopeSql(uid)}
-      GROUP BY COALESCE(c.label, 'other') ORDER BY costUsd DESC`)
+      GROUP BY COALESCE(c.label, 'other') ORDER BY "costUsd" DESC`)
     .all(monthStart(now).toISOString(), ...scopeArgs(uid)) as Array<{ label: string; calls: number; costUsd: number }>;
 }

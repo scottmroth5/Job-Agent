@@ -57,7 +57,7 @@ async function addPosting(db, { stage = 'pipeline', status = 'new', score = 8, t
   const url = `https://jobs.example.com/${Math.random()}`;
   const id = Number(
     (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-      VALUES (1, ?, ?, 'Example Co', ?, ?, ?, ?, 'Lead the platform team.', '2026-09-30', 'x', 'x')`).run(url, url, title, url, stage, status)).id,
+      VALUES (1, ?, ?, 'Example Co', ?, ?, ?, ?, 'Lead the platform team.', '2026-09-30', 'x', 'x') RETURNING id`).run(url, url, title, url, stage, status)).id,
   );
   if (score != null) {
     await db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, ?, ?, 'v2', 'x')").run(id, score, JSON.stringify({ ...analysis, score }));

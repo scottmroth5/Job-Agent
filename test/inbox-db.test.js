@@ -11,7 +11,7 @@ async function posting(db) {
   return Number(
     (await db
       .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, discovered_on, status, created_at, updated_at)
-        VALUES (1, 'https://jobs.example.com/1', 'jobs.example.com/1', 'Example Co', 'VP Engineering', 'example|vp', '2026-09-01', 'applied', ?, ?)`)
+        VALUES (1, 'https://jobs.example.com/1', 'jobs.example.com/1', 'Example Co', 'VP Engineering', 'example|vp', '2026-09-01', 'applied', ?, ?) RETURNING id`)
       .run(now, now)).id,
   );
 }

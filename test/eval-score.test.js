@@ -72,7 +72,7 @@ test('buildCases uses pasted descriptions, refetches the rest, and skips cases w
   const store = openJobStore(':memory:');
   const add = async (/** @type {{ url: string, status: string, jd: string | null }} */ o) =>
     (await store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, status, stage, jd_text, discovered_on, created_at, updated_at)
-      VALUES (1, @url, @url, 'Co', 'CTO', @url, @status, 'archived', @jd, '2026-01-01', 'x', 'x')`).run(o)).id;
+      VALUES (1, @url, @url, 'Co', 'CTO', @url, @status, 'archived', @jd, '2026-01-01', 'x', 'x') RETURNING id`).run(o)).id;
   const pasted = await add({ url: 'https://a.example.com/1', status: 'applied', jd: 'y'.repeat(600) });
   await add({ url: 'https://a.example.com/2', status: 'passed', jd: null }); // refetched
   await add({ url: 'https://a.example.com/3', status: 'passed', jd: null }); // fetch fails

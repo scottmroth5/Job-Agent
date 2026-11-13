@@ -472,7 +472,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         if (isOnSite(posting.url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, posting.url as string); // on the site, so it has a url
         await resolveDetails(item, { http: services.http as Http, browser });
         const ok = item.fetchStatus === 'ok';
-        await db.prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN @text IS NULL THEN fetched_at ELSE @now END,
+        await db.prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN CAST(@text AS TEXT) IS NULL THEN fetched_at ELSE @now END,
             fetch_status = @status, fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
             location_check = @check, updated_at = @now WHERE id = @id AND user_id = @uid`).run({
           id,

@@ -11,7 +11,7 @@ async function addPosting(db, { stage = 'pipeline', status = 'new', discovered =
   const url = `https://jobs.example.com/${Math.random()}`;
   return Number(
     (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, location, discovered_on, created_at, updated_at)
-      VALUES (1, ?, ?, ?, ?, ?, ?, ?, 'Remote', ?, 'x', 'x')`).run(url, url, company, title, url, stage, status, discovered)).id,
+      VALUES (1, ?, ?, ?, ?, ?, ?, ?, 'Remote', ?, 'x', 'x') RETURNING id`).run(url, url, company, title, url, stage, status, discovered)).id,
   );
 }
 

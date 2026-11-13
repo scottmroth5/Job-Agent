@@ -42,7 +42,7 @@ async function setup() {
     Number(
       (await store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, rate_text, rate_min, rate_max, rate_unit,
           hours_min, hours_max, fetched_text, location, discovered_on, created_at, updated_at)
-        VALUES (1, @url, @url, @company, @title, @url, 'LinkedIn', @stage, 'new', @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @text, 'Remote', '2026-09-30', 'x', 'x')`)
+        VALUES (1, @url, @url, @company, @title, @url, 'LinkedIn', @stage, 'new', @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @text, 'Remote', '2026-09-30', 'x', 'x') RETURNING id`)
         .run({ rate_text: null, rate_min: null, rate_max: null, rate_unit: null, hours_min: null, hours_max: null, text: DESCRIPTION, stage: 'pipeline', track: 'fulltime', ...o })).id,
     );
   const full = await add({ url: 'https://jobs.example.com/1', company: 'Full Co', title: 'VP Engineering' });
@@ -141,7 +141,7 @@ test('writing materials for a Discovered job moves it to the promote stage first
 test('with no AI here, adding a job and the AI actions are refused with 503 before any task starts; refetch is not', async () => {
   const store = openJobStore(':memory:');
   const id = Number((await store.db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, stage, status, track, discovered_on, created_at, updated_at)
-    VALUES (1, 'https://jobs.example.com/9', 'k9', 'Nine Co', 'CTO', 'k9', 'LinkedIn', 'pipeline', 'new', 'fulltime', '2026-09-30', 'x', 'x')`).run()).id);
+    VALUES (1, 'https://jobs.example.com/9', 'k9', 'Nine Co', 'CTO', 'k9', 'LinkedIn', 'pipeline', 'new', 'fulltime', '2026-09-30', 'x', 'x') RETURNING id`).run()).id);
   const app = await buildApp({ store, config, services: fakeServices({ ...services(), claude: null }) });
   const add = await app.inject({ method: 'POST', url: '/api/postings', payload: { title: 'CTO', company: 'Added Co', description: DESCRIPTION } });
   assert.equal(add.statusCode, 503);

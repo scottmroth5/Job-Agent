@@ -20,7 +20,7 @@ async function insertPosting(db, overrides = {}) {
   };
   const cols = Object.keys(row);
   return (await db
-    .prepare(`INSERT INTO postings (user_id, ${cols.join(', ')}) VALUES (1, ${cols.map(() => '?').join(', ')})`)
+    .prepare(`INSERT INTO postings (user_id, ${cols.join(', ')}) VALUES (1, ${cols.map(() => '?').join(', ')}) RETURNING id`)
     .run(...Object.values(row))).id;
 }
 
