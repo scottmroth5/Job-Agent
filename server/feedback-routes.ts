@@ -12,7 +12,8 @@ export const FEEDBACK_PER_DAY = 10;
 export const MAX_FEEDBACK_CHARS = 4000;
 const anyObject = { type: 'object', additionalProperties: true };
 
-export function registerFeedbackRoutes(app: App, { db, notices = {}, admin = true }: { db: Db; notices?: Notices; admin?: boolean }) {
+// adminDb is store.admin, for the admin's list of everyone's feedback (on PostgreSQL row security shows db only your own).
+export function registerFeedbackRoutes(app: App, { db, adminDb, notices = {}, admin = true }: { db: Db; adminDb: Db; notices?: Notices; admin?: boolean }) {
   app.post<{ Body: { body: string; page?: string } }>(
     '/api/feedback',
     {
@@ -47,13 +48,13 @@ export function registerFeedbackRoutes(app: App, { db, notices = {}, admin = tru
 
   if (!admin) return;
   app.get('/api/admin/feedback', { schema: { summary: 'Feedback from every user, open first (admin)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
-    await listFeedback(db),
+    await listFeedback(adminDb),
   );
   app.post<{ Params: { id: string } }>(
     '/api/admin/feedback/:id/done',
     { schema: { summary: 'Mark feedback done (admin)', params: { type: 'object', required: ['id'], properties: { id: { type: 'string', maxLength: 64 } } }, response: { 200: anyObject } } },
     async (req) => {
-      if (!await markFeedbackDone(db, req.params.id)) throw Object.assign(new Error('No open feedback with that id.'), { statusCode: 404 });
+      if (!await markFeedbackDone(adminDb, req.params.id)) throw Object.assign(new Error('No open feedback with that id.'), { statusCode: 404 });
       return { done: true };
     },
   );

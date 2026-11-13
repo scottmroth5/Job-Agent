@@ -309,7 +309,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     // A new user's setup (the Home checklist): AI paid for, About you long enough, search complete.
     ...(req.uid && req.uid !== OWNER_ID ? { setup: await setupOf(req.uid) } : {}),
     // What waits for an admin (the Admin tile's count): requests for access and open feedback.
-    ...(req.role === 'admin' && authMode !== 'demo' ? { adminWaiting: await adminWaiting(db) } : {}),
+    ...(req.role === 'admin' && authMode !== 'demo' ? { adminWaiting: await adminWaiting(store.admin) } : {}),
   }));
 
   app.get<{ Querystring: PostingFilters & { needsDescription?: boolean; minScore?: number; limit?: number } }>(
@@ -502,8 +502,8 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   };
   registerAccountRoutes(app, { db, automation: automationHooks, demo: authMode === 'demo', checkKey: services.checkClaudeKey ?? claudeKeyWorks, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   // The Users screen never exists in the demo.
-  if (authMode !== 'demo') registerUserRoutes(app, { db, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
-  registerFeedbackRoutes(app, { db, notices: services.notices ?? {}, admin: authMode !== 'demo' });
+  if (authMode !== 'demo') registerUserRoutes(app, { db, adminDb: store.admin, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
+  registerFeedbackRoutes(app, { db, adminDb: store.admin, notices: services.notices ?? {}, admin: authMode !== 'demo' });
   registerHelpRoutes(app, { store, services });
   registerDraftRoutes(app, { store, services });
   registerDocumentRoutes(app, { db, config });

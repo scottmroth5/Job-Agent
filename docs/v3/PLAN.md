@@ -321,6 +321,11 @@ Progress (decision 0006):
 - PR 2: the PostgreSQL engine (`db/engine/postgres.ts`), the baseline schema and its runner (`db/postgres`), `DATABASE_URL`
   to choose it, `compose.dev.yml` and `npm run test:pg`, the schema parity test, and the CI job "Tests (PostgreSQL)".
   The suite passes on PostgreSQL with 9 reviewed skips (`test/engine-skips.test.js`).
+- PR 3: row-level security on every user table (`db/postgres/store.ts` ensureRowSecurity, no migration). One role for
+  both handles: the engine sets `app.uid` per statement (transaction-local inside a transaction), `all` for `store.admin`,
+  because `store.db` and `store.admin` share a transaction (a second role would need a second connection). A superuser
+  connection runs statements as `job_agent_rls`; `BYPASSRLS` is refused. It found four admin routes reading across
+  users through `store.db` (Users, Usage, feedback, deleting another account); they take `store.admin` now.
 - Response times, `npm run bench` on the same PC (medians, ms): SQLite summary 1.6, postings 1.6, a job 2.2, funnel 1.1;
   PostgreSQL 17 in Docker Desktop 18.8, 7.3, 26.8, 10.8. Each PostgreSQL query is a network round trip, and the job panel
   runs about 20 in a row. Before the Phase 5 cutover: run independent queries together, and measure against RDS from
