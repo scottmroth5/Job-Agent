@@ -21,7 +21,7 @@ async function job(db, notes = null) {
   const owned = Boolean(await db.prepare("SELECT 1 FROM pragma_table_info('postings') WHERE name = 'user_id'").get());
   return Number(
     (await db.prepare(`INSERT INTO postings (${owned ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, notes, created_at, updated_at)
-      VALUES (${owned ? '1, ' : ''}?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'new', ?, 'x', 'x')`).run(`k${Math.random()}`, `example|cto${Math.random()}`, notes)).id,
+      VALUES (${owned ? '1, ' : ''}?, 'Example Co', 'CTO', ?, '2026-10-01', 'pipeline', 'new', ?, 'x', 'x') RETURNING id`).run(`k${Math.random()}`, `example|cto${Math.random()}`, notes)).id,
   );
 }
 const cache = async (/** @type {Db} */ db, /** @type {number} */ id) => await db.prepare('SELECT notes FROM postings WHERE id = ?').pluck().get(id);
@@ -118,4 +118,36 @@ test('API: notes on the job, add, edit, delete; PATCH notes and duplicate markin
   assert.equal((await app.inject(`/api/postings/${id}/notes`)).json().length, 2);
   await app.close();
   store.close();
+});
+
+test('025 numbers existing notes in the order they were written, and new notes follow, even at the same time', async () => {
+  const { mkdtempSync, rmSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const { openStore } = await import('@scottmroth5/agent-core');
+  const dir = mkdtempSync(join(tmpdir(), 'm025-'));
+  /** @type {{ close(): void }[]} */
+  const open = [];
+  try {
+    const path = join(dir, 'job-agent.db');
+    const old = openStore(path, { app: 'job-agent', migrations: loadMigrations().filter((m) => m.id < '025') });
+    open.push(old);
+    const before = createSqliteEngine(old.db, { fallbackUid: 1, strictTx: false });
+    const id = await job(before);
+    // The same time, and ids that sort the other way: only the order of writing tells them apart.
+    const at = '2026-10-15T12:00:00.000Z';
+    for (const [nid, body] of [['z-first', 'First'], ['a-second', 'Second']]) {
+      await before.prepare("INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) VALUES (1, ?, ?, ?, 'user', ?, ?)").run(nid, id, body, at, at);
+    }
+    open.pop()?.close();
+    const store = openJobStore(path, { log: {} });
+    open.push(store);
+    assert.deepEqual((await listNotes(store.db, id)).map((n) => n.body), ['Second', 'First']);
+    // A new note at that same time still comes after them.
+    await addNote(store.db, id, 'Third', { now: new Date(at) });
+    assert.deepEqual((await listNotes(store.db, id)).map((n) => n.body), ['Third', 'Second', 'First']);
+  } finally {
+    for (const s of open) s.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });

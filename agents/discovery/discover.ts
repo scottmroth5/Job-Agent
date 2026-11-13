@@ -283,9 +283,9 @@ export async function runDiscovery({ store, config, http, browser = null, source
        source_job_id, track, rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, extra_json, created_at, updated_at)
       VALUES (@uid, @url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on, @posted_raw,
        @discovered_on, @stage, @status, @fetched_text, @fetched_at, @fetch_status, @fetch_method, @fetch_attempts, @workplace, @location_check,
-       @source_job_id, @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra_json, @now, @now)`);
+       @source_job_id, @track, @rate_text, @rate_min, @rate_max, @rate_unit, @hours_min, @hours_max, @extra_json, @now, @now) RETURNING id`);
     const history = db.prepare(`INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, NULL, ?, 'agent', ?)`);
-    const sighting = db.prepare('INSERT OR IGNORE INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?)');
+    const sighting = db.prepare('INSERT INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?) ON CONFLICT DO NOTHING');
     const upgrade = db.prepare(`UPDATE postings SET url = @url, url_key = @url_key, source = @source,
         fetched_text = COALESCE(fetched_text, @fetched_text), location = COALESCE(location, @location),
         salary = COALESCE(salary, @salary), posted_on = COALESCE(posted_on, @posted_on),
@@ -380,8 +380,8 @@ export async function runDiscovery({ store, config, http, browser = null, source
     const update = db.prepare(`UPDATE postings SET fetched_text = @text, fetched_at = @fetchedAt, fetch_status = @status,
         fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
         workplace = COALESCE(workplace, @workplace), location_check = @locationCheck,
-        company = CASE WHEN company = '${UNKNOWN_COMPANY}' AND @company IS NOT NULL THEN @company ELSE company END,
-        company_title_key = CASE WHEN company = '${UNKNOWN_COMPANY}' AND @company IS NOT NULL THEN @ctKey ELSE company_title_key END,
+        company = CASE WHEN company = '${UNKNOWN_COMPANY}' AND CAST(@company AS TEXT) IS NOT NULL THEN @company ELSE company END,
+        company_title_key = CASE WHEN company = '${UNKNOWN_COMPANY}' AND CAST(@company AS TEXT) IS NOT NULL THEN @ctKey ELSE company_title_key END,
         updated_at = @now WHERE id = @id AND user_id = @uid`);
     await resolveAll(items, {
       http,

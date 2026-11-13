@@ -115,7 +115,7 @@ test('the routes save the header, and a letter downloaded after uses it', async 
   const { db } = store;
   const id = Number(
     (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
-      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', '2026-10-01', 'x', 'x')`).run()).id,
+      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', '2026-10-01', 'x', 'x') RETURNING id`).run()).id,
   );
   await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', 'The body of the letter, long enough to read.', 'v2', '2026-10-02T12:00:00Z')").run(id);
   const app = await buildApp({ store, config: fakeConfig({ candidate, search: { homeLocations: [] }, fractional: {} }), services: fakeServices({ createBrowser: async () => null }) });

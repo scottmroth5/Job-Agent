@@ -23,9 +23,9 @@ async function setup({ fail = false } = {}) {
   const { db } = store;
   const id = Number(
     (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x')`).run()).id,
+      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x') RETURNING id`).run()).id,
   );
-  const v1 = Number((await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', '2026-10-02T12:00:00Z')").run(id, LETTER)).id);
+  const v1 = Number((await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', '2026-10-02T12:00:00Z') RETURNING id").run(id, LETTER)).id);
   /** @type {SendOptions[]} */
   const sent = [];
   const claude = fakeClaude(async (opts) => {
@@ -91,7 +91,7 @@ test('writing a letter checks it, and a failed check still keeps the letter', as
     const { db } = store;
     const id = Number(
       (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-        VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x')`).run()).id,
+        VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team.', '2026-10-01', 'x', 'x') RETURNING id`).run()).id,
     );
     await db.prepare("INSERT INTO scores (user_id, posting_id, score, analysis_json, source, created_at) VALUES (1, ?, 8, ?, 'v2', 'x')").run(id, JSON.stringify({ score: 8, reason: 'Fit', strengths: [], watchOuts: [], topTalkingPoint: 'Growth' }));
     const claude = fakeClaude(async (opts) => {

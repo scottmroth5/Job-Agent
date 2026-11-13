@@ -168,6 +168,7 @@ export interface PostingNotesRow {
   source: string;
   created_at: string;
   updated_at: string;
+  seq: number;
 }
 
 export interface PostingSightingsRow {

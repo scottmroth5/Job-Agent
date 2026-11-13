@@ -16,7 +16,7 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
 /agents/hunt        cover letters, resume tailoring, application tracking, prep.js (meeting prep)
 /tools              job specific helpers: config, urls, dates, template, google (auth, docs, gmail), markdown.js (the one safe
                     Markdown renderer, shared by the web page and the prep Google Docs; job notes are Markdown)
-/agents/notes.js    a job's notes are separate entries (posting_notes: body, source user/agent/earlier, created_at, updated_at).
+/agents/notes.js    a job's notes are separate entries (posting_notes: body, source user/agent/earlier, created_at, updated_at, and seq, 025: the order written, since notes often share a time).
                     Change notes only through this module: it keeps postings.notes as every entry's text, oldest first, for
                     code that reads notes as one text. Code that inserts a job with notes text calls adoptNotesText
 /db                 SQLite schema (migrations/*.sql plus code migrations listed in db/index.ts, applied in id order), openJobStore, v1 import.
@@ -350,6 +350,14 @@ In-memory per-day caps check and record with no await in between. Task starts th
 tools/runs.ts oneStartAtATime. `config` in the server is a Proxy that must answer at once: the preHandler and the
 scheduler load each user's settings first (agents/user-config.ts withUserConfig). Never pass an async function to an
 array method (.map, .filter, .some) except into Promise.all.
+Portable SQL (v3 Phase 4; PostgreSQL joins SQLite, and SQLite stays supported for local use): app SQL runs on both.
+test/portable-sql.test.js bans SQLite-only syntax outside db/migrations and a short list of SQLite file tools: rowid,
+IFNULL, INSERT OR IGNORE/REPLACE, date()/strftime() and other date functions (compute days in code with tools/dates.ts),
+json_*() (db/engine/sql.ts jsonNumber, by db.dialect), GROUP_CONCAT, pragma and sqlite_master, ROUND with places, and
+unquoted camelCase aliases (write AS "startedAt"; PostgreSQL lowercases unquoted names). Upserts are ON CONFLICT. A
+case-insensitive match is lower(x) LIKE lower(@q); a parameter tested only with IS NULL is CAST(? AS TEXT); an EXISTS
+compared in SQL is CASE WHEN EXISTS (...) THEN 1 ELSE 0 END. run() reports id only for a statement that ends in
+RETURNING id (reading it otherwise throws, on every engine), so an insert that needs its id says RETURNING id.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),

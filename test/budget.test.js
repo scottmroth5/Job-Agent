@@ -22,7 +22,7 @@ const local = (/** @type {number} */ y, /** @type {number} */ mo, /** @type {num
  * @param {number | null} [uid]
  */
 async function seed(db, calls, uid = null) {
-  const runId = Number((await db.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('score', 'ok', ?, ?)").run(new Date().toISOString(), uid)).id);
+  const runId = Number((await db.prepare("INSERT INTO runs (name, status, started_at, user_id) VALUES ('score', 'ok', ?, ?) RETURNING id").run(new Date().toISOString(), uid)).id);
   const insert = db.prepare('INSERT INTO run_calls (run_id, label, model, cost_usd, created_at) VALUES (?, ?, ?, ?, ?)');
   for (const [label, usd, at] of calls) await insert.run(runId, label, 'claude-sonnet-5-5', usd, at.toISOString());
 }

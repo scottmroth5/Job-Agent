@@ -82,10 +82,11 @@ export async function dismissClaim(db: Db, artifactId: number, index: number, no
 
 /** A restored version has the same text, so it gets the old version's check (dismissals included). */
 export async function copyCheck(db: Db, fromId: number, toId: number) {
-  await db.prepare(`INSERT OR IGNORE INTO letter_checks (artifact_id, user_id, status, claims_json, model, prompt_version, run_id, created_at, updated_at)
+  await db.prepare(`INSERT INTO letter_checks (artifact_id, user_id, status, claims_json, model, prompt_version, run_id, created_at, updated_at)
       SELECT a.id, a.user_id, c.status, c.claims_json, c.model, c.prompt_version, c.run_id, c.created_at, c.updated_at
       FROM letter_checks c JOIN artifacts a ON a.id = ? AND a.user_id = c.user_id
-      WHERE c.artifact_id = ? AND c.user_id = @uid`).run(toId, fromId);
+      WHERE c.artifact_id = ? AND c.user_id = @uid
+      ON CONFLICT DO NOTHING`).run(toId, fromId);
 }
 
 /**

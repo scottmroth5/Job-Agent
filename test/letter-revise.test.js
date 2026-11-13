@@ -18,7 +18,7 @@ async function setup() {
   const { db } = store;
   const id = Number(
     (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, fetched_text, discovered_on, created_at, updated_at)
-      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team. Grow the org.', '2026-10-01', 'x', 'x')`).run()).id,
+      VALUES (1, 'https://jobs.example.com/1', 'k1', 'Example Co', 'VP Engineering', 'k1', 'pipeline', 'new', 'Lead the platform team. Grow the org.', '2026-10-01', 'x', 'x') RETURNING id`).run()).id,
   );
   await db.prepare("INSERT INTO artifacts (user_id, posting_id, kind, content, source, model, created_at) VALUES (1, ?, 'cover_letter', ?, 'v2', 'claude-sonnet-5-5', '2026-10-02T12:00:00Z')").run(id, LETTER);
   /** @type {SendOptions[]} */

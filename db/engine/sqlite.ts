@@ -21,6 +21,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { Database as Sqlite, Statement as SqliteStatement } from 'better-sqlite3';
 import { bindUid, userIdOr } from '../scope.ts';
+import { returnsId } from './sql.ts';
 import type { Db, RunResult, Statement } from './types.ts';
 
 /** A first-come lock: lock() resolves to a release function once every earlier holder has released. */
@@ -134,6 +135,7 @@ export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx =
   }
 
   function statement<Row>(stmt: SqliteStatement, plucked: boolean): Statement<Row> {
+    const withId = returnsId(stmt.source);
     // The check and the call run in one synchronous step, so no transaction can open between them.
     const exec = async <R>(call: (args: unknown[]) => R, args: unknown[]): Promise<R> => {
       if (!mayRun()) await whenFree();
@@ -156,7 +158,9 @@ export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx =
       run: (...args) =>
         exec((b): RunResult => {
           const r = stmt.run(...b);
-          return { changes: r.changes, id: Number(r.lastInsertRowid) };
+          // Only RETURNING id reports the id, as on PostgreSQL, so a missing RETURNING fails here too.
+          if (withId) return { changes: r.changes, id: Number(r.lastInsertRowid) };
+          return Object.defineProperty({ changes: r.changes }, 'id', { enumerable: false, get: noId });
         }, args),
       pluck: <Value>() => statement<Value>(stmt, true),
     };
@@ -208,6 +212,7 @@ export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx =
   }
 
   const engine: Db = {
+    dialect: 'sqlite',
     prepare: <Row>(sql: string) => statement<Row>(raw.prepare(sql), false),
     tx,
   };
@@ -216,6 +221,12 @@ export function createSqliteEngine(raw: Sqlite, { fallbackUid = null, strictTx =
 }
 
 const connectionOfEngine = new WeakMap<Db, Sqlite>();
+
+// Reading id from a statement without RETURNING id is a bug on every engine (PostgreSQL has no last insert id), so it
+// throws here rather than quietly working on SQLite only.
+function noId(): never {
+  throw new Error('run().id needs the statement to end in RETURNING id');
+}
 
 /** The connection under an engine made here (for caches of app-wide data, shared by every view of it). */
 export const connectionOf = (db: Db): Sqlite | undefined => connectionOfEngine.get(db);

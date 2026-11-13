@@ -14,7 +14,7 @@ const hasUser = async (/** @type {Db} */ db) => Boolean(await db.prepare("SELECT
 const insert = async (/** @type {Db} */ db, /** @type {Record<string, string>} */ o = {}) =>
   await db
     .prepare(`INSERT INTO postings (${await hasUser(db) ? 'user_id, ' : ''}url_key, company, title, company_title_key, discovered_on, stage, status, track, created_at, updated_at)
-      VALUES (${await hasUser(db) ? '1, ' : ''}@k, 'Example Co', 'CTO', 'example|cto', '2026-10-01', @stage, @status, @track, 'x', 'x')`)
+      VALUES (${await hasUser(db) ? '1, ' : ''}@k, 'Example Co', 'CTO', 'example|cto', '2026-10-01', @stage, @status, @track, 'x', 'x') RETURNING id`)
     .run({ k: `k${Math.random()}`, stage: 'discovered', status: 'new', track: 'fulltime', ...o });
 
 test('009, 018, and 023 seed the built-in values in order, with groups, settings, and roles', async () => {

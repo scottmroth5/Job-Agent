@@ -13,7 +13,7 @@ async function setup() {
   const job = Number(
     (await store.db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-        VALUES (1, 'k1', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'applied', 'x', 'x')`)
+        VALUES (1, 'k1', 'Example Co', 'CTO', 'example|cto', '2026-10-01', 'pipeline', 'applied', 'x', 'x') RETURNING id`)
       .run()).id,
   );
   const app = await buildApp({ store, config: fakeConfig({ search: { homeLocations: [] }, fractional: { weeksPerYear: 48 } }), services: fakeServices({ createBrowser: async () => null }) });

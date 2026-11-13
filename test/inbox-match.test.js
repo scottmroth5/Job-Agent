@@ -15,7 +15,7 @@ async function app(db, company, title, o = {}) {
   return Number(
     (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, company_domain, created_at, updated_at)
-        VALUES (1, ?, ?, ?, ?, '2026-09-01', ?, ?, ?, ?, ?)`)
+        VALUES (1, ?, ?, ?, ?, '2026-09-01', ?, ?, ?, ?, ?) RETURNING id`)
       .run(`k${Math.random()}`, company, title, storedKey({ company, title }), row.stage, row.status, row.company_domain, now, now)).id,
   );
 }

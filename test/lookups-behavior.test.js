@@ -20,7 +20,7 @@ function setup() {
     Number(
       (await db
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, track, fetch_status, created_at, updated_at)
-          VALUES (1, @k, 'Example Co', @title, @k, @on, @stage, @status, @track, 'ok', 'x', 'x')`)
+          VALUES (1, @k, 'Example Co', @title, @k, @on, @stage, @status, @track, 'ok', 'x', 'x') RETURNING id`)
         .run({ k: `k${Math.random()}`, title: 'CTO', on: '2026-01-01', stage: 'pipeline', status: 'new', track: 'fulltime', ...o })).id,
     );
   return { store, db, add };

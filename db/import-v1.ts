@@ -104,7 +104,7 @@ export async function importV1(
     (user_id, url, url_key, company, title, company_title_key, source, location, salary, job_type, posted_on, posted_raw,
      discovered_on, stage, status, applied_on, notes, jd_text, created_at, updated_at)
     VALUES (@uid, @url, @url_key, @company, @title, @company_title_key, @source, @location, @salary, @job_type, @posted_on,
-     @posted_raw, @discovered_on, @stage, @status, @applied_on, @notes, @jd_text, @now, @now)`);
+     @posted_raw, @discovered_on, @stage, @status, @applied_on, @notes, @jd_text, @now, @now) RETURNING id`);
   const updatePosting = q.prepare(`UPDATE postings SET stage = @stage, status = @status,
       applied_on = COALESCE(@applied_on, applied_on), notes = COALESCE(@notes, notes), jd_text = COALESCE(@jd_text, jd_text),
       updated_at = @now WHERE id = @id AND user_id = @uid`);
@@ -114,7 +114,7 @@ export async function importV1(
   const insertScore = q.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, source, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, ?, ?)`);
   const artifactExists = q.prepare(`SELECT 1 FROM artifacts WHERE posting_id = ? AND user_id = @uid AND kind = ? AND source = 'v1'
-    AND IFNULL(content, '') = IFNULL(?, '') AND IFNULL(doc_name, '') = IFNULL(?, '')`);
+    AND COALESCE(content, '') = COALESCE(?, '') AND COALESCE(doc_name, '') = COALESCE(?, '')`);
   const insertArtifact = q.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, doc_name, flags_json, source, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, ?, 'v1', ?, ?)`);
 

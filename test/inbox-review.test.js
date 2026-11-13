@@ -22,7 +22,7 @@ async function setup() {
     Number(
       (await db
         .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-          VALUES (1, ?, ?, ?, ?, '2026-09-01', 'pipeline', ?, 'x', 'x')`)
+          VALUES (1, ?, ?, ?, ?, '2026-09-01', 'pipeline', ?, 'x', 'x') RETURNING id`)
         .run(`k${Math.random()}`, company, title, storedKey({ company, title }), status)).id,
     );
   const ids = { guess: await add('Example Co', 'VP of Engineering', 'applied'), other: await add('Sample Labs', 'CTO', 'applied') };

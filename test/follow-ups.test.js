@@ -24,7 +24,7 @@ function setup() {
   const job = async (o = {}) =>
     Number(
       (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, source, track, discovered_on, stage, status, applied_on, fetched_text, created_at, updated_at)
-          VALUES (1, 'https://jobs.example.com/1', @k, @company, 'Director of Engineering', @k, 'LinkedIn', 'fulltime', '2026-06-01', @stage, @status, @applied, 'Lead the platform team.', 'x', 'x')`)
+          VALUES (1, 'https://jobs.example.com/1', @k, @company, 'Director of Engineering', @k, 'LinkedIn', 'fulltime', '2026-06-01', @stage, @status, @applied, 'Lead the platform team.', 'x', 'x') RETURNING id`)
         .run({ k: `k${Math.random()}`, company: 'Example Co', stage: 'pipeline', status: 'applied', applied: null, ...o })).id,
     );
   return { store, db, job };

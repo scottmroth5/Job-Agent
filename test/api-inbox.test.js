@@ -30,7 +30,7 @@ async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messa
   const posting = Number(
     (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-        VALUES (1, 'k1', 'Example Co', 'VP of Engineering', ?, '2026-09-01', 'pipeline', 'applied', 'x', 'x')`)
+        VALUES (1, 'k1', 'Example Co', 'VP of Engineering', ?, '2026-09-01', 'pipeline', 'applied', 'x', 'x') RETURNING id`)
       .run(storedKey({ company: 'Example Co', title: 'VP of Engineering' }))).id,
   );
   const { api } = fakeGmailApi({ messages, me: 'me@example.net' });

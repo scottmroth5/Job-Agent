@@ -34,9 +34,12 @@ function deferred() {
 
 test('get, all, run, and pluck answer like better-sqlite3, as promises', async () => {
   const { db } = setup({ fallbackUid: 1 });
-  const first = await db.prepare('INSERT INTO things (user_id, name) VALUES (@uid, ?)').run('a');
+  const first = await db.prepare('INSERT INTO things (user_id, name) VALUES (@uid, ?) RETURNING id').run('a');
   assert.deepEqual(first, { changes: 1, id: 1 });
-  await db.prepare('INSERT INTO things (user_id, name) VALUES (@uid, @name)').run({ name: 'b' });
+  // Only RETURNING id reports the id, as on PostgreSQL; reading it otherwise is a bug, so it throws.
+  const second = await db.prepare('INSERT INTO things (user_id, name) VALUES (@uid, @name)').run({ name: 'b' });
+  assert.deepEqual(second, { changes: 1 });
+  assert.throws(() => second.id, /needs the statement to end in RETURNING id/);
   assert.deepEqual(await db.prepare('SELECT name FROM things WHERE user_id = @uid ORDER BY id').all(), [{ name: 'a' }, { name: 'b' }]);
   assert.equal(await db.prepare('SELECT name FROM things WHERE id = ?').pluck().get(2), 'b');
   assert.deepEqual(await db.prepare('SELECT name FROM things ORDER BY id').pluck().all(), ['a', 'b']);
@@ -64,7 +67,7 @@ test('@uid binds the current user, or fallbackUid; with neither, the query rejec
 test('a transaction commits when its body resolves and rolls back when it rejects', async () => {
   const { db, raw } = setup({ fallbackUid: 1 });
   const id = await db.tx(async () => {
-    const r = await db.prepare("INSERT INTO things (user_id, name) VALUES (@uid, 'kept')").run();
+    const r = await db.prepare("INSERT INTO things (user_id, name) VALUES (@uid, 'kept') RETURNING id").run();
     return r.id;
   });
   assert.equal(id, 1);

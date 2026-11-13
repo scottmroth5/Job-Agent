@@ -67,7 +67,7 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
       rate_text, rate_min, rate_max, rate_unit, hours_min, hours_max, created_at, updated_at)
     VALUES (@uid, @url, @url, @company, @title, @key, @source, @location, @salary, @postedOn, @discoveredOn, @stage, @status, @appliedOn,
       @text, @fetchedAt, @fetchStatus, @fetchMethod, @workplace, @locationCheck, @track, @rateText, @rateMin, @rateMax, @rateUnit,
-      @hoursMin, @hoursMax, @createdAt, @updatedAt)`);
+      @hoursMin, @hoursMax, @createdAt, @updatedAt) RETURNING id`);
   const insertScore = db.prepare(`INSERT INTO scores (user_id, posting_id, score, reason, analysis_json, source, model, prompt_version, run_id, created_at)
     VALUES (@uid, ?, ?, ?, ?, 'v2', ?, ?, ?, ?)`);
   // Each sample score records the version of the scoring prompt in effect (the sample edit where there is one), as a
@@ -77,7 +77,7 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
     return versionOf(name, prompts.find((p) => p.name === name)?.template ?? defaultPrompt(name).template);
   };
   const insertArtifact = db.prepare(`INSERT INTO artifacts (user_id, posting_id, kind, content, doc_name, flags_json, source, model, prompt_version, run_id, created_at)
-    VALUES (@uid, ?, ?, ?, ?, ?, 'v2', ?, 'default', ?, ?)`);
+    VALUES (@uid, ?, ?, ?, ?, ?, 'v2', ?, 'default', ?, ?) RETURNING id`);
   const insertHistory = db.prepare('INSERT INTO status_history (user_id, posting_id, from_status, to_status, changed_by, changed_at) VALUES (@uid, ?, ?, ?, ?, ?)');
   const insertSighting = db.prepare('INSERT INTO posting_sightings (user_id, posting_id, source, url, seen_on) VALUES (@uid, ?, ?, ?, ?)');
   const insertEmail = db.prepare(`INSERT INTO emails (user_id, id, gmail_message_id, thread_id, sender, sender_domain, sent_at, subject, type, posting_id,
@@ -86,7 +86,7 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
       @summary, 'default', 'claude-haiku-4-5', @sentAt, @sentAt)`);
   const insertReminder = db.prepare('INSERT INTO reminders (user_id, id, posting_id, email_id, kind, due_at, note, status, created_at) VALUES (@uid, ?, ?, ?, ?, ?, ?, ?, ?)');
   const insertRun = db.prepare(`INSERT INTO runs (name, meta, status, started_at, finished_at, duration_ms, calls, input_tokens, output_tokens,
-      cache_read_tokens, cost_usd, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+      cache_read_tokens, cost_usd, summary) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`);
   const insertCall = db.prepare(`INSERT INTO run_calls (run_id, label, model, stop_reason, input_tokens, output_tokens, cache_read_tokens, cost_usd,
       duration_ms, created_at) VALUES (?, ?, ?, 'end_turn', ?, ?, ?, ?, ?, ?)`);
 

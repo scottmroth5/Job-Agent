@@ -13,6 +13,8 @@ import type { Db } from '../tools/types.ts';
 
 // Columns never exported: encrypted with keys the user does not hold.
 const HIDDEN: Record<string, string[]> = { emails: ['body_enc'], resumes: ['file'] }; // a resume's text is exported; the file itself downloads from Settings
+// Each table's rows in primary key order (id unless named here); test/account-data.test.js checks every user table's key.
+export const KEY_ORDER: Record<string, string> = { email_threads: 'thread_id', user_settings: 'key', letter_checks: 'artifact_id', scam_checks: 'posting_id' };
 // Deleted first: rows that point at other user rows (postings last; its children also cascade).
 const DELETE_ORDER = ['decision_log', 'reminders', 'emails', 'email_threads', 'contacts', 'attachments', 'meeting_preps', 'posting_notes', 'posting_sightings', 'scores', 'letter_checks', 'artifacts', 'status_history', 'prompt_versions', 'user_settings', 'feedback', 'postings'];
 
@@ -21,13 +23,13 @@ const ordered = () => [...DELETE_ORDER.filter((t) => USER_TABLES.includes(t)), .
 /** Everything that is this user's, as one object (the Settings download). */
 export async function exportAccount(db: Db, uid: number, now = new Date()) {
   const account = await db
-    .prepare(`SELECT id, email, name, role, status, request_note AS requestNote, terms_accepted_at AS termsAcceptedAt, ai_source AS aiSource,
-        ai_cap_usd AS aiCapUsd, claude_key_enc IS NOT NULL AS claudeKeySaved, created_at AS createdAt FROM users WHERE id = ?`)
+    .prepare(`SELECT id, email, name, role, status, request_note AS "requestNote", terms_accepted_at AS "termsAcceptedAt", ai_source AS "aiSource",
+        ai_cap_usd AS "aiCapUsd", claude_key_enc IS NOT NULL AS "claudeKeySaved", created_at AS "createdAt" FROM users WHERE id = ?`)
     .get(uid) as ({ claudeKeySaved: number } & Record<string, unknown>) | undefined;
   if (!account) throw Object.assign(new Error('Account not found.'), { statusCode: 404 });
   const tables: Record<string, Array<Record<string, unknown>>> = {};
   for (const t of USER_TABLES) {
-    const rows = await db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY rowid`).all(uid) as Array<Record<string, unknown>>;
+    const rows = await db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY ${KEY_ORDER[t] ?? 'id'}`).all(uid) as Array<Record<string, unknown>>;
     tables[t] = rows.map((r) => {
       const copy = { ...r };
       for (const c of HIDDEN[t] ?? []) delete copy[c];
@@ -35,7 +37,7 @@ export async function exportAccount(db: Db, uid: number, now = new Date()) {
     });
   }
   const runs = await db
-    .prepare(`SELECT r.id, r.name, r.status, r.started_at AS startedAt, r.finished_at AS finishedAt, r.cost_usd AS costUsd,
+    .prepare(`SELECT r.id, r.name, r.status, r.started_at AS "startedAt", r.finished_at AS "finishedAt", r.cost_usd AS "costUsd",
         (SELECT COUNT(*) FROM run_calls c WHERE c.run_id = r.id) AS calls FROM runs r WHERE r.user_id = ? ORDER BY r.id`)
     .all(uid);
   return { app: 'Job Hunt', exportedAt: now.toISOString(), account: { ...account, claudeKeySaved: Boolean(account.claudeKeySaved) }, tables, runs };

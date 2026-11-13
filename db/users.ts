@@ -58,7 +58,7 @@ export async function addUser(
 ) {
   const iso = now.toISOString();
   const r = await db
-    .prepare('INSERT INTO users (email, name, role, status, ai_source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .prepare('INSERT INTO users (email, name, role, status, ai_source, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id')
     .run(clean(email), name, role, status, aiSource, iso, iso);
   return Number(r.id);
 }
@@ -83,7 +83,7 @@ export async function requestAccess(
     const iso = now.toISOString();
     const r = await q
       .prepare(`INSERT INTO users (email, name, role, status, request_note, terms_accepted_at, ai_source, created_at, updated_at)
-      VALUES (?, ?, 'user', 'pending', ?, ?, 'own', ?, ?)`)
+      VALUES (?, ?, 'user', 'pending', ?, ?, 'own', ?, ?) RETURNING id`)
       .run(address, who, String(note ?? '').trim().slice(0, MAX_NOTE) || null, iso, iso, iso);
     return { id: Number(r.id), created: true };
   });

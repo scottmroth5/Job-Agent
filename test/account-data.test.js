@@ -14,6 +14,7 @@ import { authSettings } from '../server/auth.ts';
 import { createNotices } from '../server/notices.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
 import { saveUserProfile } from '../agents/user-config.ts';
+import { KEY_ORDER } from '../agents/account-data.ts';
 import { fakeConfig, fakeServices } from './fixtures/fakes.js';
 /** @import { Db } from '../tools/types.ts' */
 /** @import { SentEmail } from './fixtures/fakes.js' */
@@ -31,13 +32,13 @@ const OWNER = 'owner@example.com';
  */
 async function seedUser(raw, uid, dir, tag) {
   const job = Number((await raw.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
-    VALUES (?, ?, ?, 'CTO', ?, '2026-10-01', 'x', 'x')`).run(uid, `k-${tag}`, `${tag} Co`, `k-${tag}`)).id);
+    VALUES (?, ?, ?, 'CTO', ?, '2026-10-01', 'x', 'x') RETURNING id`).run(uid, `k-${tag}`, `${tag} Co`, `k-${tag}`)).id);
   await raw.prepare("INSERT INTO posting_notes (user_id, id, posting_id, body, source, created_at, updated_at) VALUES (?, ?, ?, ?, 'user', 'x', 'x')").run(uid, `n-${tag}`, job, `${tag} private note`);
   await raw.prepare("INSERT INTO scores (user_id, posting_id, score, source, created_at) VALUES (?, ?, 8, 'v2', 'x')").run(uid, job);
   await raw.prepare("INSERT INTO attachments (user_id, id, posting_id, filename, content_type, size_bytes, sha256, created_at) VALUES (?, ?, ?, 'cv.pdf', 'application/pdf', 3, 'h', 'x')").run(uid, `f-${tag}`, job);
   mkdirSync(join(dir, String(job)), { recursive: true });
   writeFileSync(join(dir, String(job), `f-${tag}`), 'pdf');
-  const run = Number((await raw.prepare("INSERT INTO runs (name, meta, status, started_at, user_id) VALUES ('score', ?, 'ok', 'x', ?)").run(JSON.stringify({ url: `https://${tag}.example.com` }), uid)).id);
+  const run = Number((await raw.prepare("INSERT INTO runs (name, meta, status, started_at, user_id) VALUES ('score', ?, 'ok', 'x', ?) RETURNING id").run(JSON.stringify({ url: `https://${tag}.example.com` }), uid)).id);
   await raw.prepare("INSERT INTO run_calls (run_id, label, cost_usd, created_at) VALUES (?, 'score', 0.5, ?)").run(run, new Date().toISOString());
   return { job, run };
 }
@@ -126,4 +127,14 @@ test('pausing yourself: you can still look, export, resume, or delete; a pause b
   assert.equal((await post('/api/account/delete', asPat, { confirmEmail: 'pat@example.com' })).statusCode, 200, 'a paused account may still delete itself');
   assert.equal(await store.admin.prepare('SELECT COUNT(*) FROM users WHERE id = ?').pluck().get(pat), 0);
   await done();
+});
+
+test('the export orders each user table by its primary key (KEY_ORDER names the ones that are not id)', async () => {
+  const store = openJobStore(':memory:');
+  for (const t of USER_TABLES) {
+    const pk = /** @type {string[]} */ (await store.admin.prepare('SELECT name FROM pragma_table_info(?) WHERE pk > 0 ORDER BY pk').pluck().all(t));
+    const first = pk.filter((c) => c !== 'user_id');
+    assert.deepEqual([KEY_ORDER[t] ?? 'id'], first, `${t}'s key`);
+  }
+  store.close();
 });

@@ -25,7 +25,7 @@ async function app(db, company, title, status, stage = 'pipeline') {
   return Number(
     (await db
       .prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, stage, status, created_at, updated_at)
-        VALUES (1, ?, ?, ?, ?, '2026-09-01', ?, ?, 'x', 'x')`)
+        VALUES (1, ?, ?, ?, ?, '2026-09-01', ?, ?, 'x', 'x') RETURNING id`)
       .run(`k${Math.random()}`, company, title, storedKey({ company, title }), stage, status)).id,
   );
 }

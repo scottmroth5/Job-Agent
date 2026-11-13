@@ -23,7 +23,7 @@ const MINE = '(user_id = ? OR (? = 1 AND user_id IS NULL))';
  * reload).
  */
 export async function pipelineState(db: Db, uid: number = OWNER_ID) {
-  const last = await db.prepare(`SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name = 'pipeline' AND ${MINE} ORDER BY id DESC LIMIT 1`).get(uid, uid) ?? null;
+  const last = await db.prepare(`SELECT status, started_at AS "startedAt", finished_at AS "finishedAt" FROM runs WHERE name = 'pipeline' AND ${MINE} ORDER BY id DESC LIMIT 1`).get(uid, uid) ?? null;
   let running = false;
   try {
     await assertNoRunningRun(db, 'pipeline');
@@ -31,7 +31,7 @@ export async function pipelineState(db: Db, uid: number = OWNER_ID) {
     running = true;
   }
   const lastFinished = await db
-    .prepare(`SELECT status, started_at AS startedAt, finished_at AS finishedAt FROM runs WHERE name = 'pipeline' AND status != 'running' AND ${MINE} ORDER BY id DESC LIMIT 1`)
+    .prepare(`SELECT status, started_at AS "startedAt", finished_at AS "finishedAt" FROM runs WHERE name = 'pipeline' AND status != 'running' AND ${MINE} ORDER BY id DESC LIMIT 1`)
     .get(uid, uid) ?? null;
   return { running, last, lastFinished };
 }

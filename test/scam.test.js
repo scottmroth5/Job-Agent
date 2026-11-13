@@ -48,7 +48,7 @@ async function addPosting(db, o = {}) {
     (await db
       .prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, location, location_check, fetch_status,
         fetched_text, stage, status, discovered_on, created_at, updated_at)
-        VALUES (@user, @url, @url, 'Example Co', 'Remote Coordinator', @url, 'Remote', 'remote', 'ok', @text, 'discovered', 'new', '2026-11-12', @created, 'x')`)
+        VALUES (@user, @url, @url, 'Example Co', 'Remote Coordinator', @url, 'Remote', 'remote', 'ok', @text, 'discovered', 'new', '2026-11-12', @created, 'x') RETURNING id`)
       .run(row)).id,
   );
 }

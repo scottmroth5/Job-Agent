@@ -134,7 +134,7 @@ export async function funnel(db: Db, { days = null, track = null, now = new Date
   const found = await db
     .prepare(`SELECT COUNT(*) AS n,
         SUM(CASE WHEN (SELECT s.score FROM scores s WHERE s.posting_id = p.id AND s.user_id = p.user_id ORDER BY CASE WHEN s.source IN ('v2', 'v2-rule') THEN 0 ELSE 1 END, s.id DESC LIMIT 1) >= ? THEN 1 ELSE 0 END) AS strong
-      FROM postings p WHERE p.user_id = @uid AND (? IS NULL OR p.discovered_on >= ?) AND (? IS NULL OR p.track = ?)`)
+      FROM postings p WHERE p.user_id = @uid AND (CAST(? AS TEXT) IS NULL OR p.discovered_on >= ?) AND (CAST(? AS TEXT) IS NULL OR p.track = ?)`)
     .get(PROMOTE_AT, since, since, track, track) as { n: number; strong: number | null };
 
   const count = (key: MilestoneKey) => apps.filter((a) => a[key].reached).length;

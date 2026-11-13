@@ -61,7 +61,7 @@ async function setup() {
   const add = async (/** @type {string} */ url, /** @type {string} */ status) =>
     Number(
       (await db.prepare(`INSERT INTO postings (user_id, url, url_key, company, title, company_title_key, stage, status, discovered_on, created_at, updated_at)
-        VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', ?, '2026-10-01', 'x', 'x')`).run(url, url, `Role ${status} ${url}`, `k ${url}`, status)).id,
+        VALUES (1, ?, ?, 'Example Co', ?, ?, 'pipeline', ?, '2026-10-01', 'x', 'x') RETURNING id`).run(url, url, `Role ${status} ${url}`, `k ${url}`, status)).id,
     );
   const ids = { fresh: await add('https://www.paywall.example/job/1', 'new'), applied: await add('https://paywall.example/job/2', 'applied'), other: await add('https://jobs.example.com/3', 'new') };
   const app = await buildApp({ store, config, services: fakeServices({ createBrowser: async () => null, log: { info() {}, warn() {}, error() {} } }) });

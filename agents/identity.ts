@@ -70,7 +70,7 @@ export async function findCopies(db: Db, posting: Named & { id: number }) {
   const key = identityKey(posting);
   if (!key) return [];
   return await db
-    .prepare(`SELECT id, company, title, stage, status, applied_on AS appliedOn, discovered_on AS discoveredOn FROM postings q
+    .prepare(`SELECT id, company, title, stage, status, applied_on AS "appliedOn", discovered_on AS "discoveredOn" FROM postings q
       WHERE user_id = @uid AND company_title_key = ? AND id != ? AND ${await liveCopySql(db)} ORDER BY id`)
     .all(key, posting.id) as Array<{ id: number; company: string; title: string; stage: string; status: string; appliedOn: string | null; discoveredOn: string }>;
 }

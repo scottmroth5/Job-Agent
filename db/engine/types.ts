@@ -1,8 +1,15 @@
 // The data layer's one interface (v3 Phase 3): every database call is asynchronous and goes through Db, so the engine
-// underneath can change (SQLite now, PostgreSQL in Phase 4) without touching callers. db/engine/sqlite.ts is the SQLite
-// engine. Type-only: nothing here exists at run time.
+// underneath can change (SQLite, and PostgreSQL from Phase 4) without touching callers. db/engine/sqlite.ts is the
+// SQLite engine. SQL written for Db runs on both engines (db/engine/sql.ts holds the few dialect helpers, and
+// test/portable-sql.test.js bans SQLite-only syntax in app code). Type-only: nothing here exists at run time.
 
-/** What a write reports: rows changed, and the new row's id for an insert (SQLite's lastInsertRowid). */
+/** The engine under a Db, for the few fragments portable SQL cannot write once (db/engine/sql.ts). */
+export type Dialect = 'sqlite' | 'postgres';
+
+/**
+ * What a write reports: rows changed, and, only for a statement that ends in RETURNING id, the new row's id. Every
+ * engine leaves id undefined otherwise, so an insert that needs its id must say RETURNING id.
+ */
 export interface RunResult {
   changes: number;
   id?: number;
@@ -21,6 +28,7 @@ export interface Statement<Row = unknown> {
 }
 
 export interface Db {
+  readonly dialect: Dialect;
   prepare<Row = unknown>(sql: string): Statement<Row>;
   /**
    * Runs fn in a transaction: committed when fn resolves, rolled back when it rejects. Transactions are serialized,

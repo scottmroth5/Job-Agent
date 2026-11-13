@@ -7,7 +7,8 @@ import { lookups, sqlList } from '../agents/lookups.ts';
 import { listAttachments } from './attachments.ts';
 import { listPreps } from '../agents/hunt/prep.ts';
 import { addNote, listNotes } from '../agents/notes.ts';
-import { localDay } from '../tools/dates.ts';
+import { localDay, localDaysAgo } from '../tools/dates.ts';
+import { jsonNumber } from '../db/engine/sql.ts';
 import { describeVersion } from '../agents/prompts.ts';
 import { budgetStatus } from '../agents/budget.ts';
 import { currentUserId } from '../db/scope.ts';
@@ -91,9 +92,14 @@ const LATEST_LETTER = `(SELECT a.id FROM artifacts a WHERE a.posting_id = p.id A
 // original is analysis.uncappedScore). They stay in Discovered and the UI highlights them.
 export const DESCRIPTION_DAYS = 30;
 const NO_TEXT = "TRIM(COALESCE(p.jd_text, '') || COALESCE(p.fetched_text, '')) = ''";
-const awaitingDescription = (lk: Lookups) => `(${NO_TEXT} AND p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND p.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))}
-  AND p.discovered_on >= date('now', '-${DESCRIPTION_DAYS} days')
-  AND COALESCE(CASE WHEN json_valid(ls.analysis_json) THEN json_extract(ls.analysis_json, '$.uncappedScore') END, ls.score) >= ${PROMOTE_AT})`;
+// The cutoff is the user's local day DESCRIPTION_DAYS ago (tools/dates.ts), written into the SQL as a checked date.
+const awaitingDescription = (lk: Lookups, db: Db) => {
+  const since = localDaysAgo(new Date(), DESCRIPTION_DAYS);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(since)) throw new Error('awaitingDescription: bad cutoff day');
+  return `(${NO_TEXT} AND p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND p.stage NOT IN ${sqlList(lk.ids('stage', 'archived'))}
+  AND p.discovered_on >= '${since}'
+  AND COALESCE(${jsonNumber(db.dialect, 'ls.analysis_json', 'uncappedScore')}, ls.score) >= ${PROMOTE_AT})`;
+};
 
 // The row query; db supplies the lists (agents/lookups.ts) the status and stage conditions use. p is the current
 // user's postings only (a subquery SQLite flattens, so callers add their own WHERE and indexes still apply).
@@ -101,7 +107,7 @@ const base = async (db: Db, lkGiven?: Lookups) => {
   const lk = lkGiven ?? (await lookups(db));
   return `SELECT p.*, ls.score AS score, ls.source AS score_source, ls.reason AS score_reason, ls.analysis_json,
     ls.model AS score_model, ls.prompt_version AS score_prompt_version, ls.created_at AS scored_at,
-    ${awaitingDescription(lk)} AS awaiting_description,
+    ${awaitingDescription(lk, db)} AS awaiting_description,
     -- flagged only while this job still waits on the user (new) and another live copy exists
     p.status IN ${sqlList(lk.ids('status', 'evaluate'))} AND EXISTS (SELECT 1 FROM postings q WHERE q.user_id = p.user_id AND q.company_title_key = p.company_title_key AND q.id != p.id AND ${await liveCopySql(db)}) AS shares_key,
     ll.doc_url AS letter_url, ll.doc_name AS letter_name, ll.flags_json AS letter_flags, ll.id AS letter_id,
@@ -187,13 +193,13 @@ export async function listPostings(db: Db, filters: PostingFilters = {}, config:
     where.push('p.status = @status');
     params.status = filters.status;
   }
-  if (String(filters.needsDescription) === 'true') where.push(awaitingDescription(lk));
+  if (String(filters.needsDescription) === 'true') where.push(awaitingDescription(lk, db));
   if (filters.discoveredAfter) {
     where.push('p.discovered_on >= @discoveredAfter'); // inclusive: jobs found on that day count
     params.discoveredAfter = filters.discoveredAfter;
   }
   if (filters.q) {
-    where.push('(p.title LIKE @q OR p.company LIKE @q OR p.location LIKE @q)');
+    where.push('(lower(p.title) LIKE lower(@q) OR lower(p.company) LIKE lower(@q) OR lower(p.location) LIKE lower(@q))');
     params.q = `%${filters.q}%`;
   }
   if (filters.minScore != null) {
@@ -236,12 +242,12 @@ export async function getPosting(db: Db, id: number, config: QueryConfig = {}) {
     tweaks: tweaks ? { content: tweaks.content, model: tweaks.model, createdAt: tweaks.created_at, resume: await resumeLabel(tweaks.resume_id) } : null,
     letter: letter ? { url: letter.doc_url, name: letter.doc_name, flags: parse(letter.flags_json) ?? [], content: letter.content, createdAt: letter.created_at, resume: await resumeLabel(letter.resume_id) } : null,
     scores: await db
-      .prepare('SELECT score, source, model, reason, created_at AS createdAt FROM scores WHERE posting_id = ? AND user_id = @uid ORDER BY id DESC')
+      .prepare('SELECT score, source, model, reason, created_at AS "createdAt" FROM scores WHERE posting_id = ? AND user_id = @uid ORDER BY id DESC')
       .all(id),
     statusHistory: await db
-      .prepare('SELECT from_status AS fromStatus, to_status AS toStatus, changed_by AS changedBy, changed_at AS changedAt FROM status_history WHERE posting_id = ? AND user_id = @uid ORDER BY id')
+      .prepare('SELECT from_status AS "fromStatus", to_status AS "toStatus", changed_by AS "changedBy", changed_at AS "changedAt" FROM status_history WHERE posting_id = ? AND user_id = @uid ORDER BY id')
       .all(id),
-    sightings: await db.prepare('SELECT source, url, seen_on AS seenOn FROM posting_sightings WHERE posting_id = ? AND user_id = @uid ORDER BY id').all(id),
+    sightings: await db.prepare('SELECT source, url, seen_on AS "seenOn" FROM posting_sightings WHERE posting_id = ? AND user_id = @uid ORDER BY id').all(id),
   };
 }
 
@@ -361,12 +367,12 @@ export async function summary(db: Db, config: QueryConfig = {}, now = new Date()
     // The Home page's counts: pipeline jobs that need action (the Jobs page's default view) and ones in progress.
     needsAction: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.needsAction().includes(c.status)).reduce((s, c) => s + c.n, 0),
     inProgress: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active' && lk.inProgress().includes(c.status)).reduce((s, c) => s + c.n, 0),
-    needsDescription: await db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id WHERE p.user_id = @uid AND ${awaitingDescription(lk)}`).pluck().get(),
+    needsDescription: await db.prepare(`SELECT COUNT(*) FROM postings p LEFT JOIN scores ls ON ls.id = ${LATEST_SCORE} AND ls.user_id = p.user_id WHERE p.user_id = @uid AND ${awaitingDescription(lk, db)}`).pluck().get(),
     fractionalTarget: config.fractional?.targetAnnual ?? null,
     weeksPerYear: config.fractional?.weeksPerYear ?? 48,
     spend30Days: await db.prepare(`SELECT COALESCE(SUM(cost_usd), 0) FROM runs WHERE started_at >= @since AND ${mine}`).pluck().get({ since, me: uid }),
     budget: await budgetStatus(db, { now, uid }),
     inboxNeedsReview: await db.prepare("SELECT COUNT(*) FROM emails WHERE user_id = @uid AND review_status = 'needs_review'").pluck().get(),
-    lastRun: await db.prepare(`SELECT name, status, started_at AS startedAt FROM runs WHERE name IN ('pipeline', 'discover') AND ${mine} ORDER BY id DESC LIMIT 1`).get({ me: uid }) ?? null,
+    lastRun: await db.prepare(`SELECT name, status, started_at AS "startedAt" FROM runs WHERE name IN ('pipeline', 'discover') AND ${mine} ORDER BY id DESC LIMIT 1`).get({ me: uid }) ?? null,
   };
 }
