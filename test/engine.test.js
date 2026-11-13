@@ -271,6 +271,37 @@ test('trace writes go through the engine: a run started during an open transacti
   store.close();
 });
 
+test('the trace sink writes the user in the insert, each call, and the totals through the engine', async () => {
+  const store = appConnection();
+  const second = await addUser(store.admin, { email: 'second@example.com', status: 'active' });
+  const r = await runAsUser(second, () => createJobTracer({ store }).startRun('sink-test', { trigger: 'manual' }));
+  assert.equal(typeof r.id, 'number');
+  // The user is part of the insert: there is no moment when the row has none.
+  assert.deepEqual(await store.admin.prepare('SELECT name, meta, user_id, status FROM runs WHERE id = ?').get(r.id),
+    { name: 'sink-test', meta: '{"trigger":"manual"}', user_id: second, status: 'running' });
+
+  const call = { label: 'score', model: 'claude-haiku-4-5', stopReason: 'end_turn', inputTokens: 100, outputTokens: 10,
+    cacheReadTokens: 5, cacheWriteTokens: 1, costUsd: 0.002, durationMs: 12, error: null };
+  await r.recordCall(call);
+  await r.recordCall({ ...call, costUsd: null, error: { name: 'RateLimitError', message: 'slow down' } });
+  await r.finish('partial', { postings: 3 });
+
+  assert.deepEqual(await store.admin.prepare('SELECT label, cost_usd, error_name FROM run_calls WHERE run_id = ? ORDER BY id').all(r.id), [
+    { label: 'score', cost_usd: 0.002, error_name: null },
+    { label: 'score', cost_usd: null, error_name: 'RateLimitError' },
+  ]);
+  const row = /** @type {import('../db/types.ts').RunsRow} */ (await store.admin.prepare('SELECT * FROM runs WHERE id = ?').get(r.id));
+  assert.equal(row.status, 'partial');
+  assert.deepEqual([row.calls, row.errors, row.input_tokens, row.cost_usd], [2, 1, 200, 0.002]);
+  assert.equal(row.summary, '{"postings":3}');
+  assert.ok(row.finished_at);
+
+  // Without a store the run stays in memory.
+  const memory = await createJobTracer({ logger: { info() {}, warn() {}, error() {} } }).startRun('memory');
+  assert.equal(memory.id, null);
+  store.close();
+});
+
 test('oneStartAtATime: starts run in order, one at a time, and a failed start does not block the next', async () => {
   const order = /** @type {string[]} */ ([]);
   const slow = oneStartAtATime(async () => {

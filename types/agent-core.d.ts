@@ -115,7 +115,24 @@ declare module '@scottmroth5/agent-core' {
     error: (...args: any[]) => void;
   }
 
-  export function createTracer(options?: { store?: { db: TraceDb }; logger?: Logger }): {
+  /** CallInfo as a sink receives it: missing counts as 0, the rest as null, plus when it was recorded. */
+  export interface StoredCall extends CallInfo {
+    createdAt: string;
+  }
+
+  /**
+   * 0.5.0: where a run goes when the app writes it itself (tools/trace.ts jobSink). Each method may return a promise,
+   * which the tracer awaits. Agent-Core allows a string id; this app's sink returns runs.id, a number.
+   */
+  export interface TraceSink {
+    startRun(run: { name: string; meta: object; startedAt: string }): number | null | Promise<number | null>;
+    recordCall(runId: number | null, call: StoredCall): unknown;
+    /** Called once per run; summary is undefined when finish() was given none. */
+    finishRun(runId: number | null, finish: Totals & { finishedAt: string; summary: unknown }): unknown;
+  }
+
+  /** A sink or a store, not both (a TypeError); neither keeps the run in memory. */
+  export function createTracer(options?: { sink?: TraceSink; store?: { db: TraceDb }; logger?: Logger }): {
     /** 0.4.0: resolves to the run once its runs row is written. */
     startRun(name: string, meta?: object): Promise<Run>;
   };
