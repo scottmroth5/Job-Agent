@@ -90,6 +90,11 @@ test('isolation: B sees none of A\'s jobs on any GET route; A sees them', async 
   store.close();
 });
 
+// Dollar amounts: the server rounds, and the sample runs inside the last 30 days change with the date, so a sum
+// computed here can differ in its last floating point digits (1.376 + 3).
+/** @param {number} actual @param {number} expected @param {string} [message] */
+const assertCents = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 1e-6, message ?? `${actual} is not ${expected}`);
+
 test("the summary's spend and last run are each user's own; the owner's include runs from before runs had a user", async () => {
   const { store, app, B, asA, asB } = await setup();
   const at = new Date().toISOString();
@@ -100,12 +105,12 @@ test("the summary's spend and last run are each user's own; the owner's include 
   await run(OWNER_ID, 2);
   await run(null, 1);
   assert.deepEqual([(await summary(asB)).spend30Days, (await summary(asB)).lastRun], [0, null], "A's runs are not B's");
-  assert.equal((await summary(asA)).spend30Days, before.spend30Days + 3);
+  assertCents((await summary(asA)).spend30Days, before.spend30Days + 3);
   await run(B, 0.5);
   const b = await summary(asB);
   assert.equal(b.spend30Days, 0.5);
   assert.equal(b.lastRun.name, 'pipeline');
-  assert.equal((await summary(asA)).spend30Days, before.spend30Days + 3, "B's run is not A's");
+  assertCents((await summary(asA)).spend30Days, before.spend30Days + 3, "B's run is not A's");
   await app.close();
   store.close();
 });
