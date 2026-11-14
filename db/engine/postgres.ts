@@ -13,8 +13,14 @@
 //   uncommitted rows.
 // - SQLite fails a transaction that waits on a timer under test (strictTx). That check cannot work here, where every
 //   query is a real network wait; Claude and HTTP calls still refuse to run inside a transaction (insideTransaction).
+// - Row-level security (Phase 4, PR 3; db/postgres/store.ts ensureRowSecurity): every user table shows a statement only
+//   the rows of the user in app.uid. Before each statement the engine makes its connection's app.uid the user this
+//   engine runs as: the current user (or fallbackUid) for store.db, 'all' for store.admin, '' (no rows) for store.db with
+//   no user. Outside a transaction that is the connection's setting; inside one it is set for that transaction only
+//   (set_config(..., true)), so a rollback never leaves a connection set to someone else. When the store connected as
+//   a superuser, which skips row security, each connection also takes the store's ordinary role first.
 import pg from 'pg';
-import { bindUid, userIdOr } from '../scope.ts';
+import { bindUid, currentUserId, userIdOr } from '../scope.ts';
 import { engineKeys, pgTransaction, type PgTxContext } from './context.ts';
 import { bindValues, numberPlaceholders, returnsId, type Slot } from './sql.ts';
 import type { Db, RunResult, Statement } from './types.ts';
@@ -55,7 +61,12 @@ class Mutex {
 interface TopTx {
   open: boolean;
   count: number;
+  /** The transaction's app.uid as far as this engine knows; null after a savepoint rollback (set it again). */
+  uid: string | null;
 }
+
+/** Each connection's own app.uid; a connection not here has not yet taken the store's role. */
+const sessionUid = new WeakMap<pg.PoolClient, string>();
 
 /**
  * The context code inside a transaction runs in. Each savepoint's body gets a context of its own with a fresh lock, as
@@ -82,10 +93,25 @@ export interface PgEngineOptions {
   fallbackUid?: number | null;
   /** Waited on before every statement: the store's connect-and-migrate step. */
   ready?: Promise<unknown>;
+  /** store.admin: every user's rows (app.uid 'all'). Otherwise the current user's only. */
+  allUsers?: boolean;
+  /**
+   * The role each connection takes before its first statement, read after ready: the store's ordinary role when it
+   * connected as a superuser, else null (the connection's own role already obeys row security).
+   */
+  role?: () => string | null;
+  /**
+   * Where statements outside a transaction run: pool unless given. store.admin has a pool of its own, so its
+   * connections stay set to every user and a request moving between the two handles costs no extra round trips.
+   */
+  statements?: pg.Pool;
 }
 
 /** A Db over a pool. Every engine over one pool shares its transactions (the store's db and admin, as on SQLite). */
-export function createPgEngine(pool: pg.Pool, { fallbackUid = null, ready = Promise.resolve() }: PgEngineOptions = {}): Db {
+export function createPgEngine(
+  pool: pg.Pool,
+  { fallbackUid = null, ready = Promise.resolve(), allUsers = false, role = () => null, statements = pool }: PgEngineOptions = {},
+): Db {
   const prepared = new Map<string, { text: string; slots: Slot[] }>();
   const translate = (sql: string) => {
     let t = prepared.get(sql);
@@ -101,12 +127,53 @@ export function createPgEngine(pool: pg.Pool, { fallbackUid = null, ready = Prom
     return ctx && ctx.open && ctx.pool === pool ? ctx : null;
   };
 
+  /** The app.uid this engine's statements run with now (see the header). */
+  const uidSetting = () => (allUsers ? 'all' : String(currentUserId() ?? fallbackUid ?? ''));
+
+  /** Gives a connection, outside a transaction, the store's role and this statement's app.uid. */
+  async function forSession(client: pg.PoolClient, want: string) {
+    if (sessionUid.get(client) === want) return;
+    const name = sessionUid.has(client) ? null : role();
+    if (name) await client.query("SELECT set_config('role', $1, false), set_config('app.uid', $2, false)", [name, want]);
+    else await client.query("SELECT set_config('app.uid', $1, false)", [want]);
+    sessionUid.set(client, want);
+  }
+
+  /**
+   * Inside a transaction: the statement with its app.uid, for the transaction only. The setting and the statement are
+   * queued on the client together, with nothing awaited between them, so statements running at once in one
+   * transaction (Promise.all, store.db beside store.admin) each run with their own setting.
+   */
+  async function inTransaction(ctx: TxState, want: string, config: pg.QueryConfig) {
+    let setting: Promise<unknown> = Promise.resolve();
+    if (ctx.top.uid !== want) {
+      ctx.top.uid = want;
+      setting = ctx.client.query("SELECT set_config('app.uid', $1, true)", [want]);
+    }
+    const [, result] = await Promise.all([setting, ctx.client.query(config)]);
+    return result;
+  }
+
   async function query(sql: string, args: unknown[], rowMode?: 'array') {
     await ready;
     const { text, slots } = translate(sql);
     const values = bindValues(slots, bindUid(sql, args, userIdOr(fallbackUid)) as unknown[]);
-    const runner = current()?.client ?? pool;
-    return runner.query({ text, values, ...(rowMode ? { rowMode } : {}) });
+    const config = { text, values, ...(rowMode ? { rowMode } : {}) };
+    const want = uidSetting();
+    const open = current();
+    if (open) return inTransaction(open, want, config);
+    const client = await statements.connect();
+    let broken: Error | undefined;
+    try {
+      await forSession(client, want);
+      return await client.query(config);
+    } catch (err) {
+      // A statement's own error (it carries an SQLSTATE code) leaves the connection fine; anything else drops it.
+      if (!(err as { code?: unknown }).code) broken = err as Error;
+      throw err;
+    } finally {
+      client.release(broken);
+    }
   }
 
   function statement<Row>(sql: string, plucked: boolean): Statement<Row> {
@@ -144,6 +211,7 @@ export function createPgEngine(pool: pg.Pool, { fallbackUid = null, ready = Prom
       } catch (err) {
         await ctx.client.query(`ROLLBACK TO SAVEPOINT ${name}`);
         await ctx.client.query(`RELEASE SAVEPOINT ${name}`);
+        ctx.top.uid = null; // the rollback may have undone an app.uid set inside the savepoint
         throw err;
       }
     } finally {
@@ -156,8 +224,11 @@ export function createPgEngine(pool: pg.Pool, { fallbackUid = null, ready = Prom
     const open = current();
     if (open) return savepoint(open, fn);
     const client = await pool.connect();
-    const top: TopTx = { open: false, count: 0 };
+    const want = uidSetting();
+    const top: TopTx = { open: false, count: 0, uid: want };
+    let broken: Error | undefined;
     try {
+      await forSession(client, want);
       await client.query('BEGIN');
       await client.query('SELECT pg_advisory_xact_lock(hashtext(current_schema()))');
       top.open = true;
@@ -167,10 +238,10 @@ export function createPgEngine(pool: pg.Pool, { fallbackUid = null, ready = Prom
       return result;
     } catch (err) {
       top.open = false;
-      await client.query('ROLLBACK').catch(() => {});
+      await client.query('ROLLBACK').catch((rollbackErr: Error) => (broken = rollbackErr));
       throw err;
     } finally {
-      client.release();
+      client.release(broken);
     }
   }
 

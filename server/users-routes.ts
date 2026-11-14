@@ -13,7 +13,9 @@ import type { App, IdParams, Notices } from './types.ts';
 const anyObject = { type: 'object', additionalProperties: true };
 const idParams = { type: 'object', required: ['id'], properties: { id: { type: 'integer', minimum: 1 } } };
 
-export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir = ATTACHMENTS_DIR }: { db: Db; notices?: Notices; attachmentsDir?: string }) {
+// adminDb is store.admin: the cross-user reads (server/admin-queries.ts) and deleting another user's rows. On PostgreSQL
+// row security shows db only the admin's own rows.
+export function registerUserRoutes(app: App, { db, adminDb, notices = {}, attachmentsDir = ATTACHMENTS_DIR }: { db: Db; adminDb: Db; notices?: Notices; attachmentsDir?: string }) {
   // Deleting someone's account removes everything that is theirs; their address must be typed to confirm.
   app.post<{ Params: IdParams; Body: { confirmEmail: string } }>(
     '/api/admin/users/:id/delete',
@@ -29,7 +31,7 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
       const user = await getUser(db, req.params.id);
       if (!user) throw Object.assign(new Error('User not found.'), { statusCode: 404 });
       if (req.body.confirmEmail.trim().toLowerCase() !== user.email) throw Object.assign(new Error(`Type ${user.email} to confirm.`), { statusCode: 400 });
-      const counts = await deleteAccount(db, user.id, { attachmentsDir });
+      const counts = await deleteAccount(adminDb, user.id, { attachmentsDir });
       await notices.accountDeleted?.(user, { byOwner: true });
       return { deleted: true, jobs: counts.postings ?? 0 };
     },
@@ -82,11 +84,11 @@ export function registerUserRoutes(app: App, { db, notices = {}, attachmentsDir 
         },
       },
     },
-    async (req) => ({ weeks: await usageByWeek(db, { weeks: req.query.weeks }), ...await usageTotals(db, { since: usagePeriodStart(req.query.weeks) }) }),
+    async (req) => ({ weeks: await usageByWeek(adminDb, { weeks: req.query.weeks }), ...await usageTotals(adminDb, { since: usagePeriodStart(req.query.weeks) }) }),
   );
 
   app.get('/api/admin/users', { schema: { summary: 'Every account, with its AI setup and this month\'s spend (admin)', response: { 200: { type: 'array', items: anyObject } } } }, async () =>
-    await listUsers(db),
+    await listUsers(adminDb),
   );
 
   app.post<{ Params: { id: number; decision: string } }>(

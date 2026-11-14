@@ -376,6 +376,15 @@ name, and test/pg-schema.test.js holds the two schemas equal. The SQLite file to
 db:pending, pre-migration copies) stop on PostgreSQL (db/index.ts exitUnlessSqlite) until Phase 5. Tests read the
 database's facts through test/fixtures/engine.js (tablesOf, columnsOf, primaryKeyOf, and each engine's error wording);
 a test of something only SQLite has skips there with sqliteOnly(reason), listed in test/engine-skips.test.js.
+Row-level security (PostgreSQL only, behind user_id = @uid): every table in db/user-tables.ts has ENABLE and FORCE
+row security and the own_rows policy (user_id = app.uid, or app.uid = all), added by db/postgres/store.ts
+ensureRowSecurity whenever a store opens and a user table lacks it (no migration). The engine sets each statement's
+app.uid: the current user (or fallbackUid) for store.db, all for store.admin, none (no rows) for store.db without a
+user; inside a transaction only for that transaction (store.admin has its own small pool, so its connections stay set). A superuser skips row security, so a store that connected as one
+runs its statements as the job_agent_rls role (row reads and writes only); a role with BYPASSRLS is refused. So a
+cross-user read on store.db finds nothing on PostgreSQL: the admin's screens (server/admin-queries.ts) and deleting
+another account get store.admin (adminDb). A table with user_id that is not a user table is listed with its reason in
+test/row-security.test.js (runs). test/row-security.test.js leaves out user_id filters on purpose.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),

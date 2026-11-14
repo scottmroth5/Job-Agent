@@ -10,7 +10,11 @@ const FOLDERS = ['agents', 'server', 'tools', 'demo', 'scripts', 'db', 'evals'];
 /** Each file that uses store.admin, and why. */
 const ALLOWED = {
   'db/index.ts': 'makes it',
+  'db/engine/postgres.ts': "names it: app.uid 'all' under row security",
+  'db/postgres/store.ts': 'makes it on PostgreSQL',
   'server/app.ts': "each user's settings, knowledge doc, and setup by user id (configFor, backgroundFor), the scheduled users' list, the app-wide usage totals, and the admin's cross-user reads (server/admin-queries.ts)",
+  'server/users-routes.ts': 'the Users and Usage screens (server/admin-queries.ts) and deleting another account, admin only',
+  'server/feedback-routes.ts': "the admin's list of everyone's feedback",
   'server/main.ts': 'the owner email at startup, and the allowance notice by user id',
   'scripts/add.js': "the owner's settings (configFor names its user)",
   'scripts/cleanup.js': "the owner's settings (configFor names its user)",
