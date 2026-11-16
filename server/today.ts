@@ -25,7 +25,7 @@ export async function today(db: Db, { now = new Date(), jobId = null }: { now?: 
       `SELECT r.id, r.kind, r.due_at AS due, r.note, p.id AS "jobId", p.company, p.title
        FROM reminders r JOIN postings p ON p.id = r.posting_id AND p.user_id = r.user_id
        WHERE r.user_id = @uid AND r.status = 'open' AND (r.due_at IS NULL OR r.due_at <= @horizon OR @all = 1) ${one}
-       ORDER BY r.due_at IS NULL, r.due_at`,
+       ORDER BY r.due_at IS NULL, r.due_at, r.id`,
     )
     .all({ horizon, all: jobId == null ? 0 : 1, ...params }) as ReminderRow[])
     .map((r) => ({

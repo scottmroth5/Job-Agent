@@ -111,6 +111,11 @@ npm run db:to-postgres            copy a SQLite file (-- --from <file>, default 
                                   (-- --schema <name>, default public): one transaction that empties the target (an existing
                                   one needs -- --replace), copies in foreign key order, and resets the id sequences; then
                                   row counts and checksums per table and per user (-- --verify for the check alone). Counts only
+npm run db:parity                 after db:to-postgres: the rule-based decisions (job lists and filters, panels, summary,
+                                  funnel, Today, follow-ups, scoring and archive picks, inbox rule links, spending) on both
+                                  engines for every user, compared (-- --from <file> -- --schema <name>). No Claude calls;
+                                  match, same but reordered, or DIFFER, never a value. A list query needs an explicit ORDER BY
+                                  (SQLite returns rows by id without one; PostgreSQL does not)
 npm run report:baseline           v3 baseline (tools/baseline.ts): rows per table, database and attachment sizes, Claude spend by
                                   month, accounts by status, outcome data gaps; counts only, opened read-only (no migrations).
                                   -- --json; output stays out of the repo
