@@ -11,7 +11,9 @@ import { randomUUID } from 'node:crypto';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { dataPath, DATA_DIR } from '../tools/paths.ts';
-import { openJobStore } from '../db/index.ts';
+import pg from 'pg';
+import { openJobStore, postgresUrl } from '../db/index.ts';
+import { quoteIdent, schemaFor } from '../db/postgres/store.ts';
 import { localDay } from '../tools/dates.ts';
 import { openReadOnly } from '../db/engine/files.ts';
 import { setSetting } from '../db/settings.ts';
@@ -265,10 +267,46 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
 }
 
 /**
- * True when the database at path was made by this script (or does not exist yet). Opens it read-only.
+ * On PostgreSQL (DATABASE_URL), the state of path's schema (db/postgres/store.ts schemaFor): 'empty' (no tables),
+ * 'demo' (this script's marker), or 'other'. Reads only; nothing is created or migrated.
+ * @param {string} url @param {string} path
+ */
+async function pgSchemaState(url, path) {
+  const { schema } = schemaFor(path);
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    const tables = (await client.query('SELECT table_name AS t FROM information_schema.tables WHERE table_schema = $1', [schema])).rows.map((r) => r.t);
+    if (!tables.length) return 'empty';
+    if (!tables.includes('app_settings')) return 'other';
+    // The table name is fixed; the schema name is code-made (schemaFor) and checked by quoteIdent.
+    const { rows } = await client.query(`SELECT value FROM ${quoteIdent(schema)}.app_settings WHERE key = $1`, [MARKER]);
+    return rows[0]?.value === 'true' ? 'demo' : 'other';
+  } finally {
+    await client.end();
+  }
+}
+
+/** On PostgreSQL: empties path's schema for a rebuild (only after pgSchemaState said 'demo'). @param {string} url @param {string} path */
+async function emptyPgSchema(url, path) {
+  const s = quoteIdent(schemaFor(path).schema);
+  const client = new pg.Client({ connectionString: url });
+  await client.connect();
+  try {
+    await client.query(`DROP SCHEMA ${s} CASCADE; CREATE SCHEMA ${s}`);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * True when the database at path was made by this script (or does not exist yet). Opens it read-only. On
+ * PostgreSQL (the cloud demo, phase 4), path names a schema (schemaFor) and an empty one counts as not existing.
  * @param {string} path
  */
 export async function isDemoDatabase(path) {
+  const url = postgresUrl();
+  if (url) return (await pgSchemaState(url, path)) !== 'other';
   if (!existsSync(path)) return true;
   const { db, close } = openReadOnly(path);
   try {
@@ -484,16 +522,21 @@ export async function main(args = process.argv.slice(2)) {
     return 1;
   }
   const dbPath = dataPath('job-agent.db');
-  if (existsSync(dbPath)) {
-    if (!await isDemoDatabase(dbPath)) {
-      console.error(`demo-seed: ${dbPath} is not a demo database; refusing to replace it.`);
+  // On PostgreSQL (DATABASE_URL: the cloud demo's own database container) the same rules apply to the schema.
+  const url = postgresUrl();
+  const where = url ? 'the PostgreSQL database' : dbPath;
+  const state = url ? await pgSchemaState(url, dbPath) : !existsSync(dbPath) ? 'empty' : (await isDemoDatabase(dbPath)) ? 'demo' : 'other';
+  if (state !== 'empty') {
+    if (state === 'other') {
+      console.error(`demo-seed: ${where} is not a demo database; refusing to replace it.`);
       return 1;
     }
     if (!args.includes('--force')) {
-      console.error(`demo-seed: ${dbPath} already exists; pass --force to rebuild it.`);
+      console.error(`demo-seed: ${where} already holds the demo; pass --force to rebuild it.`);
       return 1;
     }
-    for (const suffix of ['', '-wal', '-shm']) rmSync(`${dbPath}${suffix}`, { force: true });
+    if (url) await emptyPgSchema(url, dbPath);
+    else for (const suffix of ['', '-wal', '-shm']) rmSync(`${dbPath}${suffix}`, { force: true });
   }
   const counts = await seedDemo({ dbPath });
   console.log(`Demo data in ${DATA_DIR}: ${counts.postings} jobs, ${counts.emails} emails, ${counts.runs} pipeline runs, ${counts.prompts} prompt edits.`);

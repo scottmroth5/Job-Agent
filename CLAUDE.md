@@ -405,8 +405,9 @@ CI (.github/workflows/ci.yml) runs npm audit (production, high), npm test in Ame
 Dockerfile: node:26-bookworm-slim, production node_modules and Playwright Chromium in early layers (cached until
 package-lock.json changes), code and web/dist last; runs as node (uid 1000) with DATA_DIR=/data, HOST=0.0.0.0.
 .dockerignore keeps .env, data/, and credentials out of the image; keep it in step with .gitignore.
-deploy/ is copied to the server's /opt/job-agent: compose.yml (app, demo, and Caddy, only Caddy publishes ports; it fixes
-DATA_DIR, HOST, PORT, TRUST_PROXY=1; demo gets no env_file), Caddyfile (no access log), deploy.sh (deploy <tag> | rollback | up | status; healthy means app and demo both answer /healthz;
+deploy/ is copied to the server's /opt/job-agent: compose.yml (app, demo, demo-db, and Caddy, only Caddy publishes ports; it fixes
+DATA_DIR, HOST, PORT, TRUST_PROXY=1; demo gets no env_file; demo-db is the demo's PostgreSQL, in memory, on an internal
+network only the demo joins, trust sign-in), Caddyfile (no access log), deploy.sh (deploy <tag> | rollback | up | status; healthy means app and demo both answer /healthz;
 the GitHub deploy key's authorized_keys line forces it, so it validates SSH_ORIGINAL_COMMAND), cloud.env.example.
 .github/workflows/deploy.yml runs after CI succeeds on a push to main: build, publish ghcr.io/<owner>/job-agent
 (sha-<7> and latest), then deploy over SSH when the DEPLOY_ENABLED variable is true. GitHub holds only the deploy
@@ -414,6 +415,9 @@ host, user, key, and known_hosts; app secrets live in the server's .env. A new r
 deploy/cloud.env.example.
 
 ## Demo
+The cloud demo runs on PostgreSQL (DATABASE_URL to deploy/compose.yml demo-db; npm run demo stays on SQLite): demo-seed
+checks and empties the schema instead of the file, and server/main.ts exits when the sample data is gone (demo-db
+restarted), so the restart policy rebuilds it.
 AUTH_MODE=demo (server/auth.ts): no sign-in; every non-read request gets 403 except POST /api/prompts/:name/preview,
 which writes nothing; server/main.ts starts with demo services (no Google auth, Claude, browser, or schedule) and replays
 demo/sample-data.ts SAMPLE_TASKS on the Activity tab; a per-address cap on all requests (DEMO_REQUEST_LIMIT). The UI shows every

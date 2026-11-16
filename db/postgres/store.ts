@@ -31,7 +31,8 @@ export function laterMigrations(dir = DIR): Array<{ id: string; sql: string }> {
 }
 
 const now = () => new Date().toISOString();
-const quoteIdent = (name: string) => {
+/** A schema or table name made by code, quoted; anything else throws. */
+export const quoteIdent = (name: string) => {
   if (!/^[a-z_][a-z0-9_]*$/.test(name)) throw new Error(`unsafe schema name ${name}`);
   return `"${name}"`;
 };

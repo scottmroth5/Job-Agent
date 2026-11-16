@@ -62,8 +62,20 @@ services:
       # browser code) and its host. Left empty, the demo sends nothing. The app never reads these.
       DEMO_POSTHOG_KEY: ${DEMO_POSTHOG_KEY:-}
       DEMO_POSTHOG_HOST: ${DEMO_POSTHOG_HOST:-}
+      # The demo's own PostgreSQL (demo-db below), like production after Phase 5. No password: only the demo can
+      # reach it, on the demo-db network, and it holds sample data only.
+      DATABASE_URL: postgres://demo@demo-db:5432/demo
     # Builds the sample database, then serves it. A restart resets the demo.
     command: ["sh", "-c", "node scripts/demo-seed.js --force && exec node server/index.js"]
+    # restart: a restart of demo-db through Compose restarts the demo too, which rebuilds the sample data. A restart
+    # Compose does not see (a crash) is caught by the demo itself, which exits when its data is gone (server/main.ts).
+    depends_on:
+      demo-db:
+        condition: service_healthy
+        restart: true
+    networks:
+      - default
+      - demo-db
     # Nothing on disk survives or is shared: the code is read-only and the sample data lives in memory.
     read_only: true
     tmpfs:
@@ -83,6 +95,46 @@ services:
       driver: local
       options:
         max-size: 5m
+        max-file: "2"
+
+  # The demo's database (v3 Phase 4): PostgreSQL holding the sample data only, in memory (tmpfs), so a restart empties
+  # it and the demo rebuilds it. Reachable only from the demo, on the internal demo-db network (no route out, no
+  # published port), which is why it signs in without a password (trust). The app never joins that network.
+  demo-db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    user: "70:70" # the image's postgres user, so no root step and no capabilities are needed
+    environment:
+      POSTGRES_USER: demo
+      POSTGRES_DB: demo
+      POSTGRES_HOST_AUTH_METHOD: trust
+      PGDATA: /var/lib/postgresql/data/pgdata
+    # Small and fast: the data is thrown away on every restart, so nothing needs to survive a crash.
+    command: ["postgres", "-c", "shared_buffers=16MB", "-c", "max_connections=20", "-c", "fsync=off", "-c", "synchronous_commit=off", "-c", "full_page_writes=off"]
+    read_only: true
+    tmpfs:
+      - /var/lib/postgresql/data:size=96m,uid=70,gid=70,mode=0700
+      - /var/run/postgresql:size=1m,uid=70,gid=70,mode=0775
+      - /tmp:size=8m
+    shm_size: 32mb
+    networks:
+      - demo-db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d demo"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    mem_limit: 160m
+    cpus: 0.25
+    pids_limit: 50
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: local
+      options:
+        max-size: 1m
         max-file: "2"
 
   caddy:
@@ -113,3 +165,8 @@ volumes:
   # Caddy's certificates and keys. Kept so a restart never asks Let's Encrypt for a new certificate.
   caddy_data:
   caddy_config:
+
+networks:
+  # Only the demo and its database. internal: no route to the internet and none from it.
+  demo-db:
+    internal: true

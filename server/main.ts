@@ -20,7 +20,7 @@ import { timeZone } from '../tools/dates.ts';
 import { countryLookup, geoAllowFromEnv, openGeo, openRelay } from './geo.ts';
 import { createAlerts } from './alerts.ts';
 import { createNotices } from './notices.ts';
-import { claimSetting } from '../db/settings.ts';
+import { claimSetting, getSetting } from '../db/settings.ts';
 import { getUser, OWNER_ID, syncOwnerEmail } from '../db/users.ts';
 import { sendEmail } from '../tools/google/gmail.ts';
 import { assertSafeBinding, authSettings } from './auth.ts';
@@ -166,6 +166,22 @@ console.log(
     ? `Scheduled (pipeline and inbox are the owner's defaults until saved under Settings > Automatic runs): ${schedules.map((j) => `${j.name} ${j.schedule.spec}`).join('; ')}`
     : 'Scheduled: nothing from .env (SCHEDULE_BACKUP runs backups; pipelines and inbox checks are set under Settings > Automatic runs)',
 );
+
+// The cloud demo's PostgreSQL (deploy/compose.yml demo-db) keeps its data in memory: if it restarts on its own it comes
+// back empty, and the demo would answer every page with an error while /healthz still passes. Once a minute the
+// demo checks its sample data is still there; if not, it exits, and its restart policy rebuilds the data.
+if (demo && store.engine === 'postgres') {
+  const watch = setInterval(() => {
+    void getSetting(store.admin, 'demo_database')
+      .catch(() => null)
+      .then((marker) => {
+        if (marker === 'true') return;
+        console.error('[demo] the sample data is gone (its database restarted); exiting so the demo rebuilds it');
+        process.exit(1);
+      });
+  }, 60_000);
+  watch.unref();
+}
 
 const shutdown = async () => {
   await app.close();

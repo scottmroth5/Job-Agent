@@ -335,6 +335,10 @@ Progress (decision 0006):
   characters are now capped (`tools/urls.ts` capUrlKey, migration 026 on both engines). The rerun copied 26 tables and
   20,344 rows in 3.5 seconds, every table matching per table and per user; a second run without `--replace` was refused,
   and `--replace` and `--verify` matched again. The copy ran in a throwaway local schema, dropped afterwards.
+- PR 5: the demo on PostgreSQL, using the step 8 fallback. PGlite worked but needed about 480 to 600 MB on Linux, over the
+  demo's 384 MB limit, so the demo has its own `postgres:17-alpine` container (`demo-db`, tmpfs, internal network,
+  trust sign-in; owner decision November 16). Measured locally with the real `compose.yml`: demo about 95 MB, demo-db
+  about 70 MB. A restart of either rebuilds the sample data (the demo exits when its data is gone).
 - Response times, `npm run bench` on the same PC (medians, ms): SQLite summary 1.6, postings 1.6, a job 2.2, funnel 1.1;
   PostgreSQL 17 in Docker Desktop 18.8, 7.3, 26.8, 10.8. Each PostgreSQL query is a network round trip, and the job panel
   runs about 20 in a row. Before the Phase 5 cutover: run independent queries together, and measure against RDS from
