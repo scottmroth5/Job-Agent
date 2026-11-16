@@ -14,6 +14,7 @@ import * as noResponse from './migrations/018-no-response.ts';
 import * as dismissedEmail from './migrations/019-dismissed-email.ts';
 import * as usageBrowser from './migrations/021-usage-browser.ts';
 import * as statusRoles from './migrations/023-status-roles.ts';
+import * as longUrlKeys from './migrations/026-long-url-keys.ts';
 import { createSqliteEngine } from './engine/sqlite.ts';
 import { appliedIn, backupConnection, copyDatabase } from './engine/files.ts';
 import type { Db } from './engine/types.ts';
@@ -60,7 +61,7 @@ const MIGRATIONS_DIR = repoPath('db', 'migrations');
 
 // Migrations that need code rather than plain SQL. Each exports id and up(db); foreignKeys = false marks a table rebuild
 // (agent-core runs it with foreign keys off, then checks them before it commits).
-const CODE_MIGRATIONS: Array<{ id: string; up: Extract<Migration['up'], (...args: never[]) => unknown>; foreignKeys?: boolean }> = [duplicateStatus, lookups, postingNotes, users, accounts, activity, timeZoneColumn, resumes, noResponse, dismissedEmail, usageBrowser, statusRoles];
+const CODE_MIGRATIONS: Array<{ id: string; up: Extract<Migration['up'], (...args: never[]) => unknown>; foreignKeys?: boolean }> = [duplicateStatus, lookups, postingNotes, users, accounts, activity, timeZoneColumn, resumes, noResponse, dismissedEmail, usageBrowser, statusRoles, longUrlKeys];
 
 /** Migrations: the .sql files in db/migrations plus CODE_MIGRATIONS, applied in id (file-name) order. */
 export function loadMigrations(dir = MIGRATIONS_DIR): Migration[] {

@@ -311,7 +311,7 @@ computer can choose SQLite or PostgreSQL. Both engines stay in CI after the cuto
 Done when:
 - [x] The full suite passes on PostgreSQL in CI
 - [x] Row level security tests pass
-- [ ] Migration script runs repeatedly against a synthetic database and a local copy of real data, with all checks matching
+- [x] Migration script runs repeatedly against a synthetic database and a local copy of real data, with all checks matching
 - [ ] Evals show unchanged decisions on the new engine, or differences are explained
 - [ ] `Health-Review` tests pass against any new `Agent-Core` release
 
@@ -329,7 +329,12 @@ Progress (decision 0006):
 - PR 4: `npm run db:to-postgres` (`scripts/migrate-sqlite-to-postgres.js`). Tested on synthetic data (the demo seed plus a
   second user): every table matches per table and per user, a second run needs `--replace` and matches again, a changed
   row is named by table and user id, and text with a NUL character (which PostgreSQL text cannot hold) stops it before
-  anything is copied. The run on a local copy of real data waits for the owner.
+  anything is copied.
+- PR 4b: the first run on a local copy of real data (November 16, approved by the owner) stopped on 7 of 4,658 jobs
+  whose url key was over PostgreSQL's index limit (about 2.7 KB; the longest 8,045 characters). Keys over 500
+  characters are now capped (`tools/urls.ts` capUrlKey, migration 026 on both engines). The rerun copied 26 tables and
+  20,344 rows in 3.5 seconds, every table matching per table and per user; a second run without `--replace` was refused,
+  and `--replace` and `--verify` matched again. The copy ran in a throwaway local schema, dropped afterwards.
 - Response times, `npm run bench` on the same PC (medians, ms): SQLite summary 1.6, postings 1.6, a job 2.2, funnel 1.1;
   PostgreSQL 17 in Docker Desktop 18.8, 7.3, 26.8, 10.8. Each PostgreSQL query is a network round trip, and the job panel
   runs about 20 in a row. Before the Phase 5 cutover: run independent queries together, and measure against RDS from

@@ -15,6 +15,7 @@ const EXPECTED = {
   'notes.test.js': 1, // 025 numbered SQLite rows by rowid; PostgreSQL starts from the baseline
   'report-baseline.test.js': 2, // report:baseline reads the SQLite file (Phase 5)
   'restore-test.test.js': 2, // backups are of the SQLite file (pg_dump in Phase 5)
+  'url-keys.test.js': 1, // 026 on a SQLite connection; its PostgreSQL twin has its own test there
 };
 
 test('the tests skipped on PostgreSQL are the reviewed list', () => {

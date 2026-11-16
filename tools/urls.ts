@@ -1,8 +1,7 @@
-/** Whether a hostname is the domain itself or one of its subdomains (never "evil-linkedin.com"). */
-export const hostIs = (host: string | null | undefined, domain: string) => {
-  const h = String(host ?? '').toLowerCase();
-  return h === domain || h.endsWith(`.${domain}`);
-};
+import { createHash } from 'node:crypto';
+import { hostIs } from './hosts.ts';
+
+export { hostIs };
 
 /**
  * Whether a link is on a site (the domain or a subdomain) and, when given, under a path prefix. Parses the link
@@ -24,13 +23,37 @@ export const isGoogleRedirect = (raw: string | null | undefined) => isOnSite(raw
 // Query parameters that only track where a click came from; they never identify a different job.
 const TRACKING = /^(utm_.*|trk.*|refid|trackingid|ref|gh_src|lever-source|source|src|fbclid|gclid|mc_.*)$/i;
 
+/** Longest url key kept as is, in characters; a longer one is cut and fingerprinted (capUrlKey). */
+export const MAX_URL_KEY = 500;
+/** Characters a long key keeps before its fingerprint. */
+const KEPT = 400;
+
+/**
+ * A url key short enough for a unique index on either engine (PostgreSQL refuses index entries over about 2.7 KB):
+ * one over MAX_URL_KEY characters keeps its first KEPT characters and gains #sha256= and the SHA-256 of the whole key
+ * (UTF-8, hex), so the same link always gives the same key and different links stay apart. Characters are code points,
+ * as SQLite's length() and PostgreSQL's char_length() count them; 400 of them are at most 1,600 bytes.
+ * Migration 026 rekeys stored keys with its own copy of this rule.
+ */
+export function capUrlKey(key: string) {
+  const chars = Array.from(key);
+  if (chars.length <= MAX_URL_KEY) return key;
+  return `${chars.slice(0, KEPT).join('')}#sha256=${createHash('sha256').update(key, 'utf8').digest('hex')}`;
+}
+
 /**
  * Key for deciding whether two URLs point at the same posting: lowercase host without www,
  * no fragment, no trailing slash, tracking parameters removed, remaining parameters sorted.
  * LinkedIn job links keep only their path, since every query parameter there is tracking.
- * Returns null for empty input and the trimmed, lowercased text for unparseable input.
+ * Returns null for empty input and the trimmed, lowercased text for unparseable input. A key over MAX_URL_KEY
+ * characters is capped (capUrlKey).
  */
 export function normalizeUrl(raw: string | null | undefined) {
+  const key = urlKeyOf(raw);
+  return key === null ? null : capUrlKey(key);
+}
+
+function urlKeyOf(raw: string | null | undefined) {
   const text = String(raw ?? '').trim();
   if (!text) return null;
   let url;
