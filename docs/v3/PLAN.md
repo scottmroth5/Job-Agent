@@ -310,7 +310,7 @@ computer can choose SQLite or PostgreSQL. Both engines stay in CI after the cuto
 
 Done when:
 - [x] The full suite passes on PostgreSQL in CI
-- [ ] Row level security tests pass
+- [x] Row level security tests pass
 - [ ] Migration script runs repeatedly against a synthetic database and a local copy of real data, with all checks matching
 - [ ] Evals show unchanged decisions on the new engine, or differences are explained
 - [ ] `Health-Review` tests pass against any new `Agent-Core` release
@@ -326,6 +326,10 @@ Progress (decision 0006):
   because `store.db` and `store.admin` share a transaction (a second role would need a second connection). A superuser
   connection runs statements as `job_agent_rls`; `BYPASSRLS` is refused. It found four admin routes reading across
   users through `store.db` (Users, Usage, feedback, deleting another account); they take `store.admin` now.
+- PR 4: `npm run db:to-postgres` (`scripts/migrate-sqlite-to-postgres.js`). Tested on synthetic data (the demo seed plus a
+  second user): every table matches per table and per user, a second run needs `--replace` and matches again, a changed
+  row is named by table and user id, and text with a NUL character (which PostgreSQL text cannot hold) stops it before
+  anything is copied. The run on a local copy of real data waits for the owner.
 - Response times, `npm run bench` on the same PC (medians, ms): SQLite summary 1.6, postings 1.6, a job 2.2, funnel 1.1;
   PostgreSQL 17 in Docker Desktop 18.8, 7.3, 26.8, 10.8. Each PostgreSQL query is a network round trip, and the job panel
   runs about 20 in a row. Before the Phase 5 cutover: run independent queries together, and measure against RDS from

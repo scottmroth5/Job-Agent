@@ -126,6 +126,9 @@ test('API: /api/schedule lists the jobs, and a missed backup runs as a task when
   const { openJobStore } = await import('../db/index.ts');
   const { buildApp } = await import('../server/app.ts');
   const store = openJobStore(':memory:');
+  // The owner's pipeline on a day three days from now, so it is never due or missed during the test (on a fixed
+  // Mon,Thu it caught up at start on those days).
+  const pipelineAt = `${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][(new Date().getDay() + 3) % 7]} 06:00`;
   /** @type {string[]} */
   const scripts = [];
   const app = await buildApp({
@@ -140,7 +143,7 @@ test('API: /api/schedule lists the jobs, and a missed backup runs as a task when
       },
       runPipeline: async () => ({ code: 0, lastError: null }),
       // Daily at the minute just passed, so the never-run backup counts as missed and catches up at start.
-      schedules: schedulesFromEnv({ SCHEDULE_RESTORE_TEST: 'off', SCHEDULE_BACKUP: `daily ${String(new Date(Date.now() - 60000).getHours()).padStart(2, '0')}:${String(new Date(Date.now() - 60000).getMinutes()).padStart(2, '0')}`, SCHEDULE_PIPELINE: 'Mon,Thu 06:00' }),
+      schedules: schedulesFromEnv({ SCHEDULE_RESTORE_TEST: 'off', SCHEDULE_BACKUP: `daily ${String(new Date(Date.now() - 60000).getHours()).padStart(2, '0')}:${String(new Date(Date.now() - 60000).getMinutes()).padStart(2, '0')}`, SCHEDULE_PIPELINE: pipelineAt }),
       log: { info: () => {}, warn: () => {} },
     }),
   });
@@ -148,7 +151,7 @@ test('API: /api/schedule lists the jobs, and a missed backup runs as a task when
   const s = (await app.inject('/api/schedule')).json();
   assert.deepEqual(s.jobs.map((/** @type {{ name: string, next: string | null }} */ j) => [j.name, Boolean(j.next)]), [['backup', true], ['pipeline', true]], 'the backup, then the owner pipeline from SCHEDULE_PIPELINE');
   assert.ok(s.timeZone);
-  assert.equal((await app.inject('/api/pipeline')).json().schedule, 'Mon,Thu 06:00');
+  assert.equal((await app.inject('/api/pipeline')).json().schedule, pipelineAt);
   for (let i = 0; i < 50 && !scripts.length; i += 1) await new Promise((r) => setTimeout(r, 10));
   assert.deepEqual(scripts, ['scripts/backup.js']);
   const backupTask = (await app.inject('/api/tasks')).json().find((/** @type {{ kind: string }} */ t) => t.kind === 'backup');

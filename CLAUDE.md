@@ -105,6 +105,10 @@ npm run inbox:review              resolve needs_review emails; each choice but D
 npm run backup                    encrypted backup (database, data/config/job-search.json, data/attachments) to the "Job Agent
                                   Backups" Drive folder; -- --to <folder> writes it to a folder; -- --check-passphrase checks .env
 npm run db:pending                migrations a database open would apply, tried on a throwaway copy (deploy.sh runs it first)
+npm run db:to-postgres            copy a SQLite file (-- --from <file>, default data/job-agent.db) into DATABASE_URL's database
+                                  (-- --schema <name>, default public): one transaction that empties the target (an existing
+                                  one needs -- --replace), copies in foreign key order, and resets the id sequences; then
+                                  row counts and checksums per table and per user (-- --verify for the check alone). Counts only
 npm run report:baseline           v3 baseline (tools/baseline.ts): rows per table, database and attachment sizes, Claude spend by
                                   month, accounts by status, outcome data gaps; counts only, opened read-only (no migrations).
                                   -- --json; output stays out of the repo
