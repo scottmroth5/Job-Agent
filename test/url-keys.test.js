@@ -22,7 +22,7 @@ test('a short key is unchanged; a long one is cut and fingerprinted, the same li
   const a = /** @type {string} */ (normalizeUrl(longUrl('1')));
   assert.equal(a, normalizeUrl(longUrl('1')), 'deterministic');
   assert.notEqual(a, normalizeUrl(longUrl('2')), 'links that differ only past the cut stay apart');
-  assert.match(a, /^example\.com|^jobs\.example\.com/);
+  assert.ok(a.startsWith('jobs.example.com/apply?'), 'the key starts as the cleaned link does');
   assert.match(a, /#sha256=[0-9a-f]{64}$/);
   assert.equal(Array.from(a).length, 400 + '#sha256='.length + 64);
   assert.ok(!a.includes('utm_source'), 'tracking parameters are removed before the cap');
