@@ -84,6 +84,8 @@ npm run eval:letters -- --dry-run   letter fact check eval on synthetic cases (e
                                   flags on clean letters; --models=..., --max-usd=1; without --dry-run it costs real money
 npm run hunt                      resume tweaks + cover letters (Google Docs) for promoted jobs (-- --dry-run, --ids, --regenerate, --no-docs)
 npm run archive -- --dry-run      preview archiving; without --dry-run it moves them
+npm run archive -- --long-links    archive your open jobs whose link key was shortened (#sha256=, capUrlKey); not in
+                                  progress ones; --dry-run first; counts and job ids only
 npm run cleanup -- --dry-run      after a rule change: rekey duplicates, archive list-of-jobs pages, search.excludedSites jobs, and duplicate copies (the acted-on copy is kept);
                                   move pipeline jobs without a description back to Discovered. Its status changes are changed_by agent, which the eval ignores
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)

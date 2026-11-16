@@ -132,6 +132,26 @@ export async function archiveSiteJobs(db: Db, site: string, { now = new Date(), 
   return { archived: found, dryRun };
 }
 
+/**
+ * Jobs whose link was too long to keep as its key (tools/urls.ts capUrlKey: the key ends in #sha256=), or archives
+ * them: npm run archive -- --long-links (November 2026, so they need not be found by hand). Archived jobs and jobs in
+ * progress are left alone; inProgress counts the ones skipped for that.
+ */
+export async function archiveLongLinks(db: Db, { now = new Date(), dryRun = false }: { now?: Date; dryRun?: boolean } = {}) {
+  // Found and archived in one transaction.
+  return db.tx(async () => {
+    const lk = await lookups(db);
+    const inProgress = lk.inProgress();
+    const rows = (await db
+      .prepare(`SELECT id, status FROM postings WHERE user_id = @uid AND url_key LIKE ?
+        AND (stage NOT IN ${sqlList(lk.ids('stage', 'archived'))} OR status IN ${sqlList(lk.ids('status', 'evaluate'))}) ORDER BY id`)
+      .all('%#sha256=%')) as Array<Pick<PostingsRow, 'id' | 'status'>>;
+    const found = rows.filter((p) => !inProgress.includes(p.status)).map((p) => ({ ...p, reason: 'link too long to match' }));
+    if (!dryRun && found.length) await archiveFound(db, found, now);
+    return { archived: found, inProgress: rows.length - found.length, dryRun };
+  });
+}
+
 // Archives each one and marks it with the passed (or duplicate) role's status, with a note and status history, changed_by 'agent'.
 async function archiveFound(db: Db, found: Found[], now: Date) {
   // The jobs are found and archived in one transaction.
