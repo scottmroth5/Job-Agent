@@ -3,7 +3,7 @@
 Status: accepted, 2026-11-13
 
 ## Context
-Phase 4 adds PostgreSQL, so that production can move to a managed database in Phase 5 (decision 0003). The owner decided on November 13 that SQLite stays supported for good: anyone who runs Job-Agent on their own computer can choose SQLite (one file, nothing to install) or PostgreSQL. The demo moves to PostgreSQL with production, on PGlite (in process, no paid database).
+Phase 4 adds PostgreSQL, so that production can move to a managed database in Phase 5 (decision 0003). The owner decided on November 13 that SQLite stays supported for good: anyone who runs Job-Agent on their own computer can choose SQLite (one file, nothing to install) or PostgreSQL. The demo moves to PostgreSQL with production, at no cost: PGlite (in process) was the first choice.
 
 Phase 3 already put every database call behind one async interface (`db/engine/types.ts` `Db`), so a second engine only has to implement that interface.
 
@@ -20,4 +20,5 @@ Phase 3 already put every database call behind one async interface (`db/engine/t
 - Every migration is written twice, and both suites must pass.
 - The SQLite file tools (backups and their monthly check, `report:baseline`, `db:pending`, the pre-migration copy) stay SQLite-only until Phase 5 gives them PostgreSQL versions; on PostgreSQL they stop and say so.
 - Row-level security on PostgreSQL (Phase 4, PR 3) is a second guard behind the `user_id` scoping that both engines keep. Each user table allows only the rows of the user in `app.uid`, which the engine sets for every statement; `store.admin` sets `all`. Both handles use one role, since they share a transaction. The guard is against a query that forgets its `user_id` filter; it is not a wall against SQL that can set `app.uid` itself.
+- The demo runs on PostgreSQL (Phase 4, PR 5), but not on PGlite: on Linux, PGlite took about 480 to 600 MB for a tiny table (most of it compiled WebAssembly), and the demo container's limit is 384 MB. It uses the plan's fallback instead, a `postgres:17-alpine` container (`demo-db` in `deploy/compose.yml`, about 70 MB) holding the sample data in memory, on an internal network only the demo joins, signing in without a password (trust) because nothing else can reach it. The demo itself measured about 95 MB.
 - Revisit if keeping SQLite costs more than the local-install path is worth, for example if a feature needs PostgreSQL-only SQL.

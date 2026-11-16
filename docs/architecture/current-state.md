@@ -24,6 +24,7 @@ flowchart LR
   subgraph DM[demo container]
     DAPI[same image, AUTH_MODE=demo, sample data only]
   end
+  DAPI --> DDB[(demo-db: PostgreSQL 17 in memory, demo network only)]
 
   API --> DB[(SQLite: job-agent.db in DATA_DIR)]
   CH --> DB
@@ -47,7 +48,7 @@ flowchart LR
   - long actions as in-memory tasks (`server/tasks.ts`), lost on restart;
   - the pipeline and other scripts as child processes, one pipeline at a time across the app;
   - Chromium for pages that need JavaScript.
-- **The demo container:** the same image with `AUTH_MODE=demo`. It has its own sample database, no secrets, and no Claude.
+- **The demo container:** the same image with `AUTH_MODE=demo`. It has no secrets and no Claude. Its sample data lives in its own PostgreSQL container (`demo-db`, since v3 Phase 4), in memory, on a private network only the demo joins; a restart of either rebuilds the data.
 - **Storage:** one SQLite file, plus attachment files.
   - Since v3 Phase 3, every call goes through the async data layer (`db/engine`): statements return promises, and
     transactions are serialized so nothing from another request lands inside one. `better-sqlite3` sits underneath
