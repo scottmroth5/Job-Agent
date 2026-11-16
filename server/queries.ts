@@ -355,12 +355,15 @@ export async function summary(db: Db, config: QueryConfig = {}, now = new Date()
   // runs is not a user table (agent-core writes the row first): the user's runs, and for the owner the ones from before runs had a user.
   const mine = '(user_id = @me OR (@me = 1 AND user_id IS NULL))';
   const since = new Date(now.getTime() - 30 * 24 * 3600 * 1000).toISOString();
-  const counts = await db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all() as Array<{
+  const counts = (await db.prepare('SELECT track, stage, status, COUNT(*) AS n FROM postings WHERE user_id = @uid GROUP BY track, stage, status').all() as Array<{
     track: string;
     stage: string;
     status: string;
     n: number;
-  }>;
+  }>)
+    // Sorted here, not in SQL: PostgreSQL may return groups in any order, and its text order is by language rules
+    // where SQLite's is by byte; this gives one order on every engine.
+    .sort((a, b) => (a.track < b.track ? -1 : a.track > b.track ? 1 : a.stage < b.stage ? -1 : a.stage > b.stage ? 1 : a.status < b.status ? -1 : a.status > b.status ? 1 : 0));
   return {
     counts,
     pipeline: counts.filter((c) => lk.groupOf('stage', c.stage) === 'active').reduce((s, c) => s + c.n, 0),

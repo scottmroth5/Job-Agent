@@ -74,11 +74,12 @@ export async function applications(db: Db, { now = new Date() } = {}): Promise<A
     history.set(h.posting_id, [...(history.get(h.posting_id) ?? []), h]);
   }
   const emails = new Map<number, EmailRow[]>();
-  for (const e of await db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED}`).all() as EmailRow[]) {
+  for (const e of await db.prepare(`SELECT posting_id, type, sent_at FROM emails WHERE user_id = @uid AND posting_id IS NOT NULL AND review_status IN ${LINKED} ORDER BY sent_at, id`).all() as EmailRow[]) {
     emails.set(e.posting_id as number, [...(emails.get(e.posting_id as number) ?? []), e]);
   }
 
-  const rows = await db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid').all() as PostingRow[];
+  // ORDER BY id: the lists built from these (funnel, Today, follow-ups) come out in one order on every engine.
+  const rows = await db.prepare('SELECT id, company, title, source, track, status, stage, applied_on, discovered_on FROM postings WHERE user_id = @uid ORDER BY id').all() as PostingRow[];
   const out: Application[] = [];
   for (const p of rows) {
     const hist = history.get(p.id) ?? [];

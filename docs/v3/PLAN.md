@@ -312,7 +312,7 @@ Done when:
 - [x] The full suite passes on PostgreSQL in CI
 - [x] Row level security tests pass
 - [x] Migration script runs repeatedly against a synthetic database and a local copy of real data, with all checks matching
-- [ ] Evals show unchanged decisions on the new engine, or differences are explained
+- [x] Evals show unchanged decisions on the new engine, or differences are explained
 - [ ] `Health-Review` tests pass against any new `Agent-Core` release
 
 Progress (decision 0006):
@@ -339,6 +339,13 @@ Progress (decision 0006):
   demo's 384 MB limit, so the demo has its own `postgres:17-alpine` container (`demo-db`, tmpfs, internal network,
   trust sign-in; owner decision November 16). Measured locally with the real `compose.yml`: demo about 95 MB, demo-db
   about 70 MB. A restart of either rebuilds the sample data (the demo exits when its data is gone).
+- Evals (November 16): `npm run db:parity` runs every rule-based decision on both engines (39 checks per user: the job
+  lists and every stage, status, and track filter, job panels, summary, funnel, Today, follow-ups, scoring and archive
+  picks, cleanup dry runs, inbox rule links for every stored email, spending). On a local copy of real data the first
+  run found no different decision but 6 lists in a different order: queries without ORDER BY (SQLite returns rows by
+  id; PostgreSQL does not). With ORDER BY id in the funnel's queries, an id tie-break for Today's reminders, and the
+  summary's counts sorted in code, all 39 match, twice. The paid evals were not rerun: their model calls do not touch
+  the database, and the rule part of the inbox eval (decideEmail) is in the parity check.
 - Response times, `npm run bench` on the same PC (medians, ms): SQLite summary 1.6, postings 1.6, a job 2.2, funnel 1.1;
   PostgreSQL 17 in Docker Desktop 18.8, 7.3, 26.8, 10.8. Each PostgreSQL query is a network round trip, and the job panel
   runs about 20 in a row. Before the Phase 5 cutover: run independent queries together, and measure against RDS from
