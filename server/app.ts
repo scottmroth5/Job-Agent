@@ -592,14 +592,26 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     };
     // A start refused because another pipeline or inbox check is running (a button press) waits and tries again,
     // for up to 4 hours, instead of being lost.
+    // Closing the server ends every wait: a retry never runs on a closed store or keeps the process alive.
+    let closed = false;
+    const retries = new Set<() => void>();
     const whenFree = async (start: () => Promise<string>) => {
       const until = Date.now() + 4 * HOURS;
       for (;;) {
         try {
           return await start();
         } catch (err) {
-          if ((err as { statusCode?: number }).statusCode !== 409 || Date.now() + retryMs > until) throw err;
-          await new Promise((r) => setTimeout(r, retryMs));
+          if (closed || (err as { statusCode?: number }).statusCode !== 409 || Date.now() + retryMs > until) throw err;
+          await new Promise<void>((resolve) => {
+            const timer = setTimeout(done, retryMs);
+            function done() {
+              clearTimeout(timer);
+              retries.delete(done);
+              resolve();
+            }
+            retries.add(done);
+          });
+          if (closed) throw Object.assign(new Error('The server closed before the run could start.'), { statusCode: 503 });
         }
       }
     };
@@ -686,6 +698,8 @@ export async function buildApp({ store, config, services: given, webDir, authMod
       syncTimer.unref();
     });
     app.addHook('onClose', async () => {
+      closed = true;
+      for (const done of [...retries]) done();
       jobsScheduler.stop();
       if (syncTimer) clearInterval(syncTimer);
     });

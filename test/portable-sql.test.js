@@ -15,6 +15,7 @@ const SQLITE_TOOLS = [
   'tools/baseline.ts', // report:baseline reads the file's page counts and catalog
   'tools/backup/restore-check.ts', // the restore test counts rows in a restored SQLite file
   'scripts/db-types.js', // db:types reads column types from SQLite's catalog
+  'scripts/migrate-sqlite-to-postgres.js', // db:to-postgres reads the source file's catalog and checks its text
 ];
 
 /** @type {Array<{ name: string, pattern: RegExp, allow?: string[], example: string }>} */
