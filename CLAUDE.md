@@ -389,6 +389,9 @@ runs its statements as the job_agent_rls role (row reads and writes only); a rol
 cross-user read on store.db finds nothing on PostgreSQL: the admin's screens (server/admin-queries.ts) and deleting
 another account get store.admin (adminDb). A table with user_id that is not a user table is listed with its reason in
 test/row-security.test.js (runs). test/row-security.test.js leaves out user_id filters on purpose.
+PostgreSQL refuses a unique index entry over about 2.7 KB: url keys over 500 characters are their first 400 plus
+#sha256= and the hash of the whole key (tools/urls.ts capUrlKey; migration 026 rekeyed stored ones). A new unique text
+key that can grow long needs the same.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
