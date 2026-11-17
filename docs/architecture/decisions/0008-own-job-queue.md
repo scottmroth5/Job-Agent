@@ -43,3 +43,7 @@ The owner decided on November 17, 2026: one queue of our own (`tools/queue/queue
 - **The cost:** we own the queue code, about 400 lines, and its tests: priorities, aging, reserved workers, limits, retries, dead letters, dependencies, the sweep, retention and isolation. A rule pg-boss has that we need later is ours to build.
 - **Claiming runs one at a time across the app.** That's fine at this scale: a few users and one server, with workers polling every second.
 - **Out of the queue:** the short synchronous AI calls (draft, revise, letter check, Help), where the user waits on the request directly. They keep their own daily limits.
+
+## Proven (PR 5)
+- **Load:** with long scheduled work holding every pool (a pipeline's discover and score steps, a backup, an inbox check, and a backlog of scoring), a refetch, two Claude tasks from different accounts, and a pipeline started by people all began in under 100 ms on SQLite and PostgreSQL, against the owner's 5 second target (test/queue-load.test.js, production timings). The first run showed the second Claude task waiting behind the first; migration 028 reserves 2 of the Claude pool's 3 workers for tasks people start, which costs scheduled work nothing (its Claude steps run one at a time).
+- **Kill:** a worker process killed mid-task leaves both tasks recorded as running; the next worker's sweep reruns the one whose type allows a retry (its first attempt's output kept) and fails the Claude task visibly, closing its run (test/queue-kill.test.js, on both engines).
