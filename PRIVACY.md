@@ -33,7 +33,7 @@ The owner's own Google sign-in lets the app create its own documents in the owne
 
 ## Who handles your data
 
-- **Amazon Web Services:** the server in the owner's account that stores your data.
+- **Amazon Web Services:** the server and the database (Amazon RDS) in the owner's account that store your data. The app's data is in a database of its own, on a database server the owner also uses for another of their apps. The database is encrypted, it is reached only from the owner's servers, and RDS keeps its own backups of it for 7 days.
 - **Anthropic:** job postings and the material you give the app, when you use an AI feature.
 - **Google:** sign-in, encrypted backups in the owner's Google Drive, and account and feedback emails sent through Gmail.
 - **Job sites:** when your pipeline runs, the job titles in your search settings go to LinkedIn and Himalayas, and your local search location to LinkedIn, to find postings. The owner's own searches also go to Serper, a Google search results service.
@@ -45,7 +45,7 @@ Under Settings you can, at any time:
 - **Download your data:** everything that is yours, as one file.
 - **Remove your Claude key.**
 - **Pause your account,** and resume it later.
-- **Delete your account:** it and everything in it are deleted at once, apart from the usage totals above, which are not linked to it. Copies inside the encrypted backups age out within about two months.
+- **Delete your account:** it and everything in it are deleted at once, apart from the usage totals above, which are not linked to it. Copies inside the encrypted backups age out within about two months, and the database's own backups within 7 days.
 
 You can also revoke the app's Google access at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
 

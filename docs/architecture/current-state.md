@@ -1,7 +1,7 @@
-# Current architecture (v2-final)
+# Current architecture
 
-How the system runs at the `v2-final` tag, before the v3 work in [docs/v3/PLAN.md](../v3/PLAN.md). The details behind each
-box are in [CLAUDE.md](../../CLAUDE.md).
+How the system runs, kept current through v3 Phase 5 (production on PostgreSQL). The `v2-final` tag marks where v3 began
+([docs/v3/PLAN.md](../v3/PLAN.md)). The details behind each box are in [CLAUDE.md](../../CLAUDE.md).
 
 ```mermaid
 flowchart LR
@@ -26,10 +26,15 @@ flowchart LR
   end
   DAPI --> DDB[(demo-db: PostgreSQL 18 in memory, demo network only)]
 
-  API --> DB[(SQLite: job-agent.db in DATA_DIR)]
+  subgraph BK[backup container]
+    BS[pg_dump, restore test, deploy checks]
+  end
+
+  API --> DB[(PostgreSQL 18: job_agent database on the shared RDS instance)]
   CH --> DB
+  BS --> DB
+  BS --> G
   API --> FILES[attachments in DATA_DIR]
-  DAPI --> DDB[(sample SQLite)]
 
   CH --> CL[Claude API]
   API --> CL
@@ -49,7 +54,9 @@ flowchart LR
   - the pipeline and other scripts as child processes, one pipeline at a time across the app;
   - Chromium for pages that need JavaScript.
 - **The demo container:** the same image with `AUTH_MODE=demo`. It has no secrets and no Claude. Its sample data lives in its own PostgreSQL container (`demo-db`, since v3 Phase 4), in memory, on a private network only the demo joins; a restart of either rebuilds the data.
-- **Storage:** one SQLite file, plus attachment files.
+- **The server** (since v3 Phase 5, decision 0007): an EC2 instance built by `infra/` (Terraform) inside Health-Review's network, with settings from SSM Parameter Store (`env-from-ssm.sh`). Before that, a Lightsail server ran the app on SQLite.
+- **The backup container:** the same image plus PostgreSQL 18's programs. It runs the nightly backup and the monthly restore test, and `deploy.sh`'s checked dump and migration. It alone holds the owner and backup logins.
+- **Storage:** the `job_agent` database on Health-Review's RDS instance (PostgreSQL 18, private, encrypted), reached with the database's certificate checked, plus attachment files on the server's encrypted disk. Three logins: the owner runs migrations at deploy, the app only reads and writes rows, and the backup login only reads. Row-level security keeps each user's rows to that user. Local installs can still choose SQLite (decision 0006).
   - Since v3 Phase 3, every call goes through the async data layer (`db/engine`): statements return promises, and
     transactions are serialized so nothing from another request lands inside one. `better-sqlite3` sits underneath
     it and the migrations only.
@@ -77,16 +84,16 @@ flowchart LR
 
 ## Data and backups
 
-- `openJobStore` copies the database before any migration changes it, and keeps the newest 5 copies.
-- **Nightly encrypted backup** (`tools/backup`): an integrity-checked snapshot plus settings and attachments, gzipped and AES-256-GCM encrypted, then uploaded to the owner's Drive. It keeps 7 nightly, 3 weekly, and 1 monthly.
-- A restore test runs monthly.
+- **Before every deploy that migrates,** the backup container keeps a `pg_dump` checked in a throwaway cluster, tries the migrations on it first, and restores it if the deploy fails.
+- **Nightly encrypted backup** (`tools/backup`): a `pg_dump` checked by restoring it into a throwaway cluster, plus settings and attachments, gzipped and AES-256-GCM encrypted, then uploaded to the owner's Drive. It keeps 7 nightly, 3 weekly, and 1 monthly. RDS also keeps 7 days of its own point-in-time backups for the whole shared instance.
+- A restore test runs monthly, into a throwaway cluster, comparing row counts.
 
 ## Limits v3 addresses
 
-- A single writer and a single host.
-- Synchronous database calls everywhere.
-- Tasks lost on restart.
-- One process for web, AI, browser, and email work.
-- No infrastructure as code.
+- A single writer and a single host. (Phase 5 moved the database to RDS; one app server remains.)
+- Synchronous database calls everywhere. (Done in Phase 3.)
+- Tasks lost on restart. (Phase 6.)
+- One process for web, AI, browser, and email work. (Phase 6.)
+- No infrastructure as code. (Done in Phase 5: `infra/`.)
 
 See section 2 of the plan.

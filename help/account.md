@@ -4,7 +4,7 @@ Everything is under **Settings**.
 
 - **Download my data:** every job, note, letter, score, and setting that is yours, as one file you can keep.
 - **Pause my account:** for a break or once you have found a job. You can still look around; changes and AI stop until you resume it. Nothing is deleted.
-- **Delete my account:** your account and everything in it are deleted at once (you type your address to confirm). Copies in the app's encrypted backups are replaced within about a month.
+- **Delete my account:** your account and everything in it are deleted at once (you type your address to confirm). Copies in the app's encrypted backups age out within about two months, and the database's own backups within 7 days.
 - **Time zone:** the zone your "today" follows (applied dates, the funnel's weeks, document dates).
 - **Send feedback:** something broken, confusing, or missing? It goes to the owner, who can reply by email.
 
