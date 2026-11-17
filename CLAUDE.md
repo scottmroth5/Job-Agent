@@ -89,8 +89,9 @@ npm run archive -- --long-links    archive your open jobs whose link key was sho
 npm run cleanup -- --dry-run      after a rule change: rekey duplicates, archive list-of-jobs pages, search.excludedSites jobs, and duplicate copies (the acted-on copy is kept);
                                   move pipeline jobs without a description back to Discovered. Its status changes are changed_by agent, which the eval ignores
 npm run report                    email the report for the last 24 hours (-- --hours=N, --no-email)
-npm run pipeline                  discover, score, hunt, archive, then one report email (the scheduler's entry point);
-                                  node scripts/pipeline.js --user=<id> runs one user's (no Docs, no email, free sources)
+npm run pipeline                  discover, score, hunt, archive, then one report email;
+                                  node scripts/pipeline.js --user=<id> runs one user's (no Docs, no email, free sources);
+                                  --only=<step> [--since=<iso>] runs one step (the server's step tasks), exit 1 if it failed
 powershell -ExecutionPolicy Bypass -File scripts\register-schedule.ps1   Windows task: scripts/scheduled-run.ps1 runs pipeline then inbox
                                   (Mon/Thu 6:00 by default; -Time, -Days, -Remove); logs in data/logs
 npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)
@@ -246,7 +247,11 @@ server/app.ts holds every route with a JSON schema; keep /api/openapi.json the s
 web/src/api-types.ts is generated from it (npm run api:types after a route schema change); web/src/api.ts names each call by its
 route key ("PATCH /api/postings/:id"), so bodies and fully declared responses are checked, and open response schemas read
 as ApiResponse's one Loose (any) type until the route schema is tightened.
-The Run pipeline button (server/pipeline-routes.ts) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
+The Run pipeline button and the schedule (server/pipeline-routes.ts) start a pipeline task that records the pipeline run and
+queues five step tasks (pipeline-discover in the browser pool, -score and -hunt in ai, -archive and -report in io), each
+depending on the one before and each running scripts/pipeline.js --only=<step> as its own process; a failed step does not stop
+the next, and only a failed report fails the pipeline. A parent waiting on its children holds no worker. The pipeline task
+copies its steps' output into its own and turns the "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.ts) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.ts, and closes reminders.
 Background tasks run on the durable queue (server/jobs.ts over tools/queue): each kind is a handler defined once with
@@ -424,7 +429,7 @@ workers, depends_on, and priority with aging below INTERACTIVE_BAND. Handlers ru
 timeout; failures retry while retry_limit allows (AI types 0), then dead; the sweep closes abandoned jobs and their runs;
 prune keeps 30 days. Only tools/queue touches these tables (test/user-scope.test.js exempts it; reads take a uid).
 test/queue.test.js. Every app task, the scheduler, and /api/tasks run on it (server/jobs.ts, PR 2); the demo seeds its sample
-tasks through queue.record. Later PRs split the pipeline into step tasks and add Admin > Jobs.
+tasks through queue.record. The pipeline runs as step tasks (PR 3). A later PR adds Admin > Jobs.
 Backups on PostgreSQL run in the backup container (Dockerfile target backup: the runtime plus PostgreSQL 18's programs,
 PG_BIN; the app image has none): scripts/backup-service.js serves SCHEDULE_BACKUP and SCHEDULE_RESTORE_TEST (the app's
 scheduler skips them on PostgreSQL) and the commands backup-now, restore-test, pre-migrate (exit 0 none, 10 pending and

@@ -523,8 +523,9 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   const statusOf = (name: string) => scheduler?.status().find((j) => j.name === name) ?? null;
   const pipeline = services.runPipeline
     ? registerPipelineRoutes(app, {
-        db,
+        store,
         jobs,
+        followMs: services.queueOptions?.pollMs,
         runPipeline: services.runPipeline,
         schedule: (uid) => {
           const job = statusOf(jobOf(uid, 'pipeline'));

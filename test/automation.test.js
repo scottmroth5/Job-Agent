@@ -88,8 +88,11 @@ async function setup() {
   // B: on, the same minute as the owner, without scoring. C: off (manual runs only).
   await saveAutomation(store.admin, b, { on: true, pipeline: spec, steps: { score: false } });
   await saveAutomation(store.admin, c, { on: false, pipeline: spec });
-  /** @type {Array<{ user: number, args: string[], at: 'start' | 'end' }>} */
+  // A pipeline is its five step tasks (scripts/pipeline.js --only=<step>): it starts with discover and ends with report.
+  /** @type {Array<{ user: number, at: 'start' | 'end' }>} */
   const events = [];
+  /** @type {Record<number, string[]>} */
+  const steps = {};
   const app = await buildApp({
     store,
     config: fakeConfig({ candidate: { name: 'Owner Example' }, search: { homeLocations: [] }, fractional: {}, coverLetterChecks: [] }),
@@ -98,30 +101,33 @@ async function setup() {
     services: fakeServices({
       createBrowser: async () => null,
       runPipeline: async ({ user, args = [] }) => {
-        events.push({ user, args, at: 'start' });
-        await new Promise((r) => setTimeout(r, 30));
-        events.push({ user, args, at: 'end' });
+        const only = args.find((a) => a.startsWith('--only='))?.slice('--only='.length);
+        (steps[user] ??= []).push(only ?? 'all');
+        if (only === 'discover') events.push({ user, at: 'start' });
+        await new Promise((r) => setTimeout(r, 10));
+        if (only === 'report') events.push({ user, at: 'end' });
         return { code: 0, lastError: null };
       },
       schedules: schedulesFromEnv({ SCHEDULE_PIPELINE: spec }),
+      queueOptions: { pollMs: 50 },
       log: { info() {}, warn() {}, error() {} },
     }),
   });
   const as = (/** @type {string} */ email) => ({ cookie: `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`, origin: SITE });
-  return { store, app, b, c, events, asA: as('owner@example.com'), asB: as('b@example.com'), asC: as('c@example.com'), done: async () => { await app.close(); store.close(); } };
+  return { store, app, b, c, events, steps, asA: as('owner@example.com'), asB: as('b@example.com'), asC: as('c@example.com'), done: async () => { await app.close(); store.close(); } };
 }
 
 test('each user runs on their own times, one pipeline at a time, without the Claude steps they turned off; Off runs nothing', async () => {
-  const { app, store, b, events, asA, asB, asC, done } = await setup();
+  const { app, store, b, events, steps, asA, asB, asC, done } = await setup();
   await app.ready();
-  for (let i = 0; i < 100 && events.filter((e) => e.at === 'end').length < 2; i += 1) await new Promise((r) => setTimeout(r, 20));
+  for (let i = 0; i < 200 && events.filter((e) => e.at === 'end').length < 2; i += 1) await new Promise((r) => setTimeout(r, 50));
   // Both came due at once: the queue runs one pipeline at a time across the app, in either order; C (off) never ran.
   const seen = events.map((e) => `${e.at} ${e.user}`);
   const first = events[0]?.user === b ? b : OWNER_ID;
   const second = first === b ? OWNER_ID : b;
   assert.deepEqual(seen, [`start ${first}`, `end ${first}`, `start ${second}`, `end ${second}`], 'never at the same time');
-  assert.deepEqual(events.find((e) => e.user === b)?.args, ['--no-score'], 'B turned scoring off for scheduled runs');
-  assert.deepEqual(events.find((e) => e.user === OWNER_ID)?.args, [], 'the owner kept every step');
+  assert.deepEqual(steps[b], ['discover', 'hunt', 'archive', 'report'], 'B turned scoring off for scheduled runs');
+  assert.deepEqual(steps[OWNER_ID], ['discover', 'score', 'hunt', 'archive', 'report'], 'the owner kept every step');
 
   // Each sees their own automatic runs, never another user's.
   const pipelineOf = async (/** @type {Record<string, string>} */ headers) => (await app.inject({ url: '/api/pipeline', headers })).json();

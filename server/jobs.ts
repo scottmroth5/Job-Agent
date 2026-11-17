@@ -26,6 +26,8 @@ export interface TaskContext {
   signal: AbortSignal;
   /** The task's traced run (null for a handler defined with trace: false, which records its own). */
   run: Run | null;
+  /** Links the task to a run it opened itself (trace: false), for cost totals and the sweep. */
+  setRunId: HandlerContext['setRunId'];
   browser: PageRenderer | null;
 }
 export type TaskHandler<P> = (payload: P, ctx: TaskContext) => Promise<unknown>;
@@ -65,7 +67,7 @@ export function createJobs({ store, ownerConfig, createBrowser = null, log = con
         if (run?.id) await ctx.setRunId(Number(run.id));
         const b = browser && createBrowser ? ((await createBrowser()) as (PageRenderer & { close?: () => Promise<unknown> }) | null) : null;
         try {
-          const result = await handler(ctx.job.payload as P, { job: ctx.job, step: ctx.step, logger: ctx.logger, signal: ctx.signal, run, browser: b });
+          const result = await handler(ctx.job.payload as P, { job: ctx.job, step: ctx.step, logger: ctx.logger, signal: ctx.signal, run, setRunId: ctx.setRunId, browser: b });
           await run?.finish('ok', result && typeof result === 'object' ? { ...result, materials: undefined } : null);
           return result;
         } catch (err) {

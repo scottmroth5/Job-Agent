@@ -118,9 +118,11 @@ export interface QueueOptions {
   staleMs?: number;
   sweepMs?: number;
   log?: { info?: (text: string) => void; warn?: (text: string) => void };
+  /** The first retry's delay, doubled for each later attempt (default 30 seconds; tests make it short). */
+  retryDelayMs?: number;
 }
 
-export function createQueue({ db, now = () => new Date(), worker = randomUUID(), pollMs = 1000, heartbeatMs = 15_000, staleMs = 120_000, sweepMs = 60_000, log = console }: QueueOptions) {
+export function createQueue({ db, now = () => new Date(), worker = randomUUID(), pollMs = 1000, heartbeatMs = 15_000, staleMs = 120_000, sweepMs = 60_000, retryDelayMs = 30_000, log = console }: QueueOptions) {
   const iso = (d = now()) => d.toISOString();
 
   async function typeOf(type: string) {
@@ -195,8 +197,11 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
     return db.tx(async () => {
       const s = (await db.prepare('SELECT * FROM pool_settings WHERE pool = ?').get(pool)) as PoolSettingsRow | undefined;
       if (!s) return null;
-      const running = (await db.prepare("SELECT user_id, type, pool FROM task_runs WHERE status = 'running'").all()) as Array<Pick<TaskRunsRow, 'user_id' | 'type' | 'pool'>>;
-      const inPool = running.filter((r) => r.pool === pool);
+      const running = (await db.prepare("SELECT id, user_id, type, pool FROM task_runs WHERE status = 'running'").all()) as Array<Pick<TaskRunsRow, 'id' | 'user_id' | 'type' | 'pool'>>;
+      // A parent waiting on its child tasks (the pipeline and its steps) holds no worker: it would otherwise take the
+      // slot its own children need. It still counts for one-at-a-time.
+      const waiting = new Set((await db.prepare("SELECT DISTINCT parent_id FROM task_runs WHERE parent_id IS NOT NULL AND status IN ('queued', 'running')").pluck().all()) as string[]);
+      const inPool = running.filter((r) => r.pool === pool && !waiting.has(r.id));
       const free = s.concurrency - inPool.length;
       if (free <= 0) return null;
       const interactiveOnly = free <= s.reserved_for_interactive;
@@ -241,7 +246,7 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
   }
 
   // ---- finishing -----------------------------------------------------------------------------------------------------
-  const backoffMs = (attempts: number) => Math.min(30_000 * 2 ** Math.max(0, attempts - 1), 30 * 60_000);
+  const backoffMs = (attempts: number) => Math.min(retryDelayMs * 2 ** Math.max(0, attempts - 1), 30 * 60_000);
 
   async function complete(id: string, result: unknown) {
     await db
@@ -296,8 +301,9 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
     return r ? toJob(r) : null;
   }
 
+  /** The user's tasks, newest first; a parent's child tasks (the pipeline's steps) show in their parent's output instead. */
   async function list(uid: number, limit = 100) {
-    return ((await db.prepare('SELECT * FROM task_runs WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?').all(uid, limit)) as TaskRunsRow[]).map(toJob);
+    return ((await db.prepare('SELECT * FROM task_runs WHERE user_id = ? AND parent_id IS NULL ORDER BY created_at DESC, id DESC LIMIT ?').all(uid, limit)) as TaskRunsRow[]).map(toJob);
   }
 
   /** A task's steps (its progress messages, oldest first). */
@@ -490,7 +496,8 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
           }
           const p = runJob(job, handlers[job.type] as Handler, stopping.signal).finally(() => {
             inFlight.delete(p);
-            void pump(job.pool);
+            // Every pool: a job waiting on this one (depends_on) may be in another.
+            for (const next of POOLS) void pump(next);
           });
           inFlight.add(p);
         }
