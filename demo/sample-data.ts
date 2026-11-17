@@ -278,7 +278,7 @@ export const PROMPT_EDITS = [
   },
 ];
 
-// Finished runs for the Activity tab, replayed when the demo server starts (server/app.ts). The output follows the
+// Finished tasks for the Activity tab, stored by scripts/demo-seed.js (the demo runs no workers). The output follows the
 // shape of a real run's: step lines, then job titles and counts, never email content.
 const pipelineStep = (n: number, name: string) => ({ step: `[pipeline] Step ${n}/5: ${name}` });
 export const SAMPLE_TASKS = [

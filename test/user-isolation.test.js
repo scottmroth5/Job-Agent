@@ -53,30 +53,31 @@ async function setup() {
       // Gmail is never reached: ready() says it is not signed in.
       inbox: /** @type {NonNullable<AppServices['inbox']>} */ (/** @type {unknown} */ ({ ready: () => false, gmail: () => assert.fail('no Gmail here'), key: () => null, cfg: {} })),
       knowledge: async () => '',
-      // Finished runs whose output names A's jobs (the owner's: they start outside any request).
-      sampleTasks: SAMPLE_TASKS,
       log: { info() {}, warn() {}, error() {} },
     }),
   });
   const cookie = (/** @type {string} */ email) => `${SESSION_COOKIE}=${sign({ email, exp: Date.now() + 3_600_000, v: 1 }, sessionKey(secret))}`;
-  return { store, app, B, asA: cookie('a@example.com'), asB: cookie('b@example.com') };
+  // A's sample tasks (demo-seed stores them, as the owner's), whose output names A's jobs.
+  const taskIds = /** @type {string[]} */ (await store.admin.prepare('SELECT id FROM task_runs WHERE user_id = ? ORDER BY created_at').pluck().all(OWNER_ID));
+  return { store, app, B, taskIds, asA: cookie('a@example.com'), asB: cookie('b@example.com') };
 }
 
 // A's ids, so B's requests aim at A's rows.
 /** @type {Record<string, string>} */
 const PARAMS = { action: 'score', list: 'status', name: 'score', area: 'home' };
 const fill = (/** @type {string} */ url) => url.replace(/:(\w+)/g, (_, /** @type {string} */ k) => PARAMS[k] ?? '1').replaceAll('*', 'index.html');
-// Task routes take a task id; A's sample tasks are 1 to N.
-const urlsFor = (/** @type {string} */ url) => (url.startsWith('/api/tasks/:id') ? SAMPLE_TASKS.map((_, i) => url.replace(':id', String(i + 1))) : [fill(url)]);
+// Task routes take a task id: each of A's sample tasks.
+const urlsFor = (/** @type {string} */ url, /** @type {string[]} */ taskIds) => (url.startsWith('/api/tasks/:id') ? taskIds.map((id) => url.replace(':id', id)) : [fill(url)]);
 const snapshot = async (/** @type {Db} */ db, /** @type {number} */ uid) => JSON.stringify(await Promise.all(USER_TABLES.map((t) => db.prepare(`SELECT * FROM "${t}" WHERE user_id = ? ORDER BY ${KEY_ORDER[t] ?? 'id'}`).all(uid))));
 
 test('isolation: B sees none of A\'s jobs on any GET route; A sees them', async () => {
-  const { store, app, asA, asB } = await setup();
+  const { store, app, asA, asB, taskIds } = await setup();
+  assert.equal(taskIds.length, SAMPLE_TASKS.length);
   const gets = app.routeList.filter((r) => r.method === 'GET' && r.url.startsWith('/api/') && r.url !== '/api/openapi.json');
   assert.ok(gets.length >= 15, `the route table lists the GET routes (${gets.length})`);
   const seenByA = new Set();
   for (const r of gets) {
-    for (const url of urlsFor(r.url)) {
+    for (const url of urlsFor(r.url, taskIds)) {
       const bodyB = (await app.inject({ url, headers: { cookie: asB } })).body;
       for (const m of MARKERS) assert.ok(!bodyB.includes(m), `${url} shows A's "${m}" to B`);
       const bodyA = (await app.inject({ url, headers: { cookie: asA } })).body;

@@ -10,7 +10,7 @@ export default function TaskProgress({ task }: { task: Task | null | undefined }
           {i === task.steps.length - 1 && task.status === 'running' ? '⏳' : '✓'} {s.message}
         </div>
       ))}
-      {task.status === 'running' && task.steps.length === 0 && <div className="task-step">⏳ Starting…</div>}
+      {task.status === 'running' && task.steps.length === 0 && <div className="task-step">⏳ {task.waiting ? 'Waiting to start…' : 'Starting…'}</div>}
       {task.status === 'failed' && <div className="task-step error">✗ {task.error}</div>}
       {task.id && (
         <a className="small" href={`#/activity/${task.id}`} target="_blank" rel="noreferrer">

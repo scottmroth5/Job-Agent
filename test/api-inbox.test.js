@@ -84,7 +84,7 @@ test('two presses of Run pipeline at once start one pipeline (the start lock)', 
   release();
   const task = await app.tasks.wait((a.statusCode === 202 ? a : b).json().taskId);
   assert.equal(task?.status, 'done');
-  assert.equal(app.tasks.list().filter((t) => t.kind === 'pipeline').length, 1);
+  assert.equal((await app.inject('/api/tasks')).json().filter((/** @type {{ kind: string }} */ t) => t.kind === 'pipeline').length, 1);
   await app.close();
   store.close();
 });

@@ -136,8 +136,10 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
   async function enqueue(
     type: string,
     payload: unknown,
-    { userId, interactive = false, requestedBy = interactive ? 'user' : 'schedule', dependsOn = null, parentId = null, runAfter = null }: {
+    { userId, interactive = false, requestedBy = interactive ? 'user' : 'schedule', dependsOn = null, parentId = null, runAfter = null, onlyOne = null }: {
       userId: number;
+      /** Refuse (409, with this message) while the user has a task of this type waiting or running; checked in the same transaction. */
+      onlyOne?: string | null;
       interactive?: boolean;
       requestedBy?: 'user' | 'schedule';
       dependsOn?: string | null;
@@ -147,6 +149,22 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
   ): Promise<{ id: string; status: string }> {
     const t = await typeOf(type);
     if (!t) throw new Error(`Unknown task type "${type}"`);
+    const r = await db.tx(async () => {
+      if (onlyOne && (await db.prepare("SELECT 1 FROM task_runs WHERE user_id = ? AND type = ? AND status IN ('queued', 'running')").get(userId, type))) {
+        throw Object.assign(new Error(onlyOne), { statusCode: 409 });
+      }
+      return insert(t, type, payload, { userId, interactive, requestedBy, dependsOn, parentId, runAfter });
+    });
+    if (r.status === 'queued') for (const wake of wakers) wake(t.pool as Pool);
+    return r;
+  }
+
+  async function insert(
+    t: TaskTypesRow,
+    type: string,
+    payload: unknown,
+    { userId, interactive, requestedBy, dependsOn, parentId, runAfter }: { userId: number; interactive: boolean; requestedBy: string; dependsOn: string | null; parentId: string | null; runAfter: Date | null },
+  ) {
     const id = randomUUID();
     const at = iso();
     const base = { id, userId, type, pool: t.pool, interactive: interactive ? 1 : 0, requestedBy, payload: payload === undefined ? null : JSON.stringify(payload), dependsOn, parentId, at };
@@ -162,7 +180,6 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
       .prepare(`INSERT INTO task_runs (id, user_id, type, pool, priority, interactive, status, requested_by, payload, run_after, depends_on, parent_id, created_at)
         VALUES (@id, @userId, @type, @pool, @priority, @interactive, 'queued', @requestedBy, @payload, @runAfter, @dependsOn, @parentId, @at)`)
       .run({ ...base, priority: t.priority + (interactive ? INTERACTIVE_BAND : 0), runAfter: runAfter ? iso(runAfter) : at });
-    for (const wake of wakers) wake(t.pool as Pool);
     return { id, status: 'queued' };
   }
 
@@ -290,17 +307,42 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
       .all(id, uid)) as Array<{ at: string; message: string }>;
   }
 
-  /** Output lines from seq from on (progress steps are not output lines); next is the cursor for the following call. */
+  /**
+   * Output lines from index from on (progress steps are not output lines, so indexes count output only, as lineCount
+   * does); next is the index for the following call.
+   */
   async function lines(id: string, uid: number, from = 0) {
     const rows = (await db
-      .prepare('SELECT seq, at, level, text FROM task_lines WHERE task_id = ? AND user_id = ? AND seq >= ? ORDER BY seq')
-      .all(id, uid, from)) as Array<{ seq: number; at: string; level: string; text: string }>;
-    const next = rows.length ? (rows.at(-1) as { seq: number }).seq + 1 : from;
-    return { lines: rows.filter((r) => r.level !== PROGRESS).map(({ at, level, text }) => ({ at, level, text })), next };
+      .prepare(`SELECT at, level, text FROM task_lines WHERE task_id = ? AND user_id = ? AND level <> '${PROGRESS}' ORDER BY seq LIMIT ? OFFSET ?`)
+      .all(id, uid, MAX_LINES + 1, from)) as Array<{ at: string; level: string; text: string }>;
+    return { lines: rows, next: from + rows.length };
   }
 
   async function lineCount(id: string, uid: number) {
     return Number(await db.prepare(`SELECT COUNT(*) FROM task_lines WHERE task_id = ? AND user_id = ? AND level <> '${PROGRESS}'`).pluck().get(id, uid));
+  }
+
+  /** The user's newest waiting or running task of this type, or null (one check or pipeline at a time per user). */
+  async function active(uid: number, type: string) {
+    const r = (await db
+      .prepare("SELECT * FROM task_runs WHERE user_id = ? AND type = ? AND status IN ('queued', 'running') ORDER BY created_at DESC LIMIT 1")
+      .get(uid, type)) as TaskRunsRow | undefined;
+    return r ? toJob(r) : null;
+  }
+
+  /** Whether anyone's task of this type is waiting or running (a pipeline is one at a time across the app). */
+  async function anyActive(type: string) {
+    return Boolean(await db.prepare("SELECT 1 FROM task_runs WHERE type = ? AND status IN ('queued', 'running') LIMIT 1").get(type));
+  }
+
+  /** How many tasks of this type the user started since the time given (per-day limits that survive a restart). */
+  async function countSince(uid: number, type: string, since: Date) {
+    return Number(await db.prepare('SELECT COUNT(*) FROM task_runs WHERE user_id = ? AND type = ? AND created_at >= ?').pluck().get(uid, type, iso(since)));
+  }
+
+  /** The user a task belongs to (tests and the scheduler, which wait on a task they started). */
+  async function ownerOf(id: string) {
+    return ((await db.prepare('SELECT user_id FROM task_runs WHERE id = ?').pluck().get(id)) as number | undefined) ?? null;
   }
 
   /** Resolves with the job once it has finished, or as it is when the time runs out. */
@@ -311,6 +353,34 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
       if (!job || FINISHED.includes(job.status) || Date.now() >= until) return job;
       await new Promise((r) => setTimeout(r, everyMs));
     }
+  }
+
+  /**
+   * Stores a finished task with its output, as if it had run (the demo's sample tasks, scripts/demo-seed.js). Each line
+   * with a step is a progress step, others output at their level.
+   */
+  async function record({ userId, type, payload = null, status = 'done', result = null, lines = [], startedAt, finishedAt }: {
+    userId: number;
+    type: string;
+    payload?: unknown;
+    status?: 'done' | 'failed';
+    result?: unknown;
+    lines?: Array<{ step?: string; level?: string; text?: string }>;
+    startedAt: Date;
+    finishedAt: Date;
+  }) {
+    const t = await typeOf(type);
+    if (!t) throw new Error(`Unknown task type "${type}"`);
+    const id = randomUUID();
+    await db.tx(async () => {
+      await db
+        .prepare(`INSERT INTO task_runs (id, user_id, type, pool, priority, interactive, status, requested_by, payload, result, attempts, run_after, created_at, started_at, finished_at)
+          VALUES (?, ?, ?, ?, ?, 0, ?, 'schedule', ?, ?, 1, ?, ?, ?, ?)`)
+        .run(id, userId, type, t.pool, t.priority, status, payload == null ? null : JSON.stringify(payload), result == null ? null : JSON.stringify(result), iso(startedAt), iso(startedAt), iso(startedAt), iso(finishedAt));
+      const add = db.prepare('INSERT INTO task_lines (task_id, user_id, seq, at, level, text) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const [seq, l] of lines.entries()) await add.run(id, userId, seq, iso(startedAt), l.step ? 'step' : (l.level ?? 'info'), l.step ?? l.text ?? '');
+    });
+    return id;
   }
 
   // ---- the admin's actions on dead letters ---------------------------------------------------------------------------
@@ -394,7 +464,15 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
     const inFlight = new Set<Promise<void>>();
     const pumping = new Map<Pool, boolean>();
     const again = new Set<Pool>();
-    const pump = async (pool: Pool) => {
+    // Polls and sweeps under way, so stop() waits for them before the store can close.
+    const busy = new Set<Promise<unknown>>();
+    const track = <T>(work: Promise<T>) => {
+      busy.add(work);
+      void work.finally(() => busy.delete(work)).catch(() => {});
+      return work;
+    };
+    const pump = (pool: Pool) => track(pumpOnce(pool));
+    const pumpOnce = async (pool: Pool) => {
       if (stopping.signal.aborted) return;
       if (pumping.get(pool)) {
         again.add(pool);
@@ -402,9 +480,14 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
       }
       pumping.set(pool, true);
       try {
-        for (;;) {
+        while (!stopping.signal.aborted) {
           const job = await claim(pool, handled);
           if (!job) break;
+          if (stopping.signal.aborted) {
+            // Claimed as the server began to stop: back in the queue, untouched, for the next worker.
+            await db.prepare("UPDATE task_runs SET status = 'queued', attempts = attempts - 1, started_at = NULL, worker = NULL, heartbeat_at = NULL WHERE id = ? AND status = 'running'").run(job.id);
+            break;
+          }
           const p = runJob(job, handlers[job.type] as Handler, stopping.signal).finally(() => {
             inFlight.delete(p);
             void pump(job.pool);
@@ -424,21 +507,26 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
       for (const pool of POOLS) void pump(pool);
     }, pollMs);
     poll.unref?.();
-    const sweeper = setInterval(() => void sweep().then((n) => n && log.info?.(`[queue] swept ${n} abandoned task(s)`)).catch(() => {}), sweepMs);
+    const sweeper = setInterval(() => void track(sweep()).then((n) => n && log.info?.(`[queue] swept ${n} abandoned task(s)`)).catch(() => {}), sweepMs);
     sweeper.unref?.();
+    // Retention: finished tasks and their lines older than RETENTION_DAYS, every few hours.
+    const pruner = setInterval(() => void prune().catch(() => {}), 6 * 3600_000);
+    pruner.unref?.();
+    void track(sweep()).catch(() => {}); // a restart: tasks the last process left running are dealt with at once
     for (const pool of POOLS) void pump(pool);
     return {
       async stop(waitMs = 10_000) {
         wakers.delete(wake);
         clearInterval(poll);
         clearInterval(sweeper);
+        clearInterval(pruner);
         stopping.abort();
-        await Promise.race([Promise.allSettled([...inFlight]), new Promise((r) => setTimeout(r, waitMs).unref?.())]);
+        await Promise.race([Promise.allSettled([...inFlight, ...busy]), new Promise((r) => setTimeout(r, waitMs).unref?.())]);
       },
     };
   }
 
-  return { enqueue, claim, complete, fail, heartbeat, sweep, prune, get, list, steps, lines, lineCount, wait, retry, discard, start, worker };
+  return { enqueue, claim, complete, fail, heartbeat, sweep, prune, get, list, steps, lines, lineCount, active, anyActive, countSince, ownerOf, wait, record, retry, discard, start, worker };
 }
 
 export type Queue = ReturnType<typeof createQueue>;

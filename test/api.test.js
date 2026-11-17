@@ -154,12 +154,12 @@ test('with no AI here, adding a job and the AI actions are refused with 503 befo
   store.close();
 });
 
-test('actions are refused while a pipeline run is in progress', async () => {
+test('actions start while a pipeline run is in progress (the queue runs them in the interactive band)', async () => {
   const { app, store, ids } = await setup();
   await store.db.prepare("INSERT INTO runs (name, status, started_at) VALUES ('pipeline', 'running', ?)").run(new Date().toISOString());
   const res = await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/score` });
-  assert.equal(res.statusCode, 409);
-  assert.match(res.json().error, /still running/);
+  assert.equal(res.statusCode, 202);
+  assert.equal((await app.tasks.wait(res.json().taskId))?.status, 'done');
   await app.close();
   store.close();
 });
