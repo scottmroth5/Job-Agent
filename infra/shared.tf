@@ -22,7 +22,7 @@ data "aws_db_instance" "shared" {
 
 resource "aws_vpc_security_group_ingress_rule" "db_from_job_agent" {
   security_group_id            = data.aws_security_group.db.id
-  description                  = "PostgreSQL from Job-Agent's server"
+  description                  = "PostgreSQL from the Job-Agent server"
   ip_protocol                  = "tcp"
   from_port                    = 5432
   to_port                      = 5432
