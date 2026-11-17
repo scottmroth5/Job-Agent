@@ -383,7 +383,7 @@ Application changes:
    - each dump checked in a throwaway cluster;
    - the monthly restore test into a scratch database, comparing counts;
    - a checked dump before each migration, with a restore if a deploy fails.
-3. **Deploying:** `deploy.sh` gets a PostgreSQL mode, and `env-from-ssm.sh` builds `.env` from SSM. Migrations are written expand then contract, so the previous image still runs.
+3. **Done (PR 3): deploying:** `deploy.sh` gets a PostgreSQL mode, and `env-from-ssm.sh` builds `.env` from SSM. Migrations are written expand then contract, so the previous image still runs.
 4. **Documents:** update `PRIVACY.md`, `cloud.env.example`, the setup guide, README, CLAUDE.md, and decision record 0007.
 
 Cutover runbook, with the owner present:

@@ -24,6 +24,10 @@ services:
       TRUST_PROXY: loopback,linklocal,uniquelocal
       # US-only access (server/geo.ts); the health check always passes.
       GEO_ALLOW: US
+      # On a PostgreSQL server (server.conf DB_ENGINE=postgres) deploy.sh sets these: the app never opens a SQLite file
+      # and never migrates (scripts/migrate.js does, at deploy). Elsewhere (the Lightsail server) they stay off.
+      REQUIRE_POSTGRES: ${JA_REQUIRE_POSTGRES:-0}
+      DATABASE_MIGRATIONS: ${JA_DATABASE_MIGRATIONS:-}
     volumes:
       # The database, config, Google tokens, attachments, and logs. Survives every deploy.
       - ./data:/data
@@ -99,6 +103,45 @@ services:
       options:
         max-size: 5m
         max-file: "2"
+
+  # The backup container (v3 Phase 5, PostgreSQL servers only: the postgres profile, which deploy.sh turns on from
+  # server.conf): the nightly encrypted backup and monthly restore test (scripts/backup-service.js), and the deploy's
+  # checked dump and migration. The same image plus PostgreSQL 18's programs. It alone holds backup.env, the owner and
+  # backup logins (MIGRATE_DATABASE_URL, BACKUP_DATABASE_URL), so the app never can change the schema or read it all.
+  backup:
+    image: ${IMAGE:-ghcr.io/scottmroth5/job-agent}:${IMAGE_TAG:-latest}-backup
+    profiles: [postgres]
+    restart: unless-stopped
+    env_file:
+      - .env
+      # Optional to compose, so a server without it still reads this file; the service refuses to run without the
+      # addresses it needs.
+      - path: backup.env
+        required: false
+    environment:
+      DATA_DIR: /data
+      REQUIRE_POSTGRES: "1"
+      DATABASE_MIGRATIONS: deploy
+    volumes:
+      # The Google sign-in (Drive), the settings and attachments it backs up, and data/backups for pre-migration dumps.
+      - ./data:/data
+    read_only: true
+    tmpfs:
+      # Scratch clusters (each backup and restore test restores the dump here) and the plaintext dump.
+      - /tmp:size=384m,uid=1000,gid=1000,mode=0700
+    init: true
+    stop_grace_period: 30s
+    mem_limit: 768m
+    pids_limit: 200
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging:
+      driver: local
+      options:
+        max-size: 5m
+        max-file: "3"
 
   # The demo's database (v3 Phase 4): PostgreSQL holding the sample data only, in memory (tmpfs), so a restart empties
   # it and the demo rebuilds it. Reachable only from the demo, on the internal demo-db network (no route out, no

@@ -417,6 +417,14 @@ the OS temp folder, Unix socket only, deleted after); the restore test does the 
 is the only code that starts PostgreSQL's programs: argument arrays, connection details as PG* variables, errors by
 program and exit code only. test/backup-pg.test.js needs PG_BIN (CI's PostgreSQL job installs it; locally, run it in
 the backup image: docker build --target backup).
+Deploying to a PostgreSQL server (deploy/deploy.sh, v3 Phase 5): server.conf (not secret, made at first boot) turns it
+on with DB_ENGINE=postgres (the backup service's compose profile, and the app's REQUIRE_POSTGRES and deploy mode through
+JA_REQUIRE_POSTGRES and JA_DATABASE_MIGRATIONS) and ENV_SOURCE=ssm (env-from-ssm.sh rebuilds .env from /job-agent/env/
+and backup.env from /job-agent/backup/ before every start). A deploy runs pre-migrate in the backup container, the Drive
+backup with the current image when something is pending, scripts/migrate.js with the new image, then starts it; a failed
+migration or start restores the checked dump before the old image runs. Without server.conf (Lightsail) nothing changes.
+The deploy workflow publishes <tag>-backup beside <tag>, both scanned. test/deploy-script.test.js runs deploy.sh with a
+stand-in docker (Linux only).
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
