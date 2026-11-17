@@ -696,3 +696,6 @@ fieldset.bare { border: 0; margin: 0; padding: 0; min-width: 0; }
 .badge.scam { color: var(--low); border-color: var(--low); }
 .scam-warning ul { margin: 6px 0; padding-left: 20px; }
 .scam-warning q { font-size: 13px; }
+/* Admin > Jobs: the number fields in the pool and task type tables. */
+.jobs-admin .num-input { width: 5.5em; }
+.jobs-admin td label.small { display: block; white-space: nowrap; }

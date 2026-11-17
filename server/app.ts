@@ -23,6 +23,7 @@ import { registerAuth } from './auth.ts';
 import { currentUserId, runAsUser } from '../db/scope.ts';
 import { OWNER_ID, touchLastSeen } from '../db/users.ts';
 import { registerFeedbackRoutes } from './feedback-routes.ts';
+import { registerJobsAdminRoutes } from './jobs-admin-routes.ts';
 import { registerHelpRoutes } from './help-routes.ts';
 import { registerDraftRoutes } from './draft-routes.ts';
 import { registerDocumentRoutes } from './document-routes.ts';
@@ -100,7 +101,7 @@ export type BuildAppOptions = {
 };
 
 // Routes for admins: the Users screen and the feedback users sent (server/app.ts refuses anyone else).
-const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback', '/api/admin/usage'];
+const ADMIN_ONLY = ['/api/admin/users', '/api/admin/feedback', '/api/admin/usage', '/api/admin/jobs'];
 // What a paused account may still change: resume itself (when it paused itself) or delete itself.
 const PAUSED_MAY = new Set(['POST /api/account/resume', 'POST /api/account/delete']);
 import { backgroundFor, userConfigView, withUserConfig } from '../agents/user-config.ts';
@@ -487,6 +488,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   // The Users screen never exists in the demo.
   if (authMode !== 'demo') registerUserRoutes(app, { db, adminDb: store.admin, notices: services.notices ?? {}, ...(services.attachmentsDir ? { attachmentsDir: services.attachmentsDir } : {}) });
   registerFeedbackRoutes(app, { db, adminDb: store.admin, notices: services.notices ?? {}, admin: authMode !== 'demo' });
+  if (authMode !== 'demo') registerJobsAdminRoutes(app, { queue: jobs.queue }); // Admin > Jobs: app-wide, admins only (ADMIN_ONLY)
   registerHelpRoutes(app, { store, services });
   registerDraftRoutes(app, { store, services });
   registerDocumentRoutes(app, { db, config });

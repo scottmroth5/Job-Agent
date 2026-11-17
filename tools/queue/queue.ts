@@ -391,13 +391,162 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
 
   // ---- the admin's actions on dead letters ---------------------------------------------------------------------------
   async function retry(id: string) {
-    return (await db
+    const again = (await db
       .prepare("UPDATE task_runs SET status = 'queued', attempts = 0, error = NULL, run_after = ?, finished_at = NULL, worker = NULL, heartbeat_at = NULL WHERE id = ? AND status IN ('dead', 'failed')")
       .run(iso(), id)).changes > 0;
+    if (again) for (const wake of wakers) for (const pool of POOLS) wake(pool);
+    return again;
   }
 
   async function discard(id: string) {
     return (await db.prepare("UPDATE task_runs SET status = 'cancelled', finished_at = ? WHERE id = ? AND status IN ('dead', 'queued')").run(iso(), id)).changes > 0;
+  }
+
+  // ---- Admin > Jobs (app-wide, admins only: server/jobs-admin-routes.ts) ----------------------------------------------
+  /** Per pool: its settings, how many tasks run and wait, failures in the last day, and how long the oldest has waited. */
+  async function overview() {
+    const t = now();
+    const dayAgo = iso(new Date(t.getTime() - 86_400_000));
+    const pools = (await db.prepare('SELECT * FROM pool_settings ORDER BY pool').all()) as PoolSettingsRow[];
+    const rows = (await db
+      .prepare("SELECT pool, status, created_at FROM task_runs WHERE status IN ('queued', 'running') OR (status IN ('failed', 'dead') AND finished_at >= ?)")
+      .all(dayAgo)) as Array<Pick<TaskRunsRow, 'pool' | 'status' | 'created_at'>>;
+    const order = new Map(POOLS.map((p, i) => [p, i]));
+    return pools
+      .sort((a, b) => (order.get(a.pool as Pool) ?? 9) - (order.get(b.pool as Pool) ?? 9))
+      .map((p) => {
+        const mine = rows.filter((r) => r.pool === p.pool);
+        const waiting = mine.filter((r) => r.status === 'queued');
+        const oldest = waiting.reduce<string | null>((o, r) => (!o || r.created_at < o ? r.created_at : o), null);
+        return {
+          pool: p.pool,
+          concurrency: p.concurrency,
+          perUser: p.per_user_concurrency,
+          reserved: p.reserved_for_interactive,
+          running: mine.filter((r) => r.status === 'running').length,
+          waiting: waiting.length,
+          failedToday: mine.filter((r) => r.status === 'failed' || r.status === 'dead').length,
+          oldestWaitSeconds: oldest ? Math.max(0, Math.round((t.getTime() - Date.parse(oldest)) / 1000)) : null,
+          updatedAt: p.updated_at,
+        };
+      });
+  }
+
+  async function types() {
+    return ((await db.prepare('SELECT * FROM task_types ORDER BY pool, priority DESC, id').all()) as TaskTypesRow[]).map((r) => ({
+      id: r.id,
+      label: r.label,
+      pool: r.pool,
+      priority: r.priority,
+      enabled: r.enabled === 1,
+      oneAtATime: r.one_at_a_time,
+      retryLimit: r.retry_limit,
+      timeoutSeconds: r.timeout_seconds,
+      agingMinutes: r.aging_minutes,
+      updatedAt: r.updated_at,
+    }));
+  }
+
+  /** The last changes to task types, newest first. */
+  async function typeHistory(limit = 50) {
+    return (await db
+      .prepare('SELECT h.type_id AS "typeId", h.field, h.old_value AS "oldValue", h.new_value AS "newValue", h.changed_at AS "changedAt", u.email AS "changedBy" FROM task_type_history h LEFT JOIN users u ON u.id = h.changed_by ORDER BY h.id DESC LIMIT ?')
+      .all(limit)) as Array<{ typeId: string; field: string; oldValue: string | null; newValue: string | null; changedAt: string; changedBy: string | null }>;
+  }
+
+  /**
+   * Changes a task type's settings and records each changed field; a new priority applies to tasks already waiting
+   * when applyToWaiting. Returns the fields changed. The read and the writes are one transaction.
+   */
+  async function updateType(
+    id: string,
+    patch: Partial<{ priority: number; enabled: boolean; oneAtATime: 'none' | 'user' | 'app'; retryLimit: number; timeoutSeconds: number; agingMinutes: number | null }>,
+    { by, applyToWaiting = false }: { by: number | null; applyToWaiting?: boolean },
+  ) {
+    const COLUMNS = { priority: 'priority', enabled: 'enabled', oneAtATime: 'one_at_a_time', retryLimit: 'retry_limit', timeoutSeconds: 'timeout_seconds', agingMinutes: 'aging_minutes' } as const;
+    const bad = (message: string) => Object.assign(new Error(message), { statusCode: 400 });
+    const int = (v: unknown, min: number, max: number, name: string) => {
+      if (!Number.isInteger(v) || (v as number) < min || (v as number) > max) throw bad(`${name} must be a whole number from ${min} to ${max}.`);
+      return v as number;
+    };
+    if (patch.priority !== undefined) int(patch.priority, 0, INTERACTIVE_BAND - 1, 'Priority');
+    if (patch.retryLimit !== undefined) int(patch.retryLimit, 0, 5, 'Retries');
+    if (patch.timeoutSeconds !== undefined) int(patch.timeoutSeconds, 30, 86_400, 'The time limit (seconds)');
+    if (patch.agingMinutes != null) int(patch.agingMinutes, 1, 1440, 'Aging (minutes)');
+    if (patch.oneAtATime !== undefined && !['none', 'user', 'app'].includes(patch.oneAtATime)) throw bad('One at a time is none, user, or app.');
+    const at = iso();
+    return db.tx(async () => {
+      const old = (await db.prepare('SELECT * FROM task_types WHERE id = ?').get(id)) as TaskTypesRow | undefined;
+      if (!old) throw Object.assign(new Error('No such task type.'), { statusCode: 404 });
+      const changed: string[] = [];
+      for (const [key, column] of Object.entries(COLUMNS) as Array<[keyof typeof COLUMNS, string]>) {
+        if (patch[key] === undefined) continue;
+        const value = key === 'enabled' ? (patch.enabled ? 1 : 0) : patch[key];
+        const before = (old as unknown as Record<string, unknown>)[column]; // the row's columns, by name
+        if (before === value) continue;
+        await db.prepare(`UPDATE task_types SET ${column} = ?, updated_by = ?, updated_at = ? WHERE id = ?`).run(value, by, at, id);
+        await db
+          .prepare('INSERT INTO task_type_history (type_id, field, old_value, new_value, changed_by, changed_at) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(id, column, before == null ? null : String(before), value == null ? null : String(value), by, at);
+        changed.push(column);
+      }
+      let requeued = 0;
+      if (applyToWaiting && patch.priority !== undefined) {
+        requeued = (await db
+          .prepare(`UPDATE task_runs SET priority = ? + CASE WHEN interactive = 1 THEN ${INTERACTIVE_BAND} ELSE 0 END WHERE type = ? AND status = 'queued'`)
+          .run(patch.priority, id)).changes;
+      }
+      return { changed, requeued };
+    });
+  }
+
+  /** Changes a pool's limits: concurrency at least 1; per user and reserved within it (reserved leaves one for scheduled work). */
+  async function updatePool(pool: string, patch: { concurrency: number; perUser: number; reserved: number }, { by }: { by: number | null }) {
+    const { concurrency, perUser, reserved } = patch;
+    const bad = (message: string) => Object.assign(new Error(message), { statusCode: 400 });
+    if (!POOLS.includes(pool as Pool)) throw Object.assign(new Error('No such pool.'), { statusCode: 404 });
+    if (![concurrency, perUser, reserved].every(Number.isInteger) || concurrency < 1 || concurrency > 20) throw bad('Workers must be a whole number from 1 to 20.');
+    if (perUser < 1 || perUser > concurrency) throw bad('Per user must be from 1 to the number of workers.');
+    if (reserved < 0 || reserved >= concurrency) throw bad('Reserved must leave at least one worker for scheduled work.');
+    await db
+      .prepare('UPDATE pool_settings SET concurrency = ?, per_user_concurrency = ?, reserved_for_interactive = ?, updated_by = ?, updated_at = ? WHERE pool = ?')
+      .run(concurrency, perUser, reserved, by, iso(), pool);
+    for (const wake of wakers) wake(pool as Pool);
+  }
+
+  /** Tasks whose retries ran out (dead letters), newest first: their kind, account, and error only. */
+  async function deadLetters(limit = 50) {
+    return (await db
+      .prepare(`SELECT t.id, t.type, t.attempts, t.error, t.created_at AS "createdAt", t.finished_at AS "finishedAt", u.email AS "user"
+        FROM task_runs t LEFT JOIN users u ON u.id = t.user_id WHERE t.status = 'dead' ORDER BY t.finished_at DESC LIMIT ?`)
+      .all(limit)) as Array<{ id: string; type: string; attempts: number; error: string | null; createdAt: string; finishedAt: string | null; user: string | null }>;
+  }
+
+  /** Per type over the last days: tasks, done, failed, mean run time, and the Claude cost of the runs they opened. */
+  async function totals(days = 30) {
+    const since = iso(new Date(now().getTime() - days * 86_400_000));
+    const rows = (await db.prepare('SELECT type, status, started_at, finished_at FROM task_runs WHERE created_at >= ?').all(since)) as Array<
+      Pick<TaskRunsRow, 'type' | 'status' | 'started_at' | 'finished_at'>
+    >;
+    const costs = (await db
+      .prepare('SELECT t.type, SUM(c.cost_usd) AS cost FROM task_runs t JOIN run_calls c ON c.run_id = t.run_id WHERE t.created_at >= ? GROUP BY t.type')
+      .all(since)) as Array<{ type: string; cost: number | null }>;
+    const byType = new Map<string, { type: string; tasks: number; done: number; failed: number; seconds: number[]; costUsd: number }>();
+    for (const r of rows) {
+      const e = byType.get(r.type) ?? { type: r.type, tasks: 0, done: 0, failed: 0, seconds: [], costUsd: 0 };
+      e.tasks += 1;
+      if (r.status === 'done') e.done += 1;
+      if (r.status === 'failed' || r.status === 'dead') e.failed += 1;
+      if (r.started_at && r.finished_at) e.seconds.push((Date.parse(r.finished_at) - Date.parse(r.started_at)) / 1000);
+      byType.set(r.type, e);
+    }
+    for (const c of costs) {
+      const e = byType.get(c.type);
+      if (e) e.costUsd = Number(c.cost ?? 0);
+    }
+    return [...byType.values()]
+      .map(({ seconds, ...e }) => ({ ...e, meanSeconds: seconds.length ? Math.round(seconds.reduce((a, b) => a + b, 0) / seconds.length) : null, costUsd: Math.round(e.costUsd * 10000) / 10000 }))
+      .sort((a, b) => b.tasks - a.tasks || a.type.localeCompare(b.type));
   }
 
   // ---- running jobs --------------------------------------------------------------------------------------------------
@@ -533,7 +682,7 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
     };
   }
 
-  return { enqueue, claim, complete, fail, heartbeat, sweep, prune, get, list, steps, lines, lineCount, active, anyActive, countSince, ownerOf, wait, record, retry, discard, start, worker };
+  return { enqueue, claim, complete, fail, heartbeat, sweep, prune, get, list, steps, lines, lineCount, active, anyActive, countSince, ownerOf, wait, record, retry, discard, overview, types, typeHistory, updateType, updatePool, deadLetters, totals, start, worker };
 }
 
 export type Queue = ReturnType<typeof createQueue>;
