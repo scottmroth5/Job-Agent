@@ -141,7 +141,8 @@ test('the pipeline button runs the pipeline as whoever pressed it, one at a time
   assert.equal((await start(asB)).statusCode, 202);
   await new Promise((r) => setTimeout(r, 30));
   assert.equal((await start(asA)).statusCode, 202);
-  await new Promise((r) => setTimeout(r, 30));
+  // The owner's waits its turn behind B's (one pipeline at a time across the app).
+  for (let i = 0; i < 100 && runs.length < 2; i += 1) await new Promise((r) => setTimeout(r, 50));
   assert.deepEqual(runs, [b, OWNER_ID]);
   // The inbox stays the owner's.
   const check = await app.inject({ method: 'POST', url: '/api/inbox/check', headers: asB });

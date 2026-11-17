@@ -50,7 +50,7 @@ flowchart LR
 - **The app container** is one Node process:
   - Fastify routes with JSON schemas (`/api/openapi.json`) and the built React UI;
   - the in-process scheduler (`server/scheduler.ts`, set in `.env`);
-  - long actions as in-memory tasks (`server/tasks.ts`), lost on restart;
+  - long actions as tasks on the durable queue (`server/jobs.ts` over `tools/queue`), kept in the database across restarts;
   - the pipeline and other scripts as child processes, one pipeline at a time across the app;
   - Chromium for pages that need JavaScript.
 - **The demo container:** the same image with `AUTH_MODE=demo`. It has no secrets and no Claude. Its sample data lives in its own PostgreSQL container (`demo-db`, since v3 Phase 4), in memory, on a private network only the demo joins; a restart of either rebuilds the data.

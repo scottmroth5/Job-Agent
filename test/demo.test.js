@@ -10,7 +10,7 @@ import { buildApp } from '../server/app.ts';
 import { assertSafeBinding, authSettings, DEMO_REFUSAL } from '../server/auth.ts';
 import { registerRateLimits } from '../server/security.ts';
 import { seedDemo, isDemoDatabase } from '../scripts/demo-seed.js';
-import { DEMO_CONFIG, JOBS, SAMPLE_TASKS } from '../demo/sample-data.ts';
+import { DEMO_CONFIG, JOBS } from '../demo/sample-data.ts';
 import Fastify from 'fastify';
 import { fakeServices } from './fixtures/fakes.js';
 /** @import { InjectOptions } from 'fastify' */
@@ -43,7 +43,6 @@ async function demoApp(/** @type {string} */ dbPath) {
       runScript: async () => assert.fail('the demo must never run a script'),
       inbox: { ready: () => false, gmail: () => assert.fail('no Gmail in the demo'), key: () => assert.fail('no key in the demo'), cfg: {} },
       knowledge: async () => '',
-      sampleTasks: SAMPLE_TASKS,
       log: { info() {}, warn() {}, error() {} },
     }),
   });

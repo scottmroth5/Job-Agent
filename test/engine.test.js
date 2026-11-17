@@ -13,7 +13,6 @@ import { createHttp } from '../tools/http.ts';
 import { fakeClaude } from './fixtures/fakes.js';
 import { addUser, decide, getUser, requestAccess } from '../db/users.ts';
 import { createJobTracer } from '../tools/trace.ts';
-import { oneStartAtATime } from '../tools/runs.ts';
 
 function setup(/** @type {import('../db/engine/sqlite.ts').SqliteEngineOptions} */ options = {}) {
   const raw = new Database(':memory:');
@@ -303,23 +302,4 @@ test('the trace sink writes the user in the insert, each call, and the totals th
   const memory = await createJobTracer({ logger: { info() {}, warn() {}, error() {} } }).startRun('memory');
   assert.equal(memory.id, null);
   store.close();
-});
-
-test('oneStartAtATime: starts run in order, one at a time, and a failed start does not block the next', async () => {
-  const order = /** @type {string[]} */ ([]);
-  const slow = oneStartAtATime(async () => {
-    order.push('a begins');
-    await new Promise((r) => setImmediate(r));
-    order.push('a ends');
-    return 'a';
-  });
-  const failing = oneStartAtATime(async () => {
-    order.push('b');
-    throw new Error('refused');
-  });
-  const after = oneStartAtATime(() => (order.push('c'), 'c'));
-  assert.equal(await slow, 'a');
-  await assert.rejects(failing, /refused/);
-  assert.equal(await after, 'c');
-  assert.deepEqual(order, ['a begins', 'a ends', 'b', 'c']);
 });

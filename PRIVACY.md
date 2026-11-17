@@ -14,6 +14,7 @@ You sign in with Google. The app asks Google only for your email address and tha
 - **Your job search:** the jobs, notes, resumes, files, scores, and documents you add or the app makes for you. Each account sees only its own.
 - **Your Claude API key,** if you add one: stored encrypted, used only for your own AI requests, and never shown again, to you, the owner, or anyone else.
 - **Usage records:** when you last used the app, when it ran AI requests for you and what they cost, so spending can be shown and capped.
+- **Background tasks:** each action that runs in the background (adding or scoring a job, writing a letter, preparing for a meeting, a pipeline run) is kept with what you asked for and its progress and output, so it can wait its turn, survive a restart, and be shown on the Activity tab. Finished tasks are deleted after 30 days.
 - **Feedback you send:** kept for the owner and emailed to them with your address.
 
 ## How it is used

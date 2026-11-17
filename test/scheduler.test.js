@@ -2,7 +2,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createScheduler, lastRun, nextRun, parseSchedule, schedulesFromEnv, CATCH_UP_HOURS } from '../server/scheduler.ts';
-import { createTaskRunner } from '../server/tasks.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 import { fakeConfig, fakeServices, noTimer } from './fixtures/fakes.js';
 
@@ -107,19 +106,6 @@ test('scheduler: a failing job is logged and does not stop the next one', async 
   await new Promise((r) => setImmediate(r));
   assert.deepEqual(warnings, ['[schedule] backup: Drive is down']);
   assert.equal(scheduler.status()[0].lastResult, 'failed');
-});
-
-test('tasks: wait resolves when the task ends, without polling', async () => {
-  const tasks = createTaskRunner();
-  /** @type {(value: unknown) => void} */
-  let finish = () => {};
-  const id = tasks.start('x', {}, () => new Promise((r) => { finish = r; }));
-  const waiting = tasks.wait(id, 1000);
-  await new Promise((r) => setImmediate(r)); // the task starts on the next turn
-  finish('ok');
-  assert.equal((await waiting)?.status, 'done');
-  const slow = tasks.start('y', {}, () => new Promise(() => {}));
-  await assert.rejects(tasks.wait(slow, 20), /did not finish/);
 });
 
 test('API: /api/schedule lists the jobs, and a missed backup runs as a task when the server starts', async () => {

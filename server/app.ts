@@ -5,7 +5,6 @@ import Fastify from 'fastify';
 import swagger from '@fastify/swagger';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import { createJobTracer } from '../tools/trace.ts';
 import { listPostings, getPosting, updatePosting, summary } from './queries.ts';
 import { registerLookupRoutes } from './lookups-routes.ts';
 import { lookups } from '../agents/lookups.ts';
@@ -18,7 +17,8 @@ import { BLOCKED_PAGE, geoBlocker } from './geo.ts';
 import { registerUsageTotals } from './usage-totals.ts';
 import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.ts';
 import { timeZone } from '../tools/dates.ts';
-import { createTaskRunner } from './tasks.ts';
+import { createJobs, type Jobs } from './jobs.ts';
+import type { QueueOptions } from '../tools/queue/queue.ts';
 import { registerAuth } from './auth.ts';
 import { currentUserId, runAsUser } from '../db/scope.ts';
 import { OWNER_ID, touchLastSeen } from '../db/users.ts';
@@ -47,14 +47,12 @@ import type { AuthSettings, Exchange } from './auth.ts';
 import type { createAlerts } from './alerts.ts';
 import type { InboxServices } from './inbox-routes.ts';
 import type { RunPipeline } from './pipeline-routes.ts';
-import type { Account, App, FastifyReply, IdParams, Notices, RouteServices, StartTask, Tasks } from './types.ts';
+import type { Account, App, FastifyReply, IdParams, Notices, RouteServices } from './types.ts';
 
 /** A browser for pages that need JavaScript (tools/browser.ts), closed when its task ends. */
 type Browser = PageRenderer & { close?: () => Promise<unknown> };
 /** Runs a script as its own process (server/main.ts). */
 export type RunScript = (opts: { script: string; args?: string[]; onLine: (line: string) => void; onError?: (line: string) => void }) => Promise<{ code: number; lastError: string | null }>;
-/** A finished run the demo replays on the Activity tab (demo/sample-data.ts SAMPLE_TASKS). */
-type SampleTask = { kind: string; meta?: object; output: Array<{ step?: string; level?: string; text?: string }>; result?: unknown };
 type ServerLog = { info?: (text: string) => void; warn?: (text: string) => void; error?: (text: string) => void };
 
 /** What buildApp runs with: server/main.ts builds the real ones (or the demo's); tests pass fakes and leave most out. */
@@ -68,20 +66,21 @@ export type AppServices = Omit<RouteServices, 'knowledge'> & {
   runPipeline?: RunPipeline;
   /** The .env schedules: backup and restore-test run as they are; pipeline and inbox are the owner's defaults (agents/automation.ts). */
   schedules?: Array<{ name: string; schedule: Schedule }>;
-  /** Tests only: how long a due run waits before trying again while another holds the lock, and how often automatic runs resync. */
+  /** Tests only: how often a scheduled run checks whether its task has finished, and how often automatic runs resync. */
   scheduleRetryMs?: number;
   automationSyncMs?: number;
   inbox?: InboxServices;
   notices?: Notices;
   alerts?: ReturnType<typeof createAlerts>;
   log?: ServerLog;
-  sampleTasks?: SampleTask[];
+  /** Tests only: the queue's timings (poll, heartbeat, sweep). */
+  queueOptions?: Partial<QueueOptions>;
   checkClaudeKey?: (apiKey: string) => Promise<boolean>;
   attachmentsDir?: string;
 };
 
 /** buildApp's app with what it decorates: the task runner, and every route (test/security.test.js walks it). */
-export type BuiltApp = App & { tasks: Tasks; routeList: Array<{ method: string | string[]; url: string }> };
+export type BuiltApp = App & { tasks: { wait: Jobs['wait'] }; jobs: Jobs; routeList: Array<{ method: string | string[]; url: string }> };
 
 export type BuildAppOptions = {
   store: JobStore;
@@ -136,7 +135,6 @@ import { jobIdFromUrl } from '../agents/discovery/sources/linkedin.ts';
 import * as fractionaljobs from '../agents/discovery/sources/fractionaljobs.ts';
 import { isOnSite } from '../tools/urls.ts';
 import { checkLocation } from '../tools/location.ts';
-import { assertNoRunningRun } from '../tools/runs.ts';
 
 const ACTIONS = ['score', 'write-materials', 'regenerate', 'refetch'];
 const nullableString = { type: ['string', 'null'] };
@@ -175,16 +173,12 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     if (blocked(req)) return reply.code(403).type('text/html').header('Cache-Control', 'no-store').send(BLOCKED_PAGE);
   });
   const { db } = store;
-  const tasks = createTaskRunner();
-  // The demo shows a few finished runs on the Activity tab; they replay recorded output and call nothing.
-  for (const sample of services.sampleTasks ?? []) {
-    tasks.start(sample.kind, sample.meta ?? {}, async (step, { logger }) => {
-      for (const entry of sample.output) {
-        if (entry.step) step(entry.step);
-        else logger[(entry.level ?? 'info') as 'info' | 'warn' | 'error'](entry.text); // the samples use these levels
-      }
-      return sample.result ?? null;
-    });
+  // Background tasks on the durable queue (server/jobs.ts). The demo runs no workers: its Activity tab shows the sample
+  // tasks demo-seed stored (scripts/demo-seed.js), and it refuses every request that would start one.
+  const jobs = createJobs({ store, ownerConfig, createBrowser: services.createBrowser ?? null, log: services.log ?? console, queueOptions: services.queueOptions });
+  if (authMode !== 'demo') {
+    app.addHook('onReady', async () => jobs.run());
+    app.addHook('onClose', async () => jobs.stop());
   }
 
   // Every route, for the test that checks each one needs sign-in.
@@ -259,31 +253,6 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     reply.code(status).send(body);
   });
 
-  /** Runs a background action as a traced task; refuses while a pipeline step is running. */
-  const startTask: StartTask = async (kind, meta, fn) => {
-    for (const name of ['pipeline', 'discover', 'score', 'hunt']) {
-      try {
-        await assertNoRunningRun(db, name);
-      } catch (err) {
-        throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
-      }
-    }
-    return tasks.start(kind, meta, async (step, { logger }) => {
-      // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
-      const run = await createJobTracer({ store, logger }).startRun(`ui-${kind}`, meta);
-      const browser = services.createBrowser ? await services.createBrowser() : null;
-      try {
-        const result = await fn(step, { run, browser });
-        await run.finish('ok', result && typeof result === 'object' ? { ...result, materials: undefined } : null);
-        return result;
-      } catch (err) {
-        await run.finish('failed', { error: (err as Error).message });
-        throw err;
-      } finally {
-        await browser?.close?.();
-      }
-    });
-  };
 
   const notFound = (reply: FastifyReply) => reply.code(404).send({ error: 'Job not found' });
 
@@ -408,23 +377,83 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     async (req, reply) => {
       if (!services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
       const input: ManualInput = Object.fromEntries(Object.entries(req.body ?? {}).filter(([, v]) => v !== ''));
-      const taskId = await startTask('add', { url: input.url ?? null }, async (step, { run, browser }) =>
-        addPosting(input, {
-          store,
-          config,
-          // null only in the demo, which refuses this route (server/auth.ts); claude was checked above.
-          http: services.http as Http,
-          browser,
-          claude: services.claude as Claude,
-          knowledge: await services.knowledge(),
-          drive: services.drive,
-          run,
-          onStep: step,
-        }),
-      );
-      return reply.code(202).send({ taskId });
+      return reply.code(202).send({ taskId: await jobs.start('add', input) });
     },
   );
+
+  // The job panel's actions, each a task of its own type (server/jobs.ts). The handler reads the job again when it runs.
+  const needClaude = () => {
+    if (!services.claude) throw new Error('AI is not available here.');
+    return services.claude;
+  };
+  const postingOf = async (id: number) => {
+    const posting = (await db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id)) as PostingsRow | undefined;
+    if (!posting) throw new Error('That job no longer exists.');
+    return posting;
+  };
+  jobs.define<ManualInput>('add', async (input, { step, run, browser }) =>
+    addPosting(input, {
+      store,
+      config,
+      // null only in the demo, which runs no tasks.
+      http: services.http as Http,
+      browser,
+      claude: needClaude(),
+      knowledge: await services.knowledge(),
+      drive: services.drive,
+      run: run as NonNullable<typeof run>, // traced: define's default
+      onStep: step,
+    }), { browser: true });
+  jobs.define<{ id: number }>('score', async ({ id }, { step, run }) => {
+    await postingOf(id);
+    step('Scoring');
+    const s = await scorePostings({ store, config, claude: needClaude(), knowledge: await services.knowledge(), model: DEFAULT_SCORE_MODEL, run: run as NonNullable<typeof run>, options: { ids: [id], rescore: true } });
+    if (s.failures.length) throw new Error(s.failures[0].error);
+    step(s.promoted.includes(id) ? 'Scored and moved to your pipeline' : 'Scored');
+    return { scored: s.scored, promoted: s.promoted.includes(id) };
+  });
+  for (const action of ['write-materials', 'regenerate'] as const) {
+    jobs.define<{ id: number }>(action, async ({ id }, { step, run: traced }) => {
+      const run = traced as NonNullable<typeof traced>;
+      const posting = await postingOf(id);
+      const claude = needClaude();
+      const lk = await lookups(db);
+      if (lk.groupOf('stage', posting.stage) === 'found') await db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), new Date().toISOString(), id);
+      const hasScore = await db.prepare("SELECT 1 FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule')").get(id);
+      const knowledge = await services.knowledge();
+      if (!hasScore) {
+        step('Scoring first');
+        await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], rescore: true } });
+      }
+      step(action === 'regenerate' ? 'Writing new resume tweaks and cover letter' : 'Writing resume tweaks and cover letter');
+      const g = await generateForPostings({ store, config, claude, knowledge, drive: services.drive, run, options: { ids: [id], regenerate: action === 'regenerate' } });
+      if (g.failures.length) throw new Error(g.failures[0].error);
+      step(g.docs ? 'Cover letter saved as a Google Doc' : 'Done');
+      return { tweaks: g.tweaks, letters: g.letters, checked: g.checked, claimFlags: g.claimFlags, docs: g.docs, flagged: g.flagged };
+    });
+  }
+  jobs.define<{ id: number }>('refetch', async ({ id }, { step, browser }) => {
+    const posting = await postingOf(id);
+    step('Fetching the posting text');
+    // resolveDetails reads these and fills in the text and fetch fields.
+    const item = { url: posting.url, title: posting.title, company: posting.company, location: posting.location, linkedinJobId: jobIdFromUrl(posting.url) } as JobItem;
+    if (isOnSite(posting.url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, posting.url as string); // on the site, so it has a url
+    await resolveDetails(item, { http: services.http as Http, browser });
+    const ok = item.fetchStatus === 'ok';
+    await db.prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN CAST(@text AS TEXT) IS NULL THEN fetched_at ELSE @now END,
+        fetch_status = @status, fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
+        location_check = @check, updated_at = @now WHERE id = @id AND user_id = @uid`).run({
+      id,
+      text: ok ? item.description : null,
+      status: item.fetchStatus,
+      method: item.fetchMethod ?? null,
+      location: item.location ?? null,
+      check: checkLocation({ location: posting.location ?? item.location, workplace: posting.workplace ?? item.workplace, text: ok ? item.description : posting.fetched_text }, config.search.homeLocations),
+      now: new Date().toISOString(),
+    });
+    step(ok ? 'Posting text updated' : `Could not read the posting (${item.fetchStatus}); paste the description instead`);
+    return { fetchStatus: item.fetchStatus };
+  }, { browser: true });
 
   app.post<{ Params: { id: number; action: 'score' | 'write-materials' | 'regenerate' | 'refetch' } }>(
     '/api/postings/:id/actions/:action',
@@ -437,56 +466,10 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     },
     async (req, reply) => {
       const { id, action } = req.params;
-      const posting = await db.prepare('SELECT * FROM postings WHERE id = ? AND user_id = @uid').get(id) as PostingsRow | undefined;
+      const posting = await db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id);
       if (!posting) return notFound(reply);
       if (action !== 'refetch' && !services.claude) return reply.code(503).send({ error: 'AI is not available here.' });
-      // Checked above for the actions that use it.
-      const claude = services.claude as Claude;
-      const taskId = await startTask(action, { id }, async (step, { run, browser }) => {
-        if (action === 'score') {
-          step('Scoring');
-          const s = await scorePostings({ store, config, claude, knowledge: await services.knowledge(), model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], rescore: true } });
-          if (s.failures.length) throw new Error(s.failures[0].error);
-          step(s.promoted.includes(id) ? 'Scored and moved to your pipeline' : 'Scored');
-          return { scored: s.scored, promoted: s.promoted.includes(id) };
-        }
-        if (action === 'write-materials' || action === 'regenerate') {
-          const lk = await lookups(db);
-          if (lk.groupOf('stage', posting.stage) === 'found') await db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), new Date().toISOString(), id);
-          const hasScore = await db.prepare("SELECT 1 FROM scores WHERE posting_id = ? AND user_id = @uid AND source IN ('v2', 'v2-rule')").get(id);
-          const knowledge = await services.knowledge();
-          if (!hasScore) {
-            step('Scoring first');
-            await scorePostings({ store, config, claude, knowledge, model: DEFAULT_SCORE_MODEL, run, options: { ids: [id], rescore: true } });
-          }
-          step(action === 'regenerate' ? 'Writing new resume tweaks and cover letter' : 'Writing resume tweaks and cover letter');
-          const g = await generateForPostings({ store, config, claude, knowledge, drive: services.drive, run, options: { ids: [id], regenerate: action === 'regenerate' } });
-          if (g.failures.length) throw new Error(g.failures[0].error);
-          step(g.docs ? 'Cover letter saved as a Google Doc' : 'Done');
-          return { tweaks: g.tweaks, letters: g.letters, checked: g.checked, claimFlags: g.claimFlags, docs: g.docs, flagged: g.flagged };
-        }
-        // refetch
-        step('Fetching the posting text');
-        // resolveDetails reads these and fills in the text and fetch fields.
-        const item = { url: posting.url, title: posting.title, company: posting.company, location: posting.location, linkedinJobId: jobIdFromUrl(posting.url) } as JobItem;
-        if (isOnSite(posting.url, 'fractionaljobs.io', '/jobs/')) item.fetchDetails = (h) => fractionaljobs.fetchPosting(h, posting.url as string); // on the site, so it has a url
-        await resolveDetails(item, { http: services.http as Http, browser });
-        const ok = item.fetchStatus === 'ok';
-        await db.prepare(`UPDATE postings SET fetched_text = COALESCE(@text, fetched_text), fetched_at = CASE WHEN CAST(@text AS TEXT) IS NULL THEN fetched_at ELSE @now END,
-            fetch_status = @status, fetch_method = @method, fetch_attempts = fetch_attempts + 1, location = COALESCE(location, @location),
-            location_check = @check, updated_at = @now WHERE id = @id AND user_id = @uid`).run({
-          id,
-          text: ok ? item.description : null,
-          status: item.fetchStatus,
-          method: item.fetchMethod ?? null,
-          location: item.location ?? null,
-          check: checkLocation({ location: posting.location ?? item.location, workplace: posting.workplace ?? item.workplace, text: ok ? item.description : posting.fetched_text }, config.search.homeLocations),
-          now: new Date().toISOString(),
-        });
-        step(ok ? 'Posting text updated' : `Could not read the posting (${item.fetchStatus}); paste the description instead`);
-        return { fetchStatus: item.fetchStatus };
-      });
-      return reply.code(202).send({ taskId });
+      return reply.code(202).send({ taskId: await jobs.start(action, { id }) });
     },
   );
 
@@ -512,7 +495,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   registerLookupRoutes(app, { db });
   registerAttachmentRoutes(app, { db, dir: services.attachmentsDir });
   registerResumeRoutes(app, { db }); // after attachments, which registers the raw-file body parser
-  registerPrepRoutes(app, { store, config, services, startTask });
+  registerPrepRoutes(app, { store, config, services, jobs });
   registerNoteRoutes(app, { db });
   // Not a scam (or undo): the job's scam warning stops showing (agents/discovery/scam.ts). The job is the user's own.
   app.post<{ Params: IdParams; Body: { dismissed?: boolean } }>(
@@ -531,7 +514,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     },
   );
   registerExcludedSiteRoutes(app, { db, ownerConfig });
-  registerFollowUpRoutes(app, { store, config, services, startTask, demo: authMode === 'demo' });
+  registerFollowUpRoutes(app, { store, config, services, jobs, demo: authMode === 'demo' });
   let scheduler: ReturnType<typeof createScheduler> | null = null;
   // Each user's automatic runs (agents/automation.ts) by job name: the owner's are "pipeline" and "inbox" (the names
   // the alerts and the runs table know), anyone else's "pipeline:<id>". automaticOn is who has them on.
@@ -541,7 +524,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   const pipeline = services.runPipeline
     ? registerPipelineRoutes(app, {
         db,
-        tasks,
+        jobs,
         runPipeline: services.runPipeline,
         schedule: (uid) => {
           const job = statusOf(jobOf(uid, 'pipeline'));
@@ -550,27 +533,26 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         },
       })
     : null;
-  const inboxChecks = services.inbox ? registerInboxRoutes(app, { store, tasks, claude: services.claude, inbox: services.inbox }) : null;
+  const inboxChecks = services.inbox ? registerInboxRoutes(app, { store, jobs, claude: services.claude, inbox: services.inbox }) : null;
   registerReminderRoutes(app, { db });
 
-  // The encrypted backup as a task (scheduled), the same script as npm run backup, in its own process.
-  const startBackup = () =>
-    tasks.start('backup', { by: 'schedule' }, async (step, { logger }) => {
+  // The encrypted backup and the monthly restore test as tasks (scheduled), the same scripts as npm run backup and
+  // npm run backup:test, each in its own process. Defined only with runScript, the only way they are scheduled.
+  if (services.runScript) {
+    const runScript = services.runScript;
+    jobs.define('backup', async (_payload, { step, logger }) => {
       step('Backing up');
-      // Scheduled only with runScript (the runners below).
-      const { code, lastError } = await (services.runScript as RunScript)({ script: 'scripts/backup.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
+      const { code, lastError } = await runScript({ script: 'scripts/backup.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
       if (code !== 0) throw new Error(lastError ? `The backup failed: ${lastError}` : `The backup failed with exit code ${code}.`);
       step('Backup done');
-    });
-
-  // The monthly restore test as a task (scheduled), the same script as npm run backup:test, in its own process.
-  const startRestoreTest = () =>
-    tasks.start('restore-test', { by: 'schedule' }, async (step, { logger }) => {
+    }, { trace: false });
+    jobs.define('restore-test', async (_payload, { step, logger }) => {
       step('Testing the newest backup');
-      const { code, lastError } = await (services.runScript as RunScript)({ script: 'scripts/backup-verify.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
+      const { code, lastError } = await runScript({ script: 'scripts/backup-verify.js', onLine: (l) => logger.info(l), onError: (l) => logger.error(l) });
       if (code !== 0) throw new Error(lastError ? `The restore test failed: ${lastError}` : `The restore test failed with exit code ${code}.`);
       step('Restore test passed');
-    });
+    }, { trace: false });
+  }
 
   // The in-app scheduler (server/scheduler.ts): each job starts the same task as its button, and waits for it. The
   // backup and the restore test come from .env; pipelines and inbox checks are each user's automatic runs, synced
@@ -578,41 +560,33 @@ export async function buildApp({ store, config, services: given, webDir, authMod
   if (authMode !== 'demo' && (pipeline || inboxChecks || services.schedules?.length)) {
     const HOURS = 3600 * 1000;
     const log = services.log ?? console;
-    const retryMs = services.scheduleRetryMs ?? 60 * 1000;
-    const finish = async (taskId: string, hours: number) => {
-      const t = await tasks.wait(taskId, hours * HOURS);
-      if (t?.status === 'failed') throw new Error(t.error ?? 'failed');
-    };
-    // One scheduled pipeline or inbox check at a time, in the order they came due: each waits for the one before it.
-    let queue: Promise<unknown> = Promise.resolve();
-    const inQueue = <T>(fn: () => Promise<T>): Promise<T> => {
-      const result = queue.then(fn);
-      queue = result.catch(() => {});
-      return result;
-    };
-    // A start refused because another pipeline or inbox check is running (a button press) waits and tries again,
-    // for up to 4 hours, instead of being lost.
-    // Closing the server ends every wait: a retry never runs on a closed store or keeps the process alive.
+    const waitMs = services.scheduleRetryMs ?? 5 * 1000;
+    // Closing the server ends every wait: a wait never reads a closed store or keeps the process alive.
     let closed = false;
-    const retries = new Set<() => void>();
-    const whenFree = async (start: () => Promise<string>) => {
-      const until = Date.now() + 4 * HOURS;
-      for (;;) {
-        try {
-          return await start();
-        } catch (err) {
-          if (closed || (err as { statusCode?: number }).statusCode !== 409 || Date.now() + retryMs > until) throw err;
-          await new Promise<void>((resolve) => {
-            const timer = setTimeout(done, retryMs);
-            function done() {
-              clearTimeout(timer);
-              retries.delete(done);
-              resolve();
-            }
-            retries.add(done);
-          });
-          if (closed) throw Object.assign(new Error('The server closed before the run could start.'), { statusCode: 503 });
+    const sleeping = new Set<() => void>();
+    const sleep = (ms: number) =>
+      new Promise<void>((resolve) => {
+        const timer = setTimeout(done, ms);
+        function done() {
+          clearTimeout(timer);
+          sleeping.delete(done);
+          resolve();
         }
+        sleeping.add(done);
+      });
+    // Waits for a scheduled task to finish (the queue runs it in its turn); a failed one fails the scheduled job,
+    // which alerts the owner. Skipped (the type is turned off) and cancelled are not failures.
+    const finish = async (taskId: string, hours: number) => {
+      const uid = await jobs.queue.ownerOf(taskId);
+      if (uid == null) return;
+      const until = Date.now() + hours * HOURS;
+      for (;;) {
+        if (closed) throw Object.assign(new Error('The server closed before the run finished.'), { statusCode: 503 });
+        const t = await jobs.queue.get(taskId, uid);
+        if (!t || t.status === 'done' || t.status === 'skipped' || t.status === 'cancelled') return;
+        if (t.status === 'failed' || t.status === 'dead') throw new Error(t.error ?? 'failed');
+        if (Date.now() >= until) throw new Error(`The ${t.type} task did not finish in ${hours} hours.`);
+        await sleep(waitMs);
       }
     };
     const asUser = async (uid: number, fn: () => Promise<unknown>) => {
@@ -628,27 +602,26 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     };
     const pipelineRun = (uid: number) => async () => {
       if (!pipeline) return;
-      const run = inQueue(async () => {
-        // Read when its turn comes, so turning automatic runs off while it waits in the queue still stops it.
+      const run = (async () => {
         const a = await current(uid);
         if (!a) return;
         await asUser(uid, async () => {
-          await finish(await whenFree(() => pipeline.start({ by: 'schedule', args: skipArgs(a.steps) })), 4);
+          // Queued in its turn: one pipeline at a time across the app (the pipeline task type); 8 hours covers one ahead of it and its own 4.
+          await finish(await pipeline.start({ by: 'schedule', args: skipArgs(a.steps) }), 8);
           // Then the owner's inbox, as the Windows scheduled run did; a pipeline failure above skips it.
-          if (uid === OWNER_ID && a.inbox?.afterPipeline && inboxChecks && (services.inbox as InboxServices).ready()) await finish(await whenFree(() => inboxChecks.startCheck({ by: 'schedule' })), 1);
+          if (uid === OWNER_ID && a.inbox?.afterPipeline && inboxChecks && (services.inbox as InboxServices).ready()) await finish(await inboxChecks.startCheck({ by: 'schedule' }), 1);
         });
-      });
+      })();
       // Another user's failure is logged, never emailed to the owner (server/alerts.ts hears only the owner's jobs).
       if (uid === OWNER_ID) await run;
       else await run.catch((err: Error) => log.warn?.(`[schedule] pipeline for user ${uid}: ${err.message}`));
     };
     const inboxRun = async () => {
       if (!inboxChecks) return;
-      await inQueue(async () => {
-        const a = await current(OWNER_ID);
-        if (!a?.inbox?.schedule) return;
-        await asUser(OWNER_ID, async () => finish(await whenFree(() => inboxChecks.startCheck({ by: 'schedule' })), 1));
-      });
+      const a = await current(OWNER_ID);
+      if (!a?.inbox?.schedule) return;
+      // A check due while the owner's pipeline waits or runs waits for it (startCheck's depends_on).
+      await asUser(OWNER_ID, async () => finish(await inboxChecks.startCheck({ by: 'schedule' }), 1));
     };
     // When a job last started, from the runs table; the owner's include runs from before runs had a user.
     const lastRanAt = (name: string, uid = OWNER_ID) => async () =>
@@ -657,8 +630,8 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         .pluck()
         .get(name, uid, uid)) as string | null | undefined) ?? null;
     const appRunners: Record<string, (() => Promise<unknown>) | null | undefined> = {
-      backup: services.runScript && (() => finish(startBackup(), 1)),
-      'restore-test': services.runScript && (() => finish(startRestoreTest(), 1)),
+      backup: services.runScript && (async () => finish(await jobs.start('backup', { by: 'schedule' }, { by: 'schedule' }), 1)),
+      'restore-test': services.runScript && (async () => finish(await jobs.start('restore-test', { by: 'schedule' }, { by: 'schedule' }), 1)),
     };
     const jobsScheduler = createScheduler({
       // The backup and the restore test are the app's, run as the owner (their runs are the owner's).
@@ -701,7 +674,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     });
     app.addHook('onClose', async () => {
       closed = true;
-      for (const done of [...retries]) done();
+      for (const done of [...sleeping]) done();
       jobsScheduler.stop();
       if (syncTimer) clearInterval(syncTimer);
     });
@@ -714,9 +687,12 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     return { timeZone: timeZone(), jobs: (scheduler?.status() ?? []).filter((j) => mine(j.name)) };
   });
 
-  app.get('/api/tasks', { schema: { summary: 'Recent background tasks, newest first (without output)', response: { 200: { type: 'array', items: anyObject } } } }, async (req) =>
-    tasks.list({ uid: req.uid ?? 0 }),
-  );
+  // The user's own tasks from the queue (tools/queue), as the in-memory runner showed them: a waiting task reads as
+  // running with waiting: true.
+  app.get('/api/tasks', { schema: { summary: 'Recent background tasks, newest first (without output)', response: { 200: { type: 'array', items: anyObject } } } }, async (req) => {
+    const uid = req.uid ?? 0;
+    return Promise.all((await jobs.queue.list(uid)).map((j) => jobs.brief(j, uid)));
+  });
 
   app.get<{ Params: { id: string }; Querystring: { from?: number } }>(
     '/api/tasks/:id/log',
@@ -728,13 +704,24 @@ export async function buildApp({ store, config, services: given, webDir, authMod
         response: { 200: anyObject },
       },
     },
-    async (req, reply) => tasks.log(req.params.id, req.query.from ?? 0, { uid: req.uid ?? 0 }) ?? reply.code(404).send({ error: 'Task not found' }),
+    async (req, reply) => {
+      const uid = req.uid ?? 0;
+      const job = await jobs.queue.get(req.params.id, uid);
+      if (!job) return reply.code(404).send({ error: 'Task not found' });
+      const { lines, next } = await jobs.queue.lines(job.id, uid, req.query.from ?? 0);
+      const b = await jobs.brief(job, uid);
+      return { lines, next, status: b.status, waiting: b.waiting, error: b.error };
+    },
   );
 
   app.get<{ Params: { id: string } }>(
     '/api/tasks/:id',
     { schema: { summary: 'Progress of a background action', params: { type: 'object', properties: { id: { type: 'string' } } }, response: { 200: anyObject } } },
-    async (req, reply) => tasks.get(req.params.id, { uid: req.uid ?? 0 }) ?? reply.code(404).send({ error: 'Task not found' }),
+    async (req, reply) => {
+      const uid = req.uid ?? 0;
+      const job = await jobs.queue.get(req.params.id, uid);
+      return job ? jobs.brief(job, uid) : reply.code(404).send({ error: 'Task not found' });
+    },
   );
 
   if (webDir && existsSync(webDir)) {
@@ -745,6 +732,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     );
   }
 
-  app.decorate('tasks', tasks);
+  app.decorate('tasks', { wait: jobs.wait });
+  app.decorate('jobs', jobs);
   return (app as App) as BuiltApp;
 }

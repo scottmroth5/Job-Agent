@@ -1,9 +1,7 @@
 // Types shared by the server's route modules (v3 Phase 2). Type-only: nothing here runs.
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { Claude, Run } from '@scottmroth5/agent-core';
+import type { Claude } from '@scottmroth5/agent-core';
 import type { DriveClient } from '../tools/google/drive.ts';
-import type { PageRenderer } from '../agents/discovery/types.ts';
-import type { createTaskRunner } from './tasks.ts';
 import type { createNotices } from './notices.ts';
 import type { accountFor } from '../db/users.ts';
 
@@ -43,14 +41,7 @@ export interface RouteServices {
   drive: DriveClient | null;
 }
 
-/** The in-memory task runner (server/tasks.ts). */
-export type Tasks = ReturnType<typeof createTaskRunner>;
-
 /** The account emails (server/notices.ts); routes take any of them, and none in tests. */
 export type Notices = Partial<ReturnType<typeof createNotices>>;
 
-/** A task's progress step (server/tasks.ts). */
-export type TaskStep = (message: string, opts?: { log?: boolean }) => void;
 
-/** buildApp's startTask: a traced background task for the current user; returns its id. */
-export type StartTask = (kind: string, meta: Record<string, unknown>, fn: (step: TaskStep, ctx: { run: Run; browser: PageRenderer | null }) => Promise<unknown>) => Promise<string>;

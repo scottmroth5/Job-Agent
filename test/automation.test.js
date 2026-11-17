@@ -115,11 +115,11 @@ test('each user runs on their own times, one pipeline at a time, without the Cla
   const { app, store, b, events, asA, asB, asC, done } = await setup();
   await app.ready();
   for (let i = 0; i < 100 && events.filter((e) => e.at === 'end').length < 2; i += 1) await new Promise((r) => setTimeout(r, 20));
-  assert.deepEqual(
-    events.map((e) => `${e.at} ${e.user}`),
-    [`start ${OWNER_ID}`, `end ${OWNER_ID}`, `start ${b}`, `end ${b}`],
-    'both came due at once: the owner first, then B, never at the same time; C (off) never ran',
-  );
+  // Both came due at once: the queue runs one pipeline at a time across the app, in either order; C (off) never ran.
+  const seen = events.map((e) => `${e.at} ${e.user}`);
+  const first = events[0]?.user === b ? b : OWNER_ID;
+  const second = first === b ? OWNER_ID : b;
+  assert.deepEqual(seen, [`start ${first}`, `end ${first}`, `start ${second}`, `end ${second}`], 'never at the same time');
   assert.deepEqual(events.find((e) => e.user === b)?.args, ['--no-score'], 'B turned scoring off for scheduled runs');
   assert.deepEqual(events.find((e) => e.user === OWNER_ID)?.args, [], 'the owner kept every step');
 

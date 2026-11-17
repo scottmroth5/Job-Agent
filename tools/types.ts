@@ -5,7 +5,7 @@ import type { JobStore } from '../db/index.ts';
 // The database is the async engine (db/engine); openJobStore's store is db/index.ts JobStore.
 export type { Db, JobStore };
 
-/** The logging a module needs: console fits, and so does a task's logger (server/tasks.ts). */
+/** The logging a module needs: console fits, and so does a task's logger (tools/queue/queue.ts). */
 export interface Logger {
   info: (...args: unknown[]) => void;
   warn: (...args: unknown[]) => void;

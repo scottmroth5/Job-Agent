@@ -1,11 +1,13 @@
 // Run the pipeline from the UI. It runs as its own process (the same scripts/pipeline.js as npm run pipeline),
 // so a long run never blocks the server, and its step lines become task progress. Each user runs their own pipeline
-// (scripts/pipeline.js --user=<id>); one runs at a time across the app, since they share the browser and the sources.
-import { assertNoRunningRun, oneStartAtATime } from '../tools/runs.ts';
+// (scripts/pipeline.js --user=<id>); one runs at a time across the app, since they share the browser and the sources:
+// the pipeline task type is one at a time across the app (tools/queue), so a second user's pipeline waits its turn.
+import { assertNoRunningRun } from '../tools/runs.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
 import type { Db } from '../tools/types.ts';
-import type { App, Tasks } from './types.ts';
+import type { App } from './types.ts';
+import type { Jobs } from './jobs.ts';
 
 /** Runs scripts/pipeline.js for a user (args: --no-score, --no-letters): onLine gets each stdout line, onError each stderr line. */
 export type RunPipeline = (opts: { user: number; args?: string[]; onLine: (line: string) => void; onError: (line: string) => void }) => Promise<{ code: number; lastError: string | null }>;
@@ -48,48 +50,60 @@ export function progressLine(line: string) {
 /** schedule(uid) is that user's automatic runs (server/app.ts), or none when there is no scheduler. */
 export function registerPipelineRoutes(
   app: App,
-  { db, tasks, runPipeline, schedule = () => ({ automatic: false, next: null, schedule: null }) }: { db: Db; tasks: Tasks; runPipeline: RunPipeline; schedule?: PipelineSchedule },
+  { db, jobs, runPipeline, schedule = () => ({ automatic: false, next: null, schedule: null }) }: { db: Db; jobs: Jobs; runPipeline: RunPipeline; schedule?: PipelineSchedule },
 ) {
-  let taskId: string | null = null;
+  // The pipeline's own process records its runs, so the task is not traced here.
+  jobs.define<{ by: string; args?: string[] }>('pipeline', async ({ by, args = [] }, { job, step, logger }) => {
+    const uid = job.userId;
+    step(by === 'schedule' ? 'Starting (scheduled)' : 'Starting');
+    const { code, lastError } = await runPipeline({
+      user: uid,
+      args,
+      onLine: (line: string) => {
+        logger.info(line);
+        const p = progressLine(line);
+        if (p) step(p, { log: false });
+      },
+      onError: (line: string) => logger.error(line),
+    });
+    if (code !== 0) throw new Error(lastError ? `The pipeline stopped: ${lastError}` : `The pipeline stopped with exit code ${code}.`);
+    return { ...(await pipelineState(db, uid)).lastFinished };
+  }, { trace: false });
 
   /**
    * Starts the current user's pipeline as a task (the button and the scheduler); throws 409 when one is already running.
    * args leaves out steps (a scheduled run's automatic runs setting); the button runs every step.
    */
-  const start = ({ by = 'button', args = [] }: { by?: string; args?: string[] } = {}) => oneStartAtATime(async () => {
+  const start = async ({ by = 'button', args = [] }: { by?: string; args?: string[] } = {}) => {
     const uid = currentUserId() ?? OWNER_ID;
-    if (taskId && tasks.get(taskId)?.status === 'running') throw Object.assign(new Error('The pipeline is already running.'), { statusCode: 409 });
-    for (const name of LOCKS) {
-      try {
-        await assertNoRunningRun(db, name);
-      } catch (err) {
-        throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
+    // A scheduled run while this user's pipeline is already waiting or running follows that one instead.
+    if (by === 'schedule') {
+      const mine = await jobs.queue.active(uid, 'pipeline');
+      if (mine) return mine.id;
+    }
+    // A pipeline started while the user's inbox check waits or runs waits for it (depends_on), as before it was refused.
+    const inbox = await jobs.queue.active(uid, 'inbox');
+    // A pipeline run outside the queue (npm run pipeline, or one of its steps, on this machine) shows only in the runs
+    // table. While a queued pipeline runs, its rows are its own and the queue orders the rest.
+    if (!(await jobs.queue.anyActive('pipeline'))) {
+      for (const name of LOCKS.filter((n) => !(inbox && n === 'inbox'))) {
+        try {
+          await assertNoRunningRun(db, name);
+        } catch (err) {
+          throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
+        }
       }
     }
-    taskId = tasks.start('pipeline', { by }, async (step: (message: string, opts?: { log?: boolean }) => void, { logger }: { logger: { info: (t: string) => void; error: (t: string) => void } }) => {
-      step(by === 'schedule' ? 'Starting (scheduled)' : 'Starting');
-      const { code, lastError } = await runPipeline({
-        user: uid,
-        args,
-        onLine: (line: string) => {
-          logger.info(line);
-          const p = progressLine(line);
-          if (p) step(p, { log: false });
-        },
-        onError: (line: string) => logger.error(line),
-      });
-      if (code !== 0) throw new Error(lastError ? `The pipeline stopped: ${lastError}` : `The pipeline stopped with exit code ${code}.`);
-      return { ...(await pipelineState(db, uid)).lastFinished };
-    });
-    return taskId;
-  });
+    return jobs.start('pipeline', { by, args }, { by: by === 'schedule' ? 'schedule' : 'user', userId: uid, onlyOne: 'The pipeline is already running.', dependsOn: inbox?.id ?? null });
+  };
 
   app.get('/api/pipeline', { schema: { summary: 'Your last pipeline run, whether one is running, and the next scheduled run', response: { 200: anyObject } } }, async (req) => {
     const uid = req.uid ?? OWNER_ID;
-    // The running task is shown only to its own user; others just see that one is running.
-    const task = taskId ? tasks.get(taskId, { uid }) : null;
+    // The user's own waiting or running task; others just see that one is running.
+    const task = await jobs.queue.active(uid, 'pipeline');
     const mine = schedule(uid);
-    return { ...(await pipelineState(db, uid)), taskId: task?.status === 'running' ? taskId : null, automatic: mine.automatic, nextScheduled: mine.next, schedule: mine.schedule };
+    const state = await pipelineState(db, uid);
+    return { ...state, running: state.running || (await jobs.queue.anyActive('pipeline')), taskId: task?.id ?? null, automatic: mine.automatic, nextScheduled: mine.next, schedule: mine.schedule };
   });
 
   app.post(

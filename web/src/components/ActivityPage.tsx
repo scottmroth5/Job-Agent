@@ -6,7 +6,7 @@ import type { ApiResponse } from '../api.ts';
 type TaskSummary = ApiResponse<'GET /api/tasks'>[number];
 type LogLine = { at: string; level: string; text: string };
 /** The log's latest answer, or a failure to reach it. */
-type LogState = { status: string; error?: string | null; next?: number };
+type LogState = { status: string; waiting?: boolean; error?: string | null; next?: number };
 
 const KIND_LABELS: Record<string, string | undefined> = {
   pipeline: 'Run pipeline',
@@ -76,7 +76,7 @@ function TaskOutput({ id, onFinished }: { id: string; onFinished?: () => void })
           {l.text}
         </div>
       ))}
-      {state?.status === 'running' && <div className="console-line muted">⏳ running…</div>}
+      {state?.status === 'running' && <div className="console-line muted">⏳ {state.waiting ? 'waiting to start…' : 'running…'}</div>}
       {lines.length === 0 && state && state.status !== 'running' && <div className="console-line muted">No output.</div>}
     </div>
   );
@@ -110,7 +110,7 @@ export default function ActivityPage({ selectedId }: { selectedId: string | null
   return (
     <div className="activity">
       <p className="muted small">
-        Actions started from this web page since its server started. A run started in a terminal (npm run pipeline) shows its output in that terminal.
+        Actions started from this web page and scheduled runs, kept for 30 days. A run started in a terminal (npm run pipeline) shows its output in that terminal.
       </p>
       {tasks.length === 0 ? (
         <p className="muted">Nothing has run yet. Use Run pipeline, Check inbox, or a job's actions.</p>
@@ -124,7 +124,7 @@ export default function ActivityPage({ selectedId }: { selectedId: string | null
                   <b>{taskLabel(t)}</b>
                   <span className="muted small">
                     {' '}
-                    {dateTime(t.startedAt)} · {STATUS_TEXT[t.status] ?? t.status}
+                    {dateTime(t.startedAt)} · {t.waiting ? 'waiting' : (STATUS_TEXT[t.status] ?? t.status)}
                   </span>
                 </span>
               </a>

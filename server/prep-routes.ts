@@ -5,7 +5,8 @@ import type { Claude } from '@scottmroth5/agent-core';
 import type { JobStore } from '../tools/types.ts';
 import type { UserConfig } from '../agents/user-config.ts';
 import type { MeetingPrepsRow } from '../db/types.ts';
-import type { App, IdParams, RouteServices, StartTask } from './types.ts';
+import type { App, IdParams, RouteServices } from './types.ts';
+import type { Jobs } from './jobs.ts';
 
 /** What the prep dialog sends (the body schema below); writeMeetingPrep checks and tidies it again. */
 type PrepBody = {
@@ -21,8 +22,24 @@ const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
 const str = (max: number) => ({ type: 'string', maxLength: max });
 
-/** startTask is the app's task starter (it refuses while a pipeline step runs). */
-export function registerPrepRoutes(app: App, { store, config, services, startTask }: { store: JobStore; config: UserConfig; services: RouteServices; startTask: StartTask }) {
+/** jobs is the app's task queue (server/jobs.ts): the prep runs as a meeting-prep task. */
+export function registerPrepRoutes(app: App, { store, config, services, jobs }: { store: JobStore; config: UserConfig; services: RouteServices; jobs: Jobs }) {
+  jobs.define<{ id: number; input: Parameters<typeof writeMeetingPrep>[0]['input'] }>('meeting-prep', async ({ id, input }, { step, run }) => {
+    if (!services.claude) throw new Error('AI is not available here.');
+    const r = await writeMeetingPrep({
+      store,
+      config,
+      claude: services.claude as Claude,
+      knowledge: await services.knowledge(),
+      drive: services.drive,
+      run: run as NonNullable<typeof run>, // traced: define's default
+      postingId: id,
+      input,
+      onStep: step,
+    });
+    step(r.docUrl ? 'Prep ready and saved as a Google Doc' : r.docError ? 'Prep ready (the Google Doc could not be made)' : 'Prep ready');
+    return { prepId: r.id, docUrl: r.docUrl, costUsd: r.costUsd, webSearches: r.webSearches };
+  });
   const { db } = store;
 
   app.post<{ Params: IdParams; Body: PrepBody }>(
@@ -62,23 +79,9 @@ export function registerPrepRoutes(app: App, { store, config, services, startTas
       const id = req.params.id;
       if (!await db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id)) return reply.code(404).send({ error: 'Job not found' });
       if (!req.body.attendees.some((a) => a.name?.trim())) return reply.code(400).send({ error: 'Add at least one person the meeting is with.' });
-      const taskId = await startTask('meeting-prep', { id }, async (step, { run }) => {
-        const r = await writeMeetingPrep({
-          store,
-          config,
-          // services.claude was checked above, before the task started.
-          claude: services.claude as Claude,
-          knowledge: await services.knowledge(),
-          drive: services.drive,
-          run,
-          postingId: id,
-          input: req.body,
-          onStep: step,
-        });
-        step(r.docUrl ? 'Prep ready and saved as a Google Doc' : r.docError ? 'Prep ready (the Google Doc could not be made)' : 'Prep ready');
-        return { prepId: r.id, docUrl: r.docUrl, costUsd: r.costUsd, webSearches: r.webSearches };
-      });
-      return reply.code(202).send({ taskId });
+      // The task keeps what was asked (the people, the meeting, the context) with its record: the user's own row,
+      // gone with the task after the queue's retention period.
+      return reply.code(202).send({ taskId: await jobs.start('meeting-prep', { id, input: req.body }) });
     },
   );
 

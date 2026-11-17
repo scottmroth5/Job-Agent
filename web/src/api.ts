@@ -38,11 +38,13 @@ export const DEMO_NOT_SAVED = 'Demo: nothing was saved. In your own account this
 const DEMO_ALLOWED = /^\/api\/prompts\/[a-z-]+\/preview$/; // fills a draft prompt and writes nothing
 const demoSamples = () => import('../../demo/samples.ts');
 
-/** A background task as GET /api/tasks/:id returns it (server/tasks.ts), or a demo stand-in. */
+/** A background task as GET /api/tasks/:id returns it (the queue, server/jobs.ts brief), or a demo stand-in. */
 export interface Task {
   id: string | null;
   kind: string;
   status: string;
+  /** Still in the queue, waiting for its turn (status reads running). */
+  waiting?: boolean;
   steps: Array<{ at: string; message: string }>;
   log: unknown[];
   result: Loose;

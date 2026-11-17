@@ -164,7 +164,7 @@ the button always runs every step); the owner also sets the inbox (after each pi
 owner's come from SCHEDULE_PIPELINE and SCHEDULE_INBOX, and anyone else's old schedule.pipeline checkbox maps to on at
 SCHEDULE_PIPELINE. server/app.ts syncs them into the scheduler (set(); jobs "pipeline" and "inbox" for the owner,
 "pipeline:<id>" for others) at start, after each save, and every 5 minutes, and rechecks the account when a run is due;
-due runs queue one at a time, and one refused by a running pipeline waits (up to 4 hours). Only the owner's failures
+due runs are queued tasks that wait their turn (one pipeline at a time across the app). Only the owner's failures
 alert. test/automation.test.js. Other child scripts run as
 the owner; tasks keep their user and the task routes show only that user's.
 Per-user settings live in user_settings (getUserSetting: inbox cursor, Drive folders, layouts); app_settings is app-wide
@@ -249,10 +249,19 @@ as ApiResponse's one Loose (any) type until the route schema is tightened.
 The Run pipeline button (server/pipeline-routes.ts) spawns scripts/pipeline.js as its own process and turns its "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.ts) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.ts, and closes reminders.
-Every task keeps its output (server/tasks.ts: steps plus log lines; pass the task's logger to createJobTracer so run logs land there);
-the Activity tab (#/activity/<taskId>) shows it live via GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content.
-Long actions (add, score, write-materials, regenerate, refetch) run as in-memory tasks the UI polls; they refuse to start
-while a pipeline step is running. web/dist is build output (gitignored).
+Background tasks run on the durable queue (server/jobs.ts over tools/queue): each kind is a handler defined once with
+jobs.define(type, handler, { trace, browser }) beside the route that starts it, and the route only enqueues
+(jobs.start(type, payload)); the handler rebuilds its work from the stored payload, as its user, with their settings,
+a traced run (ui-<type>; trace: false for the pipeline, inbox, and backups, which record their own), and, for the ai pool,
+a budget check before anything is spent. Tasks are user rows kept 30 days (PRIVACY.md); a waiting one reads as running
+with waiting: true. Every task keeps its output (task_lines: steps plus log lines; the handler's logger goes to
+createJobTracer so run logs land there); the Activity tab (#/activity/<taskId>) shows it live via
+GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content. Long actions (add, score,
+write-materials, regenerate, refetch, meeting-prep, find-contact) are interactive tasks: they start within seconds,
+even while a pipeline runs. One pipeline runs at a time across the app (its task type), one inbox check per user; a
+pipeline or check started while the other is waiting or running waits for it (depends_on); a button press while your
+own is going is refused (onlyOne), and runs started outside the queue (npm run pipeline) are still caught by the runs
+table check. web/dist is build output (gitignored).
 A failed scheduled job emails the owner (server/alerts.ts: EMAIL_ADDRESS only, once per kind a day, cleared by the next success).
 deploy.sh: when the new image has pending migrations, it backs up to Drive with the current image first and, if the deploy
 fails, restores the pre-migration copy before restarting the old image (--no-backup, --skip-db-check for old tags).
@@ -362,8 +371,8 @@ Transactions: db.tx serializes them (a mutex), and a statement from outside wait
 savepoint. A tx body waits only on the database: no Claude, Google, browser, or timer waits (the engine fails such a
 transaction under node --test; Claude and HTTP calls refuse to run inside one). A read and the write it decides go in one
 tx (counts against a cap, check-then-update, versions); with a network call between them, say so where it happens.
-In-memory per-day caps check and record with no await in between. Task starts that check for a running run go through
-tools/runs.ts oneStartAtATime. `config` in the server is a Proxy that must answer at once: the preHandler and the
+In-memory per-day caps check and record with no await in between. A check that a task is not already waiting or
+running goes in the queue's enqueue transaction (onlyOne). `config` in the server is a Proxy that must answer at once: the preHandler and the
 scheduler load each user's settings first (agents/user-config.ts withUserConfig). Never pass an async function to an
 array method (.map, .filter, .some) except into Promise.all.
 Portable SQL (v3 Phase 4; PostgreSQL joins SQLite, and SQLite stays supported for local use): app SQL runs on both.
@@ -414,7 +423,8 @@ claimed twice; it honors pool concurrency, the per-user limit, one_at_a_time (no
 workers, depends_on, and priority with aging below INTERACTIVE_BAND. Handlers run in runAsUser with heartbeats and a
 timeout; failures retry while retry_limit allows (AI types 0), then dead; the sweep closes abandoned jobs and their runs;
 prune keeps 30 days. Only tools/queue touches these tables (test/user-scope.test.js exempts it; reads take a uid).
-test/queue.test.js. Phase 6's later PRs wire the app's tasks, scheduler and pipeline onto it and add Admin > Jobs.
+test/queue.test.js. Every app task, the scheduler, and /api/tasks run on it (server/jobs.ts, PR 2); the demo seeds its sample
+tasks through queue.record. Later PRs split the pipeline into step tasks and add Admin > Jobs.
 Backups on PostgreSQL run in the backup container (Dockerfile target backup: the runtime plus PostgreSQL 18's programs,
 PG_BIN; the app image has none): scripts/backup-service.js serves SCHEDULE_BACKUP and SCHEDULE_RESTORE_TEST (the app's
 scheduler skips them on PostgreSQL) and the commands backup-now, restore-test, pre-migrate (exit 0 none, 10 pending and

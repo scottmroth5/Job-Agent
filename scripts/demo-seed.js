@@ -21,7 +21,9 @@ import { addNote } from '../agents/notes.ts';
 import { companyTitleKey } from '../tools/urls.ts';
 import { DEFAULT_SCORE_MODEL } from '../agents/discovery/score.ts';
 import { pickResume } from '../agents/resumes.ts';
-import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, SAMPLE_SCAM, SAMPLE_SCAM_TEXT, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.ts';
+import { CANDIDATE, DEMO_CONFIG, DEMO_RESUMES, DEMO_SKIPPED_SITES, JOBS, PROMPT_EDITS, REVIEW_EMAIL, SAMPLE_CHECK_CLAIMS, SAMPLE_SCAM, SAMPLE_SCAM_TEXT, SAMPLE_TASKS, STRENGTHS, WATCH_OUTS, companyBlurb } from '../demo/sample-data.ts';
+import { createQueue } from '../tools/queue/queue.ts';
+import { OWNER_ID } from '../db/users.ts';
 import { saveCheck } from '../agents/letter-checks.ts';
 import { VERIFY_MODEL } from '../agents/hunt/verify-letter.ts';
 import { SCAM_MODEL, scamSignals } from '../agents/discovery/scam.ts';
@@ -260,6 +262,13 @@ export async function seedDemo({ dbPath = dataPath('job-agent.db'), configPath =
   const setResume = db.prepare('UPDATE artifacts SET resume_id = ? WHERE id = ? AND user_id = @uid');
   for (const a of /** @type {Array<{ id: number, title: string }>} */ (await db.prepare('SELECT a.id, p.title FROM artifacts a JOIN postings p ON p.id = a.posting_id AND p.user_id = a.user_id WHERE a.user_id = @uid').all())) {
     await setResume.run((await pickResume(db, a.title))?.id ?? null, a.id);
+  }
+
+  // Finished tasks for the Activity tab (the demo runs no workers), stored through the queue as if they had run.
+  const queue = createQueue({ db: store.admin });
+  for (const [i, t] of SAMPLE_TASKS.entries()) {
+    const startedAt = new Date(now.getTime() - (SAMPLE_TASKS.length - i) * 3600_000);
+    await queue.record({ userId: OWNER_ID, type: t.kind, payload: t.meta, result: t.result ?? null, lines: t.output, startedAt, finishedAt: new Date(startedAt.getTime() + 4 * 60_000) });
   }
 
   store.close();

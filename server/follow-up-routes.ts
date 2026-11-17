@@ -8,7 +8,8 @@ import { demoContactResult } from '../demo/sample-data.ts';
 import type { Claude } from '@scottmroth5/agent-core';
 import type { JobStore } from '../tools/types.ts';
 import type { UserConfig } from '../agents/user-config.ts';
-import type { App, IdParams, RouteServices, StartTask } from './types.ts';
+import type { App, IdParams, RouteServices } from './types.ts';
+import type { Jobs } from './jobs.ts';
 
 export const CONTACT_SEARCHES_PER_DAY = 20;
 const anyObject = { type: 'object', additionalProperties: true };
@@ -16,9 +17,15 @@ const idParams = { type: 'object', required: ['id'], properties: { id: { type: '
 
 export function registerFollowUpRoutes(
   app: App,
-  { store, config, services, startTask, demo = false }: { store: JobStore; config: UserConfig; services: Pick<RouteServices, 'claude' | 'knowledge'>; startTask: StartTask; demo?: boolean },
+  { store, config, services, jobs, demo = false }: { store: JobStore; config: UserConfig; services: Pick<RouteServices, 'claude' | 'knowledge'>; jobs: Jobs; demo?: boolean },
 ) {
   const { db } = store;
+  jobs.define<{ id: number }>('find-contact', async ({ id }, { step, run }) => {
+    if (!services.claude) throw new Error('AI is not available here.');
+    const r = await findContact({ store, config, claude: services.claude as Claude, knowledge: await services.knowledge(), run: run as NonNullable<typeof run>, postingId: id, onStep: step });
+    step('Saved as a note on the job');
+    return r;
+  });
 
   // The demo's Find someone to contact: a canned sample answer for the job, as a read. It calls no model, so the demo
   // never spends anything, and saves nothing. Registered only in the demo.
@@ -29,7 +36,6 @@ export function registerFollowUpRoutes(
       return { sample: true, markdown: demoContactResult({ company: p.company, title: p.title, appliedOn: p.applied_on }) };
     });
   }
-  const searches = new Map<number, number[]>(); // uid -> timestamps in the last day
   const settings = async () => ({ staleDays: await staleDays(db), defaultStaleDays: DEFAULT_STALE_DAYS, followUpFrom: FOLLOW_UP_FROM, min: MIN_STALE_DAYS, max: MAX_STALE_DAYS });
 
   app.get('/api/follow-ups', { schema: { summary: 'Your follow-up settings and how many applications are waiting: worth a follow-up, and stale', response: { 200: anyObject } } }, async () => {
@@ -71,18 +77,11 @@ export function registerFollowUpRoutes(
       const id = req.params.id;
       if (!await db.prepare('SELECT 1 FROM postings WHERE id = ? AND user_id = @uid').get(id)) return reply.code(404).send({ error: 'Job not found' });
       const uid = req.uid ?? OWNER_ID;
-      const day = Date.now() - 24 * 3600 * 1000;
-      const recent = (searches.get(uid) ?? []).filter((t) => t > day);
-      if (recent.length >= CONTACT_SEARCHES_PER_DAY) return reply.code(429).send({ error: 'That is a lot of searches for one day. Try again tomorrow.' });
-      searches.set(uid, [...recent, Date.now()]);
-      const knowledge = await services.knowledge();
-      const taskId = await startTask('find-contact', { id }, async (step, { run }) => {
-        // services.claude was checked above, before the task started.
-        const r = await findContact({ store, config, claude: services.claude as Claude, knowledge, run, postingId: id, onStep: step });
-        step('Saved as a note on the job');
-        return r;
-      });
-      return reply.code(202).send({ taskId });
+      // Counted from the stored tasks, so the limit holds across a restart.
+      if (await jobs.queue.countSince(uid, 'find-contact', new Date(Date.now() - 24 * 3600 * 1000)) >= CONTACT_SEARCHES_PER_DAY) {
+        return reply.code(429).send({ error: 'That is a lot of searches for one day. Try again tomorrow.' });
+      }
+      return reply.code(202).send({ taskId: await jobs.start('find-contact', { id }) });
     },
   );
 }

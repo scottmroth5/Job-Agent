@@ -24,7 +24,6 @@ import { claimSetting, getSetting } from '../db/settings.ts';
 import { getUser, OWNER_ID, syncOwnerEmail } from '../db/users.ts';
 import { sendEmail } from '../tools/google/gmail.ts';
 import { assertSafeBinding, authSettings } from './auth.ts';
-import { SAMPLE_TASKS } from '../demo/sample-data.ts';
 import type { AppServices, RunScript } from './app.ts';
 import type { Notices } from './types.ts';
 import type { BudgetExceededError } from '../agents/budget.ts';
@@ -117,7 +116,6 @@ const demoServices = (): AppServices => ({
   runPipeline: async () => ({ code: 1, lastError: 'Turned off in the demo.' }),
   schedules: [],
   inbox: { ready: () => false, gmail: demoOff, key: demoOff, cfg: loadInboxConfig() },
-  sampleTasks: SAMPLE_TASKS,
 });
 
 const services = demo ? demoServices() : realServices();

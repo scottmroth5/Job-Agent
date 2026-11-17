@@ -25,6 +25,8 @@ const ALLOWED = {
   'scripts/backup-verify.js': 'table counts for the restore test',
   'scripts/backup-service.js': 'when the backup and the restore test last ran (the runs table, app-wide), as the app scheduler reads it',
   'scripts/db-types.js': 'the schema (sqlite_master) of a throwaway database',
+  'server/jobs.ts': "the task queue (tools/queue: claims across users, every read names its uid) and each task's user's time zone and settings by id",
+  'scripts/demo-seed.js': "the demo's sample tasks, stored through the queue as the owner's",
   'tools/knowledge.ts': "the owner's knowledge doc (backgroundFor names its user)",
 };
 
