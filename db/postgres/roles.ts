@@ -35,3 +35,40 @@ export const JA_LOGINS: Logins = { owner: 'ja_migrate', app: 'ja_app', backup: '
 
 /** The options every login is made with: it signs in, and nothing more. */
 export const LOGIN_OPTIONS = 'LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS';
+
+/** Production's database on the shared RDS: text sorts byte by byte (C collation), as on SQLite. */
+export const DATABASE = 'job_agent';
+const NAME = /^[a-z][a-z0-9_]{0,40}$/;
+
+/** A pg client, as setupRoles needs it. */
+interface SetupClient {
+  query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
+  escapeLiteral: (s: string) => string;
+}
+
+/**
+ * The one-time step, connected to the server's postgres database as RDS's master login (scripts/db-setup.js): the three
+ * logins (made, or their passwords reset) and the database, owned by the owner login. Running it again never drops
+ * anything. Passwords are quoted with escapeLiteral and never logged.
+ */
+export async function setupRoles(client: SetupClient, { logins = JA_LOGINS, database = DATABASE, passwords }: { logins?: Logins; database?: string; passwords: Record<keyof Logins, string> }) {
+  for (const n of [database, ...Object.values(logins)]) if (!NAME.test(n)) throw new TypeError('names: lowercase letters, digits and _ only');
+  const q = (n: string) => `"${n}"`;
+  for (const key of Object.keys(logins) as Array<keyof Logins>) {
+    const pw = passwords[key];
+    if (typeof pw !== 'string' || pw.length < 24) throw new TypeError(`setupRoles: the ${key} password must be at least 24 characters`);
+    const present = (await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [logins[key]])).rows.length > 0;
+    await client.query(`${present ? 'ALTER' : 'CREATE'} ROLE ${q(logins[key])} WITH ${LOGIN_OPTIONS} PASSWORD ${client.escapeLiteral(pw)}`);
+  }
+  if (!(await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [database])).rows.length) {
+    // CREATE DATABASE ... OWNER needs the caller to act as that owner (PostgreSQL 16+): a membership for this step only.
+    await client.query(`GRANT ${q(logins.owner)} TO CURRENT_USER`);
+    try {
+      await client.query(`CREATE DATABASE ${q(database)} OWNER ${q(logins.owner)} TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C'`);
+    } finally {
+      await client.query(`REVOKE ${q(logins.owner)} FROM CURRENT_USER`);
+    }
+  }
+  await client.query(`REVOKE ALL ON DATABASE ${q(database)} FROM PUBLIC`);
+  await client.query(`GRANT CONNECT ON DATABASE ${q(database)} TO ${q(logins.app)}, ${q(logins.backup)}`);
+}

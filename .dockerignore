@@ -25,3 +25,9 @@ Dockerfile
 
 # The app icon source (1024 px); the served sizes are in web/public.
 assets/
+# The Terraform (v3 Phase 5) never goes into the image, nor its local state or settings files.
+infra/
+*.tfstate
+*.tfstate.*
+*.tfvars
+backend.hcl

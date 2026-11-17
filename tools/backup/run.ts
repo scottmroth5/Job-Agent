@@ -11,7 +11,13 @@ import { checkPassphrase, decrypt, encrypt, pack, sha256, unpack } from './crypt
 import type { Kdf } from './crypto.ts';
 import type { BackupDrive } from './drive.ts';
 
-export const DRIVE_FOLDER = 'Job Agent Backups';
+/** Production's Drive folder: the cut-over loads its newest backup (backup-service.js load-from-backup). */
+export const PRODUCTION_DRIVE_FOLDER = 'Job Agent Backups';
+/**
+ * Where this server's backups go and the restore test reads: production's folder, unless BACKUP_DRIVE_FOLDER names
+ * another (a staging server during the rehearsal, so it never adds to or prunes production's backups).
+ */
+export const DRIVE_FOLDER = process.env.BACKUP_DRIVE_FOLDER?.trim() || PRODUCTION_DRIVE_FOLDER;
 export const RETENTION = { nightly: 7, weekly: 3, monthly: 1 }; // the same as Health-Review
 export const DB_ENTRY = 'job-agent.db';
 /** A PostgreSQL backup's database: pg_dump's custom format (v3 Phase 5). */

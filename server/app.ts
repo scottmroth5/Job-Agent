@@ -674,7 +674,9 @@ export async function buildApp({ store, config, services: given, webDir, authMod
 
     let synced = new Set<string>();
     const sync = async () => {
-      const on = await automatedUsers(store.admin, automationHooks.defaults);
+      // AUTOMATIC_RUNS=off (a staging server holding a copy of the real data, v3 Phase 5) schedules nobody's runs, so a
+      // rehearsal never spends on Claude or searches or runs the pipeline twice; the Run pipeline button still works.
+      const on = process.env.AUTOMATIC_RUNS === 'off' ? [] : await automatedUsers(store.admin, automationHooks.defaults);
       const want = new Map<string, ScheduledJob>();
       for (const { uid, automation: a } of on) {
         if (pipeline && a.pipeline) want.set(jobOf(uid, 'pipeline'), { name: jobOf(uid, 'pipeline'), schedule: parseSchedule(a.pipeline), run: pipelineRun(uid), lastRanAt: lastRanAt('pipeline', uid) });
