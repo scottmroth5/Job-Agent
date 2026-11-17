@@ -15,11 +15,24 @@
 # GitHub Actions reaches this script through a deploy key whose authorized_keys line forces this command, so the key
 # can run nothing else: command="/opt/job-agent/deploy.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty
 # In that case the requested words arrive in SSH_ORIGINAL_COMMAND and are checked below before anything runs.
+#
+# PostgreSQL servers (v3 Phase 5, like Health-Review's): ./server.conf (written at first boot by infra/user-data.sh; not
+# secret) holds DB_ENGINE=postgres and ENV_SOURCE=ssm. Then .env and backup.env are rebuilt from Parameter Store before
+# each start (env-from-ssm.sh), the backup container (compose profile postgres, image <tag>-backup) runs with the app,
+# the app runs in deploy mode (it never migrates or opens SQLite), and a deploy that would migrate goes: pre-migrate (a
+# pg_dump restored into a scratch cluster and migrated there first; the checked dump is kept in data/backups), the
+# encrypted Drive backup with the current image, scripts/migrate.js as the owner login, then the new image; if it fails,
+# the dump goes back over the database before the old image runs. Without server.conf (the Lightsail server) everything
+# runs as before, on SQLite.
 set -euo pipefail
 
 cd "$(dirname "$(readlink -f "$0")")"
-CURRENT_FILE=.deployed-tag
-PREVIOUS_FILE=.previous-tag
+# Where deploy.sh keeps its own files: state/ when the folder exists (the EC2 server, where the deploy user may not write
+# to /opt/job-agent itself), else this folder (the Lightsail server).
+STATE_DIR=.
+[[ -d state ]] && STATE_DIR=state
+CURRENT_FILE="$STATE_DIR/.deployed-tag"
+PREVIOUS_FILE="$STATE_DIR/.previous-tag"
 HEALTH_WAIT_SECONDS=120
 
 log() { printf '[deploy] %s\n' "$*"; }
@@ -37,13 +50,32 @@ OPTION="${ARGS[2]:-}"
 [[ ${#ARGS[@]} -le 3 ]] || fail "Too many arguments."
 [[ -z "$OPTION" || "$OPTION" == --no-backup || "$OPTION" == --skip-db-check ]] || fail "Unknown option \"$OPTION\"."
 
+# server.conf is read by matching whole lines, never sourced.
+conf() { [[ -f server.conf ]] && grep -qx "$1" server.conf; }
+POSTGRES=0
+SERVICES=(app demo)
+if conf 'DB_ENGINE=postgres'; then
+  POSTGRES=1
+  SERVICES+=(backup)
+  # The backup service's profile, and the app's deploy mode (compose.yml reads these two).
+  export COMPOSE_PROFILES=postgres JA_REQUIRE_POSTGRES=1 JA_DATABASE_MIGRATIONS=deploy
+fi
+
 valid_tag() { [[ "$1" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]]; }
 
 # One deploy at a time, even if two pushes land close together.
-exec 9> .deploy.lock
+exec 9> "$STATE_DIR/.deploy.lock"
 flock -w 600 9 || fail "Another deploy is still running."
 
 compose() { IMAGE_TAG="$1" docker compose "${@:2}"; }
+
+# The settings from Parameter Store (servers with ENV_SOURCE=ssm), refreshed before every start.
+refresh_env() {
+  if conf 'ENV_SOURCE=ssm'; then ./env-from-ssm.sh || fail "Could not read the settings from Parameter Store; nothing changed."; fi
+}
+
+# A one-off backup container of this tag (PostgreSQL servers): scripts/backup-service.js <command>.
+backup_run() { local tag="$1"; shift; IMAGE_TAG="$tag" docker compose run --rm --no-deps -T backup node scripts/backup-service.js "$@"; }
 
 # Both the app and the public demo must answer /healthz before a deploy counts as good.
 healthy() {
@@ -77,6 +109,10 @@ db_check() {
 restore_pre_migration() {
   local tag="$1"
   IMAGE_TAG="$tag" docker compose stop app || true
+  if (( POSTGRES )); then
+    backup_run "$tag" restore-pre-migration
+    return
+  fi
   app_run "$tag" --entrypoint sh app -c 'set -e
     f=$(ls -1 /data/backups/pre-migration-*.db 2>/dev/null | sort | tail -1)
     [ -n "$f" ] && [ "$f" -nt /data/.deploy-started ] || { echo "[deploy] no pre-migration copy from this deploy" >&2; exit 1; }
@@ -89,9 +125,36 @@ restore_pre_migration() {
 start_tag() {
   local tag="$1"
   log "Starting image $tag"
-  compose "$tag" pull app demo
+  compose "$tag" pull "${SERVICES[@]}"
   compose "$tag" up -d --remove-orphans
   healthy
+}
+
+# PostgreSQL: check, back up and migrate before the new image starts. Sets migrating=1 once migrations may have run.
+pg_prepare() {
+  local check=0
+  log "Pulling $TAG and checking whether it changes the database (on a scratch copy)"
+  IMAGE_TAG="$TAG" docker compose pull app backup
+  app_run "$TAG" --entrypoint sh app -c 'touch /data/.deploy-started'
+  backup_run "$TAG" pre-migrate || check=$?
+  if (( check == 0 )); then return 0; fi
+  (( check == 10 )) || fail "The database check of $TAG failed (a migration failed on the scratch copy). Nothing changed."
+  if [[ "$OPTION" == --no-backup ]]; then
+    log "Database changes ahead; the Drive backup is skipped (--no-backup); the checked dump is kept"
+  else
+    [[ -n "$current" ]] || fail "Database changes ahead but no current image to back up with. Run: ./deploy.sh deploy $TAG --no-backup"
+    log "Database changes ahead: encrypted Drive backup with $current first"
+    backup_run "$current" backup-now || fail "The backup failed, so $TAG was not started and nothing changed."
+  fi
+  migrating=1
+  log "Migrating the database with $TAG"
+  # In the backup container: only it holds the owner login (backup.env); the image is this tag's.
+  if ! IMAGE_TAG="$TAG" docker compose run --rm --no-deps -T backup node scripts/migrate.js; then
+    log "The migration failed; putting the database back"
+    restore_pre_migration "$TAG" || fail "Could not put the database back. Check data/backups on the server."
+    if [[ -n "$current" ]]; then start_tag "$current" || true; fi
+    fail "Deploy of $TAG failed at its migration; the database is back as it was."
+  fi
 }
 
 case "$ACTION" in
@@ -99,7 +162,10 @@ case "$ACTION" in
     valid_tag "$TAG" || fail "deploy needs an image tag (letters, digits, dot, dash, underscore)."
     current="$(cat "$CURRENT_FILE" 2>/dev/null || true)"
     migrating=0
-    if [[ "$OPTION" != --skip-db-check ]]; then
+    refresh_env
+    if (( POSTGRES )) && [[ "$OPTION" != --skip-db-check ]]; then
+      pg_prepare
+    elif [[ "$OPTION" != --skip-db-check ]]; then
       log "Pulling $TAG and checking whether it changes the database"
       IMAGE_TAG="$TAG" docker compose pull app
       check=0
@@ -127,7 +193,7 @@ case "$ACTION" in
       docker image prune -af >/dev/null 2>&1 || true
     else
       log "Image $TAG did not pass /healthz within ${HEALTH_WAIT_SECONDS}s"
-      docker compose logs --tail 40 app demo >&2 || true
+      docker compose logs --tail 40 "${SERVICES[@]}" >&2 || true
       if [[ -n "$current" ]]; then
         if (( migrating )); then restore_pre_migration "$TAG" || fail "Could not put the database back; $current not started. Check data/backups on the server."; fi
         log "Going back to $current"
@@ -141,6 +207,7 @@ case "$ACTION" in
     previous="$(cat "$PREVIOUS_FILE" 2>/dev/null || true)"
     [[ -n "$previous" ]] || fail "No previous image recorded."
     current="$(cat "$CURRENT_FILE" 2>/dev/null || true)"
+    refresh_env
     start_tag "$previous" || fail "Image $previous is not healthy. Check: docker compose logs app"
     echo "$previous" > "$CURRENT_FILE"
     [[ -n "$current" ]] && echo "$current" > "$PREVIOUS_FILE"
@@ -149,6 +216,7 @@ case "$ACTION" in
   up)
     current="$(cat "$CURRENT_FILE" 2>/dev/null || true)"
     [[ -n "$current" ]] || fail "Nothing deployed yet. Run: ./deploy.sh deploy <tag>"
+    refresh_env
     start_tag "$current" || fail "Image $current is not healthy. Check: docker compose logs app"
     log "Running $current"
     ;;
