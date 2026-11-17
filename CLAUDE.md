@@ -429,7 +429,9 @@ workers, depends_on, and priority with aging below INTERACTIVE_BAND. Handlers ru
 timeout; failures retry while retry_limit allows (AI types 0), then dead; the sweep closes abandoned jobs and their runs;
 prune keeps 30 days. Only tools/queue touches these tables (test/user-scope.test.js exempts it; reads take a uid).
 test/queue.test.js. Every app task, the scheduler, and /api/tasks run on it (server/jobs.ts, PR 2); the demo seeds its sample
-tasks through queue.record. The pipeline runs as step tasks (PR 3).
+tasks through queue.record. The pipeline runs as step tasks (PR 3). test/queue-load.test.js (tasks people start begin within 5
+seconds while scheduled work fills every pool; migration 028 reserves 2 Claude workers) and test/queue-kill.test.js (a killed
+worker process: the retryable task reruns, the other fails visibly) are the proof (PR 5).
 Admin > Jobs (PR 4; server/jobs-admin-routes.ts, web/src/components/JobsAdmin.tsx, ADMIN_ONLY /api/admin/jobs, never in the
 demo): each pool's running, waiting, oldest wait, and failures today, with its limits; the task types, editable (priority,
 on, one at a time, retries, time limit, aging; checked in queue.updateType, each change in task_type_history; a new priority

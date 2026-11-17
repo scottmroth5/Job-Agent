@@ -488,11 +488,18 @@ Admin > Jobs screen (admins only, never in the demo, covered automatically by th
 Demo: shows the screen read-only with sample data only if it can do so without a queue. Otherwise, it stays hidden.
 
 Done when:
-- [ ] Killing the server mid-job loses nothing, and the job resumes or fails visibly
-- [ ] Tests prove priority order, reserved workers, aging, per-user limits, retries, dead letters, and isolation across users
-- [ ] A load test with synthetic jobs shows interactive tasks start within a target set by the owner while long jobs run
-- [ ] The old in-memory task runner and pipeline lock are removed
+- [x] Killing the server mid-job loses nothing, and the job resumes or fails visibly (test/queue-kill.test.js: a worker process killed mid-task; the retryable task runs again, the Claude task fails visibly and its run is closed)
+- [x] Tests prove priority order, reserved workers, aging, per-user limits, retries, dead letters, and isolation across users (test/queue.test.js, on SQLite and PostgreSQL)
+- [x] A load test with synthetic jobs shows interactive tasks start within a target set by the owner while long jobs run (target: within 5 seconds, set November 17; test/queue-load.test.js, under 100 ms on both engines)
+- [x] The old in-memory task runner and pipeline lock are removed (PR 2, #78)
 - [ ] A week of scheduled runs is clean
+
+As built (PRs #77 to #81):
+- **Our own queue, not pg-boss** (decision 0008): our own SQL in tools/queue on both engines, since local installs stay on SQLite. Claiming is one transaction, which both engines serialize across processes. The spike's questions became tests of our queue.
+- **Pools** start at browser 2 workers (1 per user, 1 reserved), ai 3 (2 per user, 2 reserved: migration 028, after the load test showed a second person's Claude task waiting behind the first), io 2 (1 per user, 1 reserved). Admins change them on Admin > Jobs.
+- **Payloads:** a task's payload is its own row in task_runs, a user table under row security, exported and deleted with the account and pruned after 30 days. So meeting prep and add keep what was asked in the payload rather than a separate row: the same data meeting_preps and postings keep, and the API shows only id, url, and by.
+- **The pipeline** is a parent task that queues its five steps (depends_on) and holds no worker while it waits; a failed step does not stop the next, and only a failed report fails the pipeline.
+- **The demo** hides Admin > Jobs; its Activity tab shows sample tasks stored by demo-seed.
 
 ### Phase 7: Modular split and observability
 
@@ -639,7 +646,7 @@ Defaults apply unless the owner says otherwise.
 | Is Job-Agent the right first app, rather than Health-Review? | Job-Agent | Before Phase 0 |
 | Monthly cost limit for the platform | Set at Phase 5 | Phase 5 |
 | RDS, or Lightsail's managed PostgreSQL | RDS | Phase 5 |
-| Interactive task start target | Under 30 seconds | Phase 6 |
+| Interactive task start target | Under 30 seconds (owner set: within 5 seconds, November 17) | Phase 6 |
 | Tracing backend | Cheapest that meets the rules | Phase 7 |
 | Publish production metrics, or demo only | Demo only | Phase 10 |
 | Apple Developer membership | Decide at Phase 11 | Phase 11 |
