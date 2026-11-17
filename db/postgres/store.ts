@@ -155,7 +155,9 @@ async function checkDeployed(pool: pg.Pool): Promise<null> {
  * message never repeats the address, which holds a password.
  */
 export function checkTls(url: string, env: NodeJS.ProcessEnv = process.env) {
-  if (env.NODE_ENV !== 'production' || env.DATABASE_TLS === 'off') return;
+  // The demo (AUTH_MODE=demo) holds sample data only, on its own private network, so it never needs this either; that
+  // keeps a new image working with a server compose.yml that predates DATABASE_TLS.
+  if (env.NODE_ENV !== 'production' || env.DATABASE_TLS === 'off' || env.AUTH_MODE === 'demo') return;
   let u: URL;
   try {
     u = new URL(url);
