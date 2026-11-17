@@ -87,7 +87,9 @@ const realServices = (): AppServices => ({
   // args are only the step flags (agents/automation.ts skipArgs); nothing else reaches the command line.
   runPipeline: ({ user, args = [], ...opts }) =>
     (services.runScript as RunScript)({ ...opts, script: 'scripts/pipeline.js', args: [...(user ? [`--user=${Number(user)}`] : []), ...args.filter((a) => a === '--no-score' || a === '--no-letters')] }),
-  schedules: schedulesFromEnv(process.env),
+  // On PostgreSQL the backup container runs the backup and the restore test (scripts/backup-service.js); the app's image
+  // has no pg_dump, so its scheduler leaves them out.
+  schedules: schedulesFromEnv(process.env).filter((j) => store.engine !== 'postgres' || (j.name !== 'backup' && j.name !== 'restore-test')),
   inbox: {
     ready: () => Boolean(process.env.GMAIL_REFRESH_TOKEN && process.env.EMAIL_ENC_KEY),
     gmail: (opts = {}) => createGmail({ auth: getInboxAuth(), ...opts }),

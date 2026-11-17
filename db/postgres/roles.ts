@@ -30,5 +30,8 @@ export function grantStatements(schema: string, { owner, app, backup }: Logins):
   ];
 }
 
+/** Production's login names on the shared RDS (scripts/db-setup.js makes them). */
+export const JA_LOGINS: Logins = { owner: 'ja_migrate', app: 'ja_app', backup: 'ja_backup' };
+
 /** The options every login is made with: it signs in, and nothing more. */
 export const LOGIN_OPTIONS = 'LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS';

@@ -378,7 +378,7 @@ Application changes:
    - **Migrating:** `scripts/migrate.js` migrates, as the owner login.
    - **No silent fallback:** with `REQUIRE_POSTGRES=1`, the app never opens a SQLite file.
    - **PostgreSQL 18:** local, CI and the demo match RDS, and the test database uses C collation.
-2. **A backup container,** ported from Health-Review:
+2. **Done (PR 2): a backup container,** ported from Health-Review:
    - `pg_dump` as `ja_backup`, into the existing encrypted `.jabk` backup with settings and attachments;
    - each dump checked in a throwaway cluster;
    - the monthly restore test into a scratch database, comparing counts;

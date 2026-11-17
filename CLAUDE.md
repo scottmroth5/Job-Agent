@@ -407,6 +407,16 @@ migration is pending, row security is missing, or it is a superuser; ja_backup r
 the Dockerfile certs stage; db/postgres/store.ts checkTls); DATABASE_TLS=off waives it only for the demo's demo-db.
 REQUIRE_POSTGRES=1 makes openJobStore refuse to open a SQLite file. PostgreSQL 18 everywhere (RDS, compose.dev.yml, CI,
 demo-db); the test database and production use C collation. test/pg-production.test.js runs the three-login shape.
+Backups on PostgreSQL run in the backup container (Dockerfile target backup: the runtime plus PostgreSQL 18's programs,
+PG_BIN; the app image has none): scripts/backup-service.js serves SCHEDULE_BACKUP and SCHEDULE_RESTORE_TEST (the app's
+scheduler skips them on PostgreSQL) and the commands backup-now, restore-test, pre-migrate (exit 0 none, 10 pending and
+tried on a scratch copy, 1 failed), restore-pre-migration, reset-database --confirm <db>, load-from-backup (the cut-over:
+a SQLite backup through db:to-postgres's copy). pg_dump (as ja_backup) goes into the same encrypted .jabk as
+job-agent.dump, checked by restoring it into a scratch cluster first (tools/backup/pg.ts withScratchCluster: initdb in
+the OS temp folder, Unix socket only, deleted after); the restore test does the same and compares counts. tools/backup/pg.ts
+is the only code that starts PostgreSQL's programs: argument arrays, connection details as PG* variables, errors by
+program and exit code only. test/backup-pg.test.js needs PG_BIN (CI's PostgreSQL job installs it; locally, run it in
+the backup image: docker build --target backup).
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
