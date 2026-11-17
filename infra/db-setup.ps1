@@ -26,7 +26,9 @@ function Out($name) {
 }
 function New-Password {
   $bytes = [byte[]]::new(32)
-  [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+  # Create().GetBytes works in Windows PowerShell 5.1 as well as PowerShell 7 (Fill exists only in 7).
+  $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+  try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
   return [Convert]::ToBase64String($bytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
 }
 
