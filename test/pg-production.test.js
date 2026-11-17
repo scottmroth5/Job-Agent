@@ -22,6 +22,8 @@ test('in production a remote PostgreSQL address must check the server certificat
     assert.doesNotThrow(() => checkTls(local, prod), 'this machine needs no certificate');
   }
   assert.doesNotThrow(() => checkTls('postgres://demo@demo-db:5432/demo', { ...prod, DATABASE_TLS: 'off' }), 'a private Docker network, said so');
+  assert.doesNotThrow(() => checkTls('postgres://demo@demo-db:5432/demo', { ...prod, AUTH_MODE: 'demo' }), 'the demo, even with an older compose.yml');
+  assert.throws(() => checkTls(RDS, { ...prod, AUTH_MODE: 'google' }), /verify-full/, 'the signed-in app is never waived');
   assert.doesNotThrow(() => checkTls(RDS, {}), 'outside production nothing is required');
   try {
     checkTls(RDS, prod);
