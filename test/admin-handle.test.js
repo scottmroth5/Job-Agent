@@ -23,6 +23,7 @@ const ALLOWED = {
   'scripts/score.js': "the owner's settings (configFor names its user)",
   'scripts/pipeline.js': "the user's settings and account checks (configFor and getUser name their user)",
   'scripts/backup-verify.js': 'table counts for the restore test',
+  'scripts/backup-service.js': 'when the backup and the restore test last ran (the runs table, app-wide), as the app scheduler reads it',
   'scripts/db-types.js': 'the schema (sqlite_master) of a throwaway database',
   'tools/knowledge.ts': "the owner's knowledge doc (backgroundFor names its user)",
 };

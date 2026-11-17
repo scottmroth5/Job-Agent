@@ -61,8 +61,16 @@ RUN mkdir -p /certs \
  && grep -q "BEGIN CERTIFICATE" /certs/rds-global-bundle.pem \
  && echo "RDS certificate bundle: $(grep -c 'BEGIN CERTIFICATE' /certs/rds-global-bundle.pem) certificates"
 
+# The PostgreSQL project's apt signing key for the backup image's postgresql-18, checked by its published fingerprint.
+FROM debian:bookworm-slim AS pgkey
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
+ && rm -rf /var/lib/apt/lists/*
+RUN curl -fsSL --max-time 60 -o /pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+ && gpg --show-keys --with-colons /pgdg.asc | grep -q '^fpr:::::::::B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8:$'
+
 # Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
-FROM node:26-bookworm-slim
+FROM node:26-bookworm-slim AS runtime
 ENV NODE_ENV=production \
     DATA_DIR=/data \
     HOST=0.0.0.0 \
@@ -91,3 +99,25 @@ EXPOSE 5178
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||5178)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server/index.js"]
+
+# The backup image (v3 Phase 5): the runtime plus PostgreSQL 18's programs (pg_dump, pg_restore, and initdb for scratch
+# clusters), from the PostgreSQL project's apt repository. Only scripts/backup-service.js runs here; the app image below
+# has none of these programs. No cluster is made at install, and ssl-cert's throwaway key pair is removed in the same
+# layer (a published image carries no private key).
+FROM runtime AS backup
+USER root
+COPY --from=pgkey /pgdg.asc /usr/share/keyrings/postgresql.asc
+RUN echo 'deb [signed-by=/usr/share/keyrings/postgresql.asc] https://apt.postgresql.org/pub/repos/apt bookworm-pgdg main' > /etc/apt/sources.list.d/pgdg.list \
+ && mkdir -p /etc/postgresql-common/createcluster.d \
+ && echo 'create_main_cluster = false' > /etc/postgresql-common/createcluster.d/no-main.conf \
+ && apt-get update \
+ && apt-get install -y --no-install-recommends postgresql-18 \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -f /etc/ssl/private/ssl-cert-snakeoil.key /etc/ssl/certs/ssl-cert-snakeoil.pem
+ENV PG_BIN=/usr/lib/postgresql/18/bin
+USER node
+HEALTHCHECK NONE
+CMD ["node", "scripts/backup-service.js"]
+
+# The default target: the app and demo image (no PostgreSQL programs).
+FROM runtime AS app

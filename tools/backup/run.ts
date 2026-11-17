@@ -14,6 +14,8 @@ import type { BackupDrive } from './drive.ts';
 export const DRIVE_FOLDER = 'Job Agent Backups';
 export const RETENTION = { nightly: 7, weekly: 3, monthly: 1 }; // the same as Health-Review
 export const DB_ENTRY = 'job-agent.db';
+/** A PostgreSQL backup's database: pg_dump's custom format (v3 Phase 5). */
+export const PG_DB_ENTRY = 'job-agent.dump';
 const NAME = /^jobs-(\d{4}-\d{2}-\d{2})\.jabk$/;
 
 export const backupName = (date: string) => `jobs-${date}.jabk`;
@@ -66,7 +68,9 @@ const safeEntry = (name: unknown) => typeof name === 'string' && name.length > 0
 
 /**
  * One backup, from options:
- *   backup   store.backup: an online snapshot of the live database (safe while the app runs)
+ *   backup   store.backup: an online snapshot of the live SQLite database (safe while the app runs)
+ *   pgUrl    or a PostgreSQL database: the backup login's address (never logged); pg_dump, checked by restoring it
+ *            into a scratch cluster (pgSnapshot), in the backup container only
  *   extras   other single files to include when they exist
  *   folders  folders to include whole (e.g. attachments)
  *   drive    createBackupDrive(...) or a fake; with toDir the upload is skipped
@@ -75,9 +79,10 @@ const safeEntry = (name: unknown) => typeof name === 'string' && name.length > 0
  *   kdf      scrypt settings (tests only)
  *   tempRoot where the plaintext snapshot is made and deleted (the OS temp folder; tests pass their own)
  */
-export async function runBackup({ backup, passphrase, extras = [], folders = [], drive, toDir, date, kdf, tempRoot = tmpdir() }: {
-  /** Writes an online snapshot of the open database to a file: store.backup (db/index.ts). */
-  backup: (to: string) => Promise<void>;
+export async function runBackup({ backup, pgUrl, passphrase, extras = [], folders = [], drive, toDir, date, kdf, tempRoot = tmpdir() }: {
+  /** Writes an online snapshot of the open SQLite database to a file: store.backup (db/index.ts). */
+  backup?: (to: string) => Promise<void>;
+  pgUrl?: string;
   passphrase: string | undefined;
   extras?: Array<{ name: string; path: string }>;
   folders?: Array<{ name: string; dir: string }>;
@@ -88,15 +93,20 @@ export async function runBackup({ backup, passphrase, extras = [], folders = [],
   tempRoot?: string;
 }) {
   checkPassphrase(passphrase);
+  if (!backup === !pgUrl) throw new Error('runBackup: give either a SQLite backup or a PostgreSQL address');
   if (!drive && !toDir) throw new Error('Nowhere to put the backup');
   const tmp = mkdtempSync(join(tempRoot, 'ja-backup-'));
   try {
-    const snapshot = join(tmp, DB_ENTRY);
-    await backup(snapshot);
-    if (integrityOf(snapshot) !== 'ok') throw new Error('The database snapshot failed its integrity check; nothing was uploaded');
+    const entry = pgUrl ? PG_DB_ENTRY : DB_ENTRY;
+    const snapshot = join(tmp, entry);
+    if (pgUrl) await pgSnapshot(pgUrl, snapshot);
+    else {
+      await (backup as (to: string) => Promise<void>)(snapshot);
+      if (integrityOf(snapshot) !== 'ok') throw new Error('The database snapshot failed its integrity check; nothing was uploaded');
+    }
 
     const dbBytes = readFileSync(snapshot);
-    const files = [{ name: DB_ENTRY, data: dbBytes }];
+    const files = [{ name: entry, data: dbBytes }];
     for (const x of extras) {
       try {
         files.push({ name: x.name, data: readFileSync(x.path) });
@@ -138,6 +148,27 @@ export async function runBackup({ backup, passphrase, extras = [], folders = [],
 }
 
 /**
+ * A checked PostgreSQL snapshot at file: pg_dump, then restored into a throwaway cluster, which must hold the app's tables
+ * (users and schema_migrations) for the dump to count. Backup container only (tools/backup/pg.ts).
+ */
+export async function pgSnapshot(url: string, file: string) {
+  const { dump, restoreInto, withScratchCluster } = await import('./pg.ts');
+  await dump(url, file);
+  const tables = await withScratchCluster(async (scratch) => {
+    await restoreInto(scratch, file);
+    const { default: pg } = await import('pg');
+    const client = new pg.Client({ connectionString: scratch });
+    await client.connect();
+    try {
+      return (await client.query<{ t: string }>("SELECT table_name AS t FROM information_schema.tables WHERE table_schema = 'public'")).rows.map((r) => r.t);
+    } finally {
+      await client.end();
+    }
+  });
+  if (!tables.includes('users') || !tables.includes('schema_migrations')) throw new Error('The database dump did not restore with its tables; nothing was uploaded');
+}
+
+/**
  * Decrypts a backup into new files: the database at outPath (never over an existing file) and everything else
  * (search settings, attachments) under a new "restored" folder next to it, keeping their paths. Checks the
  * restored database's integrity.
@@ -145,7 +176,11 @@ export async function runBackup({ backup, passphrase, extras = [], folders = [],
 export function restoreBackup({ file, passphrase, outPath }: { file: Buffer; passphrase: string; outPath: string }) {
   const files = unpack(decrypt(file, passphrase));
   const db = files.find((f) => f.name === DB_ENTRY);
-  if (!db) throw new Error('The backup has no database in it');
+  if (!db) {
+    throw new Error(files.some((f) => f.name === PG_DB_ENTRY)
+      ? 'This is a PostgreSQL backup (job-agent.dump); load it with the backup container (backup-service.js load-from-backup)'
+      : 'The backup has no database in it');
+  }
   const others = files.filter((f) => f !== db);
   for (const f of others) if (!safeEntry(f.name)) throw new Error(`The backup holds an unsafe file name: ${JSON.stringify(f.name)}`);
   const restoredDir = join(dirname(outPath), 'restored');
