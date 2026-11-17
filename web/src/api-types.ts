@@ -281,6 +281,73 @@ export interface ApiOperations {
       [key: string]: unknown;
     };
   };
+  /** The task queue: pools, task types, recent changes, dead letters, and totals by type (admin) */
+  "GET /api/admin/jobs": {
+    params: Record<string, never>;
+    query: {
+      days?: number;
+    };
+    body: never;
+    response: {
+      [key: string]: unknown;
+    };
+  };
+  /** Change a pool's workers, per-user limit, and workers reserved for tasks people start (admin) */
+  "PUT /api/admin/jobs/pools/:pool": {
+    params: {
+      pool: "browser" | "ai" | "io";
+    };
+    query: Record<string, never>;
+    body: {
+      concurrency: number;
+      perUser: number;
+      reserved: number;
+    };
+    response: {
+      [key: string]: unknown;
+    };
+  };
+  /** Discard a dead task (admin) */
+  "POST /api/admin/jobs/tasks/:id/discard": {
+    params: {
+      id: string;
+    };
+    query: Record<string, never>;
+    body: never;
+    response: {
+      [key: string]: unknown;
+    };
+  };
+  /** Run a dead task again (admin) */
+  "POST /api/admin/jobs/tasks/:id/retry": {
+    params: {
+      id: string;
+    };
+    query: Record<string, never>;
+    body: never;
+    response: {
+      [key: string]: unknown;
+    };
+  };
+  /** Change a task type's priority, on or off, one at a time, retries, time limit, or aging (admin) */
+  "PATCH /api/admin/jobs/types/:id": {
+    params: {
+      id: string;
+    };
+    query: Record<string, never>;
+    body: {
+      priority?: number;
+      enabled?: boolean;
+      oneAtATime?: "none" | "user" | "app";
+      retryLimit?: number;
+      timeoutSeconds?: number;
+      agingMinutes?: number | null;
+      applyToWaiting?: boolean;
+    };
+    response: {
+      [key: string]: unknown;
+    };
+  };
   /** The lists with how many jobs use each value */
   "GET /api/admin/lookups": {
     params: Record<string, never>;

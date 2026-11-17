@@ -208,6 +208,11 @@ export const api = {
   adminFeedback: () => request('GET /api/admin/feedback', '/api/admin/feedback'),
   adminUsage: (weeks = 12) => request('GET /api/admin/usage', `/api/admin/usage?weeks=${weeks}`),
   feedbackDone: (id: Id) => request('POST /api/admin/feedback/:id/done', `/api/admin/feedback/${id}/done`),
+  adminJobs: (days = 30) => request('GET /api/admin/jobs', `/api/admin/jobs?days=${days}`),
+  setTaskType: (id: string, patch: ApiBody<'PATCH /api/admin/jobs/types/:id'>) => request('PATCH /api/admin/jobs/types/:id', `/api/admin/jobs/types/${id}`, patch),
+  setPool: (pool: string, limits: ApiBody<'PUT /api/admin/jobs/pools/:pool'>) => request('PUT /api/admin/jobs/pools/:pool', `/api/admin/jobs/pools/${pool}`, limits),
+  retryTask: (id: string) => request('POST /api/admin/jobs/tasks/:id/retry', `/api/admin/jobs/tasks/${id}/retry`),
+  discardTask: (id: string) => request('POST /api/admin/jobs/tasks/:id/discard', `/api/admin/jobs/tasks/${id}/discard`),
   /** Sends the file as the raw body with its name and type in headers (no multipart). */
   uploadAttachment: async (jobId: Id, file: File): Promise<ApiResponse<'POST /api/postings/:id/attachments'>> => {
     const res = await send(`/api/postings/${jobId}/attachments`, {

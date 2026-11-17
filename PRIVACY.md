@@ -22,7 +22,7 @@ You sign in with Google. The app asks Google only for your email address and tha
 - Only to run the app for you. Data is not sold or used for advertising, and it is shared only with the services listed under Who handles your data.
 - Job postings and the material you give the app are sent to Anthropic's Claude API when you use an AI feature.
 - The app emails you only about your own account (for example, that it was approved). The owner is emailed when someone asks for access.
-- The app's administration screens show each account's email address, name, the note given when asking for access, join date, status, last seen time, setup status, whether a key is saved or the account uses the owner's allowance, last pipeline run, number of jobs, AI spending, and feedback, but not the text of your jobs, notes, or knowledge doc, or your key. As the person who runs the server, the owner has technical access to the database, and looks at account data only to keep the app running, or when you ask.
+- The app's administration screens show each account's email address, name, the note given when asking for access, join date, status, last seen time, setup status, whether a key is saved or the account uses the owner's allowance, last pipeline run, number of jobs, AI spending, and feedback, but not the text of your jobs, notes, or knowledge doc, or your key. They also show the background task queue: each task's kind, its account, its status and times, and the error message of one that failed, but not what was asked or its output. As the person who runs the server, the owner has technical access to the database, and looks at account data only to keep the app running, or when you ask.
 
 ## Usage totals
 

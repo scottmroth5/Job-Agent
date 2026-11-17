@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import JobsAdmin from './JobsAdmin.tsx';
 import ListsAdmin from './ListsAdmin.tsx';
 import SpendingAdmin from './SpendingAdmin.tsx';
 import UsageAdmin from './UsageAdmin.tsx';
@@ -14,6 +15,7 @@ const SECTIONS: Array<[key: string, label: string, shown: (me: Me | null, demo: 
   ['spending', 'Spending', (me, demo) => isAdmin(me) && !demo],
   ['users', 'Users', (me, demo) => isAdmin(me) && !demo],
   ['usage', 'Usage', (me, demo) => isAdmin(me) && !demo],
+  ['jobs', 'Jobs', (me, demo) => isAdmin(me) && !demo],
 ];
 const sectionFromHash = () => {
   const s = /^#\/admin\/(\w+)/.exec(window.location.hash)?.[1];
@@ -60,6 +62,8 @@ export default function AdminPage() {
         <SpendingAdmin />
       ) : section === 'usage' ? (
         <UsageAdmin />
+      ) : section === 'jobs' ? (
+        <JobsAdmin />
       ) : null}
     </>
   );
