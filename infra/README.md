@@ -92,34 +92,38 @@ The shared RDS instance adds nothing unless it has to grow. If it runs short of 
    - no email to you and no Gmail inbox;
    - its own Drive backup folder.
 
-## Rehearsal on staging names
-1. **Name the new server:** at Porkbun, add A records for the two staging names, pointing at `server_public_ip`. In Google Cloud, add `https://<staging app name>/auth/callback` to the OAuth client's redirect addresses.
-2. **Install the deploy files** on the server. Open a Session Manager session, become root, and run:
+## Rehearsal on staging names (done November 17, 2026)
+These are the steps as they ran, cleanly, on November 17, 2026. The app needs its settings file (`data/config/job-search.json`), which arrives with the data load, so the data is loaded before the first start.
+
+1. **Name the new server:** at the DNS provider, add A records for the two staging names, pointing at `server_public_ip`. In Google Cloud, add `https://<staging app name>/auth/google/callback` to the OAuth client's redirect addresses.
+2. **Install the deploy files.** In a Session Manager session, as root:
    ```
    cd /opt/job-agent
    for f in compose.yml Caddyfile deploy.sh env-from-ssm.sh; do curl -fsSL -o $f https://raw.githubusercontent.com/scottmroth5/Job-Agent/main/deploy/$f; done
    chmod 755 deploy.sh env-from-ssm.sh
    ```
-3. **First deploy:**
+3. **Build the settings, make the tables, and load a copy of the real data:**
    ```
-   sudo -u deploy ./deploy.sh deploy sha-<7> --no-backup
+   sudo -u deploy ./env-from-ssm.sh
+   export TAG=sha-<7>
+   sudo -u deploy env COMPOSE_PROFILES=postgres IMAGE_TAG=$TAG docker compose run --rm --no-deps backup node scripts/migrate.js
+   sudo -u deploy env COMPOSE_PROFILES=postgres IMAGE_TAG=$TAG docker compose run --rm --no-deps backup node scripts/backup-service.js load-from-backup
    ```
-   `--no-backup` is needed because there's no earlier image to back up with. The empty database gets its tables from `migrate.js`.
-4. **Load a copy of the real data:**
-   1. Stop the app and the backup service:
-      ```
-      sudo -u deploy env COMPOSE_PROFILES=postgres docker compose stop app backup
-      ```
-   2. Empty the database, then load the newest production backup into it:
-      ```
-      sudo -u deploy env COMPOSE_PROFILES=postgres docker compose run --rm --no-deps backup node scripts/backup-service.js reset-database --confirm job_agent
-      sudo -u deploy env COMPOSE_PROFILES=postgres docker compose run --rm --no-deps backup node scripts/backup-service.js load-from-backup
-      ```
-      `load-from-backup` must end with "every table matches". The newest production backup is the Lightsail server's nightly one.
-   3. Start everything again with `sudo -u deploy ./deploy.sh up`.
-5. **Smoke tests:** sign in, the jobs list, a letter download, then `backup-now` and `restore-test` with the same `docker compose run` line. Record how long the whole rehearsal took.
+   `load-from-backup` reads the newest production backup and must end with "every table matches".
+4. **First deploy:**
+   ```
+   sudo -u deploy ./deploy.sh deploy $TAG --no-backup
+   ```
+   `--no-backup` is needed because there's no earlier image on the server to back up with.
+5. **Smoke tests:**
+   - sign in, the jobs list and a job panel;
+   - a letter download and an attachment;
+   - add a note, then delete it;
+   - the demo.
 
-The cut-over itself follows `docs/runbooks/postgres-cutover.md`.
+   Then run `backup-now` and `restore-test`, with the same `docker compose run ... backup node scripts/backup-service.js` line.
+
+To load the data again later, first stop the app, the backup service and the demo. Then run `reset-database --confirm job_agent` before `load-from-backup`. The cut-over itself follows `docs/runbooks/postgres-cutover.md`.
 
 ## Files that stay on this PC (gitignored)
 `terraform.tfvars`, `backend.hcl`, `*.tfplan`, `*.tfstate`, `.terraform/` and `bootstrap/backend_override.tf`. Neither the repo nor the image ever holds them: `.dockerignore` leaves out `infra/`.
