@@ -154,3 +154,66 @@ test('load-from-backup: a SQLite backup into the empty database, every table che
     assert.equal((await query(url, "SELECT has_table_privilege($1, 'postings', 'SELECT') AS ok", [logins.app]))[0].ok, true);
   });
 });
+
+test('production shape: the backup login (read only, under row security) can pg_dump every user\'s rows', { skip }, async () => {
+  const { grantStatements } = await import('../db/postgres/roles.ts');
+  const base = /** @type {string} */ (postgresUrl());
+  const tag = randomBytes(4).toString('hex');
+  const logins = { owner: `t_po_${tag}`, app: `t_pa_${tag}`, backup: `t_pb_${tag}` };
+  const password = randomBytes(12).toString('hex');
+  const name = `t_pd_${tag}`;
+  const as = (/** @type {string} */ user) => {
+    const u = new URL(base);
+    u.username = user;
+    u.password = password;
+    u.pathname = `/${name}`;
+    return u.toString();
+  };
+  const admin = new pg.Client({ connectionString: base });
+  await admin.connect();
+  const dir = mkdtempSync(join(tmpdir(), 'ja-bk-test-'));
+  try {
+    for (const l of Object.values(logins)) await admin.query(`CREATE ROLE ${l} ${LOGIN_OPTIONS} PASSWORD '${password}'`);
+    await admin.query(`CREATE DATABASE ${name} OWNER ${logins.owner} TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C'`);
+    // As in production: the owner migrates and grants; rows of two users.
+    const owner = openPgStore(as(logins.owner), { schema: 'public', sqliteIds: sqliteIds() });
+    await owner.ready;
+    const other = await addUser(owner.admin, { email: 'second@example.com' });
+    for (const uid of [1, other]) {
+      await owner.admin.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
+        VALUES (?, ?, 'Example Co', 'CTO', ?, '2026-11-01', 'x', 'x')`).run(uid, `k${uid}`, `k${uid}`);
+    }
+    owner.close();
+    const grants = new pg.Client({ connectionString: as(logins.owner) });
+    await grants.connect();
+    for (const sql of grantStatements('public', logins)) await grants.query(sql);
+    await grants.end();
+
+    const r = await runBackup({ pgUrl: as(logins.backup), passphrase: PASSPHRASE, toDir: dir, date: '2026-11-17', kdf: KDF });
+    const file = readFileSync(join(dir, r.name));
+    const live = openPgStore(as(logins.owner), { schema: 'public', sqliteIds: sqliteIds() });
+    try {
+      await live.ready;
+      const check = await restoreTest({ file, passphrase: PASSPHRASE, live: live.admin });
+      assert.deepEqual(check.problems, []);
+      assert.equal(check.rowsBackup, check.rowsLive, 'every user\'s rows are in the backup');
+    } finally {
+      live.close();
+    }
+
+    // The deploy's steps as production runs them: the checked dump as the backup login, and a failed deploy's restore as
+    // the owner, who also obeys row security (FORCE).
+    await query(as(logins.owner), "DELETE FROM schema_migrations WHERE app = 'job-agent' AND id = '026-long-url-keys'");
+    const pre = await preMigrate({ backupUrl: as(logins.backup), dir, log: () => {} });
+    assert.equal(pre.code, 10);
+    await query(as(logins.owner), "UPDATE postings SET title = 'changed'");
+    await restorePreMigration({ migrateUrl: as(logins.owner), file: /** @type {string} */ (pre.file), logins, log: () => {} });
+    assert.deepEqual((await query(as(logins.owner), 'SELECT title FROM postings ORDER BY id')).map((r) => r.title), ['CTO', 'CTO'], 'both users\' rows are back');
+    assert.equal((await query(as(logins.owner), "SELECT has_table_privilege($1, 'postings', 'INSERT') AS ok", [logins.app]))[0].ok, true);
+  } finally {
+    await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+    for (const l of Object.values(logins)) await admin.query(`DROP ROLE IF EXISTS ${l}`).catch(() => {});
+    await admin.end();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
