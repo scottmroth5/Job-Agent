@@ -100,7 +100,7 @@ jobs:
         run: |
           key=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
           sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -fsSL --max-time 60 -o "$key" https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo curl -fsSL --retry 4 --retry-all-errors --max-time 60 -o "$key" https://www.postgresql.org/media/keys/ACCC4CF8.asc
           gpg --show-keys --with-colons "$key" | grep -q '^fpr:::::::::B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8:$'
           grep -l apt.postgresql.org /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f
           echo "deb [signed-by=$key] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null

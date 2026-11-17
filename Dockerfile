@@ -57,7 +57,7 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /certs \
- && curl -fsSL --max-time 120 -o /certs/rds-global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+ && curl -fsSL --retry 4 --retry-all-errors --max-time 120 -o /certs/rds-global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
  && grep -q "BEGIN CERTIFICATE" /certs/rds-global-bundle.pem \
  && echo "RDS certificate bundle: $(grep -c 'BEGIN CERTIFICATE' /certs/rds-global-bundle.pem) certificates"
 
@@ -66,7 +66,7 @@ FROM debian:bookworm-slim AS pgkey
 RUN apt-get update \
  && apt-get install -y --no-install-recommends curl ca-certificates gnupg \
  && rm -rf /var/lib/apt/lists/*
-RUN curl -fsSL --max-time 60 -o /pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+RUN curl -fsSL --retry 4 --retry-all-errors --max-time 60 -o /pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
  && gpg --show-keys --with-colons /pgdg.asc | grep -q '^fpr:::::::::B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8:$'
 
 # Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
