@@ -14,9 +14,9 @@ import type { Db } from '../tools/types.ts';
 // Columns never exported: encrypted with keys the user does not hold.
 const HIDDEN: Record<string, string[]> = { emails: ['body_enc'], resumes: ['file'] }; // a resume's text is exported; the file itself downloads from Settings
 // Each table's rows in primary key order (id unless named here); test/account-data.test.js checks every user table's key.
-export const KEY_ORDER: Record<string, string> = { email_threads: 'thread_id', user_settings: 'key', letter_checks: 'artifact_id', scam_checks: 'posting_id' };
+export const KEY_ORDER: Record<string, string> = { email_threads: 'thread_id', user_settings: 'key', letter_checks: 'artifact_id', scam_checks: 'posting_id', task_lines: 'task_id, seq' };
 // Deleted first: rows that point at other user rows (postings last; its children also cascade).
-const DELETE_ORDER = ['decision_log', 'reminders', 'emails', 'email_threads', 'contacts', 'attachments', 'meeting_preps', 'posting_notes', 'posting_sightings', 'scores', 'letter_checks', 'artifacts', 'status_history', 'prompt_versions', 'user_settings', 'feedback', 'postings'];
+const DELETE_ORDER = ['task_lines', 'task_runs', 'decision_log', 'reminders', 'emails', 'email_threads', 'contacts', 'attachments', 'meeting_preps', 'posting_notes', 'posting_sightings', 'scores', 'letter_checks', 'artifacts', 'status_history', 'prompt_versions', 'user_settings', 'feedback', 'postings'];
 
 const ordered = () => [...DELETE_ORDER.filter((t) => USER_TABLES.includes(t)), ...USER_TABLES.filter((t) => !DELETE_ORDER.includes(t))];
 

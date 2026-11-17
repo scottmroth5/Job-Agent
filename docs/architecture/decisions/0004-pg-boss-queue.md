@@ -1,6 +1,6 @@
 # 0004: pg-boss behind a JobQueue interface
 
-Status: accepted, pending the Phase 6 spike, 2026-11-02
+Status: replaced by [0008](0008-own-job-queue.md) on 2026-11-17 (our own queue, since pg-boss works only on PostgreSQL and SQLite stays supported). The pools, the settings in tables, and payloads with ids only still stand.
 
 ## Context
 Background work runs as in-memory tasks and child processes, with one pipeline at a time across the app. A restart loses tasks, and there is no priority, fairness between users, or retry. An earlier plan used RabbitMQ and Redis. That would mean two more services to run, secure, and pay for.

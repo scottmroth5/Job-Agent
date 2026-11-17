@@ -7,7 +7,7 @@ import { USER_TABLES } from '../db/user-tables.ts';
 import { appSources, stringLiterals } from './fixtures/sql-literals.js';
 
 // Migrations shape every user's rows at once; admin queries are the reviewed cross-user reads.
-const isExempt = (/** @type {string} */ rel) => rel.startsWith('db/migrations/') || rel === 'server/admin-queries.ts';
+const isExempt = (/** @type {string} */ rel) => rel.startsWith('db/migrations/') || rel === 'server/admin-queries.ts' || rel === 'tools/queue/queue.ts';
 
 // runs and run_calls (agent-core's) stay app-wide in phase 1; the Activity tab and spending become per user with phase 2.
 const tableRef = new RegExp(`\\b(FROM|INTO|UPDATE|JOIN)\\s+"?(${USER_TABLES.join('|')})\\b`, 'gi');

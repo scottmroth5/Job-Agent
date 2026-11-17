@@ -407,6 +407,14 @@ migration is pending, row security is missing, or it is a superuser; ja_backup r
 the Dockerfile certs stage; db/postgres/store.ts checkTls); DATABASE_TLS=off waives it only for the demo's demo-db.
 REQUIRE_POSTGRES=1 makes openJobStore refuse to open a SQLite file. PostgreSQL 18 everywhere (RDS, compose.dev.yml, CI,
 demo-db); the test database and production use C collation. test/pg-production.test.js runs the three-login shape.
+The job queue (v3 Phase 6, decision 0008; tools/queue/queue.ts, our own SQL on both engines, not pg-boss): task_types and
+task_type_history, pool_settings (browser, ai, io), and the user tables task_runs (the queue entry and the task's record)
+and task_lines (migration 027). Claiming is one db.tx, which both engines serialize across processes, so a job is never
+claimed twice; it honors pool concurrency, the per-user limit, one_at_a_time (none, user, app), reserved interactive
+workers, depends_on, and priority with aging below INTERACTIVE_BAND. Handlers run in runAsUser with heartbeats and a
+timeout; failures retry while retry_limit allows (AI types 0), then dead; the sweep closes abandoned jobs and their runs;
+prune keeps 30 days. Only tools/queue touches these tables (test/user-scope.test.js exempts it; reads take a uid).
+test/queue.test.js. Phase 6's later PRs wire the app's tasks, scheduler and pipeline onto it and add Admin > Jobs.
 Backups on PostgreSQL run in the backup container (Dockerfile target backup: the runtime plus PostgreSQL 18's programs,
 PG_BIN; the app image has none): scripts/backup-service.js serves SCHEDULE_BACKUP and SCHEDULE_RESTORE_TEST (the app's
 scheduler skips them on PostgreSQL) and the commands backup-now, restore-test, pre-migrate (exit 0 none, 10 pending and
