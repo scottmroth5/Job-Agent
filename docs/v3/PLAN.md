@@ -361,7 +361,7 @@ Owner decisions (November 16, 2026):
 - **The demo** keeps its own `demo-db` container. **Local installs** stay on SQLite, so `better-sqlite3` stays a dependency.
 - **The AWS budget alarm** is set at $50 a month.
 
-Progress: PR 1 (#66, #67), PR 2 (#68), PR 3 (#69), PR 4 (#70, #71, #73) merged. The owner applied infra/ and ran the staging rehearsal on November 17: every step and smoke test passed, including a PostgreSQL backup and restore test (it found pg_dump under row security, fixed in #73). PR 5: the cut-over runbook (docs/runbooks/postgres-cutover.md) and decision 0007; the PRIVACY.md, README and architecture wording is a separate PR merged during the cut-over.
+Progress: PR 1 (#66, #67), PR 2 (#68), PR 3 (#69), PR 4 (#70, #71, #73) merged. The owner applied infra/ and ran the staging rehearsal on November 17: every step and smoke test passed, including a PostgreSQL backup and restore test (it found pg_dump under row security, fixed in #73). The cut-over ran on November 17, 2026 (the runbook in docs/runbooks/postgres-cutover.md): production is on the EC2 server and the shared RDS, the Lightsail server is stopped and kept 14 days, and GitHub deploys to the new server. PR 5: the cut-over runbook (docs/runbooks/postgres-cutover.md) and decision 0007; the PRIVACY.md, README and architecture wording is a separate PR merged during the cut-over.
 
 Infrastructure in `infra/` using Terraform:
 - **`infra/bootstrap`:** Job-Agent's own KMS key (`alias/job-agent`) and S3 bucket for Terraform's state.
@@ -399,10 +399,10 @@ Cutover runbook, with the owner present:
 Risks: RDS had 141 MB free memory at its lowest before Job-Agent joined (moving it up to t4g.small is about $12 a month more, and that change belongs in Health-Review's Terraform). Point-in-time recovery restores the whole instance, so Job-Agent restores from its own `pg_dump` backups.
 
 Done when:
-- [ ] A restore from a Job-Agent backup into a scratch database has been tested in production
+- [x] A restore from a Job-Agent backup into a scratch database has been tested in production (November 17, after the cut-over: 27 tables, 0 problems)
 - [ ] Monthly cost is known and within the $50 budget
 - [ ] A week of scheduled runs on RDS is clean
-- [ ] The production app never opens SQLite (`REQUIRE_POSTGRES`). This replaces "`better-sqlite3` is out of production dependencies": SQLite stays for local installs (decision 0006)
+- [x] The production app never opens SQLite (`REQUIRE_POSTGRES`). This replaces "`better-sqlite3` is out of production dependencies": SQLite stays for local installs (decision 0006)
 
 Expected cost: about $21 a month for the new server (EC2 about $13.70, disk $2.40, Elastic IP $3.65, KMS $1, alarms under $1), offset by $12 when the Lightsail server goes, so about $9 a month more. The shared RDS adds nothing unless it must grow. Confirm in the AWS calculator before creating anything.
 
