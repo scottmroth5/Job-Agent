@@ -55,7 +55,7 @@ function run(tool: string, args: string[], env: Record<string, string> = {}): Pr
 /**
  * pg_dump in custom format (compressed, restorable table by table) to file. The backup login obeys row security (it is
  * neither a superuser nor BYPASSRLS), and pg_dump refuses a table whose rows row security would filter unless told it may
- * (--enable-row-security); the session's app.uid is 'all' (PGOPTIONS, as store.admin sets it), so the own_rows policy
+ * (--enable-row-security); the session's app.uid is 'all' (PGOPTIONS, as the unscoped admin handle sets it), so the own_rows policy
  * lets it read every user's rows.
  */
 export const dump = (url: string, file: string) =>
