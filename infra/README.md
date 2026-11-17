@@ -43,12 +43,11 @@ About $21 a month, offset by $12 once the Lightsail server is deleted, so about 
 The shared RDS instance adds nothing unless it has to grow. If it runs short of memory, moving it to db.t4g.small costs about $12 a month more, and that change belongs in Health-Review's Terraform.
 
 ## One-time setup
-1. **Install the tools:**
-   ```
-   winget install Hashicorp.Terraform
-   winget install Amazon.SessionManagerPlugin
-   ```
-   Sign in with `aws login`, using the account that runs Health-Review.
+1. **The tools:**
+   - **Terraform 1.10 or newer** (CI uses 1.17.2), from HashiCorp's download page. It's a zip with one `terraform.exe`; put it in a folder on your PATH.
+   - **AWS's Session Manager plugin**, from AWS's installer, which installs it where the AWS CLI finds it.
+
+   `winget` isn't on every Windows install. Check with `terraform version` and `session-manager-plugin --version`. Then sign in with `aws login`, using the account that runs Health-Review.
 2. **Turn on the cost tag:** in the Billing console, open Cost allocation tags and activate `app`. Until then the budget can't see Job-Agent's costs.
 3. **Bootstrap:**
    ```
