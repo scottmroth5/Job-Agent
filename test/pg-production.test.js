@@ -123,3 +123,30 @@ test('production shape: migrations as a non-superuser owner, the app as a login 
     await admin.end();
   }
 });
+
+test('setupRoles: three logins and a C-collation database the owner owns; again, passwords change and nothing is dropped', { skip: pgOnly }, async () => {
+  const { default: pg } = await import('pg');
+  const { setupRoles } = await import('../db/postgres/roles.ts');
+  const tag = randomBytes(4).toString('hex');
+  const logins = { owner: `t_so_${tag}`, app: `t_sa_${tag}`, backup: `t_sb_${tag}` };
+  const database = `t_sd_${tag}`;
+  const pw = () => randomBytes(18).toString('base64url');
+  const admin = new pg.Client({ connectionString: /** @type {string} */ (postgresUrl()) });
+  await admin.connect();
+  try {
+    await assert.rejects(setupRoles(admin, { logins, database, passwords: { owner: 'short', app: pw(), backup: pw() } }), /at least 24/);
+    await setupRoles(admin, { logins, database, passwords: { owner: pw(), app: pw(), backup: pw() } });
+    await setupRoles(admin, { logins, database, passwords: { owner: pw(), app: pw(), backup: pw() } });
+    const db = (await admin.query('SELECT pg_get_userbyid(datdba) AS owner, datcollate, datctype FROM pg_database WHERE datname = $1', [database])).rows[0];
+    assert.deepEqual(db, { owner: logins.owner, datcollate: 'C', datctype: 'C' });
+    const roles = (await admin.query('SELECT rolname, rolsuper, rolbypassrls, rolcreatedb, rolcreaterole, rolcanlogin FROM pg_roles WHERE rolname = ANY($1) ORDER BY rolname', [Object.values(logins)])).rows;
+    assert.equal(roles.length, 3);
+    for (const r of roles) assert.deepEqual([r.rolsuper, r.rolbypassrls, r.rolcreatedb, r.rolcreaterole, r.rolcanlogin], [false, false, false, false, true]);
+    const connect = (await admin.query('SELECT has_database_privilege($1, $2, \'CONNECT\') AS a, has_database_privilege(\'public\', $2, \'CONNECT\') AS p', [logins.app, database])).rows[0];
+    assert.deepEqual(connect, { a: true, p: false }, 'the app may connect; nobody else by default');
+  } finally {
+    await admin.query(`DROP DATABASE IF EXISTS ${database} WITH (FORCE)`);
+    for (const l of Object.values(logins)) await admin.query(`DROP ROLE IF EXISTS ${l}`);
+    await admin.end();
+  }
+});

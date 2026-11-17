@@ -150,3 +150,18 @@ test('each user runs on their own times, one pipeline at a time, without the Cla
   assert.equal((await pipelineOf(asB)).automatic, false);
   await done();
 });
+
+test('AUTOMATIC_RUNS=off (a staging copy) schedules nobody, the owner included', async () => {
+  process.env.AUTOMATIC_RUNS = 'off';
+  try {
+    const { app, events, asA, asB, done } = await setup();
+    await app.ready();
+    await new Promise((r) => setTimeout(r, 200));
+    assert.deepEqual(events, [], 'nothing ran, though two users had runs due');
+    const names = async (/** @type {Record<string, string>} */ headers) => (await app.inject({ url: '/api/schedule', headers })).json().jobs.map((/** @type {{ name: string }} */ j) => j.name);
+    assert.deepEqual([await names(asA), await names(asB)], [[], []]);
+    await done();
+  } finally {
+    delete process.env.AUTOMATIC_RUNS;
+  }
+});

@@ -19,7 +19,7 @@ import { runAsUser } from '../db/scope.ts';
 import { createScheduler, schedulesFromEnv } from '../server/scheduler.ts';
 import { createAlerts } from '../server/alerts.ts';
 import { createBackupDrive } from '../tools/backup/drive.ts';
-import { DRIVE_FOLDER } from '../tools/backup/run.ts';
+import { PRODUCTION_DRIVE_FOLDER } from '../tools/backup/run.ts';
 import { newestBackup } from '../tools/backup/restore-check.ts';
 import { loadFromBackup, newestDumpSince, preMigrate, resetDatabase, restorePreMigration } from '../tools/backup/pg-deploy.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';
@@ -140,8 +140,9 @@ async function main() {
       if (from) file = readFileSync(from);
       else {
         const drive = createBackupDrive(getGoogleAuth());
-        const newest = await newestBackup(drive, DRIVE_FOLDER);
-        if (!newest) throw new Error(`No backups found in the "${DRIVE_FOLDER}" Drive folder`);
+        // Always production's backups: a staging rehearsal loads a copy of the real data.
+        const newest = await newestBackup(drive, PRODUCTION_DRIVE_FOLDER);
+        if (!newest) throw new Error(`No backups found in the "${PRODUCTION_DRIVE_FOLDER}" Drive folder`);
         console.log(`load-from-backup: ${newest.name}`);
         file = await drive.download(newest.id);
       }

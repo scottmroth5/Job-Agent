@@ -10,3 +10,13 @@ web/dist/
 client_secret*.json
 token*.json
 demo-data/
+# Terraform state, plans and variable values (v3 Phase 5, infra/): never committed
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+.terraform/
+backend.hcl
+*_override.tf
+*_override.tf.json

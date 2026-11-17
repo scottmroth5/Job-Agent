@@ -1,0 +1,65 @@
+#!/bin/bash
+# First boot of the Job-Agent server (Terraform templatefile; runs once as root through cloud-init). Nothing here is
+# secret. The owner then installs compose.yml, the Caddyfile, deploy.sh and env-from-ssm.sh from the repo's deploy/
+# folder (infra/README.md), and deploy.sh fills .env and backup.env from Parameter Store before every start.
+set -euo pipefail
+
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get -y upgrade
+apt-get install -y docker.io docker-compose-v2 fail2ban unattended-upgrades python3
+# The AWS CLI (env-from-ssm.sh reads the settings with the instance role).
+snap install aws-cli --classic
+
+# Security updates install themselves; a needed reboot happens at 04:30 (the compose services restart on their own).
+cat > /etc/apt/apt.conf.d/52job-agent <<'EOF'
+Unattended-Upgrade::Automatic-Reboot "true";
+Unattended-Upgrade::Automatic-Reboot-Time "04:30";
+EOF
+
+# SSH: keys only, and only the deploy user has one.
+cat > /etc/ssh/sshd_config.d/60-job-agent.conf <<'EOF'
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+EOF
+systemctl reload ssh || true
+systemctl enable --now fail2ban docker
+
+# The deploy user: in the docker group, and its one key can only run deploy.sh (which reads SSH_ORIGINAL_COMMAND).
+id deploy >/dev/null 2>&1 || useradd --create-home --shell /bin/bash --groups docker deploy
+install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+echo 'restrict,command="/opt/job-agent/deploy.sh" ${deploy_ssh_public_key}' > /home/deploy/.ssh/authorized_keys
+chown deploy:deploy /home/deploy/.ssh/authorized_keys
+chmod 600 /home/deploy/.ssh/authorized_keys
+
+# The app folder: root-owned, with the data folder for the container's uid 1000 only.
+install -d -m 755 -o root -g root /opt/job-agent
+install -d -m 700 -o 1000 -g 1000 /opt/job-agent/data
+install -d -m 700 -o deploy -g deploy /opt/job-agent/state
+# The settings files deploy.sh rewrites from Parameter Store (env-from-ssm.sh): the deploy user's, readable by no one else.
+install -m 600 -o deploy -g deploy /dev/null /opt/job-agent/.env
+install -m 600 -o deploy -g deploy /dev/null /opt/job-agent/backup.env
+# What kind of server this is, for deploy.sh (read line by line, never sourced): PostgreSQL on RDS, settings from
+# Parameter Store in this region.
+printf 'DB_ENGINE=postgres\nENV_SOURCE=ssm\nAWS_REGION=%s\n' '${region}' > /opt/job-agent/server.conf
+chmod 644 /opt/job-agent/server.conf
+
+# The CloudWatch agent: memory and root disk use, for the alarms (namespace CWAgent, by instance).
+curl -fsSL -o /tmp/cwagent.deb https://amazoncloudwatch-agent.s3.amazonaws.com/ubuntu/amd64/latest/amazon-cloudwatch-agent.deb
+dpkg -i /tmp/cwagent.deb
+rm -f /tmp/cwagent.deb
+cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<'EOF'
+{
+  "agent": { "metrics_collection_interval": 300 },
+  "metrics": {
+    "append_dimensions": { "InstanceId": "$${aws:InstanceId}" },
+    "metrics_collected": {
+      "mem": { "measurement": ["mem_used_percent"] },
+      "disk": { "measurement": ["used_percent"], "resources": ["/"], "drop_device": true, "ignore_file_system_types": ["sysfs", "tmpfs", "overlay"] }
+    }
+  }
+}
+EOF
+/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl -a fetch-config -m ec2 -s \
+  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json

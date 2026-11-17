@@ -361,6 +361,8 @@ Owner decisions (November 16, 2026):
 - **The demo** keeps its own `demo-db` container. **Local installs** stay on SQLite, so `better-sqlite3` stays a dependency.
 - **The AWS budget alarm** is set at $50 a month.
 
+Progress: PR 1 (#66, #67), PR 2 (#68), PR 3 (#69) merged; PR 4 is `infra/` (no AWS resources until the owner applies it).
+
 Infrastructure in `infra/` using Terraform:
 - **`infra/bootstrap`:** Job-Agent's own KMS key (`alias/job-agent`) and S3 bucket for Terraform's state.
 - **`infra`:**

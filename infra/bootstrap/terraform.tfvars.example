@@ -1,0 +1,2 @@
+# Copy to terraform.tfvars (gitignored). The bucket name must be unique across all of S3.
+state_bucket_name = "job-agent-tfstate-<something-unique>"

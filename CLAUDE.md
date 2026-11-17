@@ -425,6 +425,15 @@ backup with the current image when something is pending, scripts/migrate.js with
 migration or start restores the checked dump before the old image runs. Without server.conf (Lightsail) nothing changes.
 The deploy workflow publishes <tag>-backup beside <tag>, both scanned. test/deploy-script.test.js runs deploy.sh with a
 stand-in docker (Linux only).
+infra/ (Terraform, like Health-Review's; infra/README.md is the runbook): bootstrap/ makes Job-Agent's KMS key and state
+bucket; the main stack makes the EC2 server in Health-Review's network, looks up Health-Review's VPC, subnet, database
+firewall group and RDS instance (shared.tf; never changes them but for one added ingress rule), and adds the alarms and
+the $50 budget (tag app=job-agent). The owner runs every plan and apply; CI runs fmt, validate (provider lock files
+committed, read-only) and Trivy. infra/db-setup.ps1 (scripts/db-setup.js, roles.ts setupRoles) makes the job_agent
+database and the three logins and stores their addresses in SSM; infra/env-to-ssm.ps1 copies the Lightsail .env and
+Google sign-in into /job-agent/env/ (staging: its own names, no schedules, AUTOMATIC_RUNS=off, no EMAIL_ADDRESS or
+GMAIL_REFRESH_TOKEN, BACKUP_DRIVE_FOLDER). AUTOMATIC_RUNS=off makes the app schedule nobody's runs (the button still
+works); BACKUP_DRIVE_FOLDER moves this server's backups (load-from-backup always reads production's folder).
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),
