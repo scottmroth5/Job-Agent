@@ -47,7 +47,7 @@ The shared RDS instance adds nothing unless it has to grow. If it runs short of 
    - **Terraform 1.10 or newer** (CI uses 1.17.2), from HashiCorp's download page. It's a zip with one `terraform.exe`; put it in a folder on your PATH.
    - **AWS's Session Manager plugin**, from AWS's installer, which installs it where the AWS CLI finds it.
 
-   `winget` isn't on every Windows install. Check with `terraform version` and `session-manager-plugin --version`. Then sign in with `aws login`, using the account that runs Health-Review.
+   In PowerShell, put quotes around a Terraform option that contains a dot, such as `"-backend-config=backend.hcl"`. Otherwise PowerShell splits it at the dot. `winget` isn't on every Windows install. Check with `terraform version` and `session-manager-plugin --version`. Then sign in with `aws login`, using the account that runs Health-Review.
 2. **Turn on the cost tag:** in the Billing console, open Cost allocation tags and activate `app`. Until then the budget can't see Job-Agent's costs.
 3. **Bootstrap:**
    ```
@@ -71,8 +71,8 @@ The shared RDS instance adds nothing unless it has to grow. If it runs short of 
    ```
    Fill both in. The deploy key is a new key pair; its private half goes into GitHub later. Then:
    ```
-   terraform init -backend-config=backend.hcl
-   terraform plan -out=main.tfplan
+   terraform init "-backend-config=backend.hcl"
+   terraform plan "-out=main.tfplan"
    ```
    Read the plan. It should only add Job-Agent's resources plus one firewall rule on the `health-review-db` group, and change nothing of Health-Review's.
 5. **Apply it** with `terraform apply main.tfplan`. This takes a few minutes.
