@@ -7,7 +7,8 @@
 # Databases: job_agent (yours, when DATABASE_URL points at it) and job_agent_test (npm run test:pg recreates it).
 services:
   postgres:
-    image: postgres:17
+    # 18, as on the production RDS (v3 Phase 5).
+    image: postgres:18
     # The test suite runs files in parallel, each with its own pools.
     command: ["postgres", "-c", "max_connections=400"]
     environment:
@@ -17,7 +18,8 @@ services:
     ports:
       - "127.0.0.1:5433:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PostgreSQL 18 images keep their data in a versioned folder under /var/lib/postgresql.
+      - pgdata18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U job_agent -d job_agent"]
       interval: 2s
@@ -25,4 +27,4 @@ services:
       retries: 30
 
 volumes:
-  pgdata:
+  pgdata18:

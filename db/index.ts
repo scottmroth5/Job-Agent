@@ -103,7 +103,9 @@ export function openJobStore(
   const url = postgresUrl();
   if (url) {
     const { schema, throwaway } = schemaFor(path);
-    const pgStore = openPgStore(url, { schema, throwaway, fallbackUid, sqliteIds: migrations.map((m) => m.id) });
+    // Production (DATABASE_MIGRATIONS=deploy): the app's login never migrates; deploy.sh runs scripts/migrate.js.
+    const migrate = process.env.DATABASE_MIGRATIONS !== 'deploy';
+    const pgStore = openPgStore(url, { schema, throwaway, fallbackUid, sqliteIds: migrations.map((m) => m.id), migrate });
     return {
       db: pgStore.db,
       admin: pgStore.admin,
@@ -112,6 +114,10 @@ export function openJobStore(
       backup: () => Promise.reject(new Error('Backups work on a SQLite database until Phase 5 (pg_dump).')),
       close: pgStore.close,
     };
+  }
+  // The cloud server sets REQUIRE_POSTGRES=1: without a PostgreSQL address it stops rather than open a SQLite file.
+  if (process.env.REQUIRE_POSTGRES === '1') {
+    throw new Error('REQUIRE_POSTGRES is set but DATABASE_URL is not a postgres:// address; refusing to open a SQLite file.');
   }
   let copy: string | null = null;
   if (snapshot && path !== ':memory:' && existsSync(path)) {
