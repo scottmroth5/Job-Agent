@@ -137,6 +137,24 @@ test('a job that depends on another waits until it finishes, whatever its result
   }
 });
 
+test('a parent waiting on its child tasks holds no worker, so its children in the same pool can start; the list leaves children out', async () => {
+  const { db, queue, done } = await setup();
+  try {
+    await pool(db, 'io', 1, 1, 0);
+    const parent = await queue.enqueue('pipeline', null, { userId: 1 });
+    assert.equal((await queue.claim('io'))?.id, parent.id);
+    const child = await queue.enqueue('pipeline-archive', null, { userId: 1, parentId: parent.id });
+    assert.equal((await queue.claim('io'))?.id, child.id, 'the parent waits on it, so its worker slot is free');
+    const other = await queue.enqueue('backup', null, { userId: 1 });
+    assert.equal(await queue.claim('io'), null, 'the child holds the one worker');
+    await queue.complete(child.id, null);
+    assert.equal(await queue.claim('io'), null, 'with no child waiting, the parent holds its worker again');
+    assert.deepEqual((await queue.list(1)).map((j) => j.id).sort(), [other.id, parent.id].sort(), 'the child shows in its parent, not the list');
+  } finally {
+    done();
+  }
+});
+
 test('retries with backoff while the type allows, then a dead letter; no retry for AI types or NoRetry', async () => {
   const { db, queue, clock, done } = await setup();
   try {

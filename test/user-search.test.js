@@ -85,8 +85,8 @@ async function setup() {
     services: fakeServices({
       createBrowser: async () => null,
       knowledge: async () => 'the owner knowledge doc',
-      runPipeline: async ({ user }) => {
-        runs.push(user);
+      runPipeline: async ({ user, args = [] }) => {
+        if (args.includes('--only=discover')) runs.push(user); // a pipeline's first step
         return { code: 0, lastError: null };
       },
       log: { info() {}, warn() {}, error() {} },
@@ -163,6 +163,8 @@ test('the pipeline script refuses a user who has not set up a search, before any
     assert.match(notReady.stderr, /Set up your search/);
     assert.match(run([`--user=${paused}`]).stderr, /not an active account/);
     assert.notEqual(run(['--user=abc']).status, 0);
+    assert.match(run([`--user=${b}`, '--only=everything']).stderr, /--only must be one of discover, score, hunt, archive, report/);
+    assert.match(run([`--user=${b}`, '--only=report', '--since=soon']).stderr, /--since must be a date and time/);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

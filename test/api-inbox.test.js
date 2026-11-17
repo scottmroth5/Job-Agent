@@ -23,8 +23,8 @@ function claudeReplying(reply) {
   return createClaude({ client });
 }
 
-/** @param {{ pipelineLines?: string[], pipelineCode?: number, ready?: boolean, messages?: FakeMessage[] }} [o] */
-async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messages = [] } = {}) {
+/** @param {{ pipelineLines?: string[], pipelineCode?: number, failStep?: string, ready?: boolean, messages?: FakeMessage[] }} [o] */
+async function setup({ pipelineLines = [], pipelineCode = 0, failStep = '', ready = true, messages = [] } = {}) {
   const store = openJobStore(':memory:');
   const { db } = store;
   const posting = Number(
@@ -41,15 +41,24 @@ async function setup({ pipelineLines = [], pipelineCode = 0, ready = true, messa
     claude: claudeReplying({ application_id: String(posting), confidence: 0.95, type: 'interview_request', summary: 'Invites an interview.', extracted: { company: null, role_title: null, contact_name: null, contact_email: null, interview_times: ['October 8, 2026 2:00 PM'], deadline: null } }),
     knowledge: async () => 'k',
     createBrowser: async () => null,
-    runPipeline: async (/** @type {{ onLine: (line: string) => void }} */ { onLine }) => {
-      for (const l of pipelineLines) onLine(l);
+    // Each step task runs the script with --only=<step>: it prints the lines under that step's heading. The report
+    // step stands in for the pipeline's end (its run row and, with pipelineCode, the report's failure).
+    runPipeline: async (/** @type {{ args?: string[], onLine: (line: string) => void }} */ { args = [], onLine }) => {
+      const only = args.find((a) => a.startsWith('--only='))?.slice('--only='.length);
+      let under = 'discover';
+      for (const l of pipelineLines) {
+        under = /^\[pipeline\] Step \d+\/\d+: (\w+)/.exec(l)?.[1] ?? under;
+        if (under === only) onLine(l);
+      }
       await gate;
+      if (only === failStep) return { code: 1, lastError: `${only} failed: the stand-in step failed` };
+      if (only !== 'report') return { code: 0, lastError: null };
       await db.prepare("INSERT INTO runs (name, status, started_at, finished_at) VALUES ('pipeline', ?, '2026-10-05T13:00:00Z', '2026-10-05T13:12:00Z')").run(pipelineCode ? 'failed' : 'ok');
       return { code: pipelineCode, lastError: pipelineCode ? 'EMAIL_ADDRESS is not set in .env; the report was not sent.' : null };
     },
     inbox: { ready: () => ready, gmail: () => createGmail({ api: asGmailApi(api) }), key: () => key, cfg: loadInboxConfig() },
   });
-  const app = await buildApp({ store, config, services });
+  const app = await buildApp({ store, config, services: { ...services, queueOptions: { pollMs: 50, retryDelayMs: 20 } } });
   return { store, db, app, posting, release };
 }
 
@@ -101,6 +110,28 @@ test('a failed pipeline reports why, and the button is refused while a CLI run i
   const res = await app.inject({ method: 'POST', url: '/api/pipeline/run' });
   assert.equal(res.statusCode, 409);
   assert.match(res.json().error, /inbox run/);
+  await app.close();
+  store.close();
+});
+
+test('the pipeline is five step tasks in order, each after the one before; a failed step does not stop the next', async () => {
+  const { app, store, db, release } = await setup({ failStep: 'score', pipelineLines: ['[pipeline] Step 1/5: discover', '[pipeline] Step 2/5: score', '[pipeline] Step 5/5: report', 'Sent "Job Agent" (x).'] });
+  release();
+  const { taskId } = (await app.inject({ method: 'POST', url: '/api/pipeline/run' })).json();
+  const task = await app.tasks.wait(taskId);
+  assert.equal(task?.status, 'done', 'only a failed report fails the pipeline');
+  assert.deepEqual(task?.steps.map((s) => s.message), ['Starting', 'Step 1/5: discover', 'Step 2/5: score', 'Step 5/5: report', 'Report emailed']);
+  const steps = /** @type {Array<{ id: string, type: string, status: string, depends_on: string | null, interactive: number }>} */ (/** @type {unknown} */ (await store.admin.prepare('SELECT id, type, status, depends_on, interactive FROM task_runs WHERE parent_id = ? ORDER BY created_at, id').all(taskId)));
+  const order = ['discover', 'score', 'hunt', 'archive', 'report'];
+  assert.deepEqual(steps.map((s) => s.type).sort(), order.map((n) => `pipeline-${n}`).sort());
+  const byType = Object.fromEntries(steps.map((s) => [s.type, s]));
+  for (const [i, n] of order.entries()) assert.equal(byType[`pipeline-${n}`].depends_on, i ? byType[`pipeline-${order[i - 1]}`].id : null, `${n} waits for the step before`);
+  assert.deepEqual(order.map((n) => byType[`pipeline-${n}`].status), ['done', 'failed', 'done', 'done', 'done']);
+  assert.ok(steps.every((s) => s.interactive === 1), 'a button press: its steps are interactive too');
+  const log = (await app.inject(`/api/tasks/${taskId}/log`)).json().lines.map((/** @type {{ text: string }} */ l) => l.text);
+  assert.ok(log.includes('score failed: the stand-in step failed'), 'the failed step says why in the pipeline output');
+  assert.equal(await db.prepare("SELECT status FROM runs WHERE name = 'pipeline' AND user_id = 1 AND finished_at IS NOT NULL AND id = (SELECT MIN(id) FROM runs WHERE name = 'pipeline' AND user_id = 1)").pluck().get(), 'partial', "the pipeline's own run");
+  assert.deepEqual((await app.inject('/api/tasks')).json().map((/** @type {{ kind: string }} */ t) => t.kind), ['pipeline'], 'the steps show in the pipeline, not the Activity list');
   await app.close();
   store.close();
 });
@@ -163,9 +194,13 @@ test('task output: the pipeline keeps every line; in-server actions capture thei
   const { taskId } = (await app.inject({ method: 'POST', url: '/api/pipeline/run' })).json();
   await app.tasks.wait(taskId);
   const log = (await app.inject({ method: 'GET', url: `/api/tasks/${taskId}/log` })).json();
-  assert.deepEqual(log.lines.map((/** @type {{ text: string }} */ l) => l.text), ['Starting', '[pipeline] Step 1/5: discover', 'LinkedIn: 3 found in 2 requests', '[discover] ok: 0 calls']);
-  assert.equal(log.next, 4);
-  assert.deepEqual((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}/log?from=3` })).json().lines.map((/** @type {{ text: string }} */ l) => l.text), ['[discover] ok: 0 calls']);
+  // The steps' lines, then the pipeline run's own summary (written by the pipeline task, as the script did).
+  /** @type {string[]} */
+  const texts = log.lines.map((/** @type {{ text: string }} */ l) => l.text);
+  assert.deepEqual(texts.slice(0, 4), ['Starting', '[pipeline] Step 1/5: discover', 'LinkedIn: 3 found in 2 requests', '[discover] ok: 0 calls']);
+  assert.match(texts[4], /^\[pipeline\] ok: /);
+  assert.equal(log.next, 5);
+  assert.deepEqual((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}/log?from=3` })).json().lines.map((/** @type {{ text: string }} */ l) => l.text).slice(0, 1), ['[discover] ok: 0 calls']);
   assert.equal((await app.inject({ method: 'GET', url: `/api/tasks/${taskId}` })).json().log, undefined, 'polling a task does not send its output');
 
   const inbox = (await app.inject({ method: 'POST', url: '/api/inbox/check' })).json();
@@ -177,7 +212,7 @@ test('task output: the pipeline keeps every line; in-server actions capture thei
 
   const list = (await app.inject({ method: 'GET', url: '/api/tasks' })).json();
   assert.deepEqual(list.map((/** @type {{ kind: string }} */ t) => t.kind), ['inbox', 'pipeline']);
-  assert.equal(list[1].lines, 4);
+  assert.equal(list[1].lines, 5);
   assert.equal((await app.inject({ method: 'GET', url: '/api/tasks/999/log' })).statusCode, 404);
   await app.close();
   store.close();
