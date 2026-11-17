@@ -160,6 +160,15 @@ export interface MeetingPrepsRow {
   resume_id: string | null;
 }
 
+export interface PoolSettingsRow {
+  pool: string;
+  concurrency: number;
+  per_user_concurrency: number;
+  reserved_for_interactive: number;
+  updated_by: number | null;
+  updated_at: string;
+}
+
 export interface PostingNotesRow {
   user_id: number;
   id: string;
@@ -338,6 +347,63 @@ export interface StatusHistoryRow {
   to_status: string;
   changed_by: string;
   changed_at: string;
+}
+
+export interface TaskLinesRow {
+  task_id: string;
+  user_id: number;
+  seq: number;
+  at: string;
+  level: string;
+  text: string;
+}
+
+export interface TaskRunsRow {
+  id: string;
+  user_id: number;
+  type: string;
+  pool: string;
+  priority: number;
+  interactive: number;
+  status: string;
+  requested_by: string;
+  payload: string | null;
+  result: string | null;
+  error: string | null;
+  attempts: number;
+  run_after: string;
+  depends_on: string | null;
+  parent_id: string | null;
+  worker: string | null;
+  heartbeat_at: string | null;
+  run_id: number | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface TaskTypeHistoryRow {
+  id: number;
+  type_id: string;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_by: number | null;
+  changed_at: string;
+}
+
+export interface TaskTypesRow {
+  id: string;
+  label: string;
+  pool: string;
+  priority: number;
+  enabled: number;
+  one_at_a_time: string;
+  retry_limit: number;
+  timeout_seconds: number;
+  aging_minutes: number | null;
+  updated_by: number | null;
+  updated_at: string;
 }
 
 export interface UsageTotalsRow {

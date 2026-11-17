@@ -135,7 +135,8 @@ test('the export orders each user table by its primary key (KEY_ORDER names the 
   for (const t of USER_TABLES) {
     const pk = /** @type {string[]} */ (await primaryKeyOf(store.admin, t));
     const first = pk.filter((c) => c !== 'user_id');
-    assert.deepEqual([KEY_ORDER[t] ?? 'id'], first, `${t}'s key`);
+    // A compound key is listed as "a, b" (task_lines: task_id, seq).
+    assert.deepEqual((KEY_ORDER[t] ?? 'id').split(', '), first, `${t}'s key`);
   }
   store.close();
 });
