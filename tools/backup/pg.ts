@@ -52,8 +52,14 @@ function run(tool: string, args: string[], env: Record<string, string> = {}): Pr
   });
 }
 
-/** pg_dump in custom format (compressed, restorable table by table) to file. */
-export const dump = (url: string, file: string) => run('pg_dump', ['--format=custom', '--no-password', `--file=${file}`], pgEnv(url));
+/**
+ * pg_dump in custom format (compressed, restorable table by table) to file. The backup login obeys row security (it is
+ * neither a superuser nor BYPASSRLS), and pg_dump refuses a table whose rows row security would filter unless told it may
+ * (--enable-row-security); the session's app.uid is 'all' (PGOPTIONS, as store.admin sets it), so the own_rows policy
+ * lets it read every user's rows.
+ */
+export const dump = (url: string, file: string) =>
+  run('pg_dump', ['--format=custom', '--no-password', '--enable-row-security', `--file=${file}`], { ...pgEnv(url), PGOPTIONS: '-c app.uid=all' });
 
 /**
  * Restores a dump into an empty database (a scratch cluster's): owners and grants are left out, since the scratch
