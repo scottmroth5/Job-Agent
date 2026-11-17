@@ -34,7 +34,8 @@ const client = new pg.Client({ connectionString: admin });
 try {
   await client.connect();
   await client.query(`DROP DATABASE IF EXISTS ${TEST_DB} WITH (FORCE)`);
-  await client.query(`CREATE DATABASE ${TEST_DB}`);
+  // C collation, as production's database: text sorts and compares byte by byte, as on SQLite.
+  await client.query(`CREATE DATABASE ${TEST_DB} TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C'`);
 } catch (err) {
   console.error(`test:pg: could not prepare the test database: ${/** @type {Error} */ (err).message}`);
   process.exit(1);

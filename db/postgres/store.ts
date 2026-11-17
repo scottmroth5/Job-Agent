@@ -65,7 +65,8 @@ const OWN_ROWS = `current_setting('app.uid', true) = 'all'
  * ENABLE and FORCE (so the tables' owner obeys it too) and the own_rows policy. Only tables that lack any of it are
  * changed, so a user table added later is covered the next time a store opens.
  */
-async function ensureRowSecurity(client: pg.PoolClient) {
+/** The user tables that lack row security or its policy (throws when a user table is missing altogether). */
+async function rowSecurityGaps(client: pg.PoolClient) {
   const { rows } = await client.query<{ name: string; ok: boolean }>(
     `SELECT c.relname AS name, (c.relrowsecurity AND c.relforcerowsecurity AND EXISTS (
         SELECT 1 FROM pg_policies p WHERE p.schemaname = current_schema() AND p.tablename = c.relname AND p.policyname = $2)) AS ok
@@ -74,7 +75,11 @@ async function ensureRowSecurity(client: pg.PoolClient) {
   );
   const missing = USER_TABLES.filter((t) => !rows.some((r) => r.name === t));
   if (missing.length) throw new Error(`user tables missing from the PostgreSQL schema: ${missing.join(', ')}`);
-  const todo = rows.filter((r) => !r.ok).map((r) => quoteIdent(r.name));
+  return rows.filter((r) => !r.ok).map((r) => r.name);
+}
+
+async function ensureRowSecurity(client: pg.PoolClient) {
+  const todo = (await rowSecurityGaps(client)).map(quoteIdent);
   if (!todo.length) return;
   await client.query('BEGIN');
   try {
@@ -116,10 +121,62 @@ async function statementRole(client: pg.PoolClient, schema: string): Promise<str
   return APP_ROLE;
 }
 
-async function migrate(pool: pg.Pool, schema: string, sqliteIds: string[]): Promise<string | null> {
+/** Every migration id a schema at this version has, as schema_migrations records them (app:id). */
+function expectedMigrations() {
+  return [`postgres:${BASELINE}`, ...laterMigrations().map((m) => `job-agent:${m.id}`)];
+}
+
+/**
+ * Deploy mode (DATABASE_MIGRATIONS=deploy, production): the app's own login only reads and writes rows, so it never
+ * migrates. Instead it refuses to start while a migration is pending (deploy.sh runs scripts/migrate.js first) or a user
+ * table lacks row security, and it refuses a superuser or a role that bypasses row security.
+ */
+async function checkDeployed(pool: pg.Pool): Promise<null> {
   const client = await pool.connect();
   try {
-    await client.query(`CREATE SCHEMA IF NOT EXISTS ${quoteIdent(schema)}`);
+    const has = (await client.query<{ t: string | null }>("SELECT to_regclass('schema_migrations')::text AS t")).rows[0]?.t;
+    const applied = new Set(has ? (await client.query<{ k: string }>("SELECT app || ':' || id AS k FROM schema_migrations")).rows.map((r) => r.k) : []);
+    const pending = expectedMigrations().filter((k) => !applied.has(k));
+    if (pending.length) throw new Error(`${pending.length} database migrations are pending (${pending.join(', ')}); deploy.sh runs them (scripts/migrate.js) before the app starts.`);
+    const gaps = await rowSecurityGaps(client);
+    if (gaps.length) throw new Error(`row security is missing on ${gaps.join(', ')}; run scripts/migrate.js.`);
+    const me = (await client.query<{ rolsuper: boolean; rolbypassrls: boolean }>('SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user')).rows[0];
+    if (me?.rolsuper || me?.rolbypassrls) throw new Error('In deploy mode the app connects as its own login, which must not be a superuser or bypass row security.');
+    return null;
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * The checks production connections must pass (NODE_ENV=production): an address that is not this machine must use
+ * sslmode=verify-full with sslrootcert (the RDS certificate bundle in the image), so the server's certificate and name
+ * are checked. DATABASE_TLS=off waives it for a database on a private Docker network (the demo's demo-db). The
+ * message never repeats the address, which holds a password.
+ */
+export function checkTls(url: string, env: NodeJS.ProcessEnv = process.env) {
+  if (env.NODE_ENV !== 'production' || env.DATABASE_TLS === 'off') return;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    throw new Error('DATABASE_URL is not a valid address.');
+  }
+  const host = u.hostname.replace(/^\[|\]$/g, '');
+  if (!host || host === 'localhost' || host === '::1' || /^127\./.test(host)) return;
+  if (u.searchParams.get('sslmode') !== 'verify-full' || !u.searchParams.get('sslrootcert')) {
+    throw new Error('A PostgreSQL address on another machine must end in ?sslmode=verify-full&sslrootcert=<certificate bundle> (or set DATABASE_TLS=off for a private Docker network).');
+  }
+}
+
+async function migrate(pool: pg.Pool, schema: string, sqliteIds: string[], appliedNow: string[]): Promise<string | null> {
+  const client = await pool.connect();
+  try {
+    // Only when missing: CREATE SCHEMA IF NOT EXISTS needs the right to create schemas even when it exists, which the
+    // production owner login (the schema's owner, not the database's) does not have.
+    if (!(await client.query<{ s: string | null }>('SELECT to_regnamespace($1)::text AS s', [schema])).rows[0]?.s) {
+      await client.query(`CREATE SCHEMA ${quoteIdent(schema)}`);
+    }
     await client.query("SELECT pg_advisory_lock(hashtext(current_schema() || ':migrate'))");
     // Migrations change every user's rows; under row security that needs app.uid 'all' (the engine sets each
     // connection's own value before its first statement).
@@ -148,9 +205,12 @@ async function migrate(pool: pg.Pool, schema: string, sqliteIds: string[]): Prom
           ['agent-core', '001-runs'],
           ...covered.map((id): [string, string] => ['job-agent', id]),
         ]);
+        appliedNow.push(BASELINE);
       }
       for (const m of laterMigrations()) {
-        if (!applied.has(`job-agent:${m.id}`)) await apply(m.sql, [['job-agent', m.id]]);
+        if (applied.has(`job-agent:${m.id}`)) continue;
+        await apply(m.sql, [['job-agent', m.id]]);
+        appliedNow.push(m.id);
       }
       await ensureRowSecurity(client);
       return await statementRole(client, schema);
@@ -170,14 +230,21 @@ export interface PgStore {
   /** The schema this store uses (tests and the copy script name it). */
   schema: string;
   pool: pg.Pool;
+  /** The migrations this store applied as it opened (after ready; empty in deploy mode). */
+  applied: string[];
 }
 
-/** Opens a store on PostgreSQL. sqliteIds: every SQLite migration id (db/index.ts loadMigrations), for the baseline's record. */
+/**
+ * Opens a store on PostgreSQL. sqliteIds: every SQLite migration id (db/index.ts loadMigrations), for the baseline's
+ * record. migrate false is deploy mode (checkDeployed): nothing is changed, and pending migrations stop the start.
+ */
 export function openPgStore(
   url: string,
-  { schema, throwaway = false, fallbackUid = null, sqliteIds }: { schema: string; throwaway?: boolean; fallbackUid?: number | null; sqliteIds: string[] },
+  { schema, throwaway = false, fallbackUid = null, sqliteIds, migrate: migrating = true }: { schema: string; throwaway?: boolean; fallbackUid?: number | null; sqliteIds: string[]; migrate?: boolean },
 ): PgStore {
   quoteIdent(schema);
+  checkTls(url);
+  const applied: string[] = [];
   const newPool = (max: number) => {
     const p = new pg.Pool({ connectionString: url, types: TYPES, options: `-c search_path=${schema}`, max, idleTimeoutMillis: 2000, allowExitOnIdle: true });
     // An idle client that loses its connection reports here; the next query gets a new one.
@@ -188,7 +255,7 @@ export function openPgStore(
   const pool = newPool(4);
   const adminPool = newPool(2);
   let appRole: string | null = null;
-  const ready = migrate(pool, schema, sqliteIds).then((r) => {
+  const ready = (migrating ? migrate(pool, schema, sqliteIds, applied) : checkDeployed(pool)).then((r) => {
     appRole = r;
   });
   ready.catch(() => {}); // callers see the failure on store.ready or their first statement
@@ -209,5 +276,6 @@ export function openPgStore(
     },
     schema,
     pool,
+    applied,
   };
 }

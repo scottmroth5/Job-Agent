@@ -24,7 +24,7 @@ flowchart LR
   subgraph DM[demo container]
     DAPI[same image, AUTH_MODE=demo, sample data only]
   end
-  DAPI --> DDB[(demo-db: PostgreSQL 17 in memory, demo network only)]
+  DAPI --> DDB[(demo-db: PostgreSQL 18 in memory, demo network only)]
 
   API --> DB[(SQLite: job-agent.db in DATA_DIR)]
   CH --> DB

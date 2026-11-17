@@ -65,6 +65,9 @@ services:
       # The demo's own PostgreSQL (demo-db below), like production after Phase 5. No password: only the demo can
       # reach it, on the demo-db network, and it holds sample data only.
       DATABASE_URL: postgres://demo@demo-db:5432/demo
+      # The production image requires certificate checking for a database on another machine (db/postgres/store.ts
+      # checkTls); demo-db is on a private Docker network, so it is waived here, and only here.
+      DATABASE_TLS: "off"
     # Builds the sample database, then serves it. A restart resets the demo.
     command: ["sh", "-c", "node scripts/demo-seed.js --force && exec node server/index.js"]
     # restart: a restart of demo-db through Compose restarts the demo too, which rebuilds the sample data. A restart
@@ -101,7 +104,7 @@ services:
   # it and the demo rebuilds it. Reachable only from the demo, on the internal demo-db network (no route out, no
   # published port), which is why it signs in without a password (trust). The app never joins that network.
   demo-db:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     restart: unless-stopped
     user: "70:70" # the image's postgres user, so no root step and no capabilities are needed
     environment:

@@ -72,7 +72,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_USER: job_agent
           POSTGRES_PASSWORD: ci-throwaway

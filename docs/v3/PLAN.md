@@ -216,7 +216,7 @@ Done when:
 - [x] `tools`, `db`, `agents`, and `server` are TypeScript and pass strict checks. `scripts`, `evals`, `test`, and `web/src` pass at least `checkJs`
 - [x] Any `any` or `@ts-expect-error` has a reason beside it, and the count is reported
 - [x] Typecheck and lint fail CI
-- [ ] Production runs the converted code with all checks passing and a clean week of scheduled runs
+- [x] Production runs the converted code with all checks passing and a clean week of scheduled runs (owner confirmed November 16)
 
 Status at the close-out (November 10, 2026):
 - `web/src` is TypeScript (`.ts` and `.tsx`). `scripts`, `evals`, and `test` stay JavaScript, because `deploy.sh`, `compose.yml`, and the Windows tasks run `scripts/*.js` by name. They are typed with JSDoc and checked by the root `tsconfig.json` (`checkJs: true`).
@@ -268,7 +268,7 @@ Done when:
 - [x] No floating promises
 - [x] Isolation tests pass unchanged in intent, and the mutex test passes
 - [ ] Response times in production stay close to baseline
-- [ ] A week of scheduled runs is clean
+- [x] A week of scheduled runs is clean (owner confirmed November 16)
 
 Built in PRs #40 to #51: the benchmark, Agent-Core 0.3.0 and 0.4.0 (the async tracer), the engine, then `db`, `tools`,
 `agents` (two PRs), `server`, `scripts` with `demo` and `evals`, the tests, and the removal of the synchronous
@@ -351,42 +351,58 @@ Progress (decision 0006):
   runs about 20 in a row. Before the Phase 5 cutover: run independent queries together, and measure against RDS from
   the server, where round trips are shorter than through Docker Desktop on Windows.
 
-### Phase 5: RDS and cutover
+### Phase 5: production on PostgreSQL, set up like Health-Review
 
-Goal: production runs on RDS, with verified backups and a tested way back.
+Goal: production runs on PostgreSQL, with verified backups and a tested way back.
+
+Owner decisions (November 16, 2026):
+- **Set it up like Health-Review:** Terraform, an EC2 server, settings in SSM Parameter Store, three database logins, a separate backup container, and connections that check the server's certificate (`verify-full`).
+- **Share Health-Review's RDS:** Job-Agent gets its own EC2 server in Health-Review's network, and its own `job_agent` database and logins on Health-Review's RDS instance (PostgreSQL 18, db.t4g.micro). Health-Review's code isn't changed: Job-Agent's Terraform looks its resources up, and adds one database firewall rule as a separate resource, which Health-Review's applies leave alone.
+- **The demo** keeps its own `demo-db` container. **Local installs** stay on SQLite, so `better-sqlite3` stays a dependency.
+- **The AWS budget alarm** is set at $50 a month.
 
 Infrastructure in `infra/` using Terraform:
-
-- RDS for PostgreSQL, `db.t4g.micro`, single AZ, about 20 GB gp3, in the same Region as the Lightsail server
-- Not publicly accessible, encrypted at rest, TLS required, with clients verifying the RDS certificate
-- Automated backups for 7 days, deletion protection on
-- Lightsail VPC peering, which connects to the default VPC in the same Region. Allow inbound traffic only from the Lightsail range, and confirm the range first
-- AWS budget alarm at a limit set by the owner
-- Remote Terraform state, with no secrets in the repo
+- **`infra/bootstrap`:** Job-Agent's own KMS key (`alias/job-agent`) and S3 bucket for Terraform's state.
+- **`infra`:**
+  - **Lookups:** Health-Review's network, public subnet, RDS instance, and database firewall group.
+  - **The server:** EC2 t3a.small (Ubuntu 24.04, IMDSv2, a 30 GB disk encrypted with Job-Agent's key, an Elastic IP), with its own firewall group and a rule reaching RDS on 5432.
+  - **Permissions:** an IAM role that reads only `/job-agent/*` in SSM.
+  - **Alarms and budget:** CloudWatch alarms through SNS email, and the $50 AWS budget.
+- **The database:** `infra/db-setup.ps1` creates the `job_agent` database (C collation) and the logins `ja_migrate` (owner), `ja_app` (row reads and writes) and `ja_backup` (read only). The grants are in `db/postgres/roles.ts`.
+- **Who runs it:** the owner runs every plan and apply. CI runs `fmt`, `validate` and Trivy only.
 
 Application changes:
-
-1. Replace SQLite-specific backup code. Keep the encrypted Drive backup design, using `pg_dump` output. Attachments stay on disk.
-2. Change the monthly restore test to restore into a scratch database, then compare counts.
-3. Rework `deploy.sh`. A file copy can no longer undo a migration, so take a backup before migrating, and write migrations as expand then contract so the previous image still runs.
-4. Update `PRIVACY.md`, `cloud.env.example`, the setup guide, and the `CLAUDE.md` Portability and Cloud sections.
+1. **Done (PR 1):**
+   - **Certificate checking:** in production, an address on another machine must use `sslmode=verify-full` with `sslrootcert` (the RDS bundle in the image).
+   - **Deploy mode:** with `DATABASE_MIGRATIONS=deploy`, the app never migrates and refuses to start while anything is pending, while row security is missing, or as a superuser.
+   - **Migrating:** `scripts/migrate.js` migrates, as the owner login.
+   - **No silent fallback:** with `REQUIRE_POSTGRES=1`, the app never opens a SQLite file.
+   - **PostgreSQL 18:** local, CI and the demo match RDS, and the test database uses C collation.
+2. **A backup container,** ported from Health-Review:
+   - `pg_dump` as `ja_backup`, into the existing encrypted `.jabk` backup with settings and attachments;
+   - each dump checked in a throwaway cluster;
+   - the monthly restore test into a scratch database, comparing counts;
+   - a checked dump before each migration, with a restore if a deploy fails.
+3. **Deploying:** `deploy.sh` gets a PostgreSQL mode, and `env-from-ssm.sh` builds `.env` from SSM. Migrations are written expand then contract, so the previous image still runs.
+4. **Documents:** update `PRIVACY.md`, `cloud.env.example`, the setup guide, README, CLAUDE.md, and decision record 0007.
 
 Cutover runbook, with the owner present:
+1. **Rehearse** on staging names until it runs cleanly, and record how long it takes.
+2. **Freeze the old server:** turn off schedules and put the app on Lightsail in read-only mode, then run a final encrypted backup.
+3. **Load and check the data:** load it into RDS (`npm run db:to-postgres`), then check it (`npm run db:parity`). Copy `data/` (attachments, settings, Google tokens) to the new server.
+4. **Switch over:** move DNS and the GitHub deploy settings, then run smoke tests: sign in, jobs, a letter download, an inbox check, and one pipeline.
+5. **Reopen:** open writes and turn schedules back on. Then run a backup and a restore test.
+6. **Way back:** before writes reopen, point DNS back at Lightsail. Lightsail stays stopped for 14 days as the fallback, then is deleted after owner approval.
 
-1. Rehearse on a copy until it runs cleanly, and record how long it takes.
-2. Turn off schedules. Put the app in read-only mode.
-3. Run the encrypted backup, then migrate and verify.
-4. Point the app at RDS and run smoke tests: sign in, jobs, letter download, inbox check, one pipeline.
-5. Open writes and turn schedules back on.
-6. **Way back:** before writes reopen, switch back to the SQLite file. Afterward, restore forward from RDS. Keep the SQLite file encrypted for 30 days, then delete it after owner approval.
+Risks: RDS had 141 MB free memory at its lowest before Job-Agent joined (moving it up to t4g.small is about $12 a month more, and that change belongs in Health-Review's Terraform). Point-in-time recovery restores the whole instance, so Job-Agent restores from its own `pg_dump` backups.
 
 Done when:
-- [ ] A restore from RDS backup has been tested
-- [ ] Monthly cost is known and within budget
-- [ ] A week of scheduled runs is clean
-- [ ] `better-sqlite3` is out of the app's production dependencies
+- [ ] A restore from a Job-Agent backup into a scratch database has been tested in production
+- [ ] Monthly cost is known and within the $50 budget
+- [ ] A week of scheduled runs on RDS is clean
+- [ ] The production app never opens SQLite (`REQUIRE_POSTGRES`). This replaces "`better-sqlite3` is out of production dependencies": SQLite stays for local installs (decision 0006)
 
-Expected cost: about $12 a month for the instance, plus storage and backups. Confirm in the AWS calculator before creating anything, and check what the account's free plan covers.
+Expected cost: about $21 a month for the new server (EC2 about $13.70, disk $2.40, Elastic IP $3.65, KMS $1, alarms under $1), offset by $12 when the Lightsail server goes, so about $9 a month more. The shared RDS adds nothing unless it must grow. Confirm in the AWS calculator before creating anything.
 
 ### Phase 6: Durable job system and admin screen
 

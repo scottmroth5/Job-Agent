@@ -58,9 +58,9 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
 ## Commands
 npm test                          run all unit tests (no network, no real data)
 node --test test/db.test.js       run one suite
-npm run pg:up                     start the local PostgreSQL 17 (compose.dev.yml, 127.0.0.1:5433, password PG_DEV_PASSWORD in .env); pg:down stops it
+npm run pg:up                     start the local PostgreSQL 18 (compose.dev.yml, 127.0.0.1:5433, password PG_DEV_PASSWORD in .env); pg:down stops it
 npm run test:pg                   the same suite on PostgreSQL (scripts/run-pg-tests.js recreates job_agent_test; -- test/x.test.js for one
-                                  suite); CI runs it on a postgres:17 service. Tests of SQLite-only things skip there (test/engine-skips.test.js)
+                                  suite); CI runs it on a postgres:18 service. Tests of SQLite-only things skip there (test/engine-skips.test.js)
 npm run typecheck                 tsc --noEmit, strict (tsconfig.json for the server side, web/tsconfig.json for the page)
 npm run lint                      the promise rules (no-floating-promises, await-thenable, no-misused-promises) and import type
 npm run db:types                  regenerate db/types.ts (a row type per table) from the migrations; CI runs -- --check
@@ -399,6 +399,14 @@ test/row-security.test.js (runs). test/row-security.test.js leaves out user_id f
 PostgreSQL refuses a unique index entry over about 2.7 KB: url keys over 500 characters are their first 400 plus
 #sha256= and the hash of the whole key (tools/urls.ts capUrlKey; migration 026 rekeyed stored ones). A new unique text
 key that can grow long needs the same.
+Production on PostgreSQL (v3 Phase 5, like Health-Review; docs/v3/PLAN.md): three logins on the shared RDS (db/postgres/roles.ts
+grants): ja_migrate owns the schema and runs scripts/migrate.js (MIGRATE_DATABASE_URL) at deploy; ja_app (DATABASE_URL) reads
+and writes rows in deploy mode, DATABASE_MIGRATIONS=deploy, where the store never migrates and refuses to start while a
+migration is pending, row security is missing, or it is a superuser; ja_backup reads for pg_dump. In production
+(NODE_ENV) an address on another machine must carry sslmode=verify-full and sslrootcert (/app/certs/rds-global-bundle.pem,
+the Dockerfile certs stage; db/postgres/store.ts checkTls); DATABASE_TLS=off waives it only for the demo's demo-db.
+REQUIRE_POSTGRES=1 makes openJobStore refuse to open a SQLite file. PostgreSQL 18 everywhere (RDS, compose.dev.yml, CI,
+demo-db); the test database and production use C collation. test/pg-production.test.js runs the three-login shape.
 
 ## Portability (Windows now, a Linux server later)
 Calendar days come from tools/dates.ts localDay/localDaysAgo/dayOf, in TZ from .env; never take "today" from toISOString(),

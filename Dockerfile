@@ -49,6 +49,18 @@ RUN echo "relay list for build $GEO_STAMP" \
  && if curl -fsSL --max-time 300 -o /geo/relay.csv "https://mask-api.icloud.com/egress-ip-ranges.csv" && [ -s /geo/relay.csv ]; \
     then echo "relay list $(wc -l < /geo/relay.csv) lines"; else rm -f /geo/relay.csv; fi; true
 
+# Amazon RDS's certificate authorities (v3 Phase 5): the production database address names this file in sslrootcert with
+# sslmode=verify-full, so the app checks the database's certificate and name. Unlike the geo files, the build fails if
+# it cannot be fetched: an image without it could not reach the database.
+FROM debian:bookworm-slim AS certs
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+RUN mkdir -p /certs \
+ && curl -fsSL --max-time 120 -o /certs/rds-global-bundle.pem https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem \
+ && grep -q "BEGIN CERTIFICATE" /certs/rds-global-bundle.pem \
+ && echo "RDS certificate bundle: $(grep -c 'BEGIN CERTIFICATE' /certs/rds-global-bundle.pem) certificates"
+
 # Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
 FROM node:26-bookworm-slim
 ENV NODE_ENV=production \
@@ -71,6 +83,7 @@ RUN apt-get update \
            /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=build /app ./
 COPY --from=geo /geo /app/geo
+COPY --from=certs /certs /app/certs
 # Runs as the unprivileged node user (uid 1000); the mounted /data folder must be owned by that uid.
 RUN mkdir -p /data && chown node:node /data
 USER node

@@ -51,7 +51,7 @@ Your settings go in `data/config/job-search.json`; start from [`config/job-searc
 
 ### Database: SQLite or PostgreSQL
 
-By default your data lives in one SQLite file, `data/job-agent.db`, with nothing else to install. To use PostgreSQL instead, set `DATABASE_URL` in `.env` to a `postgres://` address; the app creates its tables on first start. For a local PostgreSQL in Docker, add a `PG_DEV_PASSWORD` to `.env`, run `npm run pg:up` (PostgreSQL 17 on 127.0.0.1:5433, [`compose.dev.yml`](compose.dev.yml)), and point `DATABASE_URL` at its `job_agent` database. To move an existing SQLite database into PostgreSQL, stop the app and run `npm run db:to-postgres` with `DATABASE_URL` set: it copies every table, then checks that every row matches. Backups (`npm run backup`) work on the SQLite file for now.
+By default your data lives in one SQLite file, `data/job-agent.db`, with nothing else to install. To use PostgreSQL instead, set `DATABASE_URL` in `.env` to a `postgres://` address; the app creates its tables on first start. For a local PostgreSQL in Docker, add a `PG_DEV_PASSWORD` to `.env`, run `npm run pg:up` (PostgreSQL 18 on 127.0.0.1:5433, [`compose.dev.yml`](compose.dev.yml)), and point `DATABASE_URL` at its `job_agent` database. To move an existing SQLite database into PostgreSQL, stop the app and run `npm run db:to-postgres` with `DATABASE_URL` set: it copies every table, then checks that every row matches. Backups (`npm run backup`) work on the SQLite file for now.
 
 ## Commands
 
