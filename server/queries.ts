@@ -10,7 +10,7 @@ import { addNote, listNotes } from '../agents/notes.ts';
 import { localDay, localDaysAgo } from '../tools/dates.ts';
 import { jsonNumber } from '../db/engine/sql.ts';
 import { describeVersion } from '../agents/prompts.ts';
-import { budgetStatus } from '../agents/budget.ts';
+import { budgetStatus } from '../tools/budget.ts';
 import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { riskOf, scamFor } from '../agents/discovery/scam.ts';

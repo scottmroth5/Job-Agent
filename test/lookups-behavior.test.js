@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { addValue, updateValue, setRole, lookups, invalidateLookups } from '../agents/lookups.ts';
 import { liveCopySql } from '../agents/identity.ts';
-import { applications } from '../server/funnel.ts';
+import { applications } from '../agents/funnel.ts';
 import { archivePostings } from '../agents/hunt/archive.ts';
 import { selectPostings } from '../agents/discovery/score.ts';
 import { planStatus } from '../agents/inbox/actions.ts';

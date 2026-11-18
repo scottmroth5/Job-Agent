@@ -513,6 +513,7 @@ Goal: separately deployed services with clear boundaries and full tracing.
    infra/  docs/
    ```
 
+   Owner decision, November 18: the layers stay in today's folders, enforced by lint, with entry points in `apps/` (decision 0009).
 2. Enforce dependency direction with a lint rule. Apps depend on packages, and `packages/domain` never imports Fastify or pg-boss.
 3. Build one worker app that runs selected pools through a setting, with separate images: only `worker-browser` includes Chromium.
 4. Update `deploy/compose.yml` with `api`, `scheduler`, `worker-browser`, `worker-ai`, `worker-io`, `demo`, and `caddy`, with memory and CPU limits and no ports except Caddy's.

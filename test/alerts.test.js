@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openJobStore } from '../db/index.ts';
 import { createAlerts } from '../server/alerts.ts';
-import { createScheduler, parseSchedule } from '../server/scheduler.ts';
+import { createScheduler, parseSchedule } from '../tools/scheduler.ts';
 import { buildRawEmail } from '../tools/google/gmail.ts';
 /** @import { SentEmail } from './fixtures/fakes.js' */
 

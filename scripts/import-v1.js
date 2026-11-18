@@ -7,9 +7,9 @@ import { pathToFileURL } from 'node:url';
 import { parse } from 'csv-parse/sync';
 import { createJobTracer } from '../tools/trace.ts';
 import { openJobStore, DB_PATH } from '../db/index.ts';
-import { importV1 } from '../db/import-v1.ts';
+import { importV1 } from '../agents/import-v1.ts';
 import { dataPath } from '../tools/paths.ts';
-/** @import { SheetRow } from '../db/import-v1.ts' */
+/** @import { SheetRow } from '../agents/import-v1.ts' */
 
 const SHEETS_DIR = dataPath('v1-export', 'sheets');
 

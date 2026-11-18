@@ -3,9 +3,9 @@
 // (agents/lookups.ts), status history, and linked emails, so statuses added later count automatically.
 // Timing uses only dated events (your changes, the agent's, and emails); v1-imported history has the import
 // date, not the real one, so it counts a milestone but not its timing.
-import { lookups } from '../agents/lookups.ts';
+import { lookups } from './lookups.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
-import { PROMOTE_AT } from '../agents/discovery/score.ts';
+import { PROMOTE_AT } from './discovery/score.ts';
 import type { Db } from '../tools/types.ts';
 import type { EmailsRow, PostingsRow, StatusHistoryRow } from '../db/types.ts';
 

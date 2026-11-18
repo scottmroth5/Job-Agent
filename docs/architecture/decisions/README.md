@@ -13,3 +13,4 @@ Records are not edited once accepted. A later record marks an earlier one supers
 | [0006](0006-two-database-engines.md) | Two database engines, SQLite and PostgreSQL | Accepted |
 | [0007](0007-shared-rds.md) | Production on PostgreSQL, set up like Health-Review, on its RDS instance | Accepted |
 | [0008](0008-own-job-queue.md) | Our own job queue in SQL on both engines, not pg-boss | Accepted |
+| [0009](0009-layers-in-place.md) | Layers in today's folders, not an npm workspaces move | Accepted |

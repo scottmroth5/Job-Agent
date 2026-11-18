@@ -9,7 +9,7 @@ import { createJobClaude } from '../tools/claude.ts';
 import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.ts';
 import { OWNER_ID } from '../db/users.ts';
-import { ownerBackground } from '../tools/knowledge.ts';
+import { ownerBackground } from '../agents/knowledge.ts';
 import { createHttp } from '../tools/http.ts';
 import { createBrowser } from '../tools/browser.ts';
 import { getGoogleAuth } from '../tools/google/auth.ts';

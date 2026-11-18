@@ -6,7 +6,7 @@
 // Each notice picks its own recipient here, so no caller can address anyone else. They hold names, addresses, and links
 // only, never job data, and a failure to send never fails the action that caused it (the reason is logged, not the email).
 
-import type { BudgetStatus } from '../agents/budget.ts';
+import type { BudgetStatus } from '../tools/budget.ts';
 
 /** The account a notice is about: its name and address. */
 type Person = { name?: string | null; email: string | null };

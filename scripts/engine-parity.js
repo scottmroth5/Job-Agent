@@ -22,7 +22,7 @@ import { localDaysAgo } from '../tools/dates.ts';
 import { configFor } from '../agents/user-config.ts';
 import { lookups } from '../agents/lookups.ts';
 import { getPosting, listPostings, summary } from '../server/queries.ts';
-import { applications, funnel } from '../server/funnel.ts';
+import { applications, funnel } from '../agents/funnel.ts';
 import { today } from '../server/today.ts';
 import { closeNoResponse, waitingApplications } from '../agents/follow-ups.ts';
 import { archiveListings, archiveLongLinks, archivePostings, demoteWithoutText, findDuplicates } from '../agents/hunt/archive.ts';
@@ -30,7 +30,7 @@ import { selectPostings } from '../agents/discovery/score.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { decideEmail } from '../agents/inbox/process.ts';
 import { loadInboxConfig } from '../agents/inbox/config.ts';
-import { budgetStatus, spendByLabel } from '../agents/budget.ts';
+import { budgetStatus, spendByLabel } from '../tools/budget.ts';
 /** @import { Db } from '../tools/types.ts' */
 
 /**

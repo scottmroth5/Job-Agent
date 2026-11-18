@@ -9,7 +9,7 @@ type Body = ApiBody<'PUT /api/account/automation'>;
 /** One run time: the days it runs (0 is Sunday) and a 24-hour time, "06:00". */
 type Slot = { days: number[]; time: string };
 
-// Shown Monday first; the numbers are JavaScript's (0 is Sunday), as server/scheduler.ts reads them.
+// Shown Monday first; the numbers are JavaScript's (0 is Sunday), as tools/scheduler.ts reads them.
 const DAYS: Array<[number, string]> = [[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [0, 'Sun']];
 const NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
 const GROUPS: Record<string, number[]> = { daily: [0, 1, 2, 3, 4, 5, 6], weekdays: [1, 2, 3, 4, 5], weekends: [0, 6] };

@@ -7,7 +7,7 @@ import { createJobClaude } from '../tools/claude.ts';
 import { loadConfig } from '../tools/config.ts';
 import { configFor } from '../agents/user-config.ts';
 import { OWNER_ID } from '../db/users.ts';
-import { ownerBackground } from '../tools/knowledge.ts';
+import { ownerBackground } from '../agents/knowledge.ts';
 import { assertNoRunningRun } from '../tools/runs.ts';
 import { openJobStore } from '../db/index.ts';
 import { exitWhenDone } from '../tools/exit.ts';

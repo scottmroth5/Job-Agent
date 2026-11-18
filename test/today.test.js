@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
 import { today, REMINDER_DAYS } from '../server/today.ts';
-import { FOLLOW_UP_DAYS } from '../server/funnel.ts';
+import { FOLLOW_UP_DAYS } from '../agents/funnel.ts';
 import { addUser } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
 import { fakeConfig, fakeServices } from './fixtures/fakes.js';

@@ -11,7 +11,7 @@ import { createJobTracer } from '../tools/trace.ts';
 import { runAsUser, currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { withUserConfig } from '../agents/user-config.ts';
-import { checkBudget } from '../agents/budget.ts';
+import { checkBudget } from '../tools/budget.ts';
 import { createQueue, type Handler, type HandlerContext, type Job, type Logger, type Queue } from '../tools/queue/queue.ts';
 import type { JobSearchConfig } from '../tools/config.ts';
 import type { JobStore } from '../tools/types.ts';

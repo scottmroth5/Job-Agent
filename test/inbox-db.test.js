@@ -41,7 +41,7 @@ test('007 adds the inbox tables and the company domain column; 013 drops its fun
   const store = openJobStore(':memory:');
   const names = await tablesOf(store.db);
   for (const n of ['contacts', 'email_threads', 'emails', 'decision_log', 'reminders']) assert.ok(names.includes(n), n);
-  assert.ok(!names.includes('application_funnel'), 'server/funnel.ts computes the funnel per user instead');
+  assert.ok(!names.includes('application_funnel'), 'agents/funnel.ts computes the funnel per user instead');
   assert.ok((await columnsOf(store.db, 'postings')).includes('company_domain'));
   store.close();
 });

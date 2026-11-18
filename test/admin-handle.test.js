@@ -27,7 +27,7 @@ const ALLOWED = {
   'scripts/db-types.js': 'the schema (sqlite_master) of a throwaway database',
   'server/jobs.ts': "the task queue (tools/queue: claims across users, every read names its uid) and each task's user's time zone and settings by id",
   'scripts/demo-seed.js': "the demo's sample tasks, stored through the queue as the owner's",
-  'tools/knowledge.ts': "the owner's knowledge doc (backgroundFor names its user)",
+  'agents/knowledge.ts': "the owner's knowledge doc (backgroundFor names its user)",
 };
 
 /** @param {string} dir @returns {string[]} */
