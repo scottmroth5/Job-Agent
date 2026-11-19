@@ -1,9 +1,9 @@
-// Prints the v3 baseline (tools/baseline.ts): counts and sizes only, never text. Read-only: no migrations, no copy.
+// Prints the v3 baseline (agents/baseline.ts): counts and sizes only, never text. Read-only: no migrations, no copy.
 //   npm run report:baseline             plain text
 //   npm run report:baseline -- --json   the same as JSON, to keep privately (never in the repo)
 import { exitUnlessSqlite, DB_PATH } from '../db/index.ts';
 import { dataPath } from '../tools/paths.ts';
-import { baselineReport, renderBaseline } from '../tools/baseline.ts';
+import { baselineReport, renderBaseline } from '../agents/baseline.ts';
 
 exitUnlessSqlite('npm run report:baseline');
 

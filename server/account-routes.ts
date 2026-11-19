@@ -1,7 +1,7 @@
 // Settings (multi-user, phase 2): the signed-in user's account and their own Claude key. The key is checked with
 // Anthropic's free model list, then sealed (tools/secret-box.ts, bound to the user's id) before it is stored; it is never
 // returned, logged, or shown to anyone, only whether one is set. The owner's AI uses ANTHROPIC_API_KEY instead.
-import { budgetStatus } from '../agents/budget.ts';
+import { budgetStatus } from '../tools/budget.ts';
 import { getUser, OWNER_ID, setClaudeKey } from '../db/users.ts';
 import { boxKey, seal } from '../tools/secret-box.ts';
 import { cleanConfig, MAX_PROFILE_CHARS, MIN_PROFILE_CHARS, PROFILE_SOURCES, profileVersions, saveUserConfig, saveUserProfile, userConfig, userProfile } from '../agents/user-config.ts';

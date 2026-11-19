@@ -62,7 +62,10 @@ npm run pg:up                     start the local PostgreSQL 18 (compose.dev.yml
 npm run test:pg                   the same suite on PostgreSQL (scripts/run-pg-tests.js recreates job_agent_test; -- test/x.test.js for one
                                   suite); CI runs it on a postgres:18 service. Tests of SQLite-only things skip there (test/engine-skips.test.js)
 npm run typecheck                 tsc --noEmit, strict (tsconfig.json for the server side, web/tsconfig.json for the page)
-npm run lint                      the promise rules (no-floating-promises, await-thenable, no-misused-promises) and import type
+npm run lint                      the promise rules (no-floating-promises, await-thenable, no-misused-promises), import type, and
+                                  the layers (decision 0009): tools/ and db/ never import agents/, server/, or apps/; agents/
+                                  never imports server/ or apps/; Fastify only in server/ and apps/, pg only in db/ and
+                                  tools/backup, Playwright only in tools/browser.ts. Move shared code down, never excuse it
 npm run db:types                  regenerate db/types.ts (a row type per table) from the migrations; CI runs -- --check
 npm run api:types                 regenerate web/src/api-types.ts (each route's params, query, body, and response) from
                                   /api/openapi.json (decision 0005); CI runs -- --check
@@ -117,7 +120,7 @@ npm run db:parity                 after db:to-postgres: the rule-based decisions
                                   engines for every user, compared (-- --from <file> -- --schema <name>). No Claude calls;
                                   match, same but reordered, or DIFFER, never a value. A list query needs an explicit ORDER BY
                                   (SQLite returns rows by id without one; PostgreSQL does not)
-npm run report:baseline           v3 baseline (tools/baseline.ts): rows per table, database and attachment sizes, Claude spend by
+npm run report:baseline           v3 baseline (agents/baseline.ts): rows per table, database and attachment sizes, Claude spend by
                                   month, accounts by status, outcome data gaps; counts only, opened read-only (no migrations).
                                   -- --json; output stays out of the repo
 npm run bench                     response times (v3 Phase 3): the main routes on a fresh demo database in the OS temp folder,
@@ -204,7 +207,7 @@ the default prompts name "Section 5: Job Targets" and "Section 6 (Cover Letter R
 the prompts. The draft builder writes them, Settings shows a checklist and Start from the template / Add the missing
 sections, and test/knowledge-sections.test.js checks the template, the demo's DEMO_ABOUT_YOU, and every example in help/about-you.md.
 Everyone's knowledge doc, the owner's included, lives only in the app (user_settings): agents/user-config.ts backgroundFor
-(>= 500 characters, else a message saying to write it under Settings) for the server and tools/knowledge.ts ownerBackground
+(>= 500 characters, else a message saying to write it under Settings) for the server and agents/knowledge.ts ownerBackground
 for scripts. There is no Google Doc any more (no YOUR_KNOWLEDGE_DOC_ID, no documents.readonly scope); services.knowledge is
 only a test stand-in for the owner's.
 Knowledge doc versions: every save (PUT /api/account/profile with source typed, file, draft, or restore) keeps the one
@@ -229,7 +232,7 @@ The Home page (#/) opens with Today and upcoming (server/today.ts, summary.today
 past due, jobs at an offer, applications worth a follow-up, and one item for all stale ones; each opens its job), then a tile per screen.
 The job panel's Next step box is the same list for one job (GET /api/postings/:id nextSteps; every open reminder, however
 far out), with Prepare for a meeting and Done (registerReminderRoutes, registered with or without Gmail).
-Follow-ups (agents/follow-ups.ts, server/follow-up-routes.ts): no reply from FOLLOW_UP_DAYS (7, server/funnel.ts) until
+Follow-ups (agents/follow-ups.ts, server/follow-up-routes.ts): no reply from FOLLOW_UP_DAYS (7, agents/funnel.ts) until
 the user's stale days (Settings > Follow-ups, user_settings followUp.staleDays, default 45; never archived jobs) is a
 follow-up with Find someone to contact (agents/hunt/find-contact.ts: Sonnet with web search on the user's AI, prompt
 find-contact, the result saved as an agent note) and Close: no response; from the stale days on it is stale, closed one at
@@ -270,7 +273,7 @@ table check. web/dist is build output (gitignored).
 A failed scheduled job emails the owner (server/alerts.ts: EMAIL_ADDRESS only, once per kind a day, cleared by the next success).
 deploy.sh: when the new image has pending migrations, it backs up to Drive with the current image first and, if the deploy
 fails, restores the pre-migration copy before restarting the old image (--no-backup, --skip-db-check for old tags).
-The in-app scheduler (server/scheduler.ts) runs each user's automatic runs (see Users) and SCHEDULE_BACKUP from .env
+The in-app scheduler (tools/scheduler.ts) runs each user's automatic runs (see Users) and SCHEDULE_BACKUP from .env
 while the server runs, through the same task starters as the buttons (pipeline-routes start, inbox-routes startCheck); it
 catches up a run missed in the last 12 hours. GET /api/schedule lists the app's jobs and the caller's own. It replaces the Windows tasks in the cloud;
 never enable both. Child scripts run through services.runScript.
@@ -537,7 +540,7 @@ PRIVACY.md must stay true of the code: a new outside service, admin column, or d
 Make Claude clients only with tools/claude.ts createJobClaude(db). Each call is paid by the user it runs as: the owner, and
 users the owner put on their key (users.ai_source 'owner'), use ANTHROPIC_API_KEY; anyone else their own key, saved in
 Settings (server/account-routes.ts: checked with Anthropic's free model list, sealed by tools/secret-box.ts with USER_KEY_SECRET
-and the user id, never returned, logged, or shown, even to the admin). No key, no AI (NoClaudeKeyError). Caps (agents/budget.ts
+and the user id, never returned, logged, or shown, even to the admin). No key, no AI (NoClaudeKeyError). Caps (tools/budget.ts
 checkBudget, from run_calls joined to runs.user_id): everything on the owner's key against the owner's cap (Admin > Spending,
 else MONTHLY_CLAUDE_BUDGET_USD, else $50), and each user on it against their own monthly cap (Admin > Users); the first
 refusal of a month emails that user and the owner. Every Claude call must pass a trace (a createJobTracer run) so its cost

@@ -42,7 +42,7 @@ export function createJobTracer({ store, logger }: { store?: { db: Db } | null; 
     async startRun(name: string, meta?: object): Promise<Run> {
       const run = await tracer.startRun(name, meta);
       // An agent-core older than 0.5.0 ignores the sink and keeps the run in memory, which would hide its Claude
-      // spend from the caps (agents/budget.ts reads run_calls). Fail loudly instead.
+      // spend from the caps (tools/budget.ts reads run_calls). Fail loudly instead.
       if (store && run.id == null) throw new Error('trace: the run was not stored; agent-core 0.5.0 or newer is required');
       return run;
     },

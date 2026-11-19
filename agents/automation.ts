@@ -5,7 +5,7 @@
 // SCHEDULE_INBOX from .env, and, for anyone else, the old "Run my pipeline on the app's schedule too" checkbox on the
 // app's default pipeline schedule (SCHEDULE_PIPELINE). Times are in the app's time zone (TZ), like the scheduler.
 import { OWNER_ID } from '../db/users.ts';
-import { parseSchedule } from '../server/scheduler.ts';
+import { parseSchedule } from '../tools/scheduler.ts';
 import type { Db } from '../tools/types.ts';
 
 /** What a scheduled pipeline run does with Claude: score new jobs, and write letters and resume tweaks. */

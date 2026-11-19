@@ -5,7 +5,7 @@ import { buildScoreRequest, DEFAULT_SCORE_MODEL } from '../agents/discovery/scor
 import { buildTweaksRequest, buildLetterRequest } from '../agents/hunt/generate.ts';
 import { buildPrepRequest, normalizePrepInput } from '../agents/hunt/prep.ts';
 import { buildContactRequest } from '../agents/hunt/find-contact.ts';
-import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD } from '../agents/budget.ts';
+import { budgetStatus, setBudgetLimit, spendByLabel, DEFAULT_MONTHLY_BUDGET_USD } from '../tools/budget.ts';
 import { buildClassifyRequest } from '../agents/inbox/classify.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { OWNER_ID } from '../db/users.ts';

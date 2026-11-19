@@ -9,7 +9,7 @@ import { addUser, OWNER_ID } from '../db/users.ts';
 import { buildApp } from '../server/app.ts';
 import { authSettings } from '../server/auth.ts';
 import { SESSION_COOKIE, sessionKey, sign } from '../server/session.ts';
-import { createScheduler, parseSchedule, schedulesFromEnv } from '../server/scheduler.ts';
+import { createScheduler, parseSchedule, schedulesFromEnv } from '../tools/scheduler.ts';
 import { automatedUsers, automationFor, saveAutomation, skipArgs } from '../agents/automation.ts';
 import { fakeConfig, fakeServices, noTimer } from './fixtures/fakes.js';
 

@@ -8,11 +8,11 @@ import fastifyStatic from '@fastify/static';
 import { listPostings, getPosting, updatePosting, summary } from './queries.ts';
 import { registerLookupRoutes } from './lookups-routes.ts';
 import { lookups } from '../agents/lookups.ts';
-import { funnel } from './funnel.ts';
+import { funnel } from '../agents/funnel.ts';
 import { registerAttachmentRoutes } from './attachments.ts';
 import { registerPrepRoutes } from './prep-routes.ts';
 import { registerNoteRoutes } from './notes-routes.ts';
-import { createScheduler, parseSchedule } from './scheduler.ts';
+import { createScheduler, parseSchedule } from '../tools/scheduler.ts';
 import { BLOCKED_PAGE, geoBlocker } from './geo.ts';
 import { registerUsageTotals } from './usage-totals.ts';
 import { DEMO_REQUEST_LIMIT, errorReply, registerRateLimits, registerSecurityHeaders } from './security.ts';
@@ -40,7 +40,7 @@ import type { PostingsRow } from '../db/types.ts';
 import type { JobItem, PageRenderer } from '../agents/discovery/types.ts';
 import type { ManualInput } from '../agents/manual.ts';
 import type { PostingFilters, PostingPatch } from './queries.ts';
-import type { Schedule, ScheduledJob } from './scheduler.ts';
+import type { Schedule, ScheduledJob } from '../tools/scheduler.ts';
 import type { AutomationHooks } from './account-routes.ts';
 import type { CountryOf } from './geo.ts';
 import type { Place } from './usage-totals.ts';
@@ -557,7 +557,7 @@ export async function buildApp({ store, config, services: given, webDir, authMod
     }, { trace: false });
   }
 
-  // The in-app scheduler (server/scheduler.ts): each job starts the same task as its button, and waits for it. The
+  // The in-app scheduler (tools/scheduler.ts): each job starts the same task as its button, and waits for it. The
   // backup and the restore test come from .env; pipelines and inbox checks are each user's automatic runs, synced
   // from their settings at start, after each save, and every few minutes (so a pause or a deleted account drops out).
   if (authMode !== 'demo' && (pipeline || inboxChecks || services.schedules?.length)) {

@@ -7,7 +7,7 @@
 //   A user with their own key pays for it themselves; their spend is shown, with no cap here.
 import { getSetting, setSetting } from '../db/settings.ts';
 import { OWNER_ID } from '../db/users.ts';
-import type { Db } from '../tools/types.ts';
+import type { Db } from './types.ts';
 
 /** A month's spend against a cap: budgetStatus's answer. */
 export interface BudgetStatus {

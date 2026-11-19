@@ -16,7 +16,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { openJobStore } from '../db/index.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { runAsUser } from '../db/scope.ts';
-import { createScheduler, schedulesFromEnv } from '../server/scheduler.ts';
+import { createScheduler, schedulesFromEnv } from '../tools/scheduler.ts';
 import { createAlerts } from '../server/alerts.ts';
 import { createBackupDrive } from '../tools/backup/drive.ts';
 import { PRODUCTION_DRIVE_FOLDER } from '../tools/backup/run.ts';

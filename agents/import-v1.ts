@@ -2,9 +2,9 @@
 // Pure logic over parsed CSV rows; scripts/import-v1.js handles files and output.
 import { normalizeUrl, companyTitleKey } from '../tools/urls.ts';
 import { parseSheetDate, parsePostedDate, localDay } from '../tools/dates.ts';
-import { adoptNotesText } from '../agents/notes.ts';
-import type { JobStore } from './index.ts';
-import type { PostingsRow } from './types.ts';
+import { adoptNotesText } from './notes.ts';
+import type { JobStore } from '../db/index.ts';
+import type { PostingsRow } from '../db/types.ts';
 
 /** The import's summary counts; the stage, status, and source totals are added at the end. */
 export interface ImportCounts {

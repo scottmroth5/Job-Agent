@@ -5,8 +5,8 @@ import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { runAsUser } from '../db/scope.ts';
 import { openReadOnly } from '../db/engine/files.ts';
-import { applications } from '../server/funnel.ts';
-import { waitingApplications } from '../agents/follow-ups.ts';
+import { applications } from './funnel.ts';
+import { waitingApplications } from './follow-ups.ts';
 
 const LINKED = "('auto', 'confirmed', 'reassigned')";
 

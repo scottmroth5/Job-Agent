@@ -15,7 +15,7 @@ import { createDriveClient } from '../tools/google/drive.ts';
 import { repoPath, ROOT } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from './app.ts';
-import { schedulesFromEnv } from './scheduler.ts';
+import { schedulesFromEnv } from '../tools/scheduler.ts';
 import { timeZone } from '../tools/dates.ts';
 import { countryLookup, geoAllowFromEnv, openGeo, openRelay } from './geo.ts';
 import { createAlerts } from './alerts.ts';
@@ -26,7 +26,7 @@ import { sendEmail } from '../tools/google/gmail.ts';
 import { assertSafeBinding, authSettings } from './auth.ts';
 import type { AppServices, RunScript } from './app.ts';
 import type { Notices } from './types.ts';
-import type { BudgetExceededError } from '../agents/budget.ts';
+import type { BudgetExceededError } from '../tools/budget.ts';
 import type { User } from '../db/users.ts';
 
 const host = process.env.HOST ?? '127.0.0.1';

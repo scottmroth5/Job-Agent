@@ -12,7 +12,7 @@ const isExempt = (/** @type {string} */ rel) => rel.startsWith('db/migrations/')
 // Files that work on a SQLite database file itself, until Phase 5 gives them PostgreSQL versions.
 const SQLITE_TOOLS = [
   'db/engine/files.ts', // read-only opens, copies, online backups, integrity checks of the SQLite file
-  'tools/baseline.ts', // report:baseline reads the file's page counts and catalog
+  'agents/baseline.ts', // report:baseline reads the file's page counts and catalog
   'tools/backup/restore-check.ts', // the restore test counts rows in a restored SQLite file
   'scripts/db-types.js', // db:types reads column types from SQLite's catalog
   'scripts/migrate-sqlite-to-postgres.js', // db:to-postgres reads the source file's catalog and checks its text

@@ -1,7 +1,7 @@
 // The in-app scheduler and the time zone helpers. Times are built in local time, so these pass in any zone.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createScheduler, lastRun, nextRun, parseSchedule, schedulesFromEnv, CATCH_UP_HOURS } from '../server/scheduler.ts';
+import { createScheduler, lastRun, nextRun, parseSchedule, schedulesFromEnv, CATCH_UP_HOURS } from '../tools/scheduler.ts';
 import { dayOf, localDay, localDaysAgo } from '../tools/dates.ts';
 import { fakeConfig, fakeServices, noTimer } from './fixtures/fakes.js';
 
