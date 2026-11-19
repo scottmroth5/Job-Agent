@@ -23,6 +23,7 @@ export async function runWorker({ store, config, services, pools, version = null
   const runtime = createRuntime({ store, config, services });
   defineTasks(runtime);
   const workers = runtime.jobs.run({ pools, service, version });
+  await workers.started; // so the health check never answers before the worker's first heartbeat
   const health = healthPort == null ? null : await serveHealth({ port: healthPort, service, check: () => workers.healthy() });
   return {
     service,

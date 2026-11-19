@@ -39,6 +39,9 @@ function deploy(args, { conf, current = 'sha-old', env = {}, state } = {}) {
     mkdirSync(bin);
     writeFileSync(join(bin, 'docker'), FAKE_DOCKER);
     chmodSync(join(bin, 'docker'), 0o755);
+    // deploy.sh's health wait sleeps 3 seconds a try for up to 120 seconds; a test of an unhealthy start need not wait it out.
+    writeFileSync(join(bin, 'sleep'), '#!/usr/bin/env bash\nexit 0\n');
+    chmodSync(join(bin, 'sleep'), 0o755);
     copyFileSync(repoPath('deploy', 'deploy.sh'), join(dir, 'deploy.sh'));
     chmodSync(join(dir, 'deploy.sh'), 0o755);
     writeFileSync(join(dir, 'env-from-ssm.sh'), '#!/usr/bin/env bash\necho "env-from-ssm" >> "$FAKE_LOG"\n');

@@ -721,13 +721,18 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
       }
       lastBeat = Date.now();
     };
-    void track(beat(true)).catch((err: Error) => log.warn?.(`[queue] the worker row was not written (${err.message})`));
+    // Settles once the first beat is written or has failed, so a health check opened after it answers from a real beat.
+    const started: Promise<void> = track(beat(true)).catch((err: Error) => {
+      log.warn?.(`[queue] the worker row was not written (${err.message})`);
+    });
     const beater = setInterval(() => void track(beat()).catch(() => {}), heartbeatMs);
     beater.unref?.();
 
     void track(sweep()).catch(() => {}); // a restart: tasks the last process left running are dealt with at once
     for (const pool of mine) void pump(pool);
     return {
+      /** Settles after the first heartbeat (written or failed); wait on it before opening a health check. */
+      started,
       /** Whether this worker renewed its row lately (the database answers and its loops run). */
       healthy: () => Date.now() - lastBeat < Math.max(3 * heartbeatMs, 5_000),
       running: () => inFlight.size,
