@@ -60,8 +60,8 @@ async function account(db: Db, uid: number) {
  * The scheduler's side of Settings > Automatic runs (server/app.ts fills it in): the .env defaults, sync after a save,
  * and a user's next runs (ISO, or null).
  */
-export type AutomationHooks = { defaults: AutomationDefaults; sync: () => Promise<void>; next: (uid: number) => { pipeline: string | null; inbox: string | null } };
-const NO_AUTOMATION: AutomationHooks = { defaults: { pipeline: null, inbox: null }, sync: async () => {}, next: () => ({ pipeline: null, inbox: null }) };
+export type AutomationHooks = { defaults: AutomationDefaults; sync: () => Promise<void>; next: (uid: number) => Promise<{ pipeline: string | null; inbox: string | null }> };
+const NO_AUTOMATION: AutomationHooks = { defaults: { pipeline: null, inbox: null }, sync: async () => {}, next: async () => ({ pipeline: null, inbox: null }) };
 
 // The automatic runs the demo shows: on, twice a week, every step (nothing is read or saved).
 const DEMO_AUTOMATION: Automation = { on: true, pipeline: 'Mon,Thu 06:00', steps: { score: true, letters: true }, inbox: null, saved: true };
@@ -321,7 +321,7 @@ export function registerAccountRoutes(
   // scheduled pipeline does; the owner also sets the inbox checks. Off is manual runs only.
   const automationOf = async (uid: number) => {
     const a = demo ? DEMO_AUTOMATION : await automationFor(db, uid, automation.defaults);
-    const next = demo ? { pipeline: null, inbox: null } : a.on ? automation.next(uid) : { pipeline: null, inbox: null };
+    const next = demo ? { pipeline: null, inbox: null } : a.on ? await automation.next(uid) : { pipeline: null, inbox: null };
     return { ...a, owner: !demo && uid === OWNER_ID, timeZone: timeZone(), next };
   };
   app.get('/api/account/automation', { schema: { summary: 'Your automatic runs: on or off (manual only), when, and which Claude steps they do', response: { 200: automationReply } } }, async (req) =>

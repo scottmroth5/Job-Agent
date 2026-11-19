@@ -1,13 +1,10 @@
 // Follow-ups (agents/follow-ups.ts): the user's stale-application days (Settings > Follow-ups), closing applications
 // with no reply as no response (one job, or every stale one from Home), and Find someone to contact for one job (a
-// task on the user's AI, saved as a note on the job; agents/hunt/find-contact.ts).
+// task on the user's AI, saved as a note on the job; server/tasks/assist.ts).
 import { OWNER_ID } from '../db/users.ts';
 import { closeNoResponse, setStaleDays, staleDays, waitingApplications, DEFAULT_STALE_DAYS, FOLLOW_UP_FROM, MAX_STALE_DAYS, MIN_STALE_DAYS } from '../agents/follow-ups.ts';
-import { findContact } from '../agents/hunt/find-contact.ts';
 import { demoContactResult } from '../demo/sample-data.ts';
-import type { Claude } from '@scottmroth5/agent-core';
 import type { JobStore } from '../tools/types.ts';
-import type { UserConfig } from '../agents/user-config.ts';
 import type { App, IdParams, RouteServices } from './types.ts';
 import type { Jobs } from './jobs.ts';
 
@@ -17,15 +14,9 @@ const idParams = { type: 'object', required: ['id'], properties: { id: { type: '
 
 export function registerFollowUpRoutes(
   app: App,
-  { store, config, services, jobs, demo = false }: { store: JobStore; config: UserConfig; services: Pick<RouteServices, 'claude' | 'knowledge'>; jobs: Jobs; demo?: boolean },
+  { store, services, jobs, demo = false }: { store: JobStore; services: Pick<RouteServices, 'claude'>; jobs: Jobs; demo?: boolean },
 ) {
   const { db } = store;
-  jobs.define<{ id: number }>('find-contact', async ({ id }, { step, run }) => {
-    if (!services.claude) throw new Error('AI is not available here.');
-    const r = await findContact({ store, config, claude: services.claude as Claude, knowledge: await services.knowledge(), run: run as NonNullable<typeof run>, postingId: id, onStep: step });
-    step('Saved as a note on the job');
-    return r;
-  });
 
   // The demo's Find someone to contact: a canned sample answer for the job, as a read. It calls no model, so the demo
   // never spends anything, and saves nothing. Registered only in the demo.

@@ -1,14 +1,12 @@
 // Meeting prep routes: start a prep for a job (a background task), read one, delete one. Prep text and the
 // people's names stay in the database and the response; task output holds counts only.
-import { MAX_ATTENDEES, MEETING_FORMATS, MEETING_KINDS, listPreps, writeMeetingPrep } from '../agents/hunt/prep.ts';
-import type { Claude } from '@scottmroth5/agent-core';
+import { MAX_ATTENDEES, MEETING_FORMATS, MEETING_KINDS, listPreps } from '../agents/hunt/prep.ts';
 import type { JobStore } from '../tools/types.ts';
-import type { UserConfig } from '../agents/user-config.ts';
 import type { MeetingPrepsRow } from '../db/types.ts';
 import type { App, IdParams, RouteServices } from './types.ts';
 import type { Jobs } from './jobs.ts';
 
-/** What the prep dialog sends (the body schema below); writeMeetingPrep checks and tidies it again. */
+/** What the prep dialog sends (the body schema below); writeMeetingPrep (agents/hunt/prep.ts) checks and tidies it again. */
 type PrepBody = {
   attendees: Array<{ name: string; role?: string; organization?: string; url?: string; about?: string }>;
   meetingAt?: string | null;
@@ -22,24 +20,8 @@ const anyObject = { type: 'object', additionalProperties: true };
 const uuidParams = { type: 'object', required: ['id'], properties: { id: { type: 'string', pattern: '^[0-9a-f-]{36}$' } } };
 const str = (max: number) => ({ type: 'string', maxLength: max });
 
-/** jobs is the app's task queue (server/jobs.ts): the prep runs as a meeting-prep task. */
-export function registerPrepRoutes(app: App, { store, config, services, jobs }: { store: JobStore; config: UserConfig; services: RouteServices; jobs: Jobs }) {
-  jobs.define<{ id: number; input: Parameters<typeof writeMeetingPrep>[0]['input'] }>('meeting-prep', async ({ id, input }, { step, run }) => {
-    if (!services.claude) throw new Error('AI is not available here.');
-    const r = await writeMeetingPrep({
-      store,
-      config,
-      claude: services.claude as Claude,
-      knowledge: await services.knowledge(),
-      drive: services.drive,
-      run: run as NonNullable<typeof run>, // traced: define's default
-      postingId: id,
-      input,
-      onStep: step,
-    });
-    step(r.docUrl ? 'Prep ready and saved as a Google Doc' : r.docError ? 'Prep ready (the Google Doc could not be made)' : 'Prep ready');
-    return { prepId: r.id, docUrl: r.docUrl, costUsd: r.costUsd, webSearches: r.webSearches };
-  });
+/** jobs is the app's task queue (server/jobs.ts): the prep runs as a meeting-prep task (server/tasks/assist.ts). */
+export function registerPrepRoutes(app: App, { store, services, jobs }: { store: JobStore; services: Pick<RouteServices, 'claude'>; jobs: Jobs }) {
   const { db } = store;
 
   app.post<{ Params: IdParams; Body: PrepBody }>(

@@ -14,15 +14,15 @@ export function registerJobsAdminRoutes(app: App, { queue }: { queue: Queue }) {
     '/api/admin/jobs',
     {
       schema: {
-        summary: 'The task queue: pools, task types, recent changes, dead letters, and totals by type (admin)',
+        summary: 'The task queue: pools, the worker processes online, task types, recent changes, dead letters, and totals by type (admin)',
         querystring: { type: 'object', properties: { days: { type: 'integer', minimum: 1, maximum: 90 } } },
         response: { 200: anyObject },
       },
     },
     async (req) => {
       const days = req.query.days ?? 30;
-      const [pools, types, history, dead, totals] = await Promise.all([queue.overview(), queue.types(), queue.typeHistory(), queue.deadLetters(), queue.totals(days)]);
-      return { pools, types, history, dead, totals, days };
+      const [pools, workers, types, history, dead, totals] = await Promise.all([queue.overview(), queue.workers(), queue.types(), queue.typeHistory(), queue.deadLetters(), queue.totals(days)]);
+      return { pools, workers, types, history, dead, totals, days };
     },
   );
 

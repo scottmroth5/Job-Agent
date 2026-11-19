@@ -16,6 +16,7 @@ const KIND_LABELS: Record<string, string | undefined> = {
   'write-materials': 'Write materials',
   regenerate: 'Regenerate letter and tweaks',
   refetch: 'Refetch posting',
+  notify: 'Alert email',
 };
 const STATUS_TEXT: Record<string, string | undefined> = { running: 'running', done: 'finished', failed: 'failed' };
 

@@ -3,22 +3,26 @@
 // is missing. At most one email per kind of problem per day (the day is kept in app_settings as alert:<key>, so a
 // restart never resends), and with once, none again until it has recovered. Emails go only to the owner's own address
 // (EMAIL_ADDRESS, the same as the run report) and carry job names, dates and error messages only, like the log lines.
+// In the app (v3 Phase 7) queue makes each a notify task (server/tasks/notify.ts) with no address: the io worker that runs it
+// looks up the owner's address and sends, so the scheduler and the API never hold the Google token for it.
 import { claimSetting } from '../db/settings.ts';
 import { localDay } from '../tools/dates.ts';
 import type { Db } from '../db/engine/types.ts';
 
 type AlertOptions = {
   db: Db;
-  /** Sends one email. */
+  /** Sends one email to the owner's address (to). */
   send?: ((email: { to: string; subject: string; text: string }) => Promise<unknown>) | null;
   /** The owner's address. */
-  to: () => string | null;
+  to?: () => string | null;
+  /** Instead of send and to: queues the email for a worker that finds the owner's address itself (a notify task). */
+  queue?: ((email: { subject: string; text: string }) => Promise<unknown>) | null;
   appUrl?: () => string;
   clock?: () => Date;
   log?: { info?: (text: string) => void; warn?: (text: string) => void };
 };
 
-export function createAlerts({ db, send, to, appUrl = () => '', clock = () => new Date(), log = console }: AlertOptions) {
+export function createAlerts({ db, send, to = () => null, queue = null, appUrl = () => '', clock = () => new Date(), log = console }: AlertOptions) {
   const key = (k: string) => `alert:${k}`;
 
   /** Sends one email for this kind of problem, unless one went out today (or, with once, since it last recovered). */
@@ -27,10 +31,12 @@ export function createAlerts({ db, send, to, appUrl = () => '', clock = () => ne
     // The check and the mark are one transaction, so two failures at once send one email.
     if (!(await claimSetting(db, key(k), today, (last) => last !== today && !(once && last)))) return false;
     log.info?.(`[alert] ${k}`);
+    const link = appUrl() ? `\n\nOpen ${appUrl()}/#/activity for the details.` : '';
+    const email = { subject: `Job Agent: ${subject}`, text: `${text}${link}\n` };
+    if (queue) return queue(email).then(() => true, (err: Error) => (log.warn?.(`[alert] ${k}: the email could not be queued (${err.name})`), false));
     const address = to();
     if (!send || !address) return false;
-    const link = appUrl() ? `\n\nOpen ${appUrl()}/#/activity for the details.` : '';
-    return send({ to: address, subject: `Job Agent: ${subject}`, text: `${text}${link}\n` })
+    return send({ ...email, to: address })
       .then(() => true)
       .catch((err: Error) => {
         log.warn?.(`[alert] ${k}: the email could not be sent (${err.name})`);

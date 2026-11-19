@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
-import { pipelineScriptArgs, progressLine } from '../server/pipeline-routes.ts';
+import { pipelineScriptArgs, progressLine } from '../server/tasks/pipeline.ts';
 import { storedKey } from '../agents/identity.ts';
 import { insertEmail, addReminder } from '../agents/inbox/store.ts';
 import { createGmail } from '../agents/inbox/gmail.ts';

@@ -120,13 +120,30 @@ function rejectSkipped(posting: { url?: string | null; title?: string | null }, 
   if (reason) throw new Error(`This looks like a list of jobs, not one job (${reason}). Open it, pick a job, and add that job's link.`);
 }
 
+/** What savePosting needs: no Claude client, so the browser worker that runs it never holds the key (v3 Phase 7). */
+export type SaveContext = Pick<ManualContext, 'store' | 'config' | 'http' | 'browser' | 'run' | 'onStep'>;
+/** What scoreAdded needs to know about the saved job: whether to write materials, and where its text came from. */
+export type AddedJob = { id: number; writeMaterials?: boolean; pasted: boolean; described: boolean };
+
 /**
  * Adds one job and runs it through the same steps as discovered jobs. Returns { id, created, score, promoted, materials },
- * or { id, created: false, existing, matchedBy } when the job is already saved.
+ * or { id, created: false, existing, matchedBy } when the job is already saved. The app runs the two halves as two
+ * tasks (server/tasks/postings.ts): savePosting in the browser pool, then scoreAdded in the Claude pool.
  */
 export async function addPosting(input: ManualInput, ctx: ManualContext) {
+  const saved = await savePosting(input, ctx);
+  if (!saved.created) return { id: saved.id, created: false, existing: saved.existing, matchedBy: saved.matchedBy };
+  const r = await scoreAdded({ ...saved, writeMaterials: input.writeMaterials }, ctx);
+  return { id: saved.id, created: true, score: r.score, promoted: r.promoted, materials: r.materials };
+}
+
+/**
+ * The first half of adding a job: the duplicate checks, the posting text (fetched, or the pasted text), and the save.
+ * Returns { id, created: true, pasted, described }, or { id, created: false, existing, matchedBy } for a saved job.
+ */
+export async function savePosting(input: ManualInput, ctx: SaveContext) {
   validateManualInput(input);
-  const { store, config, http, browser, claude, knowledge, drive, run } = ctx;
+  const { store, config, http, browser, run } = ctx;
   rejectSkipped({ url: input.url?.trim() }, config);
   const step = (m: string) => {
     ctx.onStep?.(m);
@@ -145,7 +162,7 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
   if (existing) {
     const match = await describeExisting(db, existing.id);
     step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
-    return { id: existing.id, created: false, existing: match, matchedBy: byUrl ? 'link' : 'company and title' };
+    return { id: existing.id, created: false as const, existing: match, matchedBy: byUrl ? 'link' : 'company and title' };
   }
 
   // 2. Text and details
@@ -191,7 +208,7 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
   if (sameJob) {
     const match = await describeExisting(db, sameJob.id);
     step(`Already saved: "${match.title}" at ${match.company} (${match.summary})`);
-    return { id: sameJob.id, created: false, existing: match, matchedBy: 'company and title' };
+    return { id: sameJob.id, created: false as const, existing: match, matchedBy: 'company and title' };
   }
 
   // 3. Location, track, pay and hours
@@ -247,6 +264,20 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
     return id;
   });
   step(`Saved as job #${id} (${lk.label('track', track)})`);
+  return { id, created: true as const, pasted: Boolean(pasted), described: Boolean(pasted || item.description) };
+}
+
+/** The second half of adding a job: score it, then write its materials when it is promoted or they were asked for. */
+export async function scoreAdded(job: AddedJob, ctx: ManualContext) {
+  const { store, config, claude, knowledge, drive, run } = ctx;
+  const { db } = store;
+  const { id } = job;
+  const step = (m: string) => {
+    ctx.onStep?.(m);
+    run?.log?.('info', m);
+  };
+  const lk = await lookups(db);
+  const nowIso = new Date().toISOString();
 
   // 5. Score
   step('Scoring');
@@ -258,15 +289,15 @@ export async function addPosting(input: ManualInput, ctx: ManualContext) {
 
   // 6. Materials
   let materials: Awaited<ReturnType<typeof generateForPostings>> | null = null;
-  if (promoted || input.writeMaterials) {
+  if (promoted || job.writeMaterials) {
     if (!promoted) await db.prepare('UPDATE postings SET stage = ?, updated_at = ? WHERE id = ? AND user_id = @uid').run(lk.role('stage', 'promote'), nowIso, id);
     step('Writing resume tweaks and cover letter');
     materials = await generateForPostings({ store, config, claude, knowledge, drive, run, options: { ids: [id] } });
     step(materials.docs ? 'Cover letter saved as a Google Doc' : 'Materials written');
-  } else if (!pasted && !item.description) {
+  } else if (!job.described) {
     step('No description, so it stays in Discovered: paste the description in the detail panel, then Re-score');
   } else {
     step(`Score is under ${PROMOTE_AT}, so no materials were written (use Write materials to create them anyway)`);
   }
-  return { id, created: true, score, promoted, materials };
+  return { score, promoted, materials };
 }
