@@ -47,6 +47,15 @@ export async function pipelineState(db: Db, uid: number = OWNER_ID) {
   return { running, last, lastFinished };
 }
 
+/**
+ * The command line for scripts/pipeline.js: the user, then only the flags a task may pass: a step (--only=<step>), its
+ * --since, and the steps an automatic runs setting leaves out. Nothing else from a payload reaches the command line.
+ */
+export function pipelineScriptArgs(user: number | null | undefined, args: string[] = []) {
+  const allowed = (a: string) => a === '--no-score' || a === '--no-letters' || /^--only=[a-z]+$/.test(a) || /^--since=[0-9TZ:.-]+$/.test(a);
+  return [...(user ? [`--user=${Number(user)}`] : []), ...args.filter(allowed)];
+}
+
 /** Turns the pipeline's console lines into short progress messages. */
 export function progressLine(line: string) {
   const step = /^\[pipeline\] (Step \d+\/\d+: \w+(?: skipped)?)/.exec(line); // skipped: left out by the automatic runs setting
