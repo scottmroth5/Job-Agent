@@ -438,3 +438,12 @@ export interface UsersRow {
   last_seen_at: string | null;
   time_zone: string | null;
 }
+
+export interface WorkersRow {
+  id: string;
+  service: string;
+  pools: string;
+  version: string | null;
+  started_at: string;
+  heartbeat_at: string;
+}

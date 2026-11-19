@@ -73,6 +73,11 @@ export type Handler = (ctx: HandlerContext) => Promise<unknown>;
 
 /** A failure that must not be retried, whatever the type allows (the handler knows a repeat would be wrong). */
 export class NoRetry extends Error {}
+/** Why a task still running when its worker's grace period ran out was stopped (a deploy or a restart). */
+export class Stopped extends Error {}
+export const STOPPED_MESSAGE = 'Stopped for an update; start it again.';
+/** A worker heard from within this long is online (Admin > Jobs; its heartbeat is every heartbeatMs, 15 seconds). */
+export const WORKER_ONLINE_MS = 60_000;
 
 const parse = (text: string | null): unknown => {
   if (text == null) return null;
@@ -549,8 +554,36 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
       .sort((a, b) => b.tasks - a.tasks || a.type.localeCompare(b.type));
   }
 
+  /**
+   * A task its worker stopped (the grace period ran out, v3 Phase 7): one whose type may retry goes back in the queue
+   * without spending an attempt, for the next worker; any other fails visibly, since a repeat might spend twice.
+   * Either way the run it opened is closed.
+   */
+  async function release(job: Pick<Job, 'id' | 'type' | 'attempts' | 'runId'>) {
+    const t = await typeOf(job.type);
+    if ((t?.retry_limit ?? 0) > 0) {
+      await db
+        .prepare("UPDATE task_runs SET status = 'queued', attempts = attempts - 1, run_after = ?, worker = NULL, heartbeat_at = NULL, started_at = NULL WHERE id = ? AND status = 'running'")
+        .run(iso(), job.id);
+      if (job.runId) await db.prepare("UPDATE runs SET status = 'failed', finished_at = ? WHERE id = ? AND status = 'running'").run(iso(), job.runId);
+      return 'queued';
+    }
+    await fail(job, new NoRetry(STOPPED_MESSAGE));
+    return 'failed';
+  }
+
+  // ---- workers (Admin > Jobs, and each worker's health check) --------------------------------------------------------
+  /** The worker processes heard from in the last WORKER_ONLINE_MS, by service. */
+  async function workers() {
+    const since = iso(new Date(now().getTime() - WORKER_ONLINE_MS));
+    const rows = (await db.prepare('SELECT id, service, pools, version, started_at, heartbeat_at FROM workers WHERE heartbeat_at >= ? ORDER BY service, started_at').all(since)) as Array<{
+      id: string; service: string; pools: string; version: string | null; started_at: string; heartbeat_at: string;
+    }>;
+    return rows.map((r) => ({ id: r.id, service: r.service, pools: r.pools.split(',').filter(Boolean), version: r.version, startedAt: r.started_at, heartbeatAt: r.heartbeat_at }));
+  }
+
   // ---- running jobs --------------------------------------------------------------------------------------------------
-  async function runJob(job: Job, handler: Handler, stopping: AbortSignal) {
+  async function runJob(job: Job, handler: Handler, killing: AbortSignal) {
     const t = await typeOf(job.type);
     let seq = Number(await db.prepare('SELECT COALESCE(MAX(seq), -1) FROM task_lines WHERE task_id = ?').pluck().get(job.id)) + 1;
     let chain: Promise<unknown> = Promise.resolve();
@@ -574,8 +607,9 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
     };
     const logger: Logger = { info: at('info'), warn: at('warn'), error: at('error'), log: at('info') };
     const controller = new AbortController();
-    const onStop = () => controller.abort(new Error('The server is stopping.'));
-    stopping.addEventListener('abort', onStop, { once: true });
+    const onStop = () => controller.abort(new Stopped(STOPPED_MESSAGE));
+    if (killing.aborted) onStop();
+    killing.addEventListener('abort', onStop, { once: true });
     const beat = setInterval(() => void heartbeat(job.id).catch(() => {}), heartbeatMs);
     beat.unref?.();
     const limit = setTimeout(() => controller.abort(new Error(`Timed out after ${t?.timeout_seconds ?? 0} seconds.`)), (t?.timeout_seconds ?? 3600) * 1000);
@@ -597,25 +631,31 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
       await chain;
       await complete(job.id, result);
     } catch (err) {
-      logger.error((err as Error).message ?? String(err));
+      // Stopped by its worker's shutdown, not by its own failure: requeued or failed visibly (release).
+      const stopped = controller.signal.aborted && controller.signal.reason instanceof Stopped;
+      if (stopped) logger.warn('The worker stopped for an update while this task ran.');
+      else logger.error((err as Error).message ?? String(err));
       await chain;
-      // A stop is not the job's fault: leave it running for the sweep (another worker, or this one after restart).
-      if (stopping.aborted) return;
-      await fail(job, err);
+      if (stopped) await release(job);
+      else await fail(job, err);
     } finally {
       clearInterval(beat);
       clearTimeout(limit);
-      stopping.removeEventListener('abort', onStop);
+      killing.removeEventListener('abort', onStop);
     }
   }
 
   /**
-   * Starts this process's workers for the handled types: a loop per pool that claims while it can, every pollMs and at
-   * once when a job is added here or one finishes; and the sweep. stop() ends the loops and waits for running jobs.
+   * Starts this process's workers for the handled types: a loop per pool (only `pools`: a worker service runs its own)
+   * that claims while it can, every pollMs and at once when a job is added here or one finishes; the sweep; and this
+   * worker's row in the workers table, renewed every heartbeatMs. stop(graceMs) stops claiming at once, gives running
+   * jobs up to graceMs to finish, then stops the rest: release() requeues or fails each one visibly.
    */
-  function start(handlers: Record<string, Handler>) {
+  function start(handlers: Record<string, Handler>, { pools = POOLS, service = 'all', version = null }: { pools?: readonly Pool[]; service?: string; version?: string | null } = {}) {
     const handled = (type: string) => Object.hasOwn(handlers, type);
+    const mine = POOLS.filter((p) => pools.includes(p));
     const stopping = new AbortController();
+    const killing = new AbortController();
     const inFlight = new Set<Promise<void>>();
     const pumping = new Map<Pool, boolean>();
     const again = new Set<Pool>();
@@ -628,7 +668,7 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
     };
     const pump = (pool: Pool) => track(pumpOnce(pool));
     const pumpOnce = async (pool: Pool) => {
-      if (stopping.signal.aborted) return;
+      if (stopping.signal.aborted || !mine.includes(pool)) return;
       if (pumping.get(pool)) {
         again.add(pool);
         return;
@@ -643,7 +683,7 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
             await db.prepare("UPDATE task_runs SET status = 'queued', attempts = attempts - 1, started_at = NULL, worker = NULL, heartbeat_at = NULL WHERE id = ? AND status = 'running'").run(job.id);
             break;
           }
-          const p = runJob(job, handlers[job.type] as Handler, stopping.signal).finally(() => {
+          const p = runJob(job, handlers[job.type] as Handler, killing.signal).finally(() => {
             inFlight.delete(p);
             // Every pool: a job waiting on this one (depends_on) may be in another.
             for (const next of POOLS) void pump(next);
@@ -660,29 +700,64 @@ export function createQueue({ db, now = () => new Date(), worker = randomUUID(),
     const wake = (pool: Pool) => void pump(pool);
     wakers.add(wake);
     const poll = setInterval(() => {
-      for (const pool of POOLS) void pump(pool);
+      for (const pool of mine) void pump(pool);
     }, pollMs);
     poll.unref?.();
     const sweeper = setInterval(() => void track(sweep()).then((n) => n && log.info?.(`[queue] swept ${n} abandoned task(s)`)).catch(() => {}), sweepMs);
     sweeper.unref?.();
-    // Retention: finished tasks and their lines older than RETENTION_DAYS, every few hours.
-    const pruner = setInterval(() => void prune().catch(() => {}), 6 * 3600_000);
+    // Retention: finished tasks and their lines older than RETENTION_DAYS, every few hours; and workers long gone.
+    const pruner = setInterval(() => void prune().then(() => pruneWorkers()).catch(() => {}), 6 * 3600_000);
     pruner.unref?.();
+
+    // This worker's row: who it is and that it is alive. lastBeat is the health check's answer (apps/worker.ts).
+    let lastBeat = 0;
+    const beat = async (first = false) => {
+      const at = iso();
+      if (first) {
+        await db.prepare('INSERT INTO workers (id, service, pools, version, started_at, heartbeat_at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO UPDATE SET heartbeat_at = excluded.heartbeat_at')
+          .run(worker, service, mine.join(','), version, at, at);
+      } else {
+        await db.prepare('UPDATE workers SET heartbeat_at = ? WHERE id = ?').run(at, worker);
+      }
+      lastBeat = Date.now();
+    };
+    void track(beat(true)).catch((err: Error) => log.warn?.(`[queue] the worker row was not written (${err.message})`));
+    const beater = setInterval(() => void track(beat()).catch(() => {}), heartbeatMs);
+    beater.unref?.();
+
     void track(sweep()).catch(() => {}); // a restart: tasks the last process left running are dealt with at once
-    for (const pool of POOLS) void pump(pool);
+    for (const pool of mine) void pump(pool);
     return {
-      async stop(waitMs = 10_000) {
+      /** Whether this worker renewed its row lately (the database answers and its loops run). */
+      healthy: () => Date.now() - lastBeat < Math.max(3 * heartbeatMs, 5_000),
+      running: () => inFlight.size,
+      async stop(graceMs = 10_000) {
         wakers.delete(wake);
         clearInterval(poll);
         clearInterval(sweeper);
         clearInterval(pruner);
+        clearInterval(beater);
         stopping.abort();
-        await Promise.race([Promise.allSettled([...inFlight, ...busy]), new Promise((r) => setTimeout(r, waitMs).unref?.())]);
+        const all = () => Promise.allSettled([...inFlight, ...busy]);
+        const timer = <T>(ms: number, v: T) => new Promise<T>((r) => setTimeout(() => r(v), ms).unref?.());
+        // Running jobs get the grace period to finish; then the rest are stopped and released, which takes moments.
+        const settled = await Promise.race([all().then(() => true), timer(graceMs, false)]);
+        if (!settled) {
+          if (inFlight.size) log.info?.(`[queue] stopping ${inFlight.size} task(s) still running after ${Math.round(graceMs / 1000)} seconds`);
+          killing.abort();
+          await Promise.race([all(), timer(5_000, null)]);
+        }
+        await db.prepare('DELETE FROM workers WHERE id = ?').run(worker).catch(() => {});
       },
     };
   }
 
-  return { enqueue, claim, complete, fail, heartbeat, sweep, prune, get, list, steps, lines, lineCount, active, anyActive, countSince, ownerOf, wait, record, retry, discard, overview, types, typeHistory, updateType, updatePool, deadLetters, totals, start, worker };
+  /** Worker rows not heard from in a day (a process killed without its stop). */
+  async function pruneWorkers() {
+    await db.prepare('DELETE FROM workers WHERE heartbeat_at < ?').run(iso(new Date(now().getTime() - 86_400_000)));
+  }
+
+  return { enqueue, claim, complete, fail, release, heartbeat, sweep, prune, workers, get, list, steps, lines, lineCount, active, anyActive, countSince, ownerOf, wait, record, retry, discard, overview, types, typeHistory, updateType, updatePool, deadLetters, totals, start, worker };
 }
 
 export type Queue = ReturnType<typeof createQueue>;

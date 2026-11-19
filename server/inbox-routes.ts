@@ -1,19 +1,15 @@
 // Inbox screen: check Gmail, resolve emails that need review, and close reminders. Email subjects and
 // summaries are shown to the user here (local server only); they are never logged.
-import { createJobTracer } from '../tools/trace.ts';
-import { assertNoRunningRun } from '../tools/runs.ts';
-import { currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
-import { runInbox } from '../agents/inbox/process.ts';
 import { listNeedsReview, resolveReview, CHOICES } from '../agents/inbox/review.ts';
 import { listOpenApplications } from '../agents/inbox/match.ts';
 import { trimBody } from '../agents/inbox/atsParse.ts';
-import type { Claude } from '@scottmroth5/agent-core';
 import type { Db, JobStore } from '../tools/types.ts';
 import type { Gmail } from '../agents/inbox/gmail.ts';
 import type { InboxConfig } from '../agents/inbox/config.ts';
 import type { App } from './types.ts';
 import type { Jobs } from './jobs.ts';
+import type { StartCheck } from './tasks/inbox.ts';
 
 /** The inbox's services (server/main.ts): whether Gmail is signed in, its client, the email key, and inbox.json. */
 export interface InboxServices {
@@ -57,28 +53,9 @@ export async function inboxOverview(db: Db, { ready }: { ready: boolean }) {
   };
 }
 
-export function registerInboxRoutes(app: App, { store, jobs, claude, inbox }: { store: JobStore; jobs: Jobs; claude: Claude | null; inbox: InboxServices }) {
+/** The check itself is a task (server/tasks/inbox.ts); startCheck starts one (inboxStarter). */
+export function registerInboxRoutes(app: App, { store, jobs, inbox, startCheck }: { store: JobStore; jobs: Jobs; inbox: InboxServices; startCheck: StartCheck }) {
   const { db } = store;
-
-  // The check writes its own traced run (named inbox, which the alerts and the schedule's catch-up read).
-  jobs.define('inbox', async (_payload, { step, logger }) => {
-    if (!inbox.ready()) throw new Error('Gmail is not signed in. Run "npm run inbox:auth" first.');
-    const gmail = inbox.gmail({ onWait: (ms) => logger.warn(`Gmail rate limit reached; waiting ${ms / 1000} seconds, then continuing.`) });
-    // A tracer per task, so the run's log lines also go to the task's output (the Activity tab).
-    const run = await createJobTracer({ store, logger }).startRun('inbox', { model: inbox.cfg.model });
-    try {
-      step('Reading new mail');
-      // claude is set wherever Gmail can be ready (the demo has neither, and ready() refused above).
-      const s = await runInbox({ store, gmail, claude: claude as Claude, cfg: inbox.cfg, key: inbox.key(), run, log: run.log });
-      for (const n of s.notices) logger.info(n);
-      await run.finish(s.failures.length ? 'partial' : 'ok', { ...s, notices: s.notices.length });
-      step(`Done: ${s.considered} job emails, ${s.matched} linked, ${s.needsReview} to review`);
-      return { considered: s.considered, matched: s.matched, needsReview: s.needsReview, opportunities: s.opportunities, statusChanges: s.statusChanges.length, notices: s.notices, failures: s.failures.length };
-    } catch (err) {
-      await run.finish('failed', { error: (err as Error).message });
-      throw err;
-    }
-  }, { trace: false });
 
   app.get('/api/inbox', { schema: { summary: 'Emails to review, open reminders, recent linked emails, last check', response: { 200: anyObject } } }, async (req) => {
     const task = await jobs.queue.active(req.uid ?? OWNER_ID, 'inbox');
@@ -90,37 +67,6 @@ export function registerInboxRoutes(app: App, { store, jobs, claude, inbox }: { 
     { schema: { summary: 'Check Gmail for new job email now', response: { 202: { type: 'object', properties: { taskId: { type: 'string' } } } } } },
     async (req, reply) => reply.code(202).send({ taskId: await startCheck() }),
   );
-
-  /**
-   * Starts an inbox check as a task (the Inbox screen and the scheduler). One at a time per user (the inbox task type,
-   * and onlyOne for a button press; a scheduled check while one waits or runs follows that one). A check started while
-   * the user's pipeline waits or runs waits for it to finish (depends_on), as the scheduled run did.
-   */
-  async function startCheck({ by = 'button' }: { by?: string } = {}) {
-    if (!inbox.ready()) throw Object.assign(new Error('Gmail is not signed in. Run "npm run inbox:auth" first.'), { statusCode: 400 });
-    const uid = currentUserId() ?? OWNER_ID;
-    if (by === 'schedule') {
-      const mine = await jobs.queue.active(uid, 'inbox');
-      if (mine) return mine.id;
-    }
-    const pipeline = await jobs.queue.active(uid, 'pipeline');
-    // Runs outside the queue (npm run inbox or npm run pipeline on this machine) show only in the runs table.
-    for (const name of pipeline ? ['inbox', 'inbox-backfill'] : ['inbox', 'inbox-backfill', 'pipeline']) {
-      try {
-        await assertNoRunningRun(db, name);
-      } catch (err) {
-        throw Object.assign(new Error(`${(err as Error).message} Try again when it finishes.`), { statusCode: 409 });
-      }
-    }
-    const r = await jobs.queue.enqueue('inbox', { by }, {
-      userId: uid,
-      interactive: by !== 'schedule',
-      requestedBy: by === 'schedule' ? 'schedule' : 'user',
-      dependsOn: pipeline?.id ?? null,
-      onlyOne: 'An inbox check is already running. Try again when it finishes.',
-    });
-    return r.id;
-  }
 
   app.post<{ Params: { id: string }; Body: { choice: string; postingId?: number } }>(
     '/api/inbox/emails/:id/review',
@@ -152,7 +98,6 @@ export function registerInboxRoutes(app: App, { store, jobs, claude, inbox }: { 
     },
   );
 
-  return { startCheck };
 }
 
 /** Closing a reminder: registered whether or not Gmail is set up, since the job panel's Next step box closes them too. */

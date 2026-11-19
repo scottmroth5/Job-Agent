@@ -105,8 +105,13 @@ test('adding a job runs as a task with progress steps; actions score and write m
   assert.equal(/** @type {{ created: boolean }} */ (task.result).created, true);
   assert.ok(task.steps.some((s) => /Scored 8 of 10/.test(s.message)));
   assert.equal((await app.inject(`/api/tasks/${res.json().taskId}`)).json().status, 'done');
+  // Two tasks (v3 Phase 7): add reads and saves in the browser pool, its add-score child scores in the Claude pool; the
+  // Activity tab lists only the parent, which carries the child's steps.
+  const split = /** @type {Array<{ type: string, pool: string, parent_id: string | null }>} */ (await store.admin.prepare('SELECT type, pool, parent_id FROM task_runs WHERE id = ? OR parent_id = ? ORDER BY created_at').all(res.json().taskId, res.json().taskId));
+  assert.deepEqual(split.map((t) => [t.type, t.pool, t.parent_id === res.json().taskId]), [['add', 'browser', false], ['add-score', 'ai', true]]);
+  assert.ok(!(await app.inject('/api/tasks')).json().some((/** @type {{ kind: string }} */ t) => t.kind === 'add-score'), 'the child is not listed on its own');
 
-  const bad = await app.inject({ method: 'POST', url: '/api/postings', payload: { description: 'short' } });
+  const bad =await app.inject({ method: 'POST', url: '/api/postings', payload: { description: 'short' } });
   const badTask = await app.tasks.wait(bad.json().taskId);
   assert.ok(badTask);
   assert.equal(badTask.status, 'failed');
@@ -122,7 +127,8 @@ test('adding a job runs as a task with progress steps; actions score and write m
   assert.equal((await app.inject({ method: 'POST', url: `/api/postings/${ids.full}/actions/explode` })).statusCode, 400);
 
   const runs = await store.db.prepare("SELECT name FROM runs WHERE name LIKE 'ui-%' ORDER BY id").pluck().all();
-  assert.deepEqual(runs, ['ui-add', 'ui-add', 'ui-score', 'ui-write-materials']);
+  // The first add's two halves, the short one's add (it failed before saving), then the actions.
+  assert.deepEqual(runs, ['ui-add', 'ui-add-score', 'ui-add', 'ui-score', 'ui-write-materials']);
   await app.close();
   store.close();
 });

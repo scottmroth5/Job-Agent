@@ -35,14 +35,14 @@ test('higher priority first, oldest first among equals; a user\'s own request ru
   const { db, queue, clock, done } = await setup();
   try {
     await pool(db, 'ai', 10, 10, 0);
-    await setType(db, 'add', { priority: 30 }); // a lower priority than score's 50, with no one-at-a-time rule
+    await setType(db, 'add-score', { priority: 30 }); // a lower priority than score's 50, with no one-at-a-time rule
     const a = await queue.enqueue('score', { n: 1 }, { userId: 1 });
     clock.advance(1000);
-    const b = await queue.enqueue('add', { n: 2 }, { userId: 1 });
+    const b = await queue.enqueue('add-score', { n: 2 }, { userId: 1 });
     clock.advance(1000);
     const c = await queue.enqueue('score', { n: 3 }, { userId: 1 });
     clock.advance(1000);
-    const d = await queue.enqueue('add', { n: 4 }, { userId: 1, interactive: true });
+    const d = await queue.enqueue('add-score', { n: 4 }, { userId: 1, interactive: true });
     assert.equal((await queue.get(d.id, 1))?.priority, 30 + INTERACTIVE_BAND);
     const order = [];
     for (let i = 0; i < 4; i += 1) order.push((await queue.claim('ai'))?.id);

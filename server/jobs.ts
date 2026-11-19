@@ -12,7 +12,7 @@ import { runAsUser, currentUserId } from '../db/scope.ts';
 import { OWNER_ID } from '../db/users.ts';
 import { withUserConfig } from '../agents/user-config.ts';
 import { checkBudget } from '../tools/budget.ts';
-import { createQueue, type Handler, type HandlerContext, type Job, type Logger, type Queue } from '../tools/queue/queue.ts';
+import { createQueue, FINISHED, type Handler, type HandlerContext, type Job, type Logger, type Pool, type Queue } from '../tools/queue/queue.ts';
 import type { JobSearchConfig } from '../tools/config.ts';
 import type { JobStore } from '../tools/types.ts';
 import type { PageRenderer } from '../agents/discovery/types.ts';
@@ -29,7 +29,11 @@ export interface TaskContext {
   /** Links the task to a run it opened itself (trace: false), for cost totals and the sweep. */
   setRunId: HandlerContext['setRunId'];
   browser: PageRenderer | null;
+  /** Closes the browser now, before the handler waits on other work (add, while its Claude half runs). */
+  closeBrowser: () => Promise<void>;
 }
+/** One output line of a task (queue.lines). */
+export type TaskLine = { level: string; text: string };
 export type TaskHandler<P> = (payload: P, ctx: TaskContext) => Promise<unknown>;
 
 export interface DefineOptions {
@@ -65,16 +69,21 @@ export function createJobs({ store, ownerConfig, createBrowser = null, log = con
         if (ctx.job.pool === 'ai') await checkBudget(store.db, { uid: ctx.job.userId });
         const run = trace ? await createJobTracer({ store, logger: ctx.logger }).startRun(`ui-${type}`, metaOf(ctx.job.payload)) : null;
         if (run?.id) await ctx.setRunId(Number(run.id));
-        const b = browser && createBrowser ? ((await createBrowser()) as (PageRenderer & { close?: () => Promise<unknown> }) | null) : null;
+        let b = browser && createBrowser ? ((await createBrowser()) as (PageRenderer & { close?: () => Promise<unknown> }) | null) : null;
+        const closeBrowser = async () => {
+          const open = b;
+          b = null;
+          await open?.close?.();
+        };
         try {
-          const result = await handler(ctx.job.payload as P, { job: ctx.job, step: ctx.step, logger: ctx.logger, signal: ctx.signal, run, setRunId: ctx.setRunId, browser: b });
+          const result = await handler(ctx.job.payload as P, { job: ctx.job, step: ctx.step, logger: ctx.logger, signal: ctx.signal, run, setRunId: ctx.setRunId, browser: b, closeBrowser });
           await run?.finish('ok', result && typeof result === 'object' ? { ...result, materials: undefined } : null);
           return result;
         } catch (err) {
           await run?.finish('failed', { error: (err as Error).message });
           throw err;
         } finally {
-          await b?.close?.();
+          await closeBrowser();
         }
       });
   }
@@ -121,23 +130,49 @@ export function createJobs({ store, ownerConfig, createBrowser = null, log = con
     return job ? brief(job, uid) : null;
   }
 
-  let workers: { stop: (waitMs?: number) => Promise<void> } | null = null;
+  /**
+   * Follows a child task (a pipeline step, or add's Claude half) until it finishes, handing each new output line to
+   * onLine; returns the finished task (null when it is gone). A parent waiting here holds no worker (tools/queue claim).
+   */
+  async function follow(id: string, uid: number, { signal, everyMs = 250, onLine }: { signal: AbortSignal; everyMs?: number; onLine: (line: TaskLine) => void }) {
+    let from = 0;
+    for (;;) {
+      const t = await queue.get(id, uid);
+      const out = await queue.lines(id, uid, from);
+      from = out.next;
+      for (const l of out.lines) onLine(l);
+      if (!t || FINISHED.includes(t.status)) return t;
+      if (signal.aborted) throw signal.reason as Error;
+      await pause(everyMs, signal);
+    }
+  }
+
+  let workers: ReturnType<Queue['start']> | null = null;
   return {
     queue,
     define,
     start,
     brief,
     wait,
-    /** Starts this process's workers for every defined type. */
-    run() {
-      workers ??= queue.start(handlers);
+    follow,
+    /** Starts this process's workers for every defined type, in the pools given (a worker service runs its own). */
+    run(opts: { pools?: readonly Pool[]; service?: string; version?: string | null } = {}) {
+      workers ??= queue.start(handlers, opts);
+      return workers;
     },
-    async stop() {
-      await workers?.stop();
+    /** Stops claiming, gives running tasks graceMs to finish, then requeues or fails the rest (tools/queue start). */
+    async stop(graceMs?: number) {
+      await workers?.stop(graceMs);
       workers = null;
     },
   };
 }
+
+const pause = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => (clearTimeout(timer), resolve()), { once: true });
+  });
 
 function metaOf(payload: unknown) {
   if (!payload || typeof payload !== 'object') return {};

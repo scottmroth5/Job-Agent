@@ -516,9 +516,13 @@ Goal: separately deployed services with clear boundaries and full tracing.
    Owner decision, November 18: the layers stay in today's folders, enforced by lint, with entry points in `apps/` (decision 0009).
 2. Enforce dependency direction with a lint rule. Apps depend on packages, and `packages/domain` never imports Fastify or pg-boss.
 3. Build one worker app that runs selected pools through a setting, with separate images: only `worker-browser` includes Chromium.
+
+   PR 2, November 19: `apps/worker.ts` runs the pools in `POOLS`, `apps/api.ts` only enqueues, and `apps/scheduler.ts` runs the automatic runs; `server/index.js` still runs every role in one process. Add job is two tasks (the browser half and the Claude half), and alert emails are `notify` tasks. The images come in PR 3.
 4. Update `deploy/compose.yml` with `api`, `scheduler`, `worker-browser`, `worker-ai`, `worker-io`, `demo`, and `caddy`, with memory and CPU limits and no ports except Caddy's.
 5. Give each service only the secrets it needs. The browser worker does not need the Claude key, and the API does not need the Drive backup passphrase. Use separate database roles, and add a test that documents this matrix.
 6. Update `deploy.sh`, health checks, rollback, and graceful shutdown so a worker finishes or returns a job during a deploy.
+
+   PR 2: graceful shutdown and the health checks. A stopping worker stops claiming and gives running tasks its grace period. After that, a task whose type may retry goes back in the queue without spending an attempt, and the rest fail visibly. Each worker keeps a row in `workers` (migration 029), which Admin > Jobs lists, and answers `/healthz` on 127.0.0.1. `deploy.sh` and rollback come in PR 3.
 7. Add OpenTelemetry to follow a request from API through queue, worker, and Claude call. Attributes hold IDs, counts, durations, and cost only, never prompts or response text. Choose the cheapest backend through a decision record, and update `PRIVACY.md`.
 8. Add service metrics and alerts: queue depth, oldest wait, failure rate, and spend. Keep the existing failure email.
 9. Size the server from real measurements, and resize it only with owner approval.

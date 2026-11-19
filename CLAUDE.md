@@ -33,7 +33,11 @@ holds the current-state diagram and decision records (decisions/NNNN-*.md). v2-f
                     db:pending migrates a throwaway copy (exit 0 none, 10 pending, 1 failed). Back up data/job-agent.db before schema changes
 /scripts            command-line entry points (see Commands)
 /config             job-search.example.json: the shape of the real, gitignored data/config/job-search.json
-/server             Fastify API over the SQLite store (app.js routes, queries.js, tasks.js, auth.js); serves the built UI
+/server             Fastify API over the store (app.ts routes, queries.ts, auth.ts); serves the built UI. tasks/ holds every
+                    task handler (defineTasks; routes only enqueue), runtime.ts what routes and handlers share, services.ts
+                    the outside services, start.ts the HTTP server, worker.ts and scheduler-service.ts the other roles
+/apps               one entry point per cloud service (v3 Phase 7, decision 0009): api.ts, worker.ts (POOLS=), scheduler.ts.
+                    server/index.js stays the one-process app (npm run ui, the demo) that runs every role
 /agents/manual.js   manually added jobs: dedupe, fetch or paste text, score, write materials
 /agents/inbox       Gmail inbox: sync.js (historyId cursor, 7-day fallback), prefilter.js, match.js (thread, contact, domain,
                     ATS subject), classify.js (Haiku, fixed untrusted-email system prompt), actions.js (gate, forward-only status),
@@ -98,6 +102,9 @@ npm run pipeline                  discover, score, hunt, archive, then one repor
 powershell -ExecutionPolicy Bypass -File scripts\register-schedule.ps1   Windows task: scripts/scheduled-run.ps1 runs pipeline then inbox
                                   (Mon/Thu 6:00 by default; -Time, -Days, -Remove); logs in data/logs
 npm run ui                        build the React UI and start the server at http://localhost:5178 (API contract: /api/openapi.json)
+npm run service:api               the API alone (apps/api.ts: no task workers, no scheduler); service:worker runs the pools in
+                                  POOLS (browser, ai, io, comma-separated; all when unset), health on 127.0.0.1:HEALTH_PORT
+                                  (5180); service:scheduler the automatic runs (health 5181). Each needs the same database
 powershell -ExecutionPolicy Bypass -File scripts\register-server-task.ps1   "Job Agent server" task: builds and starts the server at
                                   sign-in, hidden (scripts\server-start.cmd, logs to data\logs\server.log). While it runs, npm run ui
                                   hits EADDRINUSE: use npm run server:restart after code changes, npm run server:stop to stop it
@@ -166,8 +173,10 @@ everyone, the owner too, sets on or off (off is manual runs only: the scheduler 
 Manual runs only), their pipeline times, and whether a scheduled run scores and writes letters (--no-score, --no-letters;
 the button always runs every step); the owner also sets the inbox (after each pipeline, its own times). Until saved, the
 owner's come from SCHEDULE_PIPELINE and SCHEDULE_INBOX, and anyone else's old schedule.pipeline checkbox maps to on at
-SCHEDULE_PIPELINE. server/app.ts syncs them into the scheduler (set(); jobs "pipeline" and "inbox" for the owner,
-"pipeline:<id>" for others) at start, after each save, and every 5 minutes, and rechecks the account when a run is due;
+SCHEDULE_PIPELINE. server/automatic-runs.ts createAutomaticRuns syncs them into the scheduler (set(); jobs "pipeline" and
+"inbox" for the owner, "pipeline:<id>" for others) at start, every 5 minutes, and within 30 seconds of a save (a save sets
+app setting automation_changed, which it watches), and rechecks the account when a run is due; the API shows next runs
+from each user's saved settings (scheduleView), never from a scheduler's memory, so it answers the same either way;
 due runs are queued tasks that wait their turn (one pipeline at a time across the app). Only the owner's failures
 alert. test/automation.test.js. Other child scripts run as
 the owner; tasks keep their user and the task routes show only that user's.
@@ -250,31 +259,39 @@ server/app.ts holds every route with a JSON schema; keep /api/openapi.json the s
 web/src/api-types.ts is generated from it (npm run api:types after a route schema change); web/src/api.ts names each call by its
 route key ("PATCH /api/postings/:id"), so bodies and fully declared responses are checked, and open response schemas read
 as ApiResponse's one Loose (any) type until the route schema is tightened.
-The Run pipeline button and the schedule (server/pipeline-routes.ts) start a pipeline task that records the pipeline run and
+The Run pipeline button and the schedule (server/tasks/pipeline.ts pipelineStarter) start a pipeline task that records the pipeline run and
 queues five step tasks (pipeline-discover in the browser pool, -score and -hunt in ai, -archive and -report in io), each
-depending on the one before and each running scripts/pipeline.js --only=<step> as its own process; a failed step does not stop
+depending on the one before and each running scripts/pipeline.js --only=<step> as its own process (pipelineScriptArgs: only
+--only, --since, --no-score and --no-letters reach the command line); a failed step does not stop
 the next, and only a failed report fails the pipeline. A parent waiting on its children holds no worker. The pipeline task
 copies its steps' output into its own and turns the "[pipeline] Step"
 lines into task progress; the last run comes from the runs table. The Inbox screen (#/inbox, server/inbox-routes.ts) checks
 Gmail in-process, resolves needs_review emails with agents/inbox/review.ts, and closes reminders.
 Background tasks run on the durable queue (server/jobs.ts over tools/queue): each kind is a handler defined once with
-jobs.define(type, handler, { trace, browser }) beside the route that starts it, and the route only enqueues
+jobs.define(type, handler, { trace, browser }) in server/tasks (defineTasks), and the route only enqueues
 (jobs.start(type, payload)); the handler rebuilds its work from the stored payload, as its user, with their settings,
 a traced run (ui-<type>; trace: false for the pipeline, inbox, and backups, which record their own), and, for the ai pool,
 a budget check before anything is spent. Tasks are user rows kept 30 days (PRIVACY.md); a waiting one reads as running
 with waiting: true. Every task keeps its output (task_lines: steps plus log lines; the handler's logger goes to
 createJobTracer so run logs land there); the Activity tab (#/activity/<taskId>) shows it live via
-GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content. Long actions (add, score,
+GET /api/tasks/:id/log?from=N. Output is job titles and counts, never email content. Add job is two tasks (v3 Phase 7):
+add in the browser pool (duplicates, the page, the save; agents/manual.ts savePosting) queues add-score in the ai pool
+(scoreAdded) as its child and follows it (jobs.follow), so a browser worker needs no Claude key and the Activity tab
+shows one task with every step (child tasks are never listed on their own). Long actions (add, score,
 write-materials, regenerate, refetch, meeting-prep, find-contact) are interactive tasks: they start within seconds,
 even while a pipeline runs. One pipeline runs at a time across the app (its task type), one inbox check per user; a
 pipeline or check started while the other is waiting or running waits for it (depends_on); a button press while your
 own is going is refused (onlyOne), and runs started outside the queue (npm run pipeline) are still caught by the runs
 table check. web/dist is build output (gitignored).
 A failed scheduled job emails the owner (server/alerts.ts: EMAIL_ADDRESS only, once per kind a day, cleared by the next success).
+The email is a notify task (server/tasks/notify.ts queuedAlerts): the once-a-day check runs where the failure is seen, and
+the io worker that runs the task looks up the owner's address and sends, so the scheduler holds no Google token.
 deploy.sh: when the new image has pending migrations, it backs up to Drive with the current image first and, if the deploy
 fails, restores the pre-migration copy before restarting the old image (--no-backup, --skip-db-check for old tags).
-The in-app scheduler (tools/scheduler.ts) runs each user's automatic runs (see Users) and SCHEDULE_BACKUP from .env
-while the server runs, through the same task starters as the buttons (pipeline-routes start, inbox-routes startCheck); it
+The in-app scheduler (tools/scheduler.ts, through server/automatic-runs.ts) runs each user's automatic runs (see Users) and
+SCHEDULE_BACKUP from .env, in the one-process app or in apps/scheduler.ts, through the same task starters as the buttons
+(server/tasks/pipeline.ts pipelineStarter, server/tasks/inbox.ts inboxStarter; a scheduler of its own leaves "is Gmail set
+up" to the io worker, whose check fails visibly without it); it
 catches up a run missed in the last 12 hours. GET /api/schedule lists the app's jobs and the caller's own. It replaces the Windows tasks in the cloud;
 never enable both. Child scripts run through services.runScript.
 Keyboard and screen readers: job titles and column headers in the Jobs table are real buttons (aria-sort on the header);
@@ -430,11 +447,18 @@ and task_lines (migration 027). Claiming is one db.tx, which both engines serial
 claimed twice; it honors pool concurrency, the per-user limit, one_at_a_time (none, user, app), reserved interactive
 workers, depends_on, and priority with aging below INTERACTIVE_BAND. Handlers run in runAsUser with heartbeats and a
 timeout; failures retry while retry_limit allows (AI types 0), then dead; the sweep closes abandoned jobs and their runs;
+start(handlers, { pools, service, version }) runs only those pools and keeps the worker's row in workers (029) fresh;
+stop(graceMs) stops claiming, lets running jobs finish for the grace period (server/roles.ts: ai 300 s, browser and io
+120 s, api 30 s, the one-process app 10 s; SHUTDOWN_GRACE_SECONDS), then release() requeues a job whose type may retry
+without spending an attempt and fails the rest with "Stopped for an update; start it again." Child scripts are stopped
+with their task (runScript's signal). Admin > Jobs lists the workers heard from in the last minute;
 prune keeps 30 days. Only tools/queue touches these tables (test/user-scope.test.js exempts it; reads take a uid).
 test/queue.test.js. Every app task, the scheduler, and /api/tasks run on it (server/jobs.ts, PR 2); the demo seeds its sample
 tasks through queue.record. The pipeline runs as step tasks (PR 3). test/queue-load.test.js (tasks people start begin within 5
 seconds while scheduled work fills every pool; migration 028 reserves 2 Claude workers) and test/queue-kill.test.js (a killed
-worker process: the retryable task reruns, the other fails visibly) are the proof (PR 5).
+worker process: the retryable task reruns, the other fails visibly) are the proof (PR 5). test/roles.test.js (v3 Phase 7):
+the API with workers in processes of their own (an added job read in a browser worker and scored in an ai worker), a
+stopped worker mid-task, the scheduler taking a saved change, and alerts as notify tasks.
 Admin > Jobs (PR 4; server/jobs-admin-routes.ts, web/src/components/JobsAdmin.tsx, ADMIN_ONLY /api/admin/jobs, never in the
 demo): each pool's running, waiting, oldest wait, and failures today, with its limits; the task types, editable (priority,
 on, one at a time, retries, time limit, aging; checked in queue.updateType, each change in task_type_history; a new priority

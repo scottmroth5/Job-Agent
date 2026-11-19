@@ -3,7 +3,8 @@ import type { FormEvent } from 'react';
 import { api } from '../api.ts';
 import { dateTime } from '../format.ts';
 
-// Admin > Jobs: the background task queue (tools/queue), app-wide. Each pool's load and limits, the task types (their
+// Admin > Jobs: the background task queue (tools/queue), app-wide. Each pool's load and limits, the worker processes
+// online (v3 Phase 7: in the cloud a service per pool; the one-process app is one named all), the task types (their
 // priority, on or off, one at a time, retries, time limit, aging) with recent changes, dead letters to retry or
 // discard, and totals by type. A dead letter shows its kind, account, and error only.
 
@@ -12,7 +13,8 @@ type TaskType = { id: string; label: string; pool: string; priority: number; ena
 type Change = { typeId: string; field: string; oldValue: string | null; newValue: string | null; changedAt: string; changedBy: string | null };
 type Dead = { id: string; type: string; attempts: number; error: string | null; finishedAt: string | null; user: string | null };
 type Total = { type: string; tasks: number; done: number; failed: number; meanSeconds: number | null; costUsd: number };
-type Jobs = { pools: Pool[]; types: TaskType[]; history: Change[]; dead: Dead[]; totals: Total[]; days: number };
+type Worker = { id: string; service: string; pools: string[]; version: string | null; startedAt: string; heartbeatAt: string };
+type Jobs = { pools: Pool[]; workers: Worker[]; types: TaskType[]; history: Change[]; dead: Dead[]; totals: Total[]; days: number };
 
 const POOL_LABELS: Record<string, string | undefined> = { browser: 'Browser', ai: 'Claude', io: 'Outside services' };
 const ONCE_LABELS: Record<string, string> = { none: 'No', user: 'Per user', app: 'Across the app' };
@@ -207,6 +209,36 @@ export default function JobsAdmin() {
           </tbody>
         </table>
       </div>
+
+      <h3>Worker processes</h3>
+      {jobs.workers.length ? (
+        <div className="usage-scroll">
+          <table className="history">
+            <thead>
+              <tr>
+                <th scope="col">Service</th>
+                <th scope="col">Pools</th>
+                <th scope="col">Version</th>
+                <th scope="col">Started</th>
+                <th scope="col">Last heard from</th>
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.workers.map((w) => (
+                <tr key={w.id}>
+                  <td>{w.service}</td>
+                  <td>{w.pools.map((p) => POOL_LABELS[p] ?? p).join(', ')}</td>
+                  <td>{w.version ?? ''}</td>
+                  <td>{dateTime(w.startedAt)}</td>
+                  <td>{dateTime(w.heartbeatAt)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="muted small">No worker has been heard from in the last minute: tasks wait until one runs.</p>
+      )}
 
       <h3>Task types</h3>
       <div className="usage-scroll">

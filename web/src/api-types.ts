@@ -281,7 +281,7 @@ export interface ApiOperations {
       [key: string]: unknown;
     };
   };
-  /** The task queue: pools, task types, recent changes, dead letters, and totals by type (admin) */
+  /** The task queue: pools, the worker processes online, task types, recent changes, dead letters, and totals by type (admin) */
   "GET /api/admin/jobs": {
     params: Record<string, never>;
     query: {

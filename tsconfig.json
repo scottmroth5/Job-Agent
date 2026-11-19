@@ -18,5 +18,5 @@
     "types": ["node"],
     "skipLibCheck": true
   },
-  "include": ["tools", "db", "agents", "server", "scripts", "evals", "test", "demo", "types"]
+  "include": ["tools", "db", "agents", "server", "apps", "scripts", "evals", "test", "demo", "types"]
 }

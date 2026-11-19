@@ -49,6 +49,7 @@ test('Admin > Jobs is for admins only', async () => {
   const body = res.json();
   assert.deepEqual(body.pools.map((/** @type {JsonRow} */ p) => p.pool), ['browser', 'ai', 'io']);
   assert.ok(body.types.some((/** @type {JsonRow} */ t) => t.id === 'pipeline-discover'));
+  assert.ok(Array.isArray(body.workers), 'the worker processes online (v3 Phase 7)');
   await done();
 });
 

@@ -45,7 +45,7 @@ const BROWSER_SINKS = [
 // Where a child process may start, and why: each runs fixed commands, never text from a request.
 /** @type {Record<string, string | undefined>} */
 const CHILD_PROCESS_ALLOWED = {
-  'server/main.ts': 'runs scripts/pipeline.js and scripts/backup.js as their own processes',
+  'server/services.ts': 'runs scripts/pipeline.js and scripts/backup.js as their own processes (argument arrays, no shell; stopped with their task)',
   'scripts/check-personal.js': 'reads staged files from git in the pre-commit hook',
   'scripts/evals.js': 'runs the eval scripts',
   'scripts/run-pg-tests.js': 'runs node --test on PostgreSQL (npm run test:pg; development and CI only)',
