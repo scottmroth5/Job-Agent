@@ -1,0 +1,158 @@
+# The split layout (v3 Phase 7, decision 0010): the app's roles as containers of their own on the one shared database,
+# used on top of compose.yml when server.conf says LAYOUT=split (deploy.sh sets COMPOSE_FILE=compose.yml:compose.split.yml):
+#
+#   api             routes and sign-in; enqueues tasks; short AI calls; account emails      (<tag>-slim)
+#   scheduler       each user's automatic runs; enqueues only                               (<tag>-slim)
+#   worker-browser  the browser pool: discover, refetch, the fetch half of Add job          (<tag>, with Chromium)
+#   worker-ai       the ai pool: scoring, letters, meeting prep, contacts                   (<tag>-slim)
+#   worker-io       the io pool: the pipeline parent, inbox, archive, report, alert emails  (<tag>-slim)
+#
+# Each gets only its own settings (state/env/<service>.env, written by env-from-ssm.sh from deploy/secrets.json) and its
+# own database login (DATABASE_URL in that file). The one-process app service is switched off here (a profile nothing
+# turns on); demo, demo-db, backup, and caddy are unchanged. Without LAYOUT=split this file is never read.
+#
+# Each service's image tag is its own (TAG_<SERVICE>, set by deploy.sh from state/.tag-<service>), so deploy.sh deploy
+# <tag> --only <service> replaces one service; IMAGE_TAG is the default for all of them.
+
+x-role: &role
+  restart: unless-stopped
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:size=64m,uid=1000,gid=1000,mode=0700
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  logging:
+    driver: local
+    options:
+      max-size: 10m
+      max-file: "3"
+
+x-settings: &settings
+  DATA_DIR: /data
+  # The app never opens a SQLite file and never migrates (scripts/migrate.js does, at deploy).
+  REQUIRE_POSTGRES: "1"
+  DATABASE_MIGRATIONS: deploy
+
+services:
+  # Off in this layout: the roles below do its work.
+  app:
+    profiles: [one-process]
+
+  api:
+    <<: *role
+    image: ${IMAGE:-ghcr.io/scottmroth5/job-agent}:${TAG_API:-${IMAGE_TAG:-latest}}-slim
+    command: ["node", "apps/api.ts"]
+    env_file: state/env/api.env
+    environment:
+      <<: *settings
+      PGAPPNAME: api
+      HOST: 0.0.0.0
+      PORT: "5178"
+      # As compose.yml's app: Caddy trusted as the proxy by private address, never by hop count.
+      TRUST_PROXY: loopback,linklocal,uniquelocal
+      GEO_ALLOW: US
+    volumes:
+      # Uploaded attachments, the owner's settings file (read only), and inbox review cases (data/evals).
+      - ./data/attachments:/data/attachments
+      - ./data/config:/data/config:ro
+      - ./data/evals:/data/evals
+    networks:
+      default:
+        # Caddy's Caddyfile and the demo's links name the app; in this layout that is the api.
+        aliases: [app]
+    expose:
+      - "5178"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5178/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    # Longer than the api's own 30 second grace (server/roles.ts), so docker stop never cuts it short.
+    stop_grace_period: 40s
+    mem_limit: 384m
+    pids_limit: 200
+
+  scheduler:
+    <<: *role
+    image: ${IMAGE:-ghcr.io/scottmroth5/job-agent}:${TAG_SCHEDULER:-${IMAGE_TAG:-latest}}-slim
+    command: ["node", "apps/scheduler.ts"]
+    env_file: state/env/scheduler.env
+    environment:
+      <<: *settings
+      PGAPPNAME: scheduler
+      HEALTH_PORT: "5180"
+    healthcheck: &worker-health
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5180/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    stop_grace_period: 20s
+    mem_limit: 160m
+    pids_limit: 50
+
+  worker-browser:
+    <<: *role
+    image: ${IMAGE:-ghcr.io/scottmroth5/job-agent}:${TAG_WORKER_BROWSER:-${IMAGE_TAG:-latest}}
+    command: ["node", "apps/worker.ts"]
+    env_file: state/env/worker-browser.env
+    environment:
+      <<: *settings
+      PGAPPNAME: worker-browser
+      POOLS: browser
+      HEALTH_PORT: "5180"
+      # Chromium writes its profile and crash files under HOME; the image's file system is read only.
+      HOME: /tmp
+    volumes:
+      - ./data/config:/data/config:ro
+    tmpfs:
+      - /tmp:size=256m,uid=1000,gid=1000,mode=0700
+    # A bigger shared memory area keeps Chromium from crashing on large pages.
+    shm_size: 512mb
+    healthcheck: *worker-health
+    stop_grace_period: 130s
+    mem_limit: 768m
+    pids_limit: 300
+
+  worker-ai:
+    <<: *role
+    image: ${IMAGE:-ghcr.io/scottmroth5/job-agent}:${TAG_WORKER_AI:-${IMAGE_TAG:-latest}}-slim
+    command: ["node", "apps/worker.ts"]
+    env_file: state/env/worker-ai.env
+    environment:
+      <<: *settings
+      PGAPPNAME: worker-ai
+      POOLS: ai
+      HEALTH_PORT: "5180"
+    volumes:
+      - ./data/config:/data/config:ro
+    healthcheck: *worker-health
+    stop_grace_period: 310s
+    mem_limit: 384m
+    pids_limit: 200
+
+  worker-io:
+    <<: *role
+    image: ${IMAGE:-ghcr.io/scottmroth5/job-agent}:${TAG_WORKER_IO:-${IMAGE_TAG:-latest}}-slim
+    command: ["node", "apps/worker.ts"]
+    env_file: state/env/worker-io.env
+    environment:
+      <<: *settings
+      PGAPPNAME: worker-io
+      POOLS: io
+      HEALTH_PORT: "5180"
+    volumes:
+      - ./data/config:/data/config:ro
+    healthcheck: *worker-health
+    stop_grace_period: 130s
+    mem_limit: 320m
+    pids_limit: 200
+
+  caddy:
+    depends_on: !override
+      - api
+      - demo

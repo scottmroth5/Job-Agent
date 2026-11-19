@@ -520,6 +520,14 @@ Goal: separately deployed services with clear boundaries and full tracing.
    PR 2, November 19: `apps/worker.ts` runs the pools in `POOLS`, `apps/api.ts` only enqueues, and `apps/scheduler.ts` runs the automatic runs; `server/index.js` still runs every role in one process. Add job is two tasks (the browser half and the Claude half), and alert emails are `notify` tasks. The images come in PR 3.
 4. Update `deploy/compose.yml` with `api`, `scheduler`, `worker-browser`, `worker-ai`, `worker-io`, `demo`, and `caddy`, with memory and CPU limits and no ports except Caddy's.
 5. Give each service only the secrets it needs. The browser worker does not need the Claude key, and the API does not need the Drive backup passphrase. Use separate database roles, and add a test that documents this matrix.
+
+   PR 3, November 19 (steps 3 to 6; decision 0010). Everything is opt-in on the server: production keeps one app container until `server.conf` says `LAYOUT=split`, staging first.
+   - **Images:** a slim image without Chromium (`<tag>-slim`, 785 MB against 2.25 GB) for the api, scheduler, worker-ai and worker-io.
+   - **Compose:** `deploy/compose.split.yml` on top of `compose.yml`, with memory limits, narrow data mounts, and no ports but Caddy's.
+   - **Settings:** `deploy/secrets.json`, the matrix `env-from-ssm.sh` writes each service's settings file from. `test/secrets-matrix.test.js` holds it to the code.
+   - **Database logins:** `ja_api`, `ja_worker` and `ja_scheduler` (`infra/db-setup.ps1 -ServiceLogins`), each a member of `ja_app`.
+   - **Deploys:** `deploy.sh` starts the roles before the api. `--only <services>` and `rollback <service>` replace one service alone, but never across a schema change.
+   - **Local check:** a smoke run of the split layout on a throwaway database went as expected. Every service was healthy, and each session ran on its own login. An added job was saved in worker-browser, which holds no Google or Claude settings, and then scored in worker-ai, where it failed visibly with no key.
 6. Update `deploy.sh`, health checks, rollback, and graceful shutdown so a worker finishes or returns a job during a deploy.
 
    PR 2: graceful shutdown and the health checks. A stopping worker stops claiming and gives running tasks its grace period. After that, a task whose type may retry goes back in the queue without spending an attempt, and the rest fail visibly. Each worker keeps a row in `workers` (migration 029), which Admin > Jobs lists, and answers `/healthz` on 127.0.0.1. `deploy.sh` and rollback come in PR 3.

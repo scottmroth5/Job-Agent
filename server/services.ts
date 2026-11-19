@@ -19,6 +19,7 @@ import { pipelineScriptArgs } from './tasks/pipeline.ts';
 import { claimSetting } from '../db/settings.ts';
 import { getUser, OWNER_ID } from '../db/users.ts';
 import { sendEmail } from '../tools/google/gmail.ts';
+import type { Email } from '../tools/google/gmail.ts';
 import type { JobStore } from '../db/index.ts';
 import type { AppServices, RunScript } from './app.ts';
 import type { AuthSettings } from './auth.ts';
@@ -54,12 +55,20 @@ export const runScript: RunScript = ({ script, args = [], onLine, onError = () =
     });
   });
 
-/** The services a process runs with: the real ones, or the demo's (none). */
-export function buildServices({ store, authConfig, demo }: { store: JobStore; authConfig: Pick<AuthSettings, 'publicUrl'>; demo: boolean }): AppServices {
+/**
+ * The services a process runs with: the real ones, or the demo's (none). Google sign-in is required (a missing one stops
+ * the process at start), except where needsGoogle is false: a worker for the browser pool alone (v3 Phase 7), which is
+ * given no Google settings. There Drive is null and sending an email fails visibly; neither is used by its tasks.
+ */
+export function buildServices({ store, authConfig, demo, needsGoogle = true }: { store: JobStore; authConfig: Pick<AuthSettings, 'publicUrl'>; demo: boolean; needsGoogle?: boolean }): AppServices {
   if (demo) return demoServices();
-  const auth = getGoogleAuth();
+  const auth = needsGoogle ? getGoogleAuth() : null;
+  const send = (email: Email) => {
+    if (!auth) throw new Error('Google is not set up for this service, so it sends no email.');
+    return sendEmail(auth, email);
+  };
   // Account emails (server/notices.ts): to the owner, or to a person about their own account; never anyone else.
-  const notices: Notices = createNotices({ send: (email) => sendEmail(auth, email), owner: () => process.env.EMAIL_ADDRESS || null, appUrl: () => authConfig.publicUrl ?? '' });
+  const notices: Notices = createNotices({ send, owner: () => process.env.EMAIL_ADDRESS || null, appUrl: () => authConfig.publicUrl ?? '' });
   // A user on the owner's key who uses up their allowance, and the owner, hear about it once a month.
   const onCapReached = async (uid: number, error: Error) => {
     const err = error as BudgetExceededError; // the cap's refusal (tools/claude.ts)
@@ -73,7 +82,7 @@ export function buildServices({ store, authConfig, demo }: { store: JobStore; au
     claude: createJobClaude(store.db, { onCapReached }),
     notices,
     http: createHttp(),
-    drive: createDriveClient(auth),
+    drive: auth ? createDriveClient(auth) : null,
     createBrowser: () => createBrowser(),
     runScript,
     // Each user's own pipeline: the script runs as them (--user), with their settings, background, and Claude key.
@@ -87,7 +96,7 @@ export function buildServices({ store, authConfig, demo }: { store: JobStore; au
       cfg: loadInboxConfig(),
     },
     // Failure emails (server/alerts.ts, sent by a notify task), only ever to the owner's own address, like the run report.
-    ownerMail: { to: () => process.env.EMAIL_ADDRESS || null, send: (email) => sendEmail(auth, email) },
+    ownerMail: { to: () => process.env.EMAIL_ADDRESS || null, send },
     appUrl: () => authConfig.publicUrl ?? '',
   };
 }

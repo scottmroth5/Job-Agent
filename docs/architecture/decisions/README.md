@@ -14,3 +14,4 @@ Records are not edited once accepted. A later record marks an earlier one supers
 | [0007](0007-shared-rds.md) | Production on PostgreSQL, set up like Health-Review, on its RDS instance | Accepted |
 | [0008](0008-own-job-queue.md) | Our own job queue in SQL on both engines, not pg-boss | Accepted |
 | [0009](0009-layers-in-place.md) | Layers in today's folders, not an npm workspaces move | Accepted |
+| [0010](0010-split-services.md) | Five services on one shared database, each with its own settings and login | Accepted |

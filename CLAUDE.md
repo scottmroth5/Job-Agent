@@ -504,12 +504,24 @@ package-lock.json changes), code and web/dist last; runs as node (uid 1000) with
 .dockerignore keeps .env, data/, and credentials out of the image; keep it in step with .gitignore.
 deploy/ is copied to the server's /opt/job-agent: compose.yml (app, demo, demo-db, and Caddy, only Caddy publishes ports; it fixes
 DATA_DIR, HOST, PORT, TRUST_PROXY=1; demo gets no env_file; demo-db is the demo's PostgreSQL, in memory, on an internal
-network only the demo joins, trust sign-in), Caddyfile (no access log), deploy.sh (deploy <tag> | rollback | up | status; healthy means app and demo both answer /healthz;
+network only the demo joins, trust sign-in), Caddyfile (no access log), deploy.sh (deploy <tag> [--only <services>] | rollback [<service>] | up | status; healthy means app and demo both answer /healthz;
 the GitHub deploy key's authorized_keys line forces it, so it validates SSH_ORIGINAL_COMMAND), cloud.env.example.
 .github/workflows/deploy.yml runs after CI succeeds on a push to main: build, publish ghcr.io/<owner>/job-agent
 (sha-<7> and latest), then deploy over SSH when the DEPLOY_ENABLED variable is true. GitHub holds only the deploy
 host, user, key, and known_hosts; app secrets live in the server's .env. A new required setting needs a line in
-deploy/cloud.env.example.
+deploy/cloud.env.example and in deploy/secrets.json (test/secrets-matrix.test.js fails on a setting the code reads that
+it does not list).
+The split layout (v3 Phase 7, decision 0010; infra/README.md): Dockerfile targets slim (no Chromium, <tag>-slim), runtime
+and app (<tag>, with Chromium), and backup; deploy.yml builds, scans, and pushes all three. server.conf LAYOUT=split (with
+DB_ENGINE=postgres and ENV_SOURCE=ssm) makes deploy.sh use deploy/compose.split.yml on top of compose.yml: the app service
+is switched off and api, scheduler, worker-browser (the full image), worker-ai, and worker-io run apps/*.ts, each with its own
+state/env/<service>.env (env-from-ssm.sh writes them from deploy/secrets.json, which maps each Parameter Store setting to the
+services that get it and refuses one it does not list; the browser worker holds no Claude, Google, Gmail, or session secret,
+so apps/worker.ts builds its services with needsGoogle false), its own login from /job-agent/service/<service>/DATABASE_URL
+(ja_api, ja_worker, ja_scheduler: db/postgres/roles.ts setupServiceLogins, members of ja_app WITH INHERIT TRUE, SET FALSE;
+infra/db-setup.ps1 -ServiceLogins), PGAPPNAME, narrow data mounts, and memory limits. deploy.sh starts the roles before the
+api; deploy <tag> --only <services> and rollback <service> replace one alone (state/.tag-<service>, .prev-tag-<service>),
+refused when scripts/migrations-list.js gives the two tags different last migrations. Without the line, nothing changes.
 
 ## Demo
 The cloud demo runs on PostgreSQL (DATABASE_URL to deploy/compose.yml demo-db; npm run demo stays on SQLite): demo-seed

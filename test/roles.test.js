@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { openJobStore } from '../db/index.ts';
 import { addUser } from '../db/users.ts';
 import { buildApp } from '../server/app.ts';
+import { buildServices } from '../server/services.ts';
 import { createJobs } from '../server/jobs.ts';
 import { defineNotifyTasks, queuedAlerts } from '../server/tasks/notify.ts';
 import { runScheduler } from '../server/scheduler-service.ts';
@@ -237,5 +238,17 @@ test('a stopped worker (a deploy): the retryable task goes back in the queue, th
     await stopWorker(worker.child);
     await app.close();
     done();
+  }
+});
+
+test('a browser worker starts without Google: no Drive, and an email it might send fails visibly', async () => {
+  const store = openJobStore(':memory:');
+  await store.ready;
+  try {
+    const services = buildServices({ store, authConfig: { publicUrl: 'https://app.example.com' }, demo: false, needsGoogle: false });
+    assert.equal(services.drive, null);
+    assert.throws(() => services.ownerMail?.send({ to: 'owner@example.com', subject: 's', text: 't' }), /Google is not set up for this service/);
+  } finally {
+    store.close();
   }
 });

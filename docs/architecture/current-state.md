@@ -1,6 +1,6 @@
 # Current architecture
 
-How the system runs, kept current through v3 Phase 5 (production on PostgreSQL). The `v2-final` tag marks where v3 began
+How the system runs, kept current through v3 Phase 7 PR 3 (the split layout, opt-in). The `v2-final` tag marks where v3 began
 ([docs/v3/PLAN.md](../v3/PLAN.md)). The details behind each box are in [CLAUDE.md](../../CLAUDE.md).
 
 ```mermaid
@@ -53,6 +53,10 @@ flowchart LR
   - long actions as tasks on the durable queue (`server/jobs.ts` over `tools/queue`), kept in the database across restarts;
   - the pipeline and other scripts as child processes, one pipeline at a time across the app;
   - Chromium for pages that need JavaScript.
+- **The split layout** (v3 Phase 7, decision 0010; opt-in with `server.conf` `LAYOUT=split`, not yet on in production): the app container's roles as five services on the same database.
+  - The services are `api`, `scheduler`, `worker-browser`, `worker-ai` and `worker-io` (`deploy/compose.split.yml`).
+  - Each has its own settings file (`deploy/secrets.json`) and its own database login (`ja_api`, `ja_worker`, `ja_scheduler`, each a member of `ja_app`).
+  - Only `worker-browser` has Chromium; the others run the slim image.
 - **The demo container:** the same image with `AUTH_MODE=demo`. It has no secrets and no Claude. Its sample data lives in its own PostgreSQL container (`demo-db`, since v3 Phase 4), in memory, on a private network only the demo joins; a restart of either rebuilds the data.
 - **The server** (since v3 Phase 5, decision 0007): an EC2 instance built by `infra/` (Terraform) inside Health-Review's network, with settings from SSM Parameter Store (`env-from-ssm.sh`). Before that, a Lightsail server ran the app on SQLite.
 - **The backup container:** the same image plus PostgreSQL 18's programs. It runs the nightly backup and the monthly restore test, and `deploy.sh`'s checked dump and migration. It alone holds the owner and backup logins.
@@ -76,11 +80,12 @@ flowchart LR
 ## Deploy path
 
 1. A push to main runs CI: tests in two time zones, npm audit, the web build, and the personal data scan.
-2. Deploy builds the image, scans it with Trivy, and publishes it to GHCR.
+2. Deploy builds the three images (`<tag>` with Chromium, `<tag>-slim` without, `<tag>-backup`), scans each with Trivy, and publishes them to GHCR.
 3. Over SSH, `deploy/deploy.sh` then:
    - checks for pending migrations;
    - backs up first when there are any;
    - starts the new image, checks health, and rolls back on failure.
+   - In the split layout it starts the roles before the API. It can also replace or roll back one service alone, but never across a schema change.
 
 ## Data and backups
 

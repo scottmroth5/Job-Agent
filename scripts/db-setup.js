@@ -7,9 +7,13 @@
 //   DB_MASTER_USER, DB_MASTER_PASSWORD                         RDS's master login (from Secrets Manager)
 //   JA_MIGRATE_PASSWORD, JA_APP_PASSWORD, JA_BACKUP_PASSWORD   the three logins' new passwords
 // Then, as the owner login: the schema's grants (grantStatements). The tables come with the first deploy's migrate.js.
+//
+// --service-logins (v3 Phase 7, infra/db-setup.ps1 -ServiceLogins): only the split layout's logins (ja_api, ja_worker,
+// ja_scheduler; setupServiceLogins), each a member of ja_app, with JA_API_PASSWORD, JA_WORKER_PASSWORD and
+// JA_SCHEDULER_PASSWORD. The three logins above and the database are left as they are.
 import { readFileSync } from 'node:fs';
 import pg from 'pg';
-import { DATABASE, grantStatements, JA_LOGINS, setupRoles } from '../db/postgres/roles.ts';
+import { DATABASE, grantStatements, JA_LOGINS, SERVICE_LOGINS, setupRoles, setupServiceLogins } from '../db/postgres/roles.ts';
 
 /** @param {string} name */
 const need = (name) => {
@@ -32,7 +36,19 @@ async function connect(user, password, database) {
   return client;
 }
 
+async function serviceLogins() {
+  const passwords = { api: need('JA_API_PASSWORD'), worker: need('JA_WORKER_PASSWORD'), scheduler: need('JA_SCHEDULER_PASSWORD') };
+  const master = await connect(need('DB_MASTER_USER'), need('DB_MASTER_PASSWORD'), 'postgres');
+  try {
+    await setupServiceLogins(master, { passwords });
+    console.log(`db-setup: service logins ready (${Object.values(SERVICE_LOGINS).join(', ')}), each a member of ${JA_LOGINS.app}`);
+  } finally {
+    await master.end();
+  }
+}
+
 async function main() {
+  if (process.argv.includes('--service-logins')) return await serviceLogins();
   const passwords = { owner: need('JA_MIGRATE_PASSWORD'), app: need('JA_APP_PASSWORD'), backup: need('JA_BACKUP_PASSWORD') };
   const master = await connect(need('DB_MASTER_USER'), need('DB_MASTER_PASSWORD'), 'postgres');
   try {

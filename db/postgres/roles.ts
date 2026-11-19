@@ -33,6 +33,13 @@ export function grantStatements(schema: string, { owner, app, backup }: Logins):
 /** Production's login names on the shared RDS (scripts/db-setup.js makes them). */
 export const JA_LOGINS: Logins = { owner: 'ja_migrate', app: 'ja_app', backup: 'ja_backup' };
 
+/**
+ * The split layout's logins (v3 Phase 7, decision 0010): one per role, so the database names which service each session
+ * is (with PGAPPNAME) and each can be revoked alone. The three workers share one.
+ */
+export const SERVICE_LOGINS = { api: 'ja_api', worker: 'ja_worker', scheduler: 'ja_scheduler' } as const;
+export type ServiceLogin = keyof typeof SERVICE_LOGINS;
+
 /** The options every login is made with: it signs in, and nothing more. */
 export const LOGIN_OPTIONS = 'LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS';
 
@@ -71,4 +78,25 @@ export async function setupRoles(client: SetupClient, { logins = JA_LOGINS, data
   }
   await client.query(`REVOKE ALL ON DATABASE ${q(database)} FROM PUBLIC`);
   await client.query(`GRANT CONNECT ON DATABASE ${q(database)} TO ${q(logins.app)}, ${q(logins.backup)}`);
+}
+
+/**
+ * The split layout's logins (scripts/db-setup.js --service-logins), connected as RDS's master login: each made (or its
+ * password reset) and made a member of the app login, from which it inherits the row grants (now and for tables later
+ * migrations make, through the owner's default privileges) and CONNECT. SET FALSE: a member can never act as the app
+ * login itself. Row security applies to each as to the app login. The three Phase 5 logins are never touched.
+ */
+export async function setupServiceLogins(client: SetupClient, { member = JA_LOGINS.app, logins = SERVICE_LOGINS, passwords }: { member?: string; logins?: Record<ServiceLogin, string>; passwords: Record<ServiceLogin, string> }) {
+  for (const n of [member, ...Object.values(logins)]) if (!NAME.test(n)) throw new TypeError('names: lowercase letters, digits and _ only');
+  const q = (n: string) => `"${n}"`;
+  for (const key of Object.keys(logins) as ServiceLogin[]) {
+    const pw = passwords[key];
+    if (typeof pw !== 'string' || pw.length < 24) throw new TypeError(`setupServiceLogins: the ${key} password must be at least 24 characters`);
+  }
+  if (!(await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [member])).rows.length) throw new Error(`setupServiceLogins: the ${member} login does not exist yet`);
+  for (const key of Object.keys(logins) as ServiceLogin[]) {
+    const present = (await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [logins[key]])).rows.length > 0;
+    await client.query(`${present ? 'ALTER' : 'CREATE'} ROLE ${q(logins[key])} WITH ${LOGIN_OPTIONS} PASSWORD ${client.escapeLiteral(passwords[key])}`);
+    await client.query(`GRANT ${q(member)} TO ${q(logins[key])} WITH INHERIT TRUE, SET FALSE`);
+  }
 }
