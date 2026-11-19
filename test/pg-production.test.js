@@ -124,6 +124,68 @@ test('production shape: migrations as a non-superuser owner, the app as a login 
   }
 });
 
+test('a service login (v3 Phase 7): a member of the app login works as the app does, under row security, and cannot act as the app login', { skip: pgOnly }, async () => {
+  const { default: pg } = await import('pg');
+  const { grantStatements, LOGIN_OPTIONS, setupServiceLogins } = await import('../db/postgres/roles.ts');
+  const { runAsUser } = await import('../db/scope.ts');
+  const { addUser } = await import('../db/users.ts');
+  const base = /** @type {string} */ (postgresUrl());
+  const tag = randomBytes(4).toString('hex');
+  const logins = { owner: `t_owner_${tag}`, app: `t_app_${tag}`, backup: `t_backup_${tag}` };
+  const services = { api: `t_api_${tag}`, worker: `t_worker_${tag}`, scheduler: `t_sched_${tag}` };
+  const password = randomBytes(12).toString('hex');
+  const servicePw = () => randomBytes(18).toString('base64url');
+  const as = (/** @type {string} */ user, pw = password) => {
+    const u = new URL(base);
+    u.username = user;
+    u.password = pw;
+    return u.toString();
+  };
+  const schema = `t_${randomBytes(8).toString('hex')}`;
+  const sqliteIds = loadMigrations().map((m) => m.id);
+  const admin = new pg.Client({ connectionString: base });
+  await admin.connect();
+  try {
+    for (const login of Object.values(logins)) await admin.query(`CREATE ROLE ${login} ${LOGIN_OPTIONS} PASSWORD '${password}'`);
+    await admin.query(`CREATE SCHEMA ${schema} AUTHORIZATION ${logins.owner}`);
+    const owner = openPgStore(as(logins.owner), { schema, sqliteIds });
+    await owner.ready;
+    const grants = new pg.Client({ connectionString: as(logins.owner) });
+    await grants.connect();
+    for (const sql of grantStatements(schema, logins)) await grants.query(sql);
+    await grants.end();
+    owner.close();
+
+    const passwords = { api: servicePw(), worker: servicePw(), scheduler: servicePw() };
+    await assert.rejects(setupServiceLogins(admin, { member: logins.app, logins: services, passwords: { ...passwords, api: 'short' } }), /at least 24/);
+    await assert.rejects(setupServiceLogins(admin, { member: `t_none_${tag}`, logins: services, passwords }), /does not exist/);
+    await setupServiceLogins(admin, { member: logins.app, logins: services, passwords });
+    await setupServiceLogins(admin, { member: logins.app, logins: services, passwords }); // again: no error, nothing dropped
+
+    const api = openPgStore(as(services.api, passwords.api), { schema, sqliteIds, migrate: false, fallbackUid: null });
+    await api.ready;
+    const other = await addUser(api.admin, { email: 'second@example.com' });
+    const add = async (/** @type {number} */ uid) => await api.admin.prepare(`INSERT INTO postings (user_id, url_key, company, title, company_title_key, discovered_on, created_at, updated_at)
+      VALUES (?, ?, 'Example Co', 'CTO', ?, '2026-11-01', 'x', 'x') RETURNING id`).run(uid, `k${uid}`, `k${uid}`);
+    assert.ok(Number((await add(1)).id) > 0, 'row writes and sequences, inherited from the app login');
+    await add(other);
+    assert.deepEqual(await runAsUser(other, () => api.db.prepare('SELECT user_id FROM postings').pluck().all()), [other], 'row security holds');
+    await assert.rejects(api.admin.prepare('CREATE TABLE nope (a int)').run(), /permission denied/, 'no schema changes');
+    await assert.rejects(api.admin.prepare(`SET ROLE ${logins.app}`).run(), /permission denied/, 'cannot act as the app login');
+    api.close();
+    const roles = (await admin.query('SELECT rolname, rolsuper, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname = ANY($1)', [Object.values(services)])).rows;
+    assert.equal(roles.length, 3);
+    for (const r of roles) assert.deepEqual([r.rolsuper, r.rolbypassrls, r.rolcanlogin], [false, false, true]);
+  } finally {
+    await admin.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
+    for (const login of [...Object.values(services), ...Object.values(logins)]) {
+      await admin.query(`DROP OWNED BY ${login}`).catch(() => {});
+      await admin.query(`DROP ROLE IF EXISTS ${login}`);
+    }
+    await admin.end();
+  }
+});
+
 test('setupRoles: three logins and a C-collation database the owner owns; again, passwords change and nothing is dropped', { skip: pgOnly }, async () => {
   const { default: pg } = await import('pg');
   const { setupRoles } = await import('../db/postgres/roles.ts');

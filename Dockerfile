@@ -69,8 +69,10 @@ RUN apt-get update \
 RUN curl -fsSL --retry 4 --retry-all-errors --max-time 60 -o /pgdg.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc \
  && gpg --show-keys --with-colons /pgdg.asc | grep -q '^fpr:::::::::B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8:$'
 
-# Runtime: the same Debian and Node as the stages above, so native modules built there load here unchanged.
-FROM node:26-bookworm-slim AS runtime
+# What every runtime image shares (v3 Phase 7): the same Debian and Node as the stages above, so native modules built
+# there load here unchanged, production node_modules, and tzdata for the TZ setting. npm, npx, yarn, and corepack are
+# removed: only node runs here, and their bundled dependencies would fail the image scan (Trivy) for code that never runs.
+FROM node:26-bookworm-slim AS runtime-base
 ENV NODE_ENV=production \
     DATA_DIR=/data \
     HOST=0.0.0.0 \
@@ -80,24 +82,41 @@ WORKDIR /app
 # Node runs the .ts source by stripping its types; the app requires Node 26 or newer (package.json engines).
 RUN node -e "const a = Number(process.versions.node.split('.')[0]); if (a < 26) { console.error('Node ' + process.version + ' is older than 26'); process.exit(1); }"
 COPY --from=deps /app/node_modules ./node_modules
-# Chromium and its system libraries, matching the installed Playwright version; tzdata for the TZ setting.
-# Then npm, npx, yarn, and corepack are removed: only node runs here, and their bundled dependencies would fail the
-# image scan (Trivy) for code that never runs.
+# The mounted /data folder must be owned by the node user (uid 1000), which every image runs as.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends tzdata ca-certificates \
- && npx playwright install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/* /root/.npm \
  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
-           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
+           /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+ && mkdir -p /data && chown node:node /data
+
+# The slim image (<tag>-slim, v3 Phase 7): the code without a browser, for the roles that never open a page (api,
+# scheduler, worker-ai, worker-io; deploy/compose.split.yml). Without Chromium, tools/browser.ts finds nothing to launch,
+# but these roles never run a browser-pool task. The health check asks PORT (the api) or HEALTH_PORT (a worker or the
+# scheduler, tools/health.ts).
+FROM runtime-base AS slim
 COPY --from=build /app ./
 COPY --from=geo /geo /app/geo
 COPY --from=certs /certs /app/certs
-# Runs as the unprivileged node user (uid 1000); the mounted /data folder must be owned by that uid.
-RUN mkdir -p /data && chown node:node /data
 USER node
 EXPOSE 5178
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||5178)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.HEALTH_PORT||process.env.PORT||5178)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+CMD ["node", "server/index.js"]
+
+# The full runtime (<tag>): the same plus Chromium and its system libraries, matching the installed Playwright version
+# (through Playwright's own CLI, since npx is gone). The one-process app, the demo, and worker-browser run it.
+FROM runtime-base AS runtime
+RUN apt-get update \
+ && node node_modules/playwright/cli.js install --with-deps chromium \
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=build /app ./
+COPY --from=geo /geo /app/geo
+COPY --from=certs /certs /app/certs
+USER node
+EXPOSE 5178
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.HEALTH_PORT||process.env.PORT||5178)+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "server/index.js"]
 
 # The backup image (v3 Phase 5): the runtime plus PostgreSQL 18's programs (pg_dump, pg_restore, and initdb for scratch

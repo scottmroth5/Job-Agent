@@ -16,6 +16,15 @@
 #        /job-agent/backup/BACKUP_DATABASE_URL        ja_backup (the backup container only)
 # Nothing is printed but progress lines, and nothing is written to disk but the public CA bundle in the temp folder.
 # Running it again resets the three passwords and the parameters (the app then needs a deploy.sh up).
+#
+# -ServiceLogins (v3 Phase 7, the split layout): makes only ja_api, ja_worker and ja_scheduler (each a member of ja_app;
+# db/postgres/roles.ts setupServiceLogins) with new passwords, and stores each service's address:
+#        /job-agent/service/api/DATABASE_URL                                   ja_api
+#        /job-agent/service/scheduler/DATABASE_URL                             ja_scheduler
+#        /job-agent/service/worker-browser|worker-ai|worker-io/DATABASE_URL    ja_worker
+# The three logins above, their passwords, and their parameters are left as they are. Running it again resets these three
+# passwords (the split services then need a deploy.sh up).
+param([switch]$ServiceLogins)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
@@ -45,7 +54,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Could not read the master secret' }
 $ca = Join-Path $env:TEMP 'rds-global-bundle.pem'
 Invoke-WebRequest 'https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem' -OutFile $ca
 
-$pw = @{ migrate = New-Password; app = New-Password; backup = New-Password }
+$pw = if ($ServiceLogins) { @{ api = New-Password; worker = New-Password; scheduler = New-Password } } else { @{ migrate = New-Password; app = New-Password; backup = New-Password } }
 
 Write-Host 'Opening the port forward to RDS through the server (SSM)'
 $params = "host=$dbHost,portNumber=5432,localPortNumber=$localPort"
@@ -65,23 +74,40 @@ try {
   $env:DB_SETUP_CA = $ca
   $env:DB_MASTER_USER = $master.username
   $env:DB_MASTER_PASSWORD = $master.password
-  $env:JA_MIGRATE_PASSWORD = $pw.migrate
-  $env:JA_APP_PASSWORD = $pw.app
-  $env:JA_BACKUP_PASSWORD = $pw.backup
-  node ..\scripts\db-setup.js
+  if ($ServiceLogins) {
+    $env:JA_API_PASSWORD = $pw.api
+    $env:JA_WORKER_PASSWORD = $pw.worker
+    $env:JA_SCHEDULER_PASSWORD = $pw.scheduler
+    node ..\scripts\db-setup.js --service-logins
+  } else {
+    $env:JA_MIGRATE_PASSWORD = $pw.migrate
+    $env:JA_APP_PASSWORD = $pw.app
+    $env:JA_BACKUP_PASSWORD = $pw.backup
+    node ..\scripts\db-setup.js
+  }
   if ($LASTEXITCODE -ne 0) { throw 'db-setup.js failed; no parameters were stored' }
 } finally {
-  foreach ($n in 'DB_SETUP_PORT', 'DB_SETUP_HOST', 'DB_SETUP_CA', 'DB_MASTER_USER', 'DB_MASTER_PASSWORD', 'JA_MIGRATE_PASSWORD', 'JA_APP_PASSWORD', 'JA_BACKUP_PASSWORD') {
+  foreach ($n in 'DB_SETUP_PORT', 'DB_SETUP_HOST', 'DB_SETUP_CA', 'DB_MASTER_USER', 'DB_MASTER_PASSWORD', 'JA_MIGRATE_PASSWORD', 'JA_APP_PASSWORD', 'JA_BACKUP_PASSWORD', 'JA_API_PASSWORD', 'JA_WORKER_PASSWORD', 'JA_SCHEDULER_PASSWORD') {
     Remove-Item "Env:$n" -ErrorAction SilentlyContinue
   }
   Stop-Process -Id $forward.Id -ErrorAction SilentlyContinue
 }
 
 $tail = "@${dbHost}:5432/job_agent?sslmode=verify-full&sslrootcert=/app/certs/rds-global-bundle.pem"
-$urls = [ordered]@{
-  '/job-agent/env/DATABASE_URL'            = "postgres://ja_app:$($pw.app)$tail"
-  '/job-agent/backup/MIGRATE_DATABASE_URL' = "postgres://ja_migrate:$($pw.migrate)$tail"
-  '/job-agent/backup/BACKUP_DATABASE_URL'  = "postgres://ja_backup:$($pw.backup)$tail"
+$urls = if ($ServiceLogins) {
+  [ordered]@{
+    '/job-agent/service/api/DATABASE_URL'            = "postgres://ja_api:$($pw.api)$tail"
+    '/job-agent/service/scheduler/DATABASE_URL'      = "postgres://ja_scheduler:$($pw.scheduler)$tail"
+    '/job-agent/service/worker-browser/DATABASE_URL' = "postgres://ja_worker:$($pw.worker)$tail"
+    '/job-agent/service/worker-ai/DATABASE_URL'      = "postgres://ja_worker:$($pw.worker)$tail"
+    '/job-agent/service/worker-io/DATABASE_URL'      = "postgres://ja_worker:$($pw.worker)$tail"
+  }
+} else {
+  [ordered]@{
+    '/job-agent/env/DATABASE_URL'            = "postgres://ja_app:$($pw.app)$tail"
+    '/job-agent/backup/MIGRATE_DATABASE_URL' = "postgres://ja_migrate:$($pw.migrate)$tail"
+    '/job-agent/backup/BACKUP_DATABASE_URL'  = "postgres://ja_backup:$($pw.backup)$tail"
+  }
 }
 foreach ($name in $urls.Keys) {
   aws ssm put-parameter --region $region --name $name --type SecureString --key-id alias/job-agent --overwrite --value $urls[$name] | Out-Null
@@ -89,4 +115,4 @@ foreach ($name in $urls.Keys) {
   Write-Host "Stored $name"
 }
 $pw = $null; $urls = $null; $master = $null
-Write-Host 'Done. Next: env-to-ssm.ps1 for the rest of the settings.'
+if ($ServiceLogins) { Write-Host 'Done. The split layout can now be turned on (infra/README.md).' } else { Write-Host 'Done. Next: env-to-ssm.ps1 for the rest of the settings.' }

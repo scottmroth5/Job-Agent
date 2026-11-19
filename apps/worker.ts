@@ -12,7 +12,9 @@ const pools = poolsFrom(process.env.POOLS);
 // No fallback user: every task runs as its own user (db/scope.ts).
 const store = openJobStore(undefined, { fallbackUid: null });
 await store.ready;
-const services = buildServices({ store, authConfig: { publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, '') }, demo: false });
+// Only the ai and io pools use Google (letter and prep Docs, the report, alert emails); a browser worker gets no Google settings.
+const needsGoogle = pools.some((p) => p === 'ai' || p === 'io');
+const services = buildServices({ store, authConfig: { publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, '') }, demo: false, needsGoogle });
 const worker = await runWorker({ store, config: loadConfig(), services, pools, version: process.env.APP_VERSION ?? null, healthPort: Number(process.env.HEALTH_PORT ?? 5180) });
 console.log(`Worker ${worker.service}: pools ${pools.join(', ')}; health on 127.0.0.1:${worker.health?.port}`);
 

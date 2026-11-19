@@ -125,5 +125,41 @@ These are the steps as they ran, cleanly, on November 17, 2026. The app needs it
 
 To load the data again later, first stop the app, the backup service and the demo. Then run `reset-database --confirm job_agent` before `load-from-backup`. The cut-over itself follows `docs/runbooks/postgres-cutover.md`.
 
+## The split layout (v3 Phase 7, decision 0010)
+This turns the one app container into five services, each with its own settings and database login. Staging comes first; production only after the rehearsal. The owner runs every step.
+
+1. **The service logins**, from `infra\` on this PC:
+   ```
+   powershell -ExecutionPolicy Bypass -File db-setup.ps1 -ServiceLogins
+   ```
+   - It makes `ja_api`, `ja_worker` and `ja_scheduler`, each a member of `ja_app`, and stores `/job-agent/service/<service>/DATABASE_URL` for the five services.
+   - The three existing logins and their parameters are left alone.
+2. **The deploy files.** In a Session Manager session, as root:
+   ```
+   cd /opt/job-agent
+   for f in compose.yml compose.split.yml secrets.json Caddyfile deploy.sh env-from-ssm.sh; do curl -fsSL -o $f https://raw.githubusercontent.com/scottmroth5/Job-Agent/main/deploy/$f; done
+   chmod 755 deploy.sh env-from-ssm.sh
+   install -d -o 1000 -g 1000 data/attachments data/config data/evals
+   ```
+   The last line makes sure the folders the services mount exist and belong to the app's user.
+3. **Turn it on,** once the deployed tag was built after PR 3 merged (an older tag has no `-slim` image; `./deploy.sh status` shows the tag):
+   ```
+   echo LAYOUT=split >> server.conf
+   sudo -u deploy ./deploy.sh up
+   ```
+   - `env-from-ssm.sh` refuses to start if a setting in Parameter Store is missing from `secrets.json`. Add the setting there, with the services that need it, then run `up` again.
+   - `./deploy.sh status` lists each service and its tag.
+4. **Check:**
+   - Admin > Jobs lists `worker-browser`, `worker-ai` and `worker-io`.
+   - Add a job, refetch one, write a letter, and run the pipeline; each runs in its own service.
+   - `docker stats --no-stream` shows each service's memory against its limit.
+5. **Replace or roll back one service:**
+   ```
+   sudo -u deploy ./deploy.sh deploy <tag> --only worker-browser
+   sudo -u deploy ./deploy.sh rollback worker-browser
+   ```
+   Both are refused when the two tags know different migrations; deploy every service then.
+6. **The way back:** delete the `LAYOUT=split` line from `server.conf`, then run `sudo -u deploy ./deploy.sh up`. The one app container starts again and the five services are removed.
+
 ## Files that stay on this PC (gitignored)
 `terraform.tfvars`, `backend.hcl`, `*.tfplan`, `*.tfstate`, `.terraform/` and `bootstrap/backend_override.tf`. Neither the repo nor the image ever holds them: `.dockerignore` leaves out `infra/`.
