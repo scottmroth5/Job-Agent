@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createClaude } from '@scottmroth5/agent-core';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from '../server/app.ts';
-import { progressLine } from '../server/pipeline-routes.ts';
+import { pipelineScriptArgs, progressLine } from '../server/pipeline-routes.ts';
 import { storedKey } from '../agents/identity.ts';
 import { insertEmail, addReminder } from '../agents/inbox/store.ts';
 import { createGmail } from '../agents/inbox/gmail.ts';
@@ -216,4 +216,12 @@ test('task output: the pipeline keeps every line; in-server actions capture thei
   assert.equal((await app.inject({ method: 'GET', url: '/api/tasks/999/log' })).statusCode, 404);
   await app.close();
   store.close();
+});
+
+test('a pipeline step task runs only its step: --only and --since reach the script, nothing else does', () => {
+  // Each step task (server/pipeline-routes.ts) runs scripts/pipeline.js --only=<step> --since=<iso>. Without --only the
+  // script runs the whole pipeline, finds the pipeline task's own run open, and refuses, so every step failed.
+  assert.deepEqual(pipelineScriptArgs(2, ['--only=discover', '--since=2026-11-19T11:00:00.000Z']), ['--user=2', '--only=discover', '--since=2026-11-19T11:00:00.000Z']);
+  assert.deepEqual(pipelineScriptArgs(null, ['--no-score', '--no-letters']), ['--no-score', '--no-letters']);
+  assert.deepEqual(pipelineScriptArgs(1, ['--only=discover; rm -rf /', '--since=x y', '--dry-run', '--user=9']), ['--user=1'], 'anything else is dropped');
 });

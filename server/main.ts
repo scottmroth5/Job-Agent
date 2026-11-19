@@ -15,6 +15,7 @@ import { createDriveClient } from '../tools/google/drive.ts';
 import { repoPath, ROOT } from '../tools/paths.ts';
 import { openJobStore } from '../db/index.ts';
 import { buildApp } from './app.ts';
+import { pipelineScriptArgs } from './pipeline-routes.ts';
 import { schedulesFromEnv } from '../tools/scheduler.ts';
 import { timeZone } from '../tools/dates.ts';
 import { countryLookup, geoAllowFromEnv, openGeo, openRelay } from './geo.ts';
@@ -83,9 +84,9 @@ const realServices = (): AppServices => ({
       child.on('close', (code) => resolve({ code: code ?? 1, lastError }));
     }),
   // Each user's own pipeline: the script runs as them (--user), with their settings, background, and Claude key.
-  // args are only the step flags (agents/automation.ts skipArgs); nothing else reaches the command line.
+  // args are a step (--only, --since) and the step flags (agents/automation.ts skipArgs); nothing else reaches the command line.
   runPipeline: ({ user, args = [], ...opts }) =>
-    (services.runScript as RunScript)({ ...opts, script: 'scripts/pipeline.js', args: [...(user ? [`--user=${Number(user)}`] : []), ...args.filter((a) => a === '--no-score' || a === '--no-letters')] }),
+    (services.runScript as RunScript)({ ...opts, script: 'scripts/pipeline.js', args: pipelineScriptArgs(user, args) }),
   // On PostgreSQL the backup container runs the backup and the restore test (scripts/backup-service.js); the app's image
   // has no pg_dump, so its scheduler leaves them out.
   schedules: schedulesFromEnv(process.env).filter((j) => store.engine !== 'postgres' || (j.name !== 'backup' && j.name !== 'restore-test')),
